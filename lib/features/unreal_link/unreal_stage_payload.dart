@@ -176,6 +176,28 @@ class UnrealStagePayload {
     };
   }
 
+  /// Carpetas de este equipo donde están los escaneos de la planta: Unreal,
+  /// en el mismo PC, los importa de ahí. Las pone la vista 3D del proyecto.
+  static List<String> scanFolders = const [];
+
+  /// Un escaneo de la planta (glb, gltf u obj): su archivo, en su sitio, con
+  /// su giro y su escala. Las nubes de puntos (ply) no van a Unreal.
+  static Map<String, dynamic>? scan(Map s) {
+    final at = s['at'] as List?;
+    final format = s['format'] as String? ?? 'glb';
+    if (at == null || s['file'] == null || format == 'ply') return null;
+    // En el visor gira -yaw sobre la vertical; en Unreal, igual.
+    final yaw = -((s['yawDeg'] ?? 0) as num).toDouble();
+    return {
+      'id': s['id'],
+      'name': s['name'],
+      'file': s['file'],
+      'loc': loc([at[0], at[1], s['z0'] ?? 0]),
+      'rot': [0.0, _r(yaw), 0.0],
+      'scale': ((s['scale'] ?? 1) as num).toDouble(),
+    };
+  }
+
   /// El sol: la escena da hacia dónde está; la luz va al revés.
   static Map<String, dynamic>? sun(Map? s) {
     final d = s?['dir'] as List?;
@@ -192,7 +214,7 @@ class UnrealStagePayload {
   }
 
   /// Las listas de piezas que se comparan una a una.
-  static const kinds = ['lights', 'cameras', 'props', 'assets'];
+  static const kinds = ['lights', 'cameras', 'props', 'assets', 'scans'];
 
   /// La escena entera para Unreal, en el mundo (nivel) [world].
   static Map<String, dynamic> build(
@@ -211,6 +233,11 @@ class UnrealStagePayload {
         for (final a in (scene['assets'] as List? ?? const []).cast<Map>())
           ?asset(a),
       ],
+      'scans': [
+        for (final s in (scene['scans'] as List? ?? const []).cast<Map>())
+          ?scan(s),
+      ],
+      if (scanFolders.isNotEmpty) 'scanFolders': scanFolders,
       'lights': [
         for (final f in (scene['fixtures'] as List? ?? const []).cast<Map>())
           ?light(f),
@@ -237,7 +264,10 @@ class UnrealStagePayload {
         jsonEncode(before['world']) != jsonEncode(now['world'])) {
       return {...now, 'full': true};
     }
-    final out = <String, dynamic>{'v': version};
+    final out = <String, dynamic>{
+      'v': version,
+      'scanFolders': ?now['scanFolders'],
+    };
     final remove = <String>[];
     for (final kind in kinds) {
       Map<String, String> byId(Map<String, dynamic> p) => {

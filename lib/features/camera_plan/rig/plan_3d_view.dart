@@ -28,6 +28,7 @@ import '../../unreal_link/unreal_render_view.dart';
 import '../../unreal_link/unreal_return.dart';
 import '../../unreal_link/unreal_stage_payload.dart';
 import '../../unreal_link/unreal_thumbs.dart';
+import '../../../core/sync/plan_scan_store.dart';
 import 'scan_store.dart';
 import 'rig_report.dart';
 
@@ -50,6 +51,10 @@ const _layers = <(String, String)>[
 ///
 /// En panel (junto a la planta) la barra es compacta; a pantalla entera
 /// ([full]) lleva un lateral con todas las opciones y el resumen.
+/// Recibe la cenital de un escaneo: el PNG y su rectángulo en metros de la
+/// planta.
+typedef ScanTopSink = Future<void> Function(Uint8List png, Rect metres);
+
 class Plan3dView extends StatefulWidget {
   final List<PlanElement> elements;
   final double metersPerUnit;
@@ -90,6 +95,10 @@ class Plan3dView extends StatefulWidget {
   /// Proyecto de la planta: sus miniaturas de Unreal.
   final int? projectId;
 
+  /// Pone la cenital de un escaneo (PNG) de fondo en la planta, en el
+  /// rectángulo dado en metros de la planta.
+  final ScanTopSink? onScanTop;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -107,6 +116,7 @@ class Plan3dView extends StatefulWidget {
     this.onUnrealCapture,
     this.onOpenUnreal,
     this.projectId,
+    this.onScanTop,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -152,8 +162,26 @@ class _Plan3dViewState extends State<Plan3dView> {
     super.initState();
     _realLength.addListener(() => setState(() {}));
     _fromUnreal = UnrealLink.instance.edits.listen(_applyFromUnreal);
+    _scanArrivals = PlanScanStore.arrivals.listen(
+      (file) => _call('iris.rescan(${jsonEncode(file)});'),
+    );
     UnrealThumbs.instance.addListener(_onThumbs);
+    unawaited(_shareScanFolders());
     _schedule();
+  }
+
+  StreamSubscription<String>? _scanArrivals;
+
+  /// Unreal, en este mismo PC, importa los escaneos de estas carpetas.
+  Future<void> _shareScanFolders() async {
+    final projectId = widget.projectId;
+    final folders = <String>[
+      if (projectId != null)
+        if (await PlanScanStore.pathFor(projectId, 'x.glb') case final path?)
+          File(path).parent.path,
+      (await ScanStore.dir()).path,
+    ];
+    UnrealStagePayload.scanFolders = folders;
   }
 
   @override
@@ -169,6 +197,7 @@ class _Plan3dViewState extends State<Plan3dView> {
   @override
   void dispose() {
     _fromUnreal?.cancel();
+    _scanArrivals?.cancel();
     UnrealThumbs.instance.removeListener(_onThumbs);
     _debounce?.cancel();
     _realLength.dispose();
@@ -316,6 +345,7 @@ class _Plan3dViewState extends State<Plan3dView> {
         // El visor pide los bytes de un escaneo: se le devuelven en base64.
         return ScanStore.bytesOf(
           message['file'] as String,
+          projectId: widget.projectId,
         ).then((bytes) => bytes == null ? null : base64Encode(bytes));
       case 'scanError':
         if (mounted) {
@@ -410,7 +440,20 @@ class _Plan3dViewState extends State<Plan3dView> {
     );
     final path = picked?.files.single.path;
     if (path == null) return;
-    final file = await ScanStore.import(path);
+    final file = await ScanStore.import(path, projectId: widget.projectId);
+    final size = await File(path).length();
+    if (mounted) {
+      setState(
+        () => _status = widget.projectId == null
+            ? 'Escaneo importado (solo en este equipo).'
+            : PlanScanStore.fitsCloud(size)
+            ? 'Escaneo importado; se sube a la nube para el resto de equipos.'
+            : 'Escaneo importado, pero pesa '
+                  '${(size / 1048576).round()} MB: no se sube a la nube '
+                  '(máximo 50). Expórtalo con menos detalle para usarlo en '
+                  'otros equipos.',
+      );
+    }
     var centre = Offset.zero;
     if (widget.elements.isNotEmpty) {
       for (final el in widget.elements) {
@@ -444,7 +487,10 @@ class _Plan3dViewState extends State<Plan3dView> {
             onPressed: _importScan,
           ),
         Text(
-          'De Polycam o Luma AI. Luego tócalo para colocarlo, girarlo y '
+          'De RealityScan, Polycam o Luma AI: exporta en GLB (o OBJ) con '
+          'texturas y, para que viaje a otros equipos, de menos de 50 MB '
+          '(en RealityScan, detalle medio). El USDZ del iPhone no vale: '
+          'expórtalo como GLB. Luego tócalo para colocarlo, girarlo y '
           'ponerlo a escala.',
           style: caption,
         ),
@@ -544,7 +590,47 @@ class _Plan3dViewState extends State<Plan3dView> {
           ),
         ],
       ),
+      if (widget.onScanTop != null) ...[
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.layers_outlined, size: 16),
+          label: const Text('Cenital de fondo en la planta'),
+          onPressed: () => _scanTop(el),
+        ),
+        Text(
+          'Una vista desde arriba del escaneo, a escala, debajo de la planta '
+          'para calcar paredes y muebles. Calíbralo antes.',
+          style: caption,
+        ),
+      ],
     ];
+  }
+
+  /// Pide al visor la cenital del escaneo [el] y la pone de fondo.
+  Future<void> _scanTop(PlanElement el) async {
+    final web = _web, sink = widget.onScanTop;
+    if (web == null || !_ready || sink == null) return;
+    final id = PlanScene3d.idOf(el, widget.elements.indexOf(el));
+    final raw = await web.evaluateJavascript(
+      source: 'iris.scanTop(${jsonEncode(id)}, 2048);',
+    );
+    final data = raw is String ? jsonDecode(raw) : null;
+    if (data is! Map || data['png'] is! String) {
+      if (mounted) {
+        setState(
+          () => _status = 'El escaneo aún no se ha cargado en el 3D.',
+        );
+      }
+      return;
+    }
+    double n(Object? v) => (v as num).toDouble();
+    await sink(
+      base64Decode(data['png'] as String),
+      Rect.fromLTWH(n(data['x']), n(data['y']), n(data['w']), n(data['h'])),
+    );
+    if (mounted) {
+      setState(() => _status = 'Cenital puesta de fondo en la planta.');
+    }
   }
 
   /// MVR con las luces y, dentro, la nave y su estructura en glTF.
@@ -1347,6 +1433,7 @@ class Plan3dScreen extends StatefulWidget {
   final UnrealCaptureSink? onUnrealCapture;
   final Future<void> Function()? onOpenUnreal;
   final int? projectId;
+  final ScanTopSink? onScanTop;
 
   const Plan3dScreen({
     super.key,
@@ -1362,6 +1449,7 @@ class Plan3dScreen extends StatefulWidget {
     this.onUnrealCapture,
     this.onOpenUnreal,
     this.projectId,
+    this.onScanTop,
   });
 
   static Future<void> show(
@@ -1378,6 +1466,7 @@ class Plan3dScreen extends StatefulWidget {
     UnrealCaptureSink? onUnrealCapture,
     Future<void> Function()? onOpenUnreal,
     int? projectId,
+    ScanTopSink? onScanTop,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -1393,6 +1482,7 @@ class Plan3dScreen extends StatefulWidget {
         onUnrealCapture: onUnrealCapture,
         onOpenUnreal: onOpenUnreal,
         projectId: projectId,
+        onScanTop: onScanTop,
       ),
     ),
   );
@@ -1437,6 +1527,7 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       onUnrealCapture: widget.onUnrealCapture,
       onOpenUnreal: widget.onOpenUnreal,
       projectId: widget.projectId,
+      onScanTop: widget.onScanTop,
     ),
   );
 }

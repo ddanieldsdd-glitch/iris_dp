@@ -760,6 +760,11 @@
     const fixtures = sc.fixtures || [];
     const maxLights = 14, step = Math.max(1, fixtures.length / maxLights);
     let next = 0, lit = 0;
+    // Con un escaneo se ensaya la luz sobre la localización: los primeros
+    // focos dan sombra (F6.12.4). Son caras, así que solo unos pocos.
+    const hasScans = (sc.scans || []).length > 0;
+    const maxShadows = 4;
+    let shadows = 0;
     fixtures.forEach((f, i) => {
       const col = cctColor(f.cct || 3200);
       const p = V(f.pos[0], f.pos[1], f.pos[2]), a = V(f.aim[0], f.aim[1], f.aim[2]);
@@ -783,6 +788,14 @@
         const sl = new THREE.SpotLight(col, 0.6 + (f.watts || 500) / 1600, 0, half, 0.45, 1);
         sl.position.copy(p);
         sl.target.position.copy(a);
+        if (hasScans && shadows < maxShadows) {
+          shadows++;
+          sl.castShadow = true;
+          sl.shadow.mapSize.set(1024, 1024);
+          sl.shadow.camera.near = 0.2;
+          sl.shadow.camera.far = 40;
+          sl.shadow.bias = -0.0008;
+        }
         root.add(sl);
         root.add(sl.target);
       }
@@ -880,6 +893,15 @@
       sc2.near = 0.5; sc2.far = reach * 5;
       sun.shadow.bias = -0.0005;
       root.add(sun, sun.target);
+      root.traverse((o) => {
+        if (!o.isMesh || (o.material && o.material.blending === THREE.AdditiveBlending)) return;
+        o.castShadow = true;
+        o.receiveShadow = true;
+      });
+      floor.castShadow = false;
+    }
+
+    if (hasScans && !sc.sun) {
       root.traverse((o) => {
         if (!o.isMesh || (o.material && o.material.blending === THREE.AdditiveBlending)) return;
         o.castShadow = true;
@@ -1065,6 +1087,18 @@
       new THREE.GLTFLoader().parse(buffer, '', (g) => resolve(g.scene), reject));
   }
 
+  // El escaneo recibe la luz de los focos y da sombra.
+  function shadowed(obj) {
+    if (obj) {
+      obj.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = true;
+        o.receiveShadow = true;
+      });
+    }
+    return obj;
+  }
+
   function placeScans(list) {
     const keep = new Set(list.map((q) => q.id));
     for (const id of Object.keys(scanWrappers)) {
@@ -1076,11 +1110,12 @@
         w = new THREE.Group();
         w.userData.id = q.id;
         w.userData.movable = true;
+        w.userData.file = q.file;
         w.name = 'Escaneo · ' + q.id;
         scanWrappers[q.id] = w;
         scansGroup.add(w);
         if (!scanCache[q.file]) {
-          scanCache[q.file] = loadScan(q.file, q.format).catch((e) => {
+          scanCache[q.file] = loadScan(q.file, q.format).then(shadowed).catch((e) => {
             post({ type: 'scanError', id: q.id, message: String(e && e.message || e) });
             return null;
           });
@@ -1148,8 +1183,85 @@
     });
   }
 
+  // Cenital ortográfica de un escaneo, a escala, con fondo transparente:
+  // la app la pone de fondo en la planta para calcar (F6.12.3). Devuelve
+  // el PNG y su rectángulo en metros de la planta (x a la derecha, y hacia
+  // abajo, como el lienzo).
+  function scanTop(id, maxPx) {
+    const w = scanWrappers[id];
+    if (!w || !w.children.length) return null;
+    w.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(w);
+    if (box.isEmpty()) return null;
+    const sx = box.max.x - box.min.x, sz = box.max.z - box.min.z;
+    if (!(sx > 0 && sz > 0)) return null;
+    const long = Math.max(sx, sz);
+    const px = Math.max(256, Math.min(maxPx || 2048, 4096));
+    const W = Math.max(1, Math.round(px * sx / long));
+    const H = Math.max(1, Math.round(px * sz / long));
+    const tmp = new THREE.Scene();
+    const copy = w.clone(true);
+    w.matrixWorld.decompose(copy.position, copy.quaternion, copy.scale);
+    tmp.add(copy);
+    tmp.add(new THREE.AmbientLight(0xffffff, 0.9));
+    const sunTop = new THREE.DirectionalLight(0xffffff, 0.5);
+    sunTop.position.set(0, 1, 0);
+    tmp.add(sunTop);
+    const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
+    const top = new THREE.OrthographicCamera(-sx / 2, sx / 2, sz / 2, -sz / 2, 0.01, 1000);
+    top.position.set(cx, box.max.y + 10, cz);
+    top.up.set(0, 0, -1);
+    top.lookAt(cx, box.min.y, cz);
+    const target = new THREE.WebGLRenderTarget(W, H);
+    target.texture.encoding = THREE.sRGBEncoding;
+    const clear = new THREE.Color();
+    renderer.getClearColor(clear);
+    const alpha = renderer.getClearAlpha();
+    renderer.setRenderTarget(target);
+    renderer.setViewport(0, 0, W, H);
+    renderer.setScissorTest(false);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear();
+    renderer.render(tmp, top);
+    const pixels = new Uint8Array(W * H * 4);
+    renderer.readRenderTargetPixels(target, 0, 0, W, H, pixels);
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(clear, alpha);
+    target.dispose();
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(W, H);
+    // WebGL lee de abajo arriba: se da la vuelta.
+    for (let y = 0; y < H; y++) {
+      img.data.set(pixels.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
+    }
+    ctx.putImageData(img, 0, 0);
+    return JSON.stringify({
+      png: canvas.toDataURL('image/png').split(',')[1],
+      // En three, x es la x de la planta y z su y hacia abajo, en metros.
+      x: box.min.x, y: box.min.z, w: sx, h: sz,
+    });
+  }
+
   window.iris = {
     load,
+    scanTop,
+    // Un escaneo que acaba de llegar a este equipo: se olvida lo cargado (o
+    // el fallo) y se vuelve a pedir con la escena de antes.
+    rescan: (file) => {
+      delete scanCache[file];
+      for (const id of Object.keys(scanWrappers)) {
+        const w = scanWrappers[id];
+        if (w.userData.file !== file) continue;
+        scansGroup.remove(w);
+        const i = picks.indexOf(w);
+        if (i >= 0) picks.splice(i, 1);
+        delete scanWrappers[id];
+      }
+      if (lastScene) load(lastScene);
+    },
     view: (v) => setView(v),
     select: (id) => highlight(id),
     floor: (f) => setFloorLight(f),

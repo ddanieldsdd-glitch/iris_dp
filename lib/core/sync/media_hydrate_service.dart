@@ -12,6 +12,7 @@ import 'media_entity_types.dart';
 import 'media_file_stamp.dart';
 import 'media_slots.dart';
 import 'primary_reference_repair.dart' as repair_refs;
+import 'plan_scan_store.dart';
 import 'unreal_thumb_store.dart';
 import '../utils/error_log.dart';
 
@@ -37,6 +38,21 @@ class MediaHydrateService {
     for (final asset in assets) {
       if (asset['entity_type'] == MediaEntityType.sketchStrokes) {
         strokes.add(asset);
+        continue;
+      }
+      if (asset['entity_type'] == MediaEntityType.planScan) {
+        try {
+          if (await _hydratePlanScan(projectId, projectCloudId, asset)) {
+            downloaded++;
+          }
+        } catch (e, st) {
+          await ErrorLog.record(
+            e,
+            st,
+            context: 'Bajar escaneo de la planta ${asset['entity_key']}',
+          );
+        }
+        checked++;
         continue;
       }
       if (asset['entity_type'] == MediaEntityType.unrealThumb) {
@@ -387,6 +403,31 @@ class MediaHydrateService {
     if (path == null) return false;
     await _markDownloaded(projectId, projectCloudId, asset, path);
     UnrealThumbStore.notifyArrived(key);
+    return true;
+  }
+
+  /// Escaneo de la planta: va a su archivo por nombre (`PlanScanStore`). Si
+  /// ya está aquí, no se baja.
+  Future<bool> _hydratePlanScan(
+    int projectId,
+    String projectCloudId,
+    Map<String, dynamic> asset,
+  ) async {
+    final key = asset['entity_key'] as String?;
+    final storagePath = asset['storage_path'] as String?;
+    if (key == null || storagePath == null || !PlanScanStore.isKey(key)) {
+      return false;
+    }
+    if (await PlanScanStore.resolve(projectId, key) != null) return false;
+    final path = await _cloud.downloadStorageFile(
+      localProjectId: projectId,
+      storagePath: storagePath,
+      subfolder: PlanScanStore.subfolder,
+      fileName: key,
+    );
+    if (path == null) return false;
+    await _markDownloaded(projectId, projectCloudId, asset, path);
+    PlanScanStore.notifyArrived(key);
     return true;
   }
 

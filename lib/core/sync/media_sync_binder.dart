@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'media_sync_bridge.dart';
 import 'media_sync_providers.dart';
+import 'plan_scan_store.dart';
 import 'unreal_thumb_store.dart';
 
 /// Enlaza servicios de media cloud con helpers estáticos (pegar, importar).
@@ -28,6 +29,7 @@ class _MediaSyncBinderState extends ConsumerState<MediaSyncBinder> {
       ingestService: ref.read(mediaIngestServiceProvider),
     );
     UnrealThumbStore.uploadQueue = ref.read(mediaUploadQueueProvider);
+    PlanScanStore.uploadQueue = ref.read(mediaUploadQueueProvider);
     ref.read(mediaUploadQueueProvider)?.notifyProgress();
   }
 

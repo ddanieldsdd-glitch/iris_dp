@@ -29,6 +29,10 @@ Funciones:
   FindAssets(texto)  → {"ok": true, "assets": [{path, name, kind, source, sizeCm}]}
   AssetPreview(ruta) → {"ok": true, "top": png64, "threeQuarter": png64, "topSpanCm"}
 
+Los escaneos de la planta (RealityScan, Polycam…, F6.12) llegan con el
+nombre de su archivo y las carpetas de IRIS donde buscarlo en este PC; se
+importan una vez a `/Game/IRIS/Scans/<nombre>` y se ponen en su sitio.
+
 La ruta del objeto para Remote Control es
 `/Game/Python/iris_stage_link_PY.Default__IrisStageLink` (el módulo tiene
 que estar en Content/Python del proyecto).
@@ -55,6 +59,9 @@ SKY_ID = "_sky"
 ATMOSPHERE_ID = "_atmosphere"
 FLOOR_ID = "_floor"
 WORLD_ROOT = "/Game/IRIS"
+SCAN_ROOT = WORLD_ROOT + "/Scans"
+# Una malla de más de un escaneo (la importación da varias): id#p<n>.
+PART = "#p"
 CUBE = "/Engine/BasicShapes/Cube.Cube"
 PLANE = "/Engine/BasicShapes/Plane.Plane"
 
@@ -584,8 +591,71 @@ def _apply_sky(sky):
         _set(comp, "intensity", float(sky.get("scale", 1.0)))
 
 
+def _scan_meshes(file, folders):
+    """Las mallas de un escaneo importado; si aún no está, se importa del
+    archivo que tiene IRIS en este PC. Vacío si no se encuentra."""
+    base = re.sub(r"[^0-9a-zA-Z_]", "_", os.path.splitext(os.path.basename(file))[0])
+    dest = "%s/S_%s" % (SCAN_ROOT, base)
+    lib = unreal.EditorAssetLibrary
+
+    def meshes():
+        if not lib.does_directory_exist(dest):
+            return []
+        out = []
+        for path in lib.list_assets(dest, recursive=True, include_folder=False):
+            data = lib.find_asset_data(path)
+            if str(data.asset_class_path.asset_name) == "StaticMesh":
+                out.append(str(data.package_name) + "." + str(data.asset_name))
+        return sorted(out)
+
+    found = meshes()
+    if found:
+        return found
+    source = None
+    for folder in folders or []:
+        candidate = os.path.join(folder, os.path.basename(file))
+        if os.path.isfile(candidate):
+            source = candidate
+            break
+    if source is None:
+        unreal.log_warning("[IRIS Stage] El escaneo %s no está en este PC." % file)
+        return []
+    task = unreal.AssetImportTask()
+    task.filename = source
+    task.destination_path = dest
+    task.automated = True
+    task.save = True
+    task.replace_existing = True
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+    found = meshes()
+    if not found:
+        unreal.log_warning("[IRIS Stage] No se ha podido importar %s." % source)
+    return found
+
+
+def _apply_scan(s, folders):
+    """Un escaneo de la planta: sus mallas en su sitio, giro y escala."""
+    uid = str(s["id"])
+    label = "IRIS_%s" % (s.get("name") or uid)
+    loc, rot = _vec(s["loc"]), _rot(s["rot"])
+    scale = float(s.get("scale") or 1.0)
+    parts = _scan_meshes(s["file"], folders)
+    for i, path in enumerate(parts):
+        part_uid = uid if i == 0 else "%s%s%d" % (uid, PART, i)
+        actor = _place_asset(part_uid, label if i == 0 else "%s (%d)" % (label, i),
+                             path, loc, rot)
+        if actor is not None:
+            actor.set_actor_scale3d(unreal.Vector(scale, scale, scale))
+    # Mallas que ya no tiene (otra importación del mismo escaneo).
+    _remove([p for p in list(_actors)
+             if p.startswith(uid + PART) and int(p[len(uid + PART):] or 0) >= max(len(parts), 1)])
+
+
 def _remove(ids):
     ids = list(ids) + [str(uid) + BODY for uid in ids if not str(uid).endswith(BODY)]
+    # Las otras mallas de un escaneo se van con él.
+    ids += [p for p in list(_actors) for uid in list(ids)
+            if PART not in str(uid) and p.startswith(str(uid) + PART)]
     for uid in ids:
         actor = _find(str(uid))
         if actor is not None:
@@ -598,15 +668,17 @@ def _apply(data):
     cameras = data.get("cameras", [])
     props = data.get("props", [])
     assets = data.get("assets", [])
+    scans = data.get("scans", [])
     if data.get("world"):
         _ensure_world(data["world"])
     if data.get("full"):
         # Escena entera: lo de IRIS que ya no está, fuera.
         _rescan()
-        keep = ({str(x["id"]) for x in lights + cameras + props + assets}
+        keep = ({str(x["id"]) for x in lights + cameras + props + assets + scans}
                 | {str(x["id"]) + BODY for x in lights + cameras if x.get("asset")}
                 | _FIXED)
-        _remove([uid for uid in list(_actors) if uid not in keep])
+        _remove([uid for uid in list(_actors)
+                 if uid not in keep and uid.split(PART)[0] not in keep])
     _remove(data.get("remove", []))
     for light in lights:
         _apply_light(light)
@@ -616,6 +688,8 @@ def _apply(data):
         _apply_prop(p)
     for a in assets:
         _apply_asset(a)
+    for s in scans:
+        _apply_scan(s, data.get("scanFolders", []))
     if "sun" in data:
         _apply_sun(data["sun"])
     if "sky" in data:
