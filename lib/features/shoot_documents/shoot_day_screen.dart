@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/user_error.dart';
@@ -20,6 +21,7 @@ import '../locations/locations_screen.dart';
 import '../technical_script/script_export_dialog.dart';
 import '../technical_script/technical_script_export.dart';
 import '../technical_script/technical_script_settings.dart';
+import 'shoot_day_on_set.dart';
 import 'shoot_day_order.dart';
 import 'shoot_document_block_types.dart';
 import 'shoot_document_script_picker.dart';
@@ -188,6 +190,13 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
     }
   }
 
+  void _openOnSet(ShootDocument day) => ShootDayOnSetScreen.open(
+    context,
+    projectId: widget.projectId,
+    documentId: widget.documentId,
+    title: day.name,
+  );
+
   Future<void> _export() async {
     final choice = await showScriptExportDialog(
       context,
@@ -225,16 +234,34 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
           appBar: AppBar(
             backgroundColor: palette.surface,
             title: Text(day.name, style: AppTypography.titleMedium(palette)),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilledButton.icon(
-                  onPressed: _export,
-                  icon: const Icon(Icons.ios_share, size: 18),
-                  label: const Text('Exportar'),
-                ),
-              ),
-            ],
+            actions: AppLayout.isCompact(context)
+                ? [
+                    IconButton(
+                      tooltip: 'En set',
+                      onPressed: () => _openOnSet(day),
+                      icon: const Icon(Icons.checklist),
+                    ),
+                    IconButton(
+                      tooltip: 'Exportar',
+                      onPressed: _export,
+                      icon: const Icon(Icons.ios_share),
+                    ),
+                  ]
+                : [
+                    TextButton.icon(
+                      onPressed: () => _openOnSet(day),
+                      icon: const Icon(Icons.checklist, size: 18),
+                      label: const Text('En set'),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilledButton.icon(
+                        onPressed: _export,
+                        icon: const Icon(Icons.ios_share, size: 18),
+                        label: const Text('Exportar'),
+                      ),
+                    ),
+                  ],
           ),
           body: StreamBuilder<List<LocationSite>>(
             stream: db.watchSitesForProject(widget.projectId),
