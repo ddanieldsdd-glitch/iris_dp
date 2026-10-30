@@ -19,6 +19,7 @@ import '../luka_export/iris_dp_export_service.dart';
 import '../luka_export/luka_bridge_preview_panel.dart';
 import '../luka_export/luka_export_preview.dart';
 import '../luka_export/unreal_render_import.dart';
+import '../unreal_link/unreal_library_screen.dart';
 import '../unreal_link/unreal_link.dart';
 import '../unreal_link/unreal_render_view.dart';
 import '../unreal_link/unreal_stage_card.dart';
@@ -356,6 +357,18 @@ class _IrisStageScreenState extends ConsumerState<IrisStageScreen> {
               UnrealStageCard(
                 projectId: widget.projectId,
                 projectName: widget.projectName,
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: AppButton(
+                  label: 'Biblioteca de Unreal',
+                  icon: Icons.collections_outlined,
+                  variant: AppButtonVariant.secondary,
+                  onTap: () => UnrealLibraryScreen.open(
+                    context,
+                    projectId: widget.projectId,
+                  ),
+                ),
               ),
               ListenableBuilder(
                 listenable: UnrealLink.instance,

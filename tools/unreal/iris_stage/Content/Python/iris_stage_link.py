@@ -27,6 +27,7 @@ Funciones:
   Capture(json)      → {"ok": true, "token": …}: foto en alta por una cámara
   CaptureResult(tok) → {"ok": true, "ready": bool, "png": base64}
   FindAssets(texto)  → {"ok": true, "assets": [{path, name, kind, source, sizeCm}]}
+  FindFabAssets(txt) → lo mismo, solo lo bajado de Fab y Megascans (F6.20 D2)
   AssetPreview(ruta) → {"ok": true, "top": png64, "threeQuarter": png64, "topSpanCm"}
 
 Los escaneos de la planta (RealityScan, Polycam…, F6.12) llegan con el
@@ -393,9 +394,10 @@ def _source_of(package):
     return "project"
 
 
-def _find_assets(query, limit=40):
+def _find_assets(query, limit=40, sources=None):
     """Mallas, Blueprints y personajes del proyecto que contienen todas las
-    palabras de [query] en su nombre o su carpeta."""
+    palabras de [query] en su nombre o su carpeta. Con [sources], solo los
+    de esos orígenes («fab», «megascans», «project»)."""
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     classes = {"StaticMesh": "mesh", "Blueprint": "blueprint", "SkeletalMesh": "skeletal"}
     flt = unreal.ARFilter(
@@ -406,6 +408,8 @@ def _find_assets(query, limit=40):
     for data in registry.get_assets(flt):
         package = str(data.package_name)
         if package.startswith(WORLD_ROOT + "/"):
+            continue
+        if sources and _source_of(package) not in sources:
             continue
         name = str(data.asset_name)
         hay = (package + " " + name).lower()
@@ -780,6 +784,15 @@ class IrisStageLink(unreal.BlueprintFunctionLibrary):
     def FindAssets(query):
         try:
             return json.dumps({"ok": True, "assets": _find_assets(query)})
+        except Exception as exc:
+            return json.dumps({"ok": False, "error": str(exc)})
+
+    @unreal.ufunction(static=True, params=[str], ret=str,
+                      meta=dict(Category="IRIS Stage"))
+    def FindFabAssets(query):
+        try:
+            return json.dumps({"ok": True, "assets": _find_assets(
+                query, limit=300, sources=("fab", "megascans"))})
         except Exception as exc:
             return json.dumps({"ok": False, "error": str(exc)})
 

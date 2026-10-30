@@ -16,6 +16,7 @@ import '../../core/weather/weather_summary.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
 import '../camera_plan/plan_data.dart';
 import '../camera_plan/plan_thumbnail.dart';
+import '../shoot_documents/shoot_day_on_set.dart';
 import 'table/script_sheet_theme.dart';
 import 'technical_script_settings.dart';
 
@@ -120,6 +121,7 @@ Future<ScriptDocRow> _docRow(
   Shot shot,
   ScriptSheetTheme sheet, {
   int? order,
+  String? orderNote,
   PlanProjectData? plans,
   ScriptPlanView planView = ScriptPlanView.both,
   bool storyboard = false,
@@ -161,7 +163,8 @@ Future<ScriptDocRow> _docRow(
       : await PdfSafeImage.loadFromPathMaxEdge(storyPath, maxEdge: 1200);
   return ScriptDocRow(
     cells: {
-      if (order != null) 'orden': '$order',
+      if (order != null)
+        'orden': orderNote == null ? '$order' : '$order\n$orderNote',
       'esc': scene.label,
       'plano': '${shot.number}',
       'encuadre': shot.framing ?? '',
@@ -400,6 +403,11 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
         shot,
         sheet,
         order: order,
+        orderNote: switch (OnSetMark.of(block).status) {
+          OnSetStatus.done => '**HECHO**',
+          OnSetStatus.dropped => 'DESCART.',
+          OnSetStatus.pending => null,
+        },
         plans: plans,
         planView: settings.planView,
         storyboard: !hidden.contains('story'),

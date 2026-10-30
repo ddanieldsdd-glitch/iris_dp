@@ -74,6 +74,8 @@ A mano, si lo prefieres:
 
 ## Assets de Fab y Megascans
 
+**Biblioteca de Unreal.** En IRIS Stage o en la barra de la planta (icono de colección): todo asset que has usado o encontrado, con su miniatura, origen y medidas, y favoritos. Se busca aunque no haya Unreal (también en el Mac y el iPad: viaja con tus ajustes). Con Unreal conectado, «Buscar en Unreal» añade lo del proyecto y «Hacer N miniaturas» completa las que falten. Desde la planta, «Poner en la planta» crea el elemento con su asset y sus medidas: un sofá, una silla, una mesa… según su nombre, o un actor si es un personaje.
+
 **Miniaturas.** Al elegir un asset, Unreal le hace dos fotos (desde arriba con fondo transparente, y en 3/4) y IRIS las guarda en el proyecto y las sube a la nube, así que también se ven en el Mac y el iPad aunque allí no haya Unreal. Son un render tuyo, no el modelo. Con el icono de imagen de la barra de la planta («Vista de assets»), lo que tiene asset se dibuja con su foto desde arriba, a escala; en el 3D se ve como un cartel con la foto en 3/4; y en la ficha, la 3/4. «Volver a hacer las miniaturas» las repite.
 
 - **Licencia:** los assets de Fab y Megascans con licencia de Unreal solo se pueden usar dentro de Unreal. Por eso IRIS no los copia: guarda la ruta del asset (`/Game/Fab/…`), y en la planta y el visor de IRIS queda la pieza con sus medidas.

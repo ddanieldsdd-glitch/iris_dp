@@ -281,6 +281,18 @@ class UnrealLink extends ChangeNotifier {
     ];
   }
 
+  /// Lo bajado de Fab y Megascans al proyecto de Unreal (F6.20 D2): todo,
+  /// o lo que contenga [query].
+  Future<List<UnrealAsset>> findFabAssets([String query = '']) async {
+    final r = await call('FindFabAssets', {
+      'query': query,
+    }, const Duration(seconds: 120));
+    return [
+      for (final a in (r['assets'] as List? ?? const []).cast<Map>())
+        UnrealAsset.fromJson(a),
+    ];
+  }
+
   Future<void> _pump() async {
     if (_busy || !isOn) return;
     _busy = true;

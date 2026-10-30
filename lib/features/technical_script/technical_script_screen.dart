@@ -12,6 +12,7 @@ import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_layout.dart';
 import '../shoot_documents/shoot_day_on_set.dart';
+import '../shoot_documents/shoot_day_screen.dart';
 import '../../core/sync/live_editing.dart';
 import '../../core/sync/live_editing_scope.dart';
 import '../../core/sync/realtime_hub.dart';
@@ -216,6 +217,11 @@ class TechnicalScriptScreen extends ConsumerWidget {
               if (doc == null) return Uint8List(0);
               return TechnicalScriptPdfExporter.buildBytes(doc);
             },
+          ),
+          IconButton(
+            tooltip: 'Jornadas de rodaje',
+            icon: Icon(Icons.event_note_outlined, color: palette.accent),
+            onPressed: () => _showShootDays(context, ref, projectId),
           ),
           IconButton(
             tooltip: 'Exportar el guion técnico',
@@ -879,6 +885,66 @@ class _FormatBar extends ConsumerWidget {
 
 /// Guion técnico: una tabla por escena, como hojas de un documento. Ocupa
 /// todo el ancho; por debajo del mínimo, se desplaza entera.
+/// Las jornadas del proyecto, para abrir una desde el guion técnico (G5):
+/// en el iPhone, «En set»; si no, la jornada para ordenarla y exportarla.
+Future<void> _showShootDays(
+  BuildContext context,
+  WidgetRef ref,
+  int projectId,
+) async {
+  final db = ref.read(databaseProvider);
+  final days = [
+    for (final d in await db.watchShootDocumentsForProject(projectId).first)
+      if (d.kind == kShootDayKind) d,
+  ]..sort((a, b) => (a.shootDate ?? '').compareTo(b.shootDate ?? ''));
+  if (!context.mounted) return;
+  final palette = context.palette;
+  final picked = await showModalBottomSheet<ShootDocument>(
+    context: context,
+    backgroundColor: palette.surfaceElevated,
+    builder: (ctx) => SafeArea(
+      child: days.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Text(
+                'Aún no hay jornadas. Créalas en Documentos de rodaje.',
+                style: AppTypography.bodyMedium(palette),
+              ),
+            )
+          : ListView(
+              shrinkWrap: true,
+              children: [
+                for (final d in days)
+                  ListTile(
+                    leading: const Icon(Icons.event_note_outlined),
+                    title: Text(d.name),
+                    subtitle: d.shootDate == null
+                        ? null
+                        : Text(formatShootDate(d.shootDate)),
+                    onTap: () => Navigator.pop(ctx, d),
+                  ),
+              ],
+            ),
+    ),
+  );
+  if (picked == null || !context.mounted) return;
+  if (AppLayout.isCompact(context)) {
+    await ShootDayOnSetScreen.open(
+      context,
+      projectId: projectId,
+      documentId: picked.id,
+      title: picked.name,
+    );
+    return;
+  }
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) =>
+          ShootDayScreen(projectId: projectId, documentId: picked.id),
+    ),
+  );
+}
+
 /// En el iPhone (IP.2.3) el guion se abre en lectura: escenas y planos en
 /// tarjetas. La tabla sigue a un toque, para retocar algo suelto.
 class _CompactSwitch extends StatefulWidget {
