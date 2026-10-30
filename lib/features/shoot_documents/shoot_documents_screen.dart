@@ -266,7 +266,7 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
                                           technicalScriptSettingsProvider,
                                         ),
                                         doc.id,
-                                        (word: word, index: true),
+                                        (word: word, index: lastScriptExportIndex),
                                       )
                                     : null,
                                 onSetPrimary: () => db.setPrimaryShootDocument(

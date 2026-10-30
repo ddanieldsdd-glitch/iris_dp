@@ -344,14 +344,13 @@ class TechnicalScriptDocxExporter {
     final embeds = StringBuffer();
     final fontFiles = <String, Uint8List>{};
     if (fonts != null) {
-      final random = Random();
       for (final (i, (tag, bytes)) in [
         ('embedRegular', fonts.regular),
         ('embedBold', fonts.bold),
         ('embedItalic', fonts.italic),
         ('embedBoldItalic', fonts.boldItalic),
       ].indexed) {
-        final key = _fontKey(random);
+        final key = _fontKey(Random(_fontSeed(bytes)));
         final file = 'font${i + 1}.odttf';
         fontFiles['word/fonts/$file'] = _obfuscateFont(bytes, key);
         fontRels.write(
@@ -383,12 +382,12 @@ class TechnicalScriptDocxExporter {
         '<w:style w:type="paragraph" w:default="1" w:styleId="Normal">'
         '<w:name w:val="Normal"/><w:qFormat/></w:style>'
         '</w:styles>';
-    // Con índice, Word recalcula sus páginas al abrir el documento.
+    // Las páginas del índice ya vienen calculadas por el PDF; sin
+    // updateFields, Word no pregunta nada al abrir el documento.
     final settings =
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
         '${fonts != null ? '<w:embedTrueTypeFonts/>' : ''}'
-        '${doc.hasIndex ? '<w:updateFields w:val="true"/>' : ''}'
         '</w:settings>';
 
     const contentTypes =
@@ -439,7 +438,17 @@ class TechnicalScriptDocxExporter {
     return Uint8List.fromList(ZipEncoder().encode(archive)!);
   }
 
-  /// Clave aleatoria de una tipografía incrustada: «{XXXXXXXX-XXXX-…}».
+  /// Semilla fija por tipografía (FNV-1a de sus bytes), para que el mismo
+  /// guion dé siempre el mismo .docx.
+  static int _fontSeed(Uint8List bytes) {
+    var h = 0x811c9dc5;
+    for (final b in bytes) {
+      h = ((h ^ b) * 0x01000193) & 0xffffffff;
+    }
+    return h;
+  }
+
+  /// Clave de una tipografía incrustada: «{XXXXXXXX-XXXX-…}».
   static String _fontKey(Random random) {
     final hex = [
       for (var i = 0; i < 16; i++)

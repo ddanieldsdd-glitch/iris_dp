@@ -9,6 +9,10 @@ typedef ScriptExportChoice = ({bool word, bool index});
 /// Última elección, para proponerla la próxima vez.
 ScriptExportChoice _last = (word: false, index: true);
 
+/// Si la última exportación llevó índice; lo usan los botones directos de
+/// PDF y Word, que no abren el diálogo.
+bool get lastScriptExportIndex => _last.index;
+
 /// Pregunta el formato (PDF o Word) y si lleva índice de escenas.
 Future<ScriptExportChoice?> showScriptExportDialog(
   BuildContext context, {

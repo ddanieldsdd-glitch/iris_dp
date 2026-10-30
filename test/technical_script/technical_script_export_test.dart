@@ -305,13 +305,15 @@ void main() {
     );
     expect(plain, isNot(contains('esc_0')));
 
-    final zip = ZipDecoder().decodeBytes(
-      TechnicalScriptDocxExporter.buildBytes(
-        doc.copyWith(fontFamily: 'Tinos'),
-        pages: pages,
-        fonts: await DocxFontFiles.load('Tinos'),
-      ),
-    );
+    final fonts = await DocxFontFiles.load('Tinos');
+    Archive docx() => ZipDecoder().decodeBytes(
+          TechnicalScriptDocxExporter.buildBytes(
+            doc.copyWith(fontFamily: 'Tinos'),
+            pages: pages,
+            fonts: fonts,
+          ),
+        );
+    final zip = docx();
     String part(String name) =>
         utf8.decode(zip.files.firstWhere((f) => f.name == name).content);
     final xml = part('word/document.xml');
@@ -331,7 +333,17 @@ void main() {
       zip.files.where((f) => f.name.endsWith('.odttf')),
       hasLength(4),
     );
-    expect(part('word/settings.xml'), contains('w:updateFields'));
+    // Word no pregunta por actualizar campos al abrir.
+    expect(part('word/settings.xml'), isNot(contains('w:updateFields')));
+    // El mismo guion da siempre el mismo .docx.
+    final again = docx();
+    for (final f in zip.files) {
+      expect(
+        again.findFile(f.name)?.content,
+        f.content,
+        reason: f.name,
+      );
+    }
   });
 
   test('un asterisco en el título o la escena no pone nada en cursiva',

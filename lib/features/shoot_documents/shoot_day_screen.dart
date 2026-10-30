@@ -698,7 +698,38 @@ class _OrderListState extends ConsumerState<_OrderList> {
                               shotOfBlock[id]!,
                           ],
                           onRemove: () async {
-                            for (final id in tracts[i].blockIds) {
+                            final tract = tracts[i];
+                            final n = tract.blockIds.length;
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: Text(
+                                  'Quitar la escena '
+                                  '${scenes[tract.sceneId]?.label ?? '—'} '
+                                  'de la jornada',
+                                ),
+                                content: Text(
+                                  n == 1
+                                      ? 'Se quita 1 plano de este documento. '
+                                          'El plano sigue en el guion técnico.'
+                                      : 'Se quitan $n planos de este '
+                                          'documento. Siguen en el guion '
+                                          'técnico.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Cancelar'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('Quitar'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (ok != true) return;
+                            for (final id in tract.blockIds) {
                               await db.deleteShootDocumentBlock(id);
                             }
                           },
