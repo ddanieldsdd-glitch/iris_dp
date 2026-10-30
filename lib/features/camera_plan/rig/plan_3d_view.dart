@@ -51,6 +51,10 @@ const _layers = <(String, String)>[
 ///
 /// En panel (junto a la planta) la barra es compacta; a pantalla entera
 /// ([full]) lleva un lateral con todas las opciones y el resumen.
+/// Recibe la cenital de un escaneo: el PNG y su rectángulo en metros de la
+/// planta.
+typedef ScanTopSink = Future<void> Function(Uint8List png, Rect metres);
+
 class Plan3dView extends StatefulWidget {
   final List<PlanElement> elements;
   final double metersPerUnit;
@@ -91,6 +95,10 @@ class Plan3dView extends StatefulWidget {
   /// Proyecto de la planta: sus miniaturas de Unreal.
   final int? projectId;
 
+  /// Pone la cenital de un escaneo (PNG) de fondo en la planta, en el
+  /// rectángulo dado en metros de la planta.
+  final ScanTopSink? onScanTop;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -108,6 +116,7 @@ class Plan3dView extends StatefulWidget {
     this.onUnrealCapture,
     this.onOpenUnreal,
     this.projectId,
+    this.onScanTop,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -565,7 +574,47 @@ class _Plan3dViewState extends State<Plan3dView> {
           ),
         ],
       ),
+      if (widget.onScanTop != null) ...[
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.layers_outlined, size: 16),
+          label: const Text('Cenital de fondo en la planta'),
+          onPressed: () => _scanTop(el),
+        ),
+        Text(
+          'Una vista desde arriba del escaneo, a escala, debajo de la planta '
+          'para calcar paredes y muebles. Calíbralo antes.',
+          style: caption,
+        ),
+      ],
     ];
+  }
+
+  /// Pide al visor la cenital del escaneo [el] y la pone de fondo.
+  Future<void> _scanTop(PlanElement el) async {
+    final web = _web, sink = widget.onScanTop;
+    if (web == null || !_ready || sink == null) return;
+    final id = PlanScene3d.idOf(el, widget.elements.indexOf(el));
+    final raw = await web.evaluateJavascript(
+      source: 'iris.scanTop(${jsonEncode(id)}, 2048);',
+    );
+    final data = raw is String ? jsonDecode(raw) : null;
+    if (data is! Map || data['png'] is! String) {
+      if (mounted) {
+        setState(
+          () => _status = 'El escaneo aún no se ha cargado en el 3D.',
+        );
+      }
+      return;
+    }
+    double n(Object? v) => (v as num).toDouble();
+    await sink(
+      base64Decode(data['png'] as String),
+      Rect.fromLTWH(n(data['x']), n(data['y']), n(data['w']), n(data['h'])),
+    );
+    if (mounted) {
+      setState(() => _status = 'Cenital puesta de fondo en la planta.');
+    }
   }
 
   /// MVR con las luces y, dentro, la nave y su estructura en glTF.
@@ -1368,6 +1417,7 @@ class Plan3dScreen extends StatefulWidget {
   final UnrealCaptureSink? onUnrealCapture;
   final Future<void> Function()? onOpenUnreal;
   final int? projectId;
+  final ScanTopSink? onScanTop;
 
   const Plan3dScreen({
     super.key,
@@ -1383,6 +1433,7 @@ class Plan3dScreen extends StatefulWidget {
     this.onUnrealCapture,
     this.onOpenUnreal,
     this.projectId,
+    this.onScanTop,
   });
 
   static Future<void> show(
@@ -1399,6 +1450,7 @@ class Plan3dScreen extends StatefulWidget {
     UnrealCaptureSink? onUnrealCapture,
     Future<void> Function()? onOpenUnreal,
     int? projectId,
+    ScanTopSink? onScanTop,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -1414,6 +1466,7 @@ class Plan3dScreen extends StatefulWidget {
         onUnrealCapture: onUnrealCapture,
         onOpenUnreal: onOpenUnreal,
         projectId: projectId,
+        onScanTop: onScanTop,
       ),
     ),
   );
@@ -1458,6 +1511,7 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       onUnrealCapture: widget.onUnrealCapture,
       onOpenUnreal: widget.onOpenUnreal,
       projectId: widget.projectId,
+      onScanTop: widget.onScanTop,
     ),
   );
 }
