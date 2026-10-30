@@ -84,6 +84,8 @@ import 'plan_outliner.dart';
 import 'rig/plan_3d_view.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../unreal_link/unreal_asset_tile.dart';
+import '../unreal_link/unreal_library.dart';
+import '../unreal_link/unreal_library_screen.dart';
 import '../unreal_link/unreal_link.dart';
 import '../unreal_link/unreal_thumbs.dart';
 import '../unreal_link/unreal_stage_launcher.dart';
@@ -2938,6 +2940,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (mounted) _showSnack('Cenital del escaneo puesta de fondo.');
   }
 
+  /// Un asset de la biblioteca de Unreal, puesto en la planta: un actor si
+  /// es un personaje; si no, una pieza del tipo que dice su nombre, con sus
+  /// medidas y el asset ya asignado. Aparece en lo que se está viendo.
+  Future<void> _placeFromLibrary(UnrealAssetRef ref) async {
+    final el = UnrealLibrary.elementFor(ref, at: _snapToGrid(_viewCenter));
+    await _addElement(el, keepPosition: true);
+    await UnrealLibrary.instance.remember(ref, projectId: widget.projectId);
+  }
+
   /// «Abrir en Unreal» del proyecto de esta planta: lo crea, lo prepara,
   /// abre Unreal y conecta.
   Future<void> _openInUnreal() async {
@@ -4682,43 +4693,58 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             ),
             onPressed: () => setState(() => _gearLabels = !_gearLabels),
           ),
-          IconButton(
-            tooltip: _colorByType
-                ? 'Quitar los colores por tipo'
-                : 'Colorear por tipo, con leyenda',
+          // Reconocer cada elemento: colores por tipo, nombres y la imagen
+          // de su asset de Unreal (F6.20). Se recuerdan entre sesiones.
+          PopupMenuButton<String>(
+            tooltip: 'Vista: colores por tipo, nombres y assets',
             icon: Icon(
               Icons.palette_outlined,
-              color: _colorByType ? palette.accent : palette.textSecondary,
+              color: _colorByType || _showNames || _assetView
+                  ? palette.accent
+                  : palette.textSecondary,
             ),
-            onPressed: () {
-              setState(() => _colorByType = !_colorByType);
-              _setViewPref(_colorByTypeKey, _colorByType);
+            itemBuilder: (_) => [
+              CheckedPopupMenuItem(
+                value: 'types',
+                checked: _colorByType,
+                child: const Text('Colorear por tipo, con leyenda'),
+              ),
+              CheckedPopupMenuItem(
+                value: 'names',
+                checked: _showNames,
+                child: const Text('Nombres'),
+              ),
+              CheckedPopupMenuItem(
+                value: 'assets',
+                checked: _assetView,
+                child: const Text('Vista de assets de Unreal'),
+              ),
+            ],
+            onSelected: (v) {
+              switch (v) {
+                case 'types':
+                  setState(() => _colorByType = !_colorByType);
+                  _setViewPref(_colorByTypeKey, _colorByType);
+                case 'names':
+                  setState(() => _showNames = !_showNames);
+                  _setViewPref(_namesKey, _showNames);
+                case 'assets':
+                  setState(() => _assetView = !_assetView);
+                  _setViewPref(_assetViewKey, _assetView);
+              }
             },
           ),
           IconButton(
-            tooltip: _assetView
-                ? 'Quitar la vista de assets'
-                : 'Vista de assets: lo que tiene asset de Unreal, con su '
-                      'imagen desde arriba',
+            tooltip: 'Biblioteca de Unreal: poner un asset en la planta',
             icon: Icon(
-              Icons.image_outlined,
-              color: _assetView ? palette.accent : palette.textSecondary,
+              Icons.collections_outlined,
+              color: palette.textSecondary,
             ),
-            onPressed: () {
-              setState(() => _assetView = !_assetView);
-              _setViewPref(_assetViewKey, _assetView);
-            },
-          ),
-          IconButton(
-            tooltip: _showNames ? 'Quitar los nombres' : 'Nombres',
-            icon: Icon(
-              Icons.label_outline,
-              color: _showNames ? palette.accent : palette.textSecondary,
+            onPressed: () => UnrealLibraryScreen.open(
+              context,
+              projectId: widget.projectId,
+              onPlace: _placeFromLibrary,
             ),
-            onPressed: () {
-              setState(() => _showNames = !_showNames);
-              _setViewPref(_namesKey, _showNames);
-            },
           ),
           IconButton(
             tooltip: 'Lista de elementos',
