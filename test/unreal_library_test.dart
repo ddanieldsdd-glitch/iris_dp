@@ -1,8 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:iris_dp/core/theme/app_theme.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
+import 'package:iris_dp/features/unreal_link/fab_links.dart';
 import 'package:iris_dp/features/unreal_link/unreal_library.dart';
 import 'package:iris_dp/features/unreal_link/unreal_library_screen.dart';
 import 'package:iris_dp/features/unreal_link/unreal_link.dart';
@@ -139,5 +144,50 @@ void main() {
     await tester.tap(find.text('Poner en la planta'));
     await tester.pumpAndSettle();
     expect(placed?.name, 'SM_Rock');
+  });
+
+  test('Fab: búsqueda en el navegador, también solo de Megascans', () {
+    final uri = FabLinks.search(' sofa ');
+    expect(uri.host, 'www.fab.com');
+    expect(uri.path, '/search');
+    expect(uri.queryParameters['q'], 'sofa');
+    expect(FabLinks.search('rock', megascans: true).queryParameters['seller'],
+        'Quixel');
+    expect(FabLinks.search('').queryParameters, isEmpty);
+    expect(FabLinks.starterPacks, isNotEmpty);
+  });
+
+  test('recoger de Fab mete en la biblioteca lo bajado al proyecto', () async {
+    final client = MockClient((req) async {
+      final body = jsonDecode(req.body) as Map<String, dynamic>;
+      final result = switch (body['functionName']) {
+        'Ping' => {'ok': true, 'version': 1, 'engine': '5.5.4'},
+        'FindFabAssets' => {
+          'ok': true,
+          'assets': [
+            {
+              'path': '/Game/Fab/Megascans/Rock/SM_Rock.SM_Rock',
+              'name': 'SM_Rock',
+              'kind': 'mesh',
+              'source': 'megascans',
+              'sizeCm': [120, 90, 60],
+            },
+          ],
+        },
+        _ => {'ok': true},
+      };
+      return http.Response(
+        jsonEncode({'ReturnValue': jsonEncode(result)}),
+        200,
+      );
+    });
+    final link = UnrealLink(client: client);
+    expect(await link.connect(host: '127.0.0.1'), isTrue);
+    final found = await link.findFabAssets();
+    final lib = UnrealLibrary()..clearForTest();
+    expect(await lib.addFound([for (final a in found) a.toRef()]), 1);
+    expect(lib.search('rock').single.ref.path,
+        '/Game/Fab/Megascans/Rock/SM_Rock.SM_Rock');
+    link.disconnect();
   });
 }
