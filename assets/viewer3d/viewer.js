@@ -1076,6 +1076,7 @@
         w = new THREE.Group();
         w.userData.id = q.id;
         w.userData.movable = true;
+        w.userData.file = q.file;
         w.name = 'Escaneo · ' + q.id;
         scanWrappers[q.id] = w;
         scansGroup.add(w);
@@ -1150,6 +1151,20 @@
 
   window.iris = {
     load,
+    // Un escaneo que acaba de llegar a este equipo: se olvida lo cargado (o
+    // el fallo) y se vuelve a pedir con la escena de antes.
+    rescan: (file) => {
+      delete scanCache[file];
+      for (const id of Object.keys(scanWrappers)) {
+        const w = scanWrappers[id];
+        if (w.userData.file !== file) continue;
+        scansGroup.remove(w);
+        const i = picks.indexOf(w);
+        if (i >= 0) picks.splice(i, 1);
+        delete scanWrappers[id];
+      }
+      if (lastScene) load(lastScene);
+    },
     view: (v) => setView(v),
     select: (id) => highlight(id),
     floor: (f) => setFloorLight(f),

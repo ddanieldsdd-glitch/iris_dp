@@ -33,6 +33,10 @@ abstract final class MediaEntityType {
   /// ver `UnrealThumbStore`. Va como archivo, no por Cloudinary.
   static const unrealThumb = 'unreal_thumb';
 
+  /// Escaneo 3D de la planta, por nombre de archivo: ver `PlanScanStore`.
+  /// Va como archivo, no por Cloudinary.
+  static const planScan = 'plan_scan';
+
   /// Trazos editables de un boceto (`<imagen>.trazos.json`), que viajan con
   /// su imagen. Clave: `<tipo de la imagen>|<clave de la imagen>`.
   static const sketchStrokes = 'sketch_strokes';

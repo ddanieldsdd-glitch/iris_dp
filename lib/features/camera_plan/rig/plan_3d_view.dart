@@ -28,6 +28,7 @@ import '../../unreal_link/unreal_render_view.dart';
 import '../../unreal_link/unreal_return.dart';
 import '../../unreal_link/unreal_stage_payload.dart';
 import '../../unreal_link/unreal_thumbs.dart';
+import '../../../core/sync/plan_scan_store.dart';
 import 'scan_store.dart';
 import 'rig_report.dart';
 
@@ -152,9 +153,14 @@ class _Plan3dViewState extends State<Plan3dView> {
     super.initState();
     _realLength.addListener(() => setState(() {}));
     _fromUnreal = UnrealLink.instance.edits.listen(_applyFromUnreal);
+    _scanArrivals = PlanScanStore.arrivals.listen(
+      (file) => _call('iris.rescan(${jsonEncode(file)});'),
+    );
     UnrealThumbs.instance.addListener(_onThumbs);
     _schedule();
   }
+
+  StreamSubscription<String>? _scanArrivals;
 
   @override
   void didUpdateWidget(Plan3dView old) {
@@ -169,6 +175,7 @@ class _Plan3dViewState extends State<Plan3dView> {
   @override
   void dispose() {
     _fromUnreal?.cancel();
+    _scanArrivals?.cancel();
     UnrealThumbs.instance.removeListener(_onThumbs);
     _debounce?.cancel();
     _realLength.dispose();
@@ -316,6 +323,7 @@ class _Plan3dViewState extends State<Plan3dView> {
         // El visor pide los bytes de un escaneo: se le devuelven en base64.
         return ScanStore.bytesOf(
           message['file'] as String,
+          projectId: widget.projectId,
         ).then((bytes) => bytes == null ? null : base64Encode(bytes));
       case 'scanError':
         if (mounted) {
@@ -410,7 +418,20 @@ class _Plan3dViewState extends State<Plan3dView> {
     );
     final path = picked?.files.single.path;
     if (path == null) return;
-    final file = await ScanStore.import(path);
+    final file = await ScanStore.import(path, projectId: widget.projectId);
+    final size = await File(path).length();
+    if (mounted) {
+      setState(
+        () => _status = widget.projectId == null
+            ? 'Escaneo importado (solo en este equipo).'
+            : PlanScanStore.fitsCloud(size)
+            ? 'Escaneo importado; se sube a la nube para el resto de equipos.'
+            : 'Escaneo importado, pero pesa '
+                  '${(size / 1048576).round()} MB: no se sube a la nube '
+                  '(máximo 50). Expórtalo con menos detalle para usarlo en '
+                  'otros equipos.',
+      );
+    }
     var centre = Offset.zero;
     if (widget.elements.isNotEmpty) {
       for (final el in widget.elements) {
