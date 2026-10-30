@@ -70,7 +70,7 @@ En el iPhone con el .ipa de esta rama, o en el PC estrechando la ventana a menos
 
 ## 6 · Sincronización y estabilidad
 
-- [ ] **Bucle de descarga.** En la terminal del PC aparece `pullContentCloud · El Bosque de Aldrun` cada uno o dos segundos sin parar. Anota si pasa también en el Mac: puede ser un bucle de descarga, y conviene revisarlo antes de fiarse de la nube con el proyecto del rodaje (es la nota «La descarga de la nube pierde datos» de `PLAN_IRIS_PC.md`).
+- [ ] **Descargas de la nube.** Al abrir IRIS, la terminal del PC repite `pullContentCloud · El Bosque de Aldrun` cada uno o dos segundos durante unos minutos; después baja a una vez por minuto, con la pasada ligera. Anota si en algún equipo no para nunca, o si al bajar falta algo de un proyecto (es la nota «La descarga de la nube pierde datos» de `PLAN_IRIS_PC.md`). Hasta comprobarlo, no te fíes de la nube con el proyecto del rodaje.
 - [ ] **Del PC al Mac.** Un cambio hecho en el PC (un plano, una luz) llega al Mac, y al revés.
 
 ## 7 · Fab, Megascans y jornada (rama `plan/f6-20-d-fab-quixel`)
