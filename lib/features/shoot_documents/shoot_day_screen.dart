@@ -573,6 +573,48 @@ class _OrderList extends ConsumerStatefulWidget {
 }
 
 class _OrderListState extends ConsumerState<_OrderList> {
+  /// Cambia el orden y deja deshacerlo desde el aviso.
+  void _reorder(AppDatabase db, List<int> before, List<int> next) {
+    db.reorderShootDocumentBlocks(widget.documentId, next);
+    AppSnackBar.show(
+      context,
+      'Orden de rodaje cambiado.',
+      actionLabel: 'Deshacer',
+      onAction: () =>
+          db.reorderShootDocumentBlocks(widget.documentId, before),
+    );
+  }
+
+  /// Quita [removed] de la jornada y deja deshacerlo: vuelven en su sitio
+  /// del orden [before].
+  Future<void> _remove(
+    AppDatabase db,
+    List<ShootDocumentBlock> removed,
+    List<int> before,
+  ) async {
+    for (final b in removed) {
+      await db.deleteShootDocumentBlock(b.id);
+    }
+    if (!mounted) return;
+    final n = removed.length;
+    AppSnackBar.show(
+      context,
+      n == 1 ? 'Plano quitado de la jornada.' : '$n planos quitados.',
+      actionLabel: 'Deshacer',
+      onAction: () async {
+        final newIds = <int, int>{};
+        for (final b in removed) {
+          newIds[b.id] = await db.insertShootDocumentBlock(
+            b.toCompanion(false).copyWith(id: const Value.absent()),
+          );
+        }
+        await db.reorderShootDocumentBlocks(widget.documentId, [
+          for (final id in before) newIds[id] ?? id,
+        ]);
+      },
+    );
+  }
+
   bool _byScene = true;
 
   @override
@@ -604,8 +646,8 @@ class _OrderListState extends ConsumerState<_OrderList> {
             (id) => shotOfBlock[id]!.sceneId,
           );
 
-          void reorder(List<int> next) =>
-              db.reorderShootDocumentBlocks(widget.documentId, next);
+          void reorder(List<int> next) => _reorder(db, ids, next);
+          final blockById = {for (final b in rows) b.id: b};
 
           final inScriptOrder = scriptOrderOf(
             ids,
@@ -759,9 +801,9 @@ class _OrderListState extends ConsumerState<_OrderList> {
                               ),
                             );
                             if (ok != true) return;
-                            for (final id in tract.blockIds) {
-                              await db.deleteShootDocumentBlock(id);
-                            }
+                            await _remove(db, [
+                              for (final id in tract.blockIds) blockById[id]!,
+                            ], ids);
                           },
                         ),
                       )
@@ -852,8 +894,8 @@ class _OrderListState extends ConsumerState<_OrderList> {
                                         size: 16,
                                         color: palette.textSecondary,
                                       ),
-                                      onPressed: () => db
-                                          .deleteShootDocumentBlock(rows[i].id),
+                                      onPressed: () =>
+                                          _remove(db, [rows[i]], ids),
                                     ),
                                   ],
                                 ),

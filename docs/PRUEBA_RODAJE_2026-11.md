@@ -73,9 +73,28 @@ En el iPhone con el .ipa de esta rama, o en el PC estrechando la ventana a menos
 - [ ] **Bucle de descarga.** En la terminal del PC aparece `pullContentCloud · El Bosque de Aldrun` cada uno o dos segundos sin parar. Anota si pasa también en el Mac: puede ser un bucle de descarga, y conviene revisarlo antes de fiarse de la nube con el proyecto del rodaje (es la nota «La descarga de la nube pierde datos» de `PLAN_IRIS_PC.md`).
 - [ ] **Del PC al Mac.** Un cambio hecho en el PC (un plano, una luz) llega al Mac, y al revés.
 
-## 7 · Pendiente (no está en estas PRs)
+## 7 · Fab, Megascans y jornada (rama `plan/f6-20-d-fab-quixel`)
 
-- **Biblioteca de assets de Unreal (PR #58):** está lista, con la CI en verde, y falta tu aprobación para fusionarla. En su worktree (`.claude/worktrees/f6-3d-pc`) hay trabajo sin guardar de la cuenta anterior: opciones del esquema de luz en la miniatura y «quitar» en la biblioteca, que es el inicio de C1.
-- **Fab y Quixel desde IRIS (D1–D4)** e **IRIS Stage como guía de seis pasos (C1–C4):** van sobre la PR #58.
-- **RealityScan sin interfaz en el PC (E):** de fotos o vídeo a malla sin abrir RealityScan, y paredes propuestas.
-- **Pendiente de la hoja de rodaje:** deshacer en la hoja de rodaje, ver la jornada desde el guion técnico, y que el estado «hecho» salga en el PDF.
+Esta rama lleva todo lo anterior, más la biblioteca de assets (#58, ya en `main`).
+
+- [ ] **Biblioteca.** Planta → icono de colección (o IRIS Stage → Biblioteca): se abre la biblioteca de Unreal.
+- [ ] **Buscar en Fab.** Escribe «sofa» y pulsa «Buscar en Fab»: se abre fab.com con la búsqueda. «Megascans» busca solo lo de Quixel.
+- [ ] **Packs de partida.** «Packs de partida» → «Cocina»: se abre la búsqueda de cocina en Fab.
+- [ ] **Recoger de Fab.**
+  - En Unreal, con el plugin Fab (Ventana → Fab), añade al proyecto un asset gratuito.
+  - Vuelve a IRIS con la biblioteca abierta: el asset entra solo. También con «Recoger de Fab».
+- [ ] **Con el asset en la biblioteca.**
+  - «Hacer miniaturas» hace sus miniaturas.
+  - «Poner en la planta» crea la pieza con sus medidas.
+  - En Unreal aparece con el asset de Fab.
+- [ ] **Jornadas desde el guion.** Guion técnico → icono de calendario: lista las jornadas y abre la elegida (en el iPhone, «En set»).
+- [ ] **Deshacer en la jornada.** Mueve un tramo o un plano: el aviso «Orden de rodaje cambiado» trae «Deshacer» y lo devuelve. Quita un plano o una escena: «Deshacer» los vuelve a poner en su sitio.
+- [ ] **Estado en el PDF.** Marca planos «Hecho» y «Descartado» en «En set» y exporta la jornada: en la columna ORDEN pone **HECHO** o DESCART. bajo el número.
+
+## 8 · Pendiente (no está en estas ramas)
+
+- **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.
+- **F6.20 C1–C4 · IRIS Stage en seis pasos, con tutorial y guía.** En `.claude/worktrees/f6-3d-pc` hay un inicio de C1 de la cuenta anterior, sin guardar: opciones del esquema de luz en la miniatura y «quitar» en la biblioteca.
+- **F6.20 E · RealityScan sin interfaz en el PC:** de fotos o vídeo a malla sin abrir RealityScan, y paredes propuestas a partir del escaneo.
+- **IP.2.2 · Storyboard compacto en el iPhone.**
+- **Revisar el bucle de `pullContentCloud`** (apartado 6).
