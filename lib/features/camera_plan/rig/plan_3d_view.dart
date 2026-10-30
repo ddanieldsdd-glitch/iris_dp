@@ -166,10 +166,23 @@ class _Plan3dViewState extends State<Plan3dView> {
       (file) => _call('iris.rescan(${jsonEncode(file)});'),
     );
     UnrealThumbs.instance.addListener(_onThumbs);
+    unawaited(_shareScanFolders());
     _schedule();
   }
 
   StreamSubscription<String>? _scanArrivals;
+
+  /// Unreal, en este mismo PC, importa los escaneos de estas carpetas.
+  Future<void> _shareScanFolders() async {
+    final projectId = widget.projectId;
+    final folders = <String>[
+      if (projectId != null)
+        if (await PlanScanStore.pathFor(projectId, 'x.glb') case final path?)
+          File(path).parent.path,
+      (await ScanStore.dir()).path,
+    ];
+    UnrealStagePayload.scanFolders = folders;
+  }
 
   @override
   void didUpdateWidget(Plan3dView old) {
@@ -474,7 +487,10 @@ class _Plan3dViewState extends State<Plan3dView> {
             onPressed: _importScan,
           ),
         Text(
-          'De Polycam o Luma AI. Luego tócalo para colocarlo, girarlo y '
+          'De RealityScan, Polycam o Luma AI: exporta en GLB (o OBJ) con '
+          'texturas y, para que viaje a otros equipos, de menos de 50 MB '
+          '(en RealityScan, detalle medio). El USDZ del iPhone no vale: '
+          'expórtalo como GLB. Luego tócalo para colocarlo, girarlo y '
           'ponerlo a escala.',
           style: caption,
         ),

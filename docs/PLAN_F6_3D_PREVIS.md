@@ -552,13 +552,13 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 **F6.12.2 Recortar y limpiar** · Mac
 - **Qué:** caja de recorte y borrador del escaneo, guardados con el escaneo.
 
-**F6.12.3 Del escaneo a la planta** · Mac
+**F6.12.3 Del escaneo a la planta** · Mac · **en curso** (`plan/f6-12-escaneos-rodaje`: cenital a escala como fondo de la planta; falta proponer paredes)
 - **Qué:** vista cenital y corte a 1 m como fondo de la planta para calcar, y propuesta de paredes detectadas.
 
-**F6.12.4 Luz sobre el escaneo** · Mac
+**F6.12.4 Luz sobre el escaneo** · Mac · **en curso** (`plan/f6-12-escaneos-rodaje`: con un escaneo, cuatro focos dan sombra y el escaneo la recibe; sin malla simplificada todavía)
 - **Qué:** una malla de colisión simplificada del escaneo para que las luces de IRIS lo iluminen y den sombra.
 
-**F6.12.5 Sincronizar escaneos** · todos
+**F6.12.5 Sincronizar escaneos** · todos · **hecho** (`plan/f6-12-escaneos-rodaje`: `PlanScanStore`, como archivo por la nube, hasta 50 MB)
 - **Qué:** los escaneos viajan con los medios del proyecto (como las imágenes de la planta) y están en el iPad.
 
 **F6.12.6 Localizaciones con coordenadas** · todos
@@ -896,7 +896,7 @@ Plan aprobado por Daniel el 2026-10-27. Un PR por fase, en ramas que salen de `p
 | B5 | Biblioteca de assets | pendiente |
 | C1–C4 | IRIS Stage como lista de seis pasos, tutorial y guía | pendiente |
 | D1–D4 | Buscar en Fab y Quixel desde IRIS, recogida automática, tejidos y packs de partida | pendiente |
-| E1–E5 | RealityScan/RealityCapture sin interfaz: de vídeo a malla, ortofoto y paredes propuestas, con ida y vuelta | pendiente |
+| E1–E5 | RealityScan/RealityCapture sin interfaz: de vídeo a malla, ortofoto y paredes propuestas, con ida y vuelta | en curso: el escaneo exportado (GLB/OBJ) se importa, viaja por la nube, da la cenital de fondo, recibe sombras y llega a Unreal (`scans` en IRIS Stage, importado a `/Game/IRIS/Scans`). Falta la captura sin interfaz y las paredes propuestas |
 
 ## Orden propuesto y dependencias
 

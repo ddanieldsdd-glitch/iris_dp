@@ -34,6 +34,46 @@ Map<String, dynamic> _fixture({
 
 void main() {
   group('UnrealStagePayload', () {
+    test('los escaneos de la planta van a Unreal con su archivo y sus carpetas',
+        () {
+      UnrealStagePayload.scanFolders = ['C:/IRIS/plan_scans'];
+      addTearDown(() => UnrealStagePayload.scanFolders = const []);
+      final scene = {
+        'scans': [
+          {
+            'id': 's1',
+            'name': 'Salón',
+            'file': 'abc.glb',
+            'format': 'glb',
+            'at': [2.0, -1.0],
+            'z0': 0.1,
+            'yawDeg': 30,
+            'scale': 0.5,
+          },
+          {'id': 's2', 'file': 'nube.ply', 'format': 'ply', 'at': [0, 0]},
+        ],
+      };
+      final payload = UnrealStagePayload.build(scene);
+      final scans = payload['scans'] as List;
+      // La nube de puntos no va.
+      expect(scans, hasLength(1));
+      expect(scans.single['file'], 'abc.glb');
+      expect(scans.single['loc'], [200, 100, 10]);
+      expect(scans.single['rot'][1], -30);
+      expect(scans.single['scale'], 0.5);
+      expect(payload['scanFolders'], ['C:/IRIS/plan_scans']);
+
+      // Mover el escaneo manda solo el escaneo, con sus carpetas.
+      final moved = jsonDecode(jsonEncode(scene)) as Map<String, dynamic>;
+      (moved['scans'] as List).first['yawDeg'] = 45;
+      final diff = UnrealStagePayload.diff(
+        payload,
+        UnrealStagePayload.build(moved),
+      )!;
+      expect((diff['scans'] as List).single['rot'][1], -45);
+      expect(diff['scanFolders'], ['C:/IRIS/plan_scans']);
+    });
+
     test('metros de la escena a centímetros de Unreal, con la y al revés', () {
       expect(UnrealStagePayload.loc([1.5, 2, 3]), [150, -200, 300]);
     });
