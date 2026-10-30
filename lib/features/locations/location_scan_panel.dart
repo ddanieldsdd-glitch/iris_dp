@@ -13,7 +13,7 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
 import '../camera_plan/camera_plan_editor.dart';
-import '../luka_export/luka_bridge_screen.dart';
+import '../iris_stage/iris_stage_screen.dart';
 import 'cinetracer_export_service.dart';
 import 'location_scan_service.dart';
 import '../../core/widgets/app_snackbar.dart';
@@ -285,7 +285,7 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
                 if (!context.mounted || project == null) return;
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => LukaBridgeScreen(
+                    builder: (_) => IrisStageScreen(
                       projectId: widget.projectId,
                       projectName: project.name,
                     ),

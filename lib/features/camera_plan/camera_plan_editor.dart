@@ -5,7 +5,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' show Value, OrderingTerm;
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show Uint8List, listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +16,7 @@ import '../../core/database/database_provider.dart';
 import '../../core/sync/live_editing.dart';
 import '../../core/sync/realtime_hub.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
@@ -79,7 +80,14 @@ import 'plan_prefs.dart';
 import 'rig/hall_builder_sheet.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
+import 'plan_outliner.dart';
 import 'rig/plan_3d_view.dart';
+import '../../core/utils/shot_reference_import.dart';
+import '../unreal_link/unreal_asset_tile.dart';
+import '../unreal_link/unreal_link.dart';
+import '../unreal_link/unreal_thumbs.dart';
+import '../unreal_link/unreal_stage_launcher.dart';
+import '../unreal_link/unreal_stage_payload.dart';
 import 'rig/rig_report.dart';
 import 'rig/plan_hall.dart';
 import '../../core/utils/platform_keys.dart';
@@ -318,6 +326,86 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Rótulos de equipo y leyenda, como en una hoja de luces.
   bool _gearLabels = false;
 
+  // Reconocer cada elemento (F6.20 A3–A4): se recuerdan entre sesiones.
+  static const _colorByTypeKey = PrefKey<bool>('plan.colorByType', false);
+  static const _namesKey = PrefKey<bool>('plan.showNames', false);
+  static const _assetViewKey = PrefKey<bool>('plan.assetView', false);
+  late bool _colorByType = AppPrefs.instance.get(_colorByTypeKey);
+  late bool _showNames = AppPrefs.instance.get(_namesKey);
+
+  /// «Vista de assets»: la cenital de cada asset de Unreal en la planta.
+  late bool _assetView = AppPrefs.instance.get(_assetViewKey);
+
+  /// La cenital cargada de una miniatura, para el pintor.
+  ui.Image? _thumbOf(String key) =>
+      UnrealThumbs.instance.image(widget.projectId, key);
+
+  void _onThumbs() {
+    if (mounted) setState(() {});
+  }
+
+  /// La lista de elementos, junto a la planta.
+  bool _showOutliner = false;
+
+  /// Elementos ocultos desde la lista (solo en esta sesión).
+  final Set<PlanElement> _hiddenElements = {};
+
+  void _setViewPref(PrefKey<bool> key, bool value) => unawaited(
+    AppPrefs.instance.setIn(key, const SettingsScope.global(), value),
+  );
+
+  void _toggleHidden(PlanElement el) => setState(() {
+    if (!_hiddenElements.remove(el)) {
+      _hiddenElements.add(el);
+      if (identical(_selected, el)) _selected = null;
+      _multi.remove(el);
+    }
+  });
+
+  Widget _outliner({VoidCallback? onClose}) => PlanOutliner(
+    elements: _elements,
+    selected: _selected,
+    hidden: _hiddenElements,
+    onSelect: (el) {
+      _selectFrom3d(el);
+      if (onClose != null) onClose();
+    },
+    onToggleHidden: _toggleHidden,
+    onClose: onClose,
+  );
+
+  /// En el Mac (ancho), la lista va acoplada junto a la planta; en el iPad
+  /// en vertical, en una hoja desde abajo.
+  void _toggleOutliner() {
+    if (_wide) {
+      setState(() => _showOutliner = !_showOutliner);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheet) => SizedBox(
+        height: MediaQuery.sizeOf(sheet).height * 0.75,
+        child: StatefulBuilder(
+          builder: (_, refresh) => PlanOutliner(
+            elements: _elements,
+            selected: _selected,
+            hidden: _hiddenElements,
+            onSelect: (el) {
+              Navigator.of(sheet).pop();
+              _selectFrom3d(el);
+            },
+            onToggleHidden: (el) {
+              _toggleHidden(el);
+              refresh(() {});
+            },
+            onClose: () => Navigator.of(sheet).pop(),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Lecturas de diafragma bajo cada actor.
   late bool _showReadings = _planPrefs.readings;
 
@@ -442,6 +530,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _repo = FloorPlanRepository(ref.read(databaseProvider));
     _imageCache.addListener(_onImageLoaded);
     AppPrefs.instance.addListener(_onPrefsChanged);
+    UnrealThumbs.instance.addListener(_onThumbs);
     _load();
   }
 
@@ -471,6 +560,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   @override
   void dispose() {
     AppPrefs.instance.removeListener(_onPrefsChanged);
+    UnrealThumbs.instance.removeListener(_onThumbs);
     final live = _live;
     final key = _liveKey;
     // Fuera del desmontaje: avisar mientras se quita el árbol no se puede.
@@ -646,6 +736,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       ]);
     }
 
+    // Todo elemento lleva identificador estable: con él se reconoce en el
+    // 3D, en Unreal y en la lista de elementos. Lo que aún no lo tenía (una
+    // planta de antes) se guarda una vez al terminar de cargar.
+    final unsaved = {
+      for (final el in LightOverrides.ensureUids(elements)) el.layer,
+    };
+
     // Zonas de los sets sobre el plano maestro.
     final zones = <PlanZone>[];
     Rect? setZone;
@@ -787,6 +884,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _elements
         ..clear()
         ..addAll(elements);
+      _hiddenElements.clear();
+      _uidsToSave = unsaved;
       _selected = null;
       _selectedPathIndex = null;
       _multi.clear();
@@ -834,6 +933,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     });
     _lastSaved = _snapshot();
     _claimLive();
+    // Si otro equipo la está editando, no se toca: se guardará al soltarla.
+    if (_uidsToSave.isNotEmpty &&
+        _peerBlocking(ref.read(liveEditingProvider)) == null) {
+      unawaited(_saveNewUids());
+    }
   }
 
   // ── Edición compartida ────────────────────────────────────────────────────
@@ -1160,14 +1264,40 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   List<PlanElement> _layerElements(PlanLayer layer) =>
       _elements.where((e) => e.layer == layer).toList();
 
-  List<PlanElement> get _visibleElements => _hiddenLayers.isEmpty
+  /// Lo de las capas que se ven, también lo oculto con el ojo de la lista:
+  /// para el material y las cargas de rigging, que no pueden olvidarlo.
+  List<PlanElement> get _layerElementsShown => _hiddenLayers.isEmpty
       ? _elements
       : _elements.where((e) => !_hiddenLayers.contains(e.layer)).toList();
+
+  List<PlanElement> get _visibleElements =>
+      _hiddenLayers.isEmpty && _hiddenElements.isEmpty
+      ? _elements
+      : _elements
+            .where(
+              (e) =>
+                  !_hiddenLayers.contains(e.layer) &&
+                  !_hiddenElements.contains(e),
+            )
+            .toList();
+
+  /// Capas de una planta de antes cuyos elementos acaban de recibir
+  /// identificador al cargarla: se guardan una vez ([_saveNewUids]).
+  Set<PlanLayer> _uidsToSave = const {};
+
+  Future<void> _saveNewUids() async {
+    final layers = _uidsToSave;
+    _uidsToSave = const {};
+    for (final layer in layers) {
+      await _saveLayer(layer);
+    }
+  }
 
   /// Guarda una capa entera en su sitio.
   Future<void> _saveLayer(PlanLayer layer) async {
     if (!_hasLayer(layer)) return;
     final list = _layerElements(layer);
+    LightOverrides.ensureUids(list);
     switch (layer) {
       case PlanLayer.environment:
         await _repo.saveElements(
@@ -1182,9 +1312,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           setId: _linkedSet!.id,
         );
       case PlanLayer.light:
-        // Cada elemento del esquema lleva un identificador estable, para
-        // que un plano pueda ajustarlo sin tocar el de los demás.
-        LightOverrides.ensureUids(list);
+        // Con el identificador estable, un plano ajusta un elemento del
+        // esquema sin tocar el de los demás.
         final own = <String, PlanElement>{};
         final shared = <PlanElement>[];
         for (final el in list) {
@@ -2418,6 +2547,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         ];
       copies.add(copy);
     }
+    LightOverrides.renewUids(copies);
     setState(() {
       _elements.addAll(copies);
       _multi
@@ -2596,7 +2726,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _elements.where(
       (e) => e.layer == PlanLayer.light || e.layer == PlanLayer.shot,
     ),
-    rigging: RigReport.rigging(_visibleElements, _metersPerUnit),
+    // Lo oculto con el ojo sigue colgado: cuenta en la carga.
+    rigging: RigReport.rigging(_layerElementsShown, _metersPerUnit),
   );
 
   /// Tocar una línea de la lista de material selecciona en la planta lo
@@ -2760,7 +2891,65 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       onChanged: _changedFrom3d,
       onAdd: (el) => _addElement(el, keepPosition: true, select: false),
       ambient: _lightSetup == null ? null : _ambient,
+      unrealWorld: _unrealWorld,
+      onUnrealCapture: widget.shotId == null ? null : _saveUnrealCapture,
+      onOpenUnreal: _openInUnreal,
+      projectId: widget.projectId,
     );
+  }
+
+  /// «Abrir en Unreal» del proyecto de esta planta: lo crea, lo prepara,
+  /// abre Unreal y conecta.
+  Future<void> _openInUnreal() async {
+    final project = await ref.read(databaseProvider).getProject(
+      widget.projectId,
+    );
+    await UnrealStageLauncher.instance.open(
+      projectId: widget.projectId,
+      projectName: project?.name ?? 'Proyecto ${widget.projectId}',
+    );
+  }
+
+  /// El mundo de Unreal de esta planta: el de su set (lo comparten todas
+  /// las escenas y planos que se ruedan en él) o el de la localización.
+  UnrealWorld? get _unrealWorld {
+    if (_linkedSet case final set?) {
+      return UnrealWorld(
+        key: 'set${set.id}',
+        name: set.locationName,
+        site: _linkedSite?.name,
+      );
+    }
+    if (_linkedSite case final site?) {
+      return UnrealWorld(key: 'site${site.id}', name: site.name, site: site.name);
+    }
+    return null;
+  }
+
+  /// Una captura RTX de Unreal va al storyboard de este plano, como los
+  /// renders que se importan a mano.
+  Future<String> _saveUnrealCapture(Uint8List png, String cameraId) async {
+    final shotId = widget.shotId;
+    if (shotId == null) throw StateError('Esta planta no es de un plano.');
+    final db = ref.read(databaseProvider);
+    final shot = await db.getShotById(shotId);
+    if (shot == null) throw StateError('No se encuentra el plano.');
+    final file = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}'
+      'iris_dp_s${shot.sceneId}_p${shot.number}_unreal.png',
+    );
+    await file.writeAsBytes(png);
+    try {
+      await importShotReferenceImage(
+        db: db,
+        shot: shot,
+        sourcePath: file.path,
+        source: ShotReferenceSource.unrealRender,
+      );
+    } finally {
+      if (await file.exists()) await file.delete();
+    }
+    return 'Captura RTX guardada en el storyboard del plano ${shot.number}.';
   }
 
   /// Algo movido, apuntado o retocado en el 3D: se guarda como si se
@@ -3397,13 +3586,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
     centre = centre / copies.length.toDouble();
     final shift = _snapToGrid(_cursor ?? _viewCenter) - centre;
+    // Identificadores propios: no son los elementos copiados.
+    LightOverrides.renewUids(copies);
     for (final el in copies) {
       el
         ..id = 0
         ..position += shift
         ..pathPoints = [for (final p in el.pathPoints) p + shift];
-      // Un identificador propio: no es la misma luz que la copiada.
-      el.props.remove('uid');
       await _addElement(el, keepPosition: true, select: false);
     }
     if (!mounted) return;
@@ -4085,6 +4274,138 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// «Vaciar planta»: cada capa abierta se puede empezar de cero. Lo
   /// vaciado va a la Papelera de plantas.
+  Widget _addImageMenu(AppPalette palette) => PopupMenuButton<String>(
+    tooltip: 'Poner una imagen en la planta',
+    icon: Icon(
+      Icons.add_photo_alternate_outlined,
+      color: palette.textSecondary,
+    ),
+    onSelected: _onAddImage,
+    itemBuilder: (_) => [
+      PopupMenuItem(
+        value: 'paste',
+        child: PlanMenuRow('Pegar imagen', '${modKey}V'),
+      ),
+      const PopupMenuItem(value: 'moodboard', child: Text('Del moodboard…')),
+      if (_isShotMode)
+        PopupMenuItem(
+          value: 'storyboard',
+          enabled: _shot?.storyboardImagePath != null,
+          child: const Text('Storyboard de este plano'),
+        ),
+      const PopupMenuItem(value: 'file', child: Text('Archivo…')),
+    ],
+  );
+
+  void _showElevation() => showPlanElevation(
+    context,
+    elements: _visibleElements,
+    scene: _lightScene,
+    metersPerUnit: _metersPerUnit,
+    name: _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta',
+  );
+
+  /// Barra de arriba en el iPhone: imagen, 3D, encajar y el resto en «Más».
+  /// Guardar va en la barra de abajo. Vaciar la planta, atajos y ajustes se
+  /// quedan para el iPad y el Mac (edición ligera, PLAN_IPHONE).
+  List<Widget> _compactActions(AppPalette palette) {
+    PopupMenuItem<VoidCallback> item(
+      String label,
+      IconData icon,
+      VoidCallback? onTap, {
+      bool on = false,
+    }) => PopupMenuItem<VoidCallback>(
+      value: onTap,
+      enabled: onTap != null,
+      child: ListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(icon, color: on ? palette.accent : null),
+        title: Text(label),
+      ),
+    );
+
+    return [
+      _addImageMenu(palette),
+      IconButton(
+        tooltip: '3D',
+        icon: Icon(
+          Icons.threed_rotation,
+          color: _show3d ? palette.accent : palette.textSecondary,
+        ),
+        onPressed: _toggle3d,
+      ),
+      IconButton(
+        tooltip: 'Encajar todo',
+        icon: Icon(Icons.fit_screen_outlined, color: palette.textSecondary),
+        onPressed: _fitAll,
+      ),
+      PopupMenuButton<VoidCallback>(
+        tooltip: 'Más',
+        icon: Icon(Icons.more_vert, color: palette.textSecondary),
+        onSelected: (action) => action(),
+        itemBuilder: (_) => [
+          item('Deshacer', Icons.undo, _undoStack.isEmpty ? null : _undo),
+          item('Rehacer', Icons.redo, _redoStack.isEmpty ? null : _redo),
+          const PopupMenuDivider(),
+          for (final view in LightView.values)
+            item(
+              'Luz: ${view.label.toLowerCase()}',
+              view == LightView.camera
+                  ? Icons.camera_outlined
+                  : Icons.visibility_outlined,
+              () => setState(() => _lightView = view),
+              on: view == _lightView,
+            ),
+          item(
+            _exposureMap ? 'Volver a los haces de luz' : 'Mapa de exposición',
+            Icons.gradient,
+            () => setState(() => _exposureMap = !_exposureMap),
+            on: _exposureMap,
+          ),
+          item(
+            _showReadings
+                ? 'Ocultar lecturas de los actores'
+                : 'Mostrar lecturas de los actores',
+            Icons.speed_outlined,
+            () => setState(() => _showReadings = !_showReadings),
+            on: _showReadings,
+          ),
+          item(
+            _gearLabels ? 'Quitar rótulos de equipo' : 'Rótulos de equipo',
+            Icons.sell_outlined,
+            () => setState(() => _gearLabels = !_gearLabels),
+            on: _gearLabels,
+          ),
+          item(
+            _snap ? 'Desactivar el imán' : 'Activar el imán',
+            Icons.grid_goldenratio,
+            () => setState(() => _snap = !_snap),
+            on: _snap,
+          ),
+          const PopupMenuDivider(),
+          item('Alzado y perfil', Icons.view_in_ar_outlined, _showElevation),
+          if (_isShotMode && _shot != null)
+            item(
+              'Bocetos de planta del plano',
+              Icons.image_outlined,
+              () => showShotImageMenu(
+                context,
+                _shot!,
+                target: ShotImageTarget.planSketch,
+              ),
+            ),
+          if (!_isShotMode && _linkedSet != null)
+            item(
+              'Asociar planos a «${_linkedSet!.locationName}»',
+              Icons.playlist_add_check,
+              _associateToLinkedSet,
+            ),
+        ],
+      ),
+    ];
+  }
+
   Widget _clearPlanMenu(AppPalette palette) {
     final site = _linkedSite;
     final set = _linkedSet;
@@ -4150,6 +4471,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     _wide = MediaQuery.sizeOf(context).width >= 1100;
+    final compact = AppLayout.isCompact(context);
     // Otro equipo edita esta planta: aquí no se toca hasta que termine, y
     // al soltarla se vuelve a leer para ver lo que cambió.
     final blocker = _loading
@@ -4216,7 +4538,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                   Text(widget.label, style: AppTypography.titleMedium(palette)),
                 ],
               ),
-        actions: [
+        // En el iPhone no caben los ~20 botones (IP.4.1).
+        actions: compact
+            ? _compactActions(palette)
+            : [
           if (_isShotMode && _shot != null)
             IconButton(
               tooltip: 'Bocetos de planta del plano (imágenes)',
@@ -4236,31 +4561,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               ),
               onPressed: _associateToLinkedSet,
             ),
-          PopupMenuButton<String>(
-            tooltip: 'Poner una imagen en la planta',
-            icon: Icon(
-              Icons.add_photo_alternate_outlined,
-              color: palette.textSecondary,
-            ),
-            onSelected: _onAddImage,
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'paste',
-                child: PlanMenuRow('Pegar imagen', '${modKey}V'),
-              ),
-              const PopupMenuItem(
-                value: 'moodboard',
-                child: Text('Del moodboard…'),
-              ),
-              if (_isShotMode)
-                PopupMenuItem(
-                  value: 'storyboard',
-                  enabled: _shot?.storyboardImagePath != null,
-                  child: const Text('Storyboard de este plano'),
-                ),
-              const PopupMenuItem(value: 'file', child: Text('Archivo…')),
-            ],
-          ),
+          _addImageMenu(palette),
           _clearPlanMenu(palette),
           IconButton(
             tooltip: 'Deshacer',
@@ -4329,13 +4630,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               Icons.view_in_ar_outlined,
               color: palette.textSecondary,
             ),
-            onPressed: () => showPlanElevation(
-              context,
-              elements: _visibleElements,
-              scene: _lightScene,
-              metersPerUnit: _metersPerUnit,
-              name: _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta',
-            ),
+            onPressed: _showElevation,
           ),
           IconButton(
             tooltip: _gearLabels
@@ -4346,6 +4641,52 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               color: _gearLabels ? palette.accent : palette.textSecondary,
             ),
             onPressed: () => setState(() => _gearLabels = !_gearLabels),
+          ),
+          IconButton(
+            tooltip: _colorByType
+                ? 'Quitar los colores por tipo'
+                : 'Colorear por tipo, con leyenda',
+            icon: Icon(
+              Icons.palette_outlined,
+              color: _colorByType ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: () {
+              setState(() => _colorByType = !_colorByType);
+              _setViewPref(_colorByTypeKey, _colorByType);
+            },
+          ),
+          IconButton(
+            tooltip: _assetView
+                ? 'Quitar la vista de assets'
+                : 'Vista de assets: lo que tiene asset de Unreal, con su '
+                      'imagen desde arriba',
+            icon: Icon(
+              Icons.image_outlined,
+              color: _assetView ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: () {
+              setState(() => _assetView = !_assetView);
+              _setViewPref(_assetViewKey, _assetView);
+            },
+          ),
+          IconButton(
+            tooltip: _showNames ? 'Quitar los nombres' : 'Nombres',
+            icon: Icon(
+              Icons.label_outline,
+              color: _showNames ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: () {
+              setState(() => _showNames = !_showNames);
+              _setViewPref(_namesKey, _showNames);
+            },
+          ),
+          IconButton(
+            tooltip: 'Lista de elementos',
+            icon: Icon(
+              Icons.format_list_bulleted,
+              color: _showOutliner ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: _toggleOutliner,
           ),
           IconButton(
             tooltip: _exposureMap
@@ -4765,6 +5106,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         lightView: _lightView,
                                                         gearLabels:
                                                             _gearLabels,
+                                                        colorByType:
+                                                            _colorByType,
+                                                        showNames: _showNames,
+                                                        assetView: _assetView,
+                                                        thumbOf: _thumbOf,
                                                         selectedElement:
                                                             _selected,
                                                         selectedPathIndex:
@@ -4824,6 +5170,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 },
                               ),
                             ),
+                            if (_wide && _showOutliner) ...[
+                              Container(width: 1, color: palette.border),
+                              SizedBox(
+                                width: 300,
+                                child: _outliner(
+                                  onClose: () =>
+                                      setState(() => _showOutliner = false),
+                                ),
+                              ),
+                            ],
                             if (_wide && _show3d) ...[
                               // El borde se arrastra para ensanchar el 3D.
                               MouseRegion(
@@ -4861,6 +5217,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   onChanged: _changedFrom3d,
                                   onExpand: _open3dScreen,
                                   onClose: _toggle3d,
+                                  unrealWorld: _unrealWorld,
+                                  onUnrealCapture: widget.shotId == null
+                                      ? null
+                                      : _saveUnrealCapture,
+                                  onOpenUnreal: _openInUnreal,
+                                  projectId: widget.projectId,
                                 ),
                               ),
                             ],
@@ -4868,6 +5230,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                               _ElementPanel(
                                 palette: palette,
                                 element: _selected!,
+                                projectId: widget.projectId,
                                 scopeNotice: _scopeNotice(_selected!.layer),
                                 moveTargets: [
                                   for (final layer in PlanLayer.values)
@@ -5526,6 +5889,9 @@ class _ElementPanel extends StatefulWidget {
   final AppPalette palette;
   final PlanElement element;
 
+  /// Proyecto de la planta: dónde se guardan las miniaturas de Unreal.
+  final int projectId;
+
   /// A qué afecta cambiar este elemento.
   final String scopeNotice;
   final List<PlanLayer> moveTargets;
@@ -5574,6 +5940,7 @@ class _ElementPanel extends StatefulWidget {
   const _ElementPanel({
     required this.palette,
     required this.element,
+    required this.projectId,
     required this.scopeNotice,
     required this.moveTargets,
     required this.onMove,
@@ -5606,13 +5973,26 @@ class _ElementPanel extends StatefulWidget {
 class _ElementPanelState extends State<_ElementPanel> {
   late TextEditingController _lensCtrl;
   late final TextEditingController _nameCtrl = TextEditingController(
-    text: widget.element.label ?? '',
+    text: _nameOf(widget.element),
   );
 
-  /// Pone nombre al personaje. Si ya existe en el proyecto, coge su color.
+  /// El personaje se llama por su [PlanElement.label]; lo demás, por su
+  /// nombre libre.
+  static String _nameOf(PlanElement el) => el.type == ElementType.actor
+      ? el.label ?? ''
+      : el.customName ?? '';
+
+  /// Pone nombre al personaje (si ya existe en el proyecto, coge su color)
+  /// o a cualquier otro elemento.
   void _commitName(String value) {
     final element = widget.element;
     final name = value.trim();
+    if (element.type != ElementType.actor) {
+      if (name == (element.customName ?? '')) return;
+      element.customName = name;
+      widget.onUpdate();
+      return;
+    }
     if (name.isEmpty || name == element.label) return;
     element.label = name;
     final known = widget.cast[PlanCast.key(name)];
@@ -5631,7 +6011,7 @@ class _ElementPanelState extends State<_ElementPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.element.id != widget.element.id) {
       _lensCtrl.text = widget.element.lens ?? '';
-      _nameCtrl.text = widget.element.label ?? '';
+      _nameCtrl.text = _nameOf(widget.element);
     }
   }
 
@@ -5906,6 +6286,30 @@ class _ElementPanelState extends State<_ElementPanel> {
                           ),
                         ),
                       ),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (element.type != ElementType.actor) ...[
+                      TextField(
+                        controller: _nameCtrl,
+                        style: AppTypography.bodyLarge(palette),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          labelText: 'Nombre',
+                          hintText: element.typeLabel,
+                          helperText:
+                              'Se ve en la planta, en el 3D y en Unreal.',
+                        ),
+                        onSubmitted: _commitName,
+                        onTapOutside: (_) => _commitName(_nameCtrl.text),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    // Su asset de Unreal (F6.20 B2), para cualquier tipo.
+                    UnrealAssetTile(
+                      element: element,
+                      link: UnrealLink.instance,
+                      projectId: widget.projectId,
+                      onChanged: () async => widget.onUpdate(),
+                    ),
                     const SizedBox(height: AppSpacing.sm),
                     if (element.type == ElementType.actor)
                       _section(palette, 'Personaje', 'cast', [

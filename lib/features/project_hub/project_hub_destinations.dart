@@ -122,8 +122,8 @@ List<ProjectHubDestination> buildProjectHubDestinations() {
     ProjectHubDestination(
       id: ProjectHubDestinationId.lukaBridge,
       icon: Icons.view_in_ar_outlined,
-      title: 'Unreal / LUKA Bridge',
-      subtitle: (_) => 'Exportar escena a UE5 · Gaussian Splat + LUKA',
+      title: 'IRIS Stage',
+      subtitle: (_) => 'Unreal en vivo · render RTX · exportar a UE5 y LUKA',
       accentColor: const Color(0xFFFFD60A),
     ),
     ProjectHubDestination(
@@ -136,3 +136,48 @@ List<ProjectHubDestination> buildProjectHubDestinations() {
     ),
   ];
 }
+
+/// Pestaña de la barra inferior del hub en el iPhone (IP.1.2).
+class CompactHubTab {
+  final ProjectHubDestinationId id;
+  final String label;
+  final IconData icon;
+  final IconData selectedIcon;
+
+  const CompactHubTab({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.selectedIcon,
+  });
+}
+
+/// Lo que se consulta en set, por orden de uso (PLAN_IPHONE, prioridades):
+/// documento del día, storyboard, planta y localizaciones (fotos). Con el
+/// hub son 5, el máximo de la barra.
+const compactHubTabs = <CompactHubTab>[
+  CompactHubTab(
+    id: ProjectHubDestinationId.dailyOrder,
+    label: 'Rodaje',
+    icon: Icons.description_outlined,
+    selectedIcon: Icons.description,
+  ),
+  CompactHubTab(
+    id: ProjectHubDestinationId.storyboard,
+    label: 'Storyboard',
+    icon: Icons.view_comfy_outlined,
+    selectedIcon: Icons.view_comfy,
+  ),
+  CompactHubTab(
+    id: ProjectHubDestinationId.cameraPlans,
+    label: 'Planta',
+    icon: Icons.grid_on_outlined,
+    selectedIcon: Icons.grid_on,
+  ),
+  CompactHubTab(
+    id: ProjectHubDestinationId.locations,
+    label: 'Localiz.',
+    icon: Icons.location_city_outlined,
+    selectedIcon: Icons.location_city,
+  ),
+];

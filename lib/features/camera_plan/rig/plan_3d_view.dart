@@ -21,6 +21,13 @@ import '../plan_piece_controls.dart';
 import 'light_floor.dart';
 import 'plan_rig.dart';
 import 'plan_scene3d.dart';
+import '../../unreal_link/unreal_link.dart';
+import '../../unreal_link/unreal_link_button.dart';
+import '../../unreal_link/unreal_asset_tile.dart';
+import '../../unreal_link/unreal_render_view.dart';
+import '../../unreal_link/unreal_return.dart';
+import '../../unreal_link/unreal_stage_payload.dart';
+import '../../unreal_link/unreal_thumbs.dart';
 import 'scan_store.dart';
 import 'rig_report.dart';
 
@@ -33,6 +40,7 @@ const _layers = <(String, String)>[
   ('rig', 'Truss, motores y torres'),
   ('fixtures', 'Focos'),
   ('people', 'Personas y cámaras'),
+  ('props', 'Mobiliario y atrezzo'),
 ];
 
 /// La planta en 3D: three.js en un WebView, empaquetado en la app para que
@@ -69,6 +77,19 @@ class Plan3dView extends StatefulWidget {
   /// Panel: cerrar.
   final VoidCallback? onClose;
 
+  /// El mundo de Unreal de esta planta (su set o su localización).
+  final UnrealWorld? unrealWorld;
+
+  /// Guarda una captura RTX de Unreal en el storyboard del plano; sin él
+  /// (planta de set o de localización) no se captura.
+  final UnrealCaptureSink? onUnrealCapture;
+
+  /// «Abrir en Unreal» del proyecto de esta planta.
+  final Future<void> Function()? onOpenUnreal;
+
+  /// Proyecto de la planta: sus miniaturas de Unreal.
+  final int? projectId;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -82,6 +103,10 @@ class Plan3dView extends StatefulWidget {
     this.full = false,
     this.onExpand,
     this.onClose,
+    this.unrealWorld,
+    this.onUnrealCapture,
+    this.onOpenUnreal,
+    this.projectId,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -99,6 +124,9 @@ class _Plan3dViewState extends State<Plan3dView> {
   String _view = 'iso';
   bool _cones = true;
   bool _roof = true;
+
+  /// Etiquetas con el nombre de cada pieza (la del seleccionado, siempre).
+  bool _names = false;
   bool _ortho = false;
   final _show = {for (final (k, _) in _layers) k: true};
   late PlanElement? _selected = widget.selected;
@@ -116,10 +144,16 @@ class _Plan3dViewState extends State<Plan3dView> {
   double? _measuredM;
   final _realLength = TextEditingController();
 
+  /// Cambios que llegan de Unreal (IRIS Stage Link).
+  StreamSubscription<List<UnrealEdit>>? _fromUnreal;
+
   @override
   void initState() {
     super.initState();
     _realLength.addListener(() => setState(() {}));
+    _fromUnreal = UnrealLink.instance.edits.listen(_applyFromUnreal);
+    UnrealThumbs.instance.addListener(_onThumbs);
+    _schedule();
   }
 
   @override
@@ -134,6 +168,8 @@ class _Plan3dViewState extends State<Plan3dView> {
 
   @override
   void dispose() {
+    _fromUnreal?.cancel();
+    UnrealThumbs.instance.removeListener(_onThumbs);
     _debounce?.cancel();
     _realLength.dispose();
     super.dispose();
@@ -147,21 +183,55 @@ class _Plan3dViewState extends State<Plan3dView> {
   }
 
   Future<void> _push() async {
-    final web = _web;
-    if (!_ready || web == null || !mounted) return;
+    if (!mounted) return;
     final scene = PlanScene3d.build(
       widget.elements,
       metersPerUnit: widget.metersPerUnit,
       name: widget.name,
       ambient: widget.ambient,
     );
+    // Unreal recibe la misma escena, esté o no listo el visor.
+    UnrealLink.instance.offer(scene, world: widget.unrealWorld);
+    final web = _web;
+    if (!_ready || web == null) return;
     final json = jsonEncode(scene);
     if (json == _sent) return;
     _sent = json;
     setState(() => _scene = scene);
     await web.evaluateJavascript(source: 'iris.load($json);');
+    unawaited(_sendThumbs());
     await _pushSelection();
     if (_floor) unawaited(_pushFloor());
+  }
+
+  /// Miniaturas 3/4 ya mandadas al visor.
+  final _sentThumbs = <String>{};
+
+  /// Manda al visor las miniaturas que pide la escena y aún no tiene: van
+  /// una vez, como imagen, y el visor rehace el atrezzo con ellas.
+  Future<void> _sendThumbs() async {
+    final projectId = widget.projectId;
+    final scene = _scene;
+    if (projectId == null || scene == null || !_ready) return;
+    final out = <String, String>{};
+    for (final p in (scene['props'] as List? ?? const []).cast<Map>()) {
+      final key = p['thumb'] as String?;
+      if (key == null || _sentThumbs.contains(key)) continue;
+      final file = UnrealThumbs.instance.file(projectId, key);
+      if (file == null) continue;
+      try {
+        out[key] =
+            'data:image/png;base64,${base64Encode(await File(file).readAsBytes())}';
+        _sentThumbs.add(key);
+      } catch (_) {}
+    }
+    if (out.isNotEmpty) await _call('iris.thumbs(${jsonEncode(out)});');
+  }
+
+  void _onThumbs() {
+    // Una miniatura nueva (o rehecha): se vuelve a mandar.
+    _sentThumbs.clear();
+    unawaited(_sendThumbs());
   }
 
   /// Calcula la luz en el suelo aparte y la manda; si entretanto la planta
@@ -219,6 +289,7 @@ class _Plan3dViewState extends State<Plan3dView> {
           'cones': _cones,
           'roof': _roof,
           'ortho': _ortho,
+          'names': _names,
           'show': _show,
         });
         _push();
@@ -296,6 +367,21 @@ class _Plan3dViewState extends State<Plan3dView> {
     if (!mounted) return;
     setState(() => _selected = el);
     _schedule();
+  }
+
+  /// Lo que se ha movido, regulado o recoloreado en Unreal vuelve a la
+  /// planta y se guarda, como si se hubiera hecho en este 3D.
+  Future<void> _applyFromUnreal(List<UnrealEdit> edits) async {
+    final save = widget.onChanged;
+    if (save == null || !mounted) return;
+    for (final edit in edits) {
+      final el = _byId(edit.id);
+      if (el == null || !edit.claim()) continue;
+      if (UnrealReturn.apply(el, edit, widget.elements, widget.metersPerUnit)) {
+        await save(el);
+      }
+    }
+    if (mounted) _preview();
   }
 
   /// Retoque desde el lateral: repinta mientras se arrastra y guarda al
@@ -586,6 +672,24 @@ class _Plan3dViewState extends State<Plan3dView> {
             child: _viewButtons(compact: true),
           ),
         ),
+        UnrealLinkButton(
+          link: UnrealLink.instance,
+          onOpenUnreal: widget.onOpenUnreal,
+        ),
+        ListenableBuilder(
+          listenable: UnrealLink.instance,
+          builder: (context, _) => UnrealLink.instance.isOn
+              ? IconButton(
+                  tooltip: 'Render RTX: ver Unreal aquí',
+                  icon: Icon(
+                    Icons.live_tv_outlined,
+                    size: 18,
+                    color: palette.textSecondary,
+                  ),
+                  onPressed: _openRender,
+                )
+              : const SizedBox.shrink(),
+        ),
         PopupMenuButton<String>(
           tooltip: 'Qué se ve',
           icon: Icon(
@@ -594,6 +698,11 @@ class _Plan3dViewState extends State<Plan3dView> {
             color: palette.textSecondary,
           ),
           itemBuilder: (_) => [
+            CheckedPopupMenuItem(
+              value: 'names',
+              checked: _names,
+              child: const Text('Nombres'),
+            ),
             CheckedPopupMenuItem(
               value: 'cones',
               checked: _cones,
@@ -676,6 +785,9 @@ class _Plan3dViewState extends State<Plan3dView> {
   void _toggle(String key) {
     setState(() {
       switch (key) {
+        case 'names':
+          _names = !_names;
+          _set({'names': _names});
         case 'cones':
           _cones = !_cones;
           _set({'cones': _cones});
@@ -828,6 +940,7 @@ class _Plan3dViewState extends State<Plan3dView> {
                 : AppTypography.mono(palette),
           ),
         header('Qué se ve'),
+        toggle('Nombres', _names, () => _toggle('names')),
         toggle('Cubierta', _roof, () => _toggle('roof')),
         toggle('Conos de luz', _cones, () => _toggle('cones')),
         toggle(
@@ -848,6 +961,12 @@ class _Plan3dViewState extends State<Plan3dView> {
           style: AppTypography.bodyMedium(palette),
         ),
         if (_selected != null && widget.onChanged != null) ...[
+          if (_selected!.type != ElementType.actor)
+            _NameField(
+              key: ValueKey(_selected),
+              element: _selected!,
+              onCommit: _update,
+            ),
           Text(
             _selected!.type == ElementType.light
                 ? 'Arrástralo para moverlo; el asa naranja cambia adónde '
@@ -871,6 +990,12 @@ class _Plan3dViewState extends State<Plan3dView> {
               onPreview: _preview,
               onUpdate: _update,
             ),
+          UnrealAssetTile(
+              element: _selected!,
+              link: UnrealLink.instance,
+              projectId: widget.projectId,
+              onChanged: _update,
+            ),
         ],
         header('Escaneos'),
         ..._scanSection(palette),
@@ -886,9 +1011,45 @@ class _Plan3dViewState extends State<Plan3dView> {
           label: const Text('MVR con la nave y la estructura'),
           onPressed: _exportMvr,
         ),
+        header('Unreal en vivo'),
+        ListenableBuilder(
+          listenable: UnrealLink.instance,
+          builder: (context, _) => OutlinedButton.icon(
+            icon: const Icon(Icons.cast_connected_outlined, size: 16),
+            label: Text(
+              UnrealLink.instance.isOn
+                  ? 'Conectado con Unreal'
+                  : 'Conectar con Unreal',
+            ),
+            onPressed: () => showUnrealLinkDialog(
+              context,
+              UnrealLink.instance,
+              onOpenUnreal: widget.onOpenUnreal,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.live_tv_outlined, size: 16),
+          label: const Text('Render RTX: ver Unreal aquí'),
+          onPressed: _openRender,
+        ),
+        Text(
+          'Lo que muevas, regules o cambies de color en Unreal vuelve a la '
+          'planta.',
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textTertiary),
+        ),
       ],
     );
   }
+
+  void _openRender() => UnrealRenderScreen.open(
+    context,
+    cameras: [for (final (id, name, _) in _cameras) (id, name)],
+    onCapture: widget.onUnrealCapture,
+  );
 
   /// Avisos de rigging; tocar uno selecciona lo que lo provoca.
   List<Widget> _warnings(AppPalette palette) {
@@ -976,6 +1137,51 @@ class _Plan3dViewState extends State<Plan3dView> {
 
 /// Lo justo de una luz para retocarla en el 3D: si cuelga, a qué altura,
 /// hacia dónde mira y cuánto se inclina.
+/// Nombre libre del elemento seleccionado; se guarda al terminar de
+/// escribir.
+class _NameField extends StatefulWidget {
+  final PlanElement element;
+  final Future<void> Function() onCommit;
+
+  const _NameField({super.key, required this.element, required this.onCommit});
+
+  @override
+  State<_NameField> createState() => _NameFieldState();
+}
+
+class _NameFieldState extends State<_NameField> {
+  late final _ctrl = TextEditingController(
+    text: widget.element.customName ?? '',
+  );
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    if (_ctrl.text.trim() == (widget.element.customName ?? '')) return;
+    widget.element.customName = _ctrl.text;
+    widget.onCommit();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+    child: TextField(
+      controller: _ctrl,
+      decoration: InputDecoration(
+        isDense: true,
+        labelText: 'Nombre',
+        hintText: widget.element.typeLabel,
+      ),
+      onSubmitted: (_) => _commit(),
+      onTapOutside: (_) => _commit(),
+    ),
+  );
+}
+
 class _LightControls extends StatelessWidget {
   final PlanElement element;
   final VoidCallback onPreview;
@@ -1137,6 +1343,10 @@ class Plan3dScreen extends StatefulWidget {
   final Future<void> Function(PlanElement)? onChanged;
   final Future<void> Function(PlanElement)? onAdd;
   final PlanAmbient? ambient;
+  final UnrealWorld? unrealWorld;
+  final UnrealCaptureSink? onUnrealCapture;
+  final Future<void> Function()? onOpenUnreal;
+  final int? projectId;
 
   const Plan3dScreen({
     super.key,
@@ -1148,6 +1358,10 @@ class Plan3dScreen extends StatefulWidget {
     this.onChanged,
     this.onAdd,
     this.ambient,
+    this.unrealWorld,
+    this.onUnrealCapture,
+    this.onOpenUnreal,
+    this.projectId,
   });
 
   static Future<void> show(
@@ -1160,6 +1374,10 @@ class Plan3dScreen extends StatefulWidget {
     Future<void> Function(PlanElement)? onChanged,
     Future<void> Function(PlanElement)? onAdd,
     PlanAmbient? ambient,
+    UnrealWorld? unrealWorld,
+    UnrealCaptureSink? onUnrealCapture,
+    Future<void> Function()? onOpenUnreal,
+    int? projectId,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -1171,6 +1389,10 @@ class Plan3dScreen extends StatefulWidget {
         onChanged: onChanged,
         onAdd: onAdd,
         ambient: ambient,
+        unrealWorld: unrealWorld,
+        onUnrealCapture: onUnrealCapture,
+        onOpenUnreal: onOpenUnreal,
+        projectId: projectId,
       ),
     ),
   );
@@ -1211,6 +1433,10 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
               if (mounted) setState(() {});
             },
       full: true,
+      unrealWorld: widget.unrealWorld,
+      onUnrealCapture: widget.onUnrealCapture,
+      onOpenUnreal: widget.onOpenUnreal,
+      projectId: widget.projectId,
     ),
   );
 }

@@ -15,28 +15,35 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
 import '../camera_plan/camera_plan_grouping.dart';
-import 'iris_dp_export_service.dart';
-import 'luka_bridge_preview_panel.dart';
-import 'luka_export_preview.dart';
-import 'unreal_render_import.dart';
+import '../luka_export/iris_dp_export_service.dart';
+import '../luka_export/luka_bridge_preview_panel.dart';
+import '../luka_export/luka_export_preview.dart';
+import '../luka_export/unreal_render_import.dart';
+import '../unreal_link/unreal_link.dart';
+import '../unreal_link/unreal_render_view.dart';
+import '../unreal_link/unreal_stage_card.dart';
+import '../unreal_link/unreal_tutorial_screen.dart';
 import '../../core/widgets/app_snackbar.dart';
 
-/// Puente IRIS DP → Unreal Engine 5 (Gaussian Splat + ARRI LUKA).
-class LukaBridgeScreen extends ConsumerStatefulWidget {
+/// IRIS Stage (F6.13): el 3D del proyecto con Unreal. Arriba, Unreal en
+/// vivo (un botón lo abre y lo conecta); debajo, exportar e importar
+/// archivos para Unreal y ARRI LUKA. Antes se llamaba «Unreal / LUKA
+/// Bridge».
+class IrisStageScreen extends ConsumerStatefulWidget {
   final int projectId;
   final String projectName;
 
-  const LukaBridgeScreen({
+  const IrisStageScreen({
     super.key,
     required this.projectId,
     required this.projectName,
   });
 
   @override
-  ConsumerState<LukaBridgeScreen> createState() => _LukaBridgeScreenState();
+  ConsumerState<IrisStageScreen> createState() => _IrisStageScreenState();
 }
 
-class _LukaBridgeScreenState extends ConsumerState<LukaBridgeScreen> {
+class _IrisStageScreenState extends ConsumerState<IrisStageScreen> {
   Scene? _selectedScene;
   bool _exporting = false;
   bool _importing = false;
@@ -325,7 +332,18 @@ class _LukaBridgeScreenState extends ConsumerState<LukaBridgeScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: palette.surface,
-        title: Text('Unreal / LUKA Bridge', style: AppTypography.titleMedium(palette)),
+        title: Text('IRIS Stage', style: AppTypography.titleMedium(palette)),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.school_outlined, size: 18),
+            label: const Text('Tutorial'),
+            onPressed: () => UnrealTutorialScreen.open(
+              context,
+              projectId: widget.projectId,
+              projectName: widget.projectName,
+            ),
+          ),
+        ],
       ),
       body: StreamBuilder<List<Scene>>(
         stream: db.watchScenesForProject(widget.projectId),
@@ -335,20 +353,41 @@ class _LukaBridgeScreenState extends ConsumerState<LukaBridgeScreen> {
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
+              UnrealStageCard(
+                projectId: widget.projectId,
+                projectName: widget.projectName,
+              ),
+              ListenableBuilder(
+                listenable: UnrealLink.instance,
+                builder: (context, _) => UnrealLink.instance.isOn
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.sm),
+                        child: AppButton(
+                          label: 'Ver Render RTX',
+                          icon: Icons.live_tv_outlined,
+                          variant: AppButtonVariant.secondary,
+                          onTap: () =>
+                              UnrealRenderScreen.open(context, cameras: const []),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              const SizedBox(height: AppSpacing.xl),
               AppCard(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Previsualización 3D',
+                      'Archivos para Unreal y LUKA',
                       style: AppTypography.titleMedium(palette),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'Exporta la escena a JSON para importarla en Unreal Engine 5 '
-                      'con el script iris_dp_import.py. Combina tu Gaussian Splat '
-                      '(Luma AI) con cámaras, luces LUKA y actores del guion.',
+                      'Sin conexión en vivo: exporta la escena a JSON para '
+                      'importarla en Unreal Engine 5 con el script '
+                      'iris_dp_import.py. Combina tu Gaussian Splat (Luma AI) '
+                      'con cámaras, luces LUKA y actores del guion.',
                       style: AppTypography.bodyMedium(palette),
                     ),
                   ],
@@ -549,7 +588,7 @@ class _LukaBridgeScreenState extends ConsumerState<LukaBridgeScreen> {
                 onTap: _importing ? null : _importRenders,
               ),
               const SizedBox(height: AppSpacing.xl),
-              Text('Workflow', style: AppTypography.titleMedium(palette)),
+              Text('Flujo con archivos', style: AppTypography.titleMedium(palette)),
               const SizedBox(height: AppSpacing.sm),
               const _WorkflowStep(
                 number: '1',

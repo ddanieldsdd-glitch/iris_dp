@@ -15,6 +15,8 @@ import 'light_beam.dart';
 import 'light_symbols.dart';
 import 'light/modifiers.dart';
 import 'light/surfaces.dart';
+import 'plan_category.dart';
+import '../unreal_link/unreal_asset_ref.dart';
 import 'plan_images.dart';
 import 'plan_gear_list.dart';
 import 'plan_light_map.dart';
@@ -117,6 +119,20 @@ class CameraPlanPainter extends CustomPainter {
   /// la leyenda con el total, como en una hoja de luces.
   final bool gearLabels;
 
+  /// Cada elemento con el color de su categoría ([PlanCategory]) debajo, y
+  /// la leyenda de tipos.
+  final bool colorByType;
+
+  /// El nombre de cada elemento encima, en una etiqueta.
+  final bool showNames;
+
+  /// «Vista de assets» (F6.20 B4): los elementos con miniatura cenital de
+  /// su asset de Unreal se dibujan con ella, a escala y girados con él.
+  final bool assetView;
+
+  /// La cenital ya cargada de una clave de miniatura, o `null`.
+  final ui.Image? Function(String key)? thumbOf;
+
   /// Metros por unidad del lienzo; con él se rotulan longitudes y se pinta
   /// la barra de escala. `null` = sin rótulos de medida.
   final double? metersPerUnit;
@@ -167,6 +183,10 @@ class CameraPlanPainter extends CustomPainter {
     this.exposureMap = false,
     this.lightView = LightView.camera,
     this.gearLabels = false,
+    this.colorByType = false,
+    this.showNames = false,
+    this.assetView = false,
+    this.thumbOf,
     this.selectedElement,
     this.selectedRoom,
     this.rotating = false,
@@ -300,6 +320,16 @@ class CameraPlanPainter extends CustomPainter {
     }
 
     final ordered = _paintOrder(elements);
+    if (colorByType) {
+      for (final el in ordered) {
+        _drawCategoryTint(canvas, el);
+      }
+    }
+    if (assetView) {
+      for (final el in ordered) {
+        _drawAssetTop(canvas, el);
+      }
+    }
     for (final el in ordered) {
       _drawElement(
         canvas,
@@ -320,6 +350,12 @@ class CameraPlanPainter extends CustomPainter {
       if (image.selected) _drawImageSelection(canvas, image);
     }
 
+    if (showNames) {
+      for (final el in ordered) {
+        _drawNameTag(canvas, el);
+      }
+    }
+
     _drawOverlays(canvas);
     canvas.restore();
 
@@ -329,16 +365,216 @@ class CameraPlanPainter extends CustomPainter {
     if (!exposureMap && lightView == LightView.camera && lightMap != null) {
       _drawExposureReference(canvas, size);
     }
-    if (gearLabels) _drawGearLegend(canvas, size);
+    final legendBottom = gearLabels ? _drawGearLegend(canvas, size) : 0.0;
+    if (colorByType) _drawTypeLegend(canvas, size, top: legendBottom);
   }
 
   Map<PlanElement, int> _units = const {};
 
+  // ── Reconocer cada elemento (F6.20 A3) ─────────────────────────────────
+
+  /// Debajo del elemento, el color de su categoría: un halo en lo que es un
+  /// punto, una franja a lo largo de paredes, telas y truss.
+  void _drawCategoryTint(Canvas canvas, PlanElement el) {
+    if (PlanTerrainPainter.isTerrain(el) || RigTypeCodec.of(el) == RigType.hall) {
+      return;
+    }
+    final color = PlanCategory.of(el).color;
+    final band = Paint()
+      ..color = color.withValues(alpha: 0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 14
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    if (PlanSegment.isSegment(el)) {
+      const steps = 16;
+      final path = Path();
+      for (var k = 0; k <= steps; k++) {
+        final p = PlanSegment.pointAt(el, k / steps);
+        k == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(path, band);
+      return;
+    }
+    if (PlanTruss.isTruss(el)) {
+      canvas.drawLine(PlanTruss.start(el), PlanTruss.end(el), band);
+      return;
+    }
+    canvas.drawCircle(
+      el.position,
+      26,
+      Paint()..color = color.withValues(alpha: 0.22),
+    );
+    canvas.drawCircle(
+      el.position,
+      26,
+      Paint()
+        ..color = color.withValues(alpha: 0.85)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6,
+    );
+  }
+
+  /// Dónde va la etiqueta de un elemento: en su sitio o, en lo que es un
+  /// tramo, en su centro.
+  static Offset _anchorOf(PlanElement el) {
+    if (PlanSegment.isSegment(el)) return PlanSegment.pointAt(el, 0.5);
+    if (PlanTruss.isTruss(el)) {
+      return (PlanTruss.start(el) + PlanTruss.end(el)) / 2;
+    }
+    return el.position;
+  }
+
+  /// Encima del elemento, su nombre con la marca de su categoría.
+  void _drawNameTag(Canvas canvas, PlanElement el) {
+    if (PlanTerrainPainter.isTerrain(el) || PlanOpening.isOpening(el)) return;
+    final text = el.displayLabel;
+    if (text.isEmpty) return;
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          color: Color(0xFFF2F4F6),
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: 140);
+    final at = _anchorOf(el) + const Offset(0, -34);
+    final rect = Rect.fromCenter(
+      center: at,
+      width: tp.width + 16,
+      height: tp.height + 6,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(5)),
+      Paint()..color = const Color(0xD9101418),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(rect.left, rect.top + 3, 3, rect.height - 6),
+        const Radius.circular(1.5),
+      ),
+      Paint()..color = PlanCategory.of(el).color,
+    );
+    tp.paint(canvas, Offset(rect.left + 10, rect.top + 3));
+  }
+
+  /// La cenital de su asset de Unreal, si la hay: a escala (lo que cubre
+  /// la foto, centrada en el punto de apoyo) y girada con el elemento.
+  ui.Image? _assetTopOf(PlanElement el) {
+    if (!assetView) return null;
+    final key = UnrealAssetRef.of(el)?.thumbTop;
+    return key == null ? null : thumbOf?.call(key);
+  }
+
+  void _drawAssetTop(Canvas canvas, PlanElement el) {
+    final image = _assetTopOf(el);
+    if (image == null) return;
+    final ref = UnrealAssetRef.of(el)!;
+    final mpu = metersPerUnit ?? defaultMetersPerUnit;
+    final spanCm =
+        ref.topSpanCm ??
+        (ref.sizeCm == null
+            ? 100.0
+            : math.max(ref.sizeCm![0], ref.sizeCm![1]) * 1.08);
+    final side = spanCm / 100 / mpu;
+    canvas.save();
+    canvas.translate(el.position.dx, el.position.dy);
+    canvas.rotate(el.rotation * math.pi / 180);
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      Rect.fromCenter(center: Offset.zero, width: side, height: side),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+    canvas.restore();
+  }
+
+  /// «UE» junto al elemento que tiene asset de Unreal.
+  void _drawUnrealBadge(Canvas canvas) {
+    const at = Offset(18, -18);
+    canvas.drawCircle(at, 8, Paint()..color = const Color(0xFF101418));
+    canvas.drawCircle(
+      at,
+      8,
+      Paint()
+        ..color = const Color(0xFFF2F4F6)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    final tp = TextPainter(
+      text: const TextSpan(
+        text: 'UE',
+        style: TextStyle(
+          color: Color(0xFFF2F4F6),
+          fontSize: 7,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, at - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  /// La leyenda de tipos: solo los que hay en la planta, con su color y
+  /// cuántos.
+  void _drawTypeLegend(Canvas canvas, Size size, {double top = 0}) {
+    final counts = <PlanCategory, int>{};
+    for (final el in elements) {
+      if (PlanTerrainPainter.isTerrain(el)) continue;
+      final c = PlanCategory.of(el);
+      counts[c] = (counts[c] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return;
+    const pad = 10.0, dot = 8.0;
+    final rows = [
+      for (final c in PlanCategory.values)
+        if (counts[c] case final n?)
+          (
+            c,
+            TextPainter(
+              text: TextSpan(
+                text: '${c.label} · $n',
+                style: const TextStyle(
+                  color: _CanvasColors.inkSecondary,
+                  fontSize: 10,
+                ),
+              ),
+              textDirection: TextDirection.ltr,
+            )..layout(),
+          ),
+    ];
+    final width = rows.fold(0.0, (w, r) => math.max(w, r.$2.width)) + dot + 6;
+    final height = rows.fold(0.0, (h, r) => h + r.$2.height + 3);
+    final origin = Offset(16, top + 16);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(origin.dx, origin.dy, width + pad * 2, height + pad * 2),
+        const Radius.circular(8),
+      ),
+      Paint()..color = _CanvasColors.background.withValues(alpha: 0.88),
+    );
+    var y = origin.dy + pad;
+    for (final (c, tp) in rows) {
+      canvas.drawCircle(
+        Offset(origin.dx + pad + dot / 2, y + tp.height / 2),
+        dot / 2,
+        Paint()..color = c.color,
+      );
+      tp.paint(canvas, Offset(origin.dx + pad + dot + 6, y));
+      y += tp.height + 3;
+    }
+  }
+
   /// Arriba a la izquierda, la leyenda de equipo: cada modelo con su
   /// cantidad, potencia, luz y unidades, y el total encendido.
-  void _drawGearLegend(Canvas canvas, Size size) {
+  double _drawGearLegend(Canvas canvas, Size size) {
     final legend = LightLegend.of([...inheritedElements, ...elements]);
-    if (legend.isEmpty) return;
+    if (legend.isEmpty) return 0;
     const pad = 10.0;
     final lines = <(String, TextStyle)>[
       (
@@ -398,6 +634,7 @@ class CameraPlanPainter extends CustomPainter {
       tp.paint(canvas, Offset(origin.dx + pad, y));
       y += tp.height + 3;
     }
+    return origin.dy + height + pad * 2;
   }
 
   /// Arriba a la derecha, de dónde viene el sol.
@@ -1626,7 +1863,7 @@ class CameraPlanPainter extends CustomPainter {
       case ElementType.light:
         _drawLight(canvas, el);
       case ElementType.prop:
-        if (body) _drawProp(canvas, el);
+        if (body && _assetTopOf(el) == null) _drawProp(canvas, el);
       case ElementType.wall:
         if (PlanOpening.isOpening(el)) {
           _drawOpening(canvas, el);
@@ -1661,6 +1898,7 @@ class CameraPlanPainter extends CustomPainter {
     // Los rótulos no giran con el elemento: siempre se leen del derecho.
     canvas.save();
     canvas.translate(el.position.dx, el.position.dy);
+    if (PlanCategory.hasUnrealAsset(el)) _drawUnrealBadge(canvas);
     switch (el.type) {
       case ElementType.camera:
         final camColor = cameraColorForLetter(el.cameraLetter);
@@ -1668,7 +1906,8 @@ class CameraPlanPainter extends CustomPainter {
         // una se rotula con su plano.
         final tag = el.props['shotTag'] as String?;
         final labelText =
-            '${tag ?? el.cameraLabel}\n${el.stabilization ?? ''} ${el.lens ?? ''}'
+            '${el.customName ?? tag ?? el.cameraLabel}\n'
+                    '${el.stabilization ?? ''} ${el.lens ?? ''}'
                 .trim();
         if (labelText.isNotEmpty) {
           _drawLabelBelow(canvas, labelText, camColor, yOffset: 28);
@@ -1753,7 +1992,10 @@ class CameraPlanPainter extends CustomPainter {
 
   void _drawLightLabel(Canvas canvas, PlanElement el) {
     final base =
-        (el.props['name'] as String?) ?? el.lightType?.label ?? el.label;
+        el.customName ??
+        (el.props['name'] as String?) ??
+        el.lightType?.label ??
+        el.label;
     if (base == null || base.isEmpty) return;
     final beam = LightBeam.of(el);
     final light = PlanLight.of(el);
@@ -2964,6 +3206,10 @@ class CameraPlanPainter extends CustomPainter {
       old.exposureMap != exposureMap ||
       old.lightView != lightView ||
       old.gearLabels != gearLabels ||
+      old.colorByType != colorByType ||
+      old.showNames != showNames ||
+      old.assetView != assetView ||
+      old.thumbOf != thumbOf ||
       old.selectedElement?.id != selectedElement?.id ||
       old.selectedPathIndex != selectedPathIndex ||
       old.scale != scale ||

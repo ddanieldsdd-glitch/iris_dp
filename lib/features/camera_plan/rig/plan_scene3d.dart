@@ -4,6 +4,9 @@ import 'dart:ui';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
+import '../light/light_scene.dart';
+import '../plan_category.dart';
+import '../../unreal_link/unreal_asset_ref.dart';
 import '../light/plan_light.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
@@ -62,6 +65,8 @@ class PlanScene3d {
       'version': version,
       'units': 'm',
       'name': ?name,
+      // Colores por categoría: los mismos que en la planta 2D.
+      'palette': PlanCategory.palette,
       if (ambient != null && ambient.hasSun) 'sun': _sun(ambient),
       'halls': [
         for (final MapEntry(key: uid, value: (el, r)) in halls.entries)
@@ -80,6 +85,7 @@ class PlanScene3d {
     final people = <Map<String, dynamic>>[];
     final scans = <Map<String, dynamic>>[];
     final cameras = <Map<String, dynamic>>[];
+    final props = <Map<String, dynamic>>[];
 
     for (final (i, el) in elements.indexed) {
       final level = PlanLevel.of(el);
@@ -97,6 +103,8 @@ class PlanScene3d {
         case RigType.pillar:
           pillars.add({
             'id': uid,
+            'name': el.displayLabel,
+            'cat': PlanCategory.of(el).name,
             'at': xy(el.position),
             'z0': level,
             'shape': PlanPillar.isRound(el) ? 'round' : 'square',
@@ -109,6 +117,8 @@ class PlanScene3d {
         case RigType.truss:
           trusses.add({
             'id': uid,
+            'name': el.displayLabel,
+            'cat': PlanCategory.of(el).name,
             'from': xy(PlanTruss.start(el)),
             'to': xy(PlanTruss.end(el)),
             'z': _r(level + PlanTruss.lowM(el)),
@@ -120,6 +130,8 @@ class PlanScene3d {
         case RigType.motor || RigType.groundSupport:
           rigging.add({
             'id': uid,
+            'name': el.displayLabel,
+            'cat': PlanCategory.of(el).name,
             'type': RigTypeCodec.of(el)!.name,
             'at': xy(el.position),
             'z0': level,
@@ -132,6 +144,8 @@ class PlanScene3d {
           if (PlanScan.file(el) case final file?) {
             scans.add({
               'id': uid,
+              'name': el.displayLabel,
+              'cat': PlanCategory.of(el).name,
               'file': file,
               'format': PlanScan.format(el),
               'at': xy(el.position),
@@ -147,18 +161,37 @@ class PlanScene3d {
         case ElementType.light:
           final f = _fixture(el, uid, mpu, level, xy);
           if (f != null) fixtures.add(f);
+        case ElementType.prop when furniture.contains(el.propType):
+          props.add({
+            'id': uid,
+            'name': el.customName ?? el.propType!.label,
+            'cat': PlanCategory.of(el).name,
+            'type': el.propType!.name,
+            'at': xy(el.position),
+            'z0': level,
+            'yawDeg': el.rotation,
+            'sizeM': _r(LightScene.propSizeM(el)),
+            'heightM': _r(LightScene.propHeightM(el)),
+            'asset': ?UnrealAssetRef.of(el)?.toPayload(),
+            // Miniatura 3/4 del asset (F6.20 B4): el visor la pone de cartel.
+            'thumb': ?UnrealAssetRef.of(el)?.thumb34,
+          });
         case ElementType.actor:
           people.add({
             'id': uid,
             'name': el.label ?? 'Actor',
+            'cat': PlanCategory.of(el).name,
             'at': xy(el.position),
             'z0': level,
           });
         case ElementType.camera:
           final rad = el.rotation * math.pi / 180;
+          final sensorMm =
+              (el.props['sensorWidthMm'] as num?)?.toDouble() ?? 24.89;
           cameras.add({
             'id': uid,
-            'name': el.cameraLabel,
+            'name': el.customName ?? el.cameraLabel,
+            'cat': PlanCategory.of(el).name,
             'lens': ?el.lens,
             'at': xy(el.position),
             'z0': level,
@@ -166,14 +199,10 @@ class PlanScene3d {
             'z': _r((el.props[PlanLight.heightKey] as num?)?.toDouble() ?? 1.5),
             'dir': [_r(math.sin(rad)), _r(math.cos(rad))],
             'hfovDeg': _r(
-              cameraFovDegrees(
-                    el.lens,
-                    sensorWidthMm:
-                        (el.props['sensorWidthMm'] as num?)?.toDouble() ??
-                        24.89,
-                  ) ??
-                  40,
+              cameraFovDegrees(el.lens, sensorWidthMm: sensorMm) ?? 40,
             ),
+            'sensorMm': sensorMm,
+            'asset': ?UnrealAssetRef.of(el)?.toPayload(),
           });
         default:
           break;
@@ -188,12 +217,77 @@ class PlanScene3d {
       ..['fixtures'] = fixtures
       ..['people'] = people
       ..['cameras'] = cameras
-      ..['scans'] = scans;
+      ..['scans'] = scans
+      ..['props'] = props
+      ..['assets'] = [
+        for (final (i, el) in elements.indexed)
+          ?_asset(el, idOf(el, i), mpu),
+      ];
     return out;
   }
 
-  /// Identificador de un elemento en la escena: su `uid` o, si no tiene,
-  /// su posición en la lista. Con él el visor dice qué se ha tocado.
+  /// Lo demás que tiene asset de Unreal (F6.20 B2): paredes, puertas y
+  /// ventanas (en el centro del tramo, orientadas con él), actores, grip,
+  /// pilares, rigging y truss. Focos, cámaras y atrezzo lo llevan en su
+  /// propia lista.
+  static Map<String, dynamic>? _asset(PlanElement el, String uid, double mpu) {
+    final ref = UnrealAssetRef.of(el);
+    if (ref == null) return null;
+    if (el.type == ElementType.camera ||
+        (el.type == ElementType.light && LightBeam.emits(el.lightType)) ||
+        (el.type == ElementType.prop && furniture.contains(el.propType))) {
+      return null;
+    }
+    var at = el.position;
+    var yaw = el.rotation;
+    Offset? from, to;
+    if (PlanSegment.isSegment(el)) {
+      from = PlanSegment.pointAt(el, 0);
+      to = PlanSegment.pointAt(el, 1);
+    } else if (PlanTruss.isTruss(el)) {
+      from = PlanTruss.start(el);
+      to = PlanTruss.end(el);
+    }
+    if (from != null && to != null) {
+      at = (from + to) / 2;
+      final d = to - from;
+      // Hacia dónde va el tramo, con el giro de la planta: (sin r, cos r)
+      // con la y al revés que el lienzo.
+      yaw = (math.atan2(d.dx, -d.dy) * 180 / math.pi + 360) % 360;
+    }
+    return {
+      'id': uid,
+      'name': el.displayLabel,
+      'cat': PlanCategory.of(el).name,
+      'at': [_r(at.dx * mpu), _r(-at.dy * mpu)],
+      'z0': PlanLevel.of(el),
+      'yawDeg': _r(yaw),
+      if (from != null && to != null) 'lengthM': _r((to - from).distance * mpu),
+      'asset': ref.toPayload(),
+    };
+  }
+
+  /// El atrezzo que tiene cuerpo (lo demás de [PropType] son colinas,
+  /// fotómetros o piezas de pared).
+  static const furniture = {
+    PropType.table,
+    PropType.chair,
+    PropType.rectangle,
+    PropType.sofa,
+    PropType.bed,
+    PropType.tree,
+    PropType.rock,
+    PropType.vehicle,
+  };
+
+  /// Asset de Unreal (Fab, Megascans o propio) que hace de esta pieza en
+  /// Unreal; en IRIS queda un sustituto con sus medidas. Ver
+  /// [UnrealAssetRef], que también lee esta clave de antes.
+  static const unrealAssetKey = UnrealAssetRef.legacyKey;
+
+  /// Identificador de un elemento en la escena: su `uid`, que todos llevan
+  /// desde F6.20 (`LightOverrides.ensureUids` al cargar y al guardar). La
+  /// posición en la lista queda solo como red de seguridad.
   static String idOf(PlanElement el, int index) =>
       LightOverrides.uidOf(el) ?? 'n$index';
 
@@ -395,6 +489,8 @@ class PlanScene3d {
     holes.sort((a, b) => (a['from'] as double).compareTo(b['from'] as double));
     return {
       'id': id,
+      'name': el.displayLabel,
+      'cat': PlanCategory.of(el).name,
       'points': [for (final p in pts) xy(p)],
       'z0': level,
       'tops': tops,
@@ -415,6 +511,8 @@ class PlanScene3d {
     final color = PlanDrape.color(el);
     return {
       'id': id,
+      'name': el.displayLabel,
+      'cat': PlanCategory.of(el).name,
       'z0': level,
       'material': mat.id,
       'color':
@@ -467,7 +565,9 @@ class PlanScene3d {
     final light = PlanLight.of(el);
     return {
       'id': id,
-      'name': el.label?.isNotEmpty == true ? el.label : type.label,
+      // «Principal · ARRI SkyPanel S60», o lo que tenga.
+      'name': el.fullLabel,
+      'cat': PlanCategory.of(el).name,
       'type': type.dbValue,
       'pos': [p[0], p[1], _r(z)],
       'aim': [_r(p[0] + dx * t), _r(p[1] + dy * t), _r(z + dz * t)],
@@ -475,8 +575,19 @@ class PlanScene3d {
       'cct': beam?.cct ?? 3200,
       'watts': ?light?.watts,
       'on': beam != null && !beam.off,
+      // Lo que llega a la escena, con regulación, difusiones y gelatinas:
+      // candelas en el eje, haz, color y tamaño de lo que emite. Es lo que
+      // usan el motor de luz de IRIS y Unreal (IRIS Stage Link).
+      if (light != null)
+        'source': {
+          'cd': _r(light.source.candela),
+          'beamDeg': _r(light.source.beamDeg),
+          'cct': _r(light.source.cct),
+          'sizeM': _r(light.source.sizeM),
+        },
       if (TrussMagnet.trussUidOf(el) != null)
         'truss': TrussMagnet.trussUidOf(el),
+      'asset': ?UnrealAssetRef.of(el)?.toPayload(),
     };
   }
 }
