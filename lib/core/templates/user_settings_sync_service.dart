@@ -1,3 +1,4 @@
+import '../../features/unreal_link/unreal_library.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -61,6 +62,8 @@ abstract final class UserSettingsSyncService {
       'projectShootDocTemplateIds': prefs.projectShootDocTemplateIds.map(
         (k, v) => MapEntry(k.toString(), v),
       ),
+      // Biblioteca de assets de Unreal (F6.20 B5).
+      'unrealLibrary': await _unrealLibrary(),
     };
 
     await client.from('user_settings').upsert({
@@ -146,10 +149,19 @@ abstract final class UserSettingsSyncService {
             _decodeIntMap(map['projectShootDocTemplateIds']),
       );
       await prefs.save();
+      if (map['unrealLibrary'] case final String library) {
+        await UnrealLibrary.instance.load();
+        UnrealLibrary.instance.importJson(library);
+      }
     }
 
     if (cloudUpdated != null) await _markSynced(cloudUpdated);
     return true;
+  }
+
+  static Future<String> _unrealLibrary() async {
+    await UnrealLibrary.instance.load();
+    return UnrealLibrary.instance.encode();
   }
 
   static Map<int, String> _decodeIntMap(dynamic raw) {
