@@ -62,7 +62,15 @@ class TechnicalScriptPdfExporter {
     final theme = PdfExportFonts.familyTheme(family);
     final pdf = pw.Document();
 
-    const base = pw.TextStyle(fontSize: 8.5, color: _ink, lineSpacing: 1.5);
+    final bodySize = doc.fontSize ?? 8.5;
+    final base = pw.TextStyle(
+      fontSize: bodySize,
+      color: _ink,
+      lineSpacing: 1.5,
+    );
+    final paper = doc.paper == ScriptDocPaper.letter
+        ? PdfPageFormat.letter
+        : PdfPageFormat.a4;
 
     pw.Widget rich(String text, {required bool centered}) {
       final spans = parseScriptMarkup(text);
@@ -190,7 +198,7 @@ class TechnicalScriptPdfExporter {
     pdf.addPage(
       pw.MultiPage(
         theme: theme,
-        pageFormat: PdfPageFormat.a4.landscape,
+        pageFormat: doc.landscape ? paper.landscape : paper.portrait,
         margin: const pw.EdgeInsets.all(28),
         build: (context) => [
           pw.Text(
@@ -245,7 +253,7 @@ class TechnicalScriptPdfExporter {
                           column.label,
                           textAlign: pw.TextAlign.center,
                           style: pw.TextStyle(
-                            fontSize: 8,
+                            fontSize: bodySize - 0.5,
                             fontWeight: pw.FontWeight.bold,
                             color: _ink,
                           ),

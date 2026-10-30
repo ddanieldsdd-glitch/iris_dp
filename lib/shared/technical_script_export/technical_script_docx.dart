@@ -76,9 +76,12 @@ class TechnicalScriptDocxExporter {
   /// Nombre del marcador de la sección [i], destino de su línea del índice.
   static String _bookmark(int i) => 'esc_$i';
 
-  // A4 apaisado en veinteavos de punto, con márgenes de 1,27 cm.
-  static const _pageW = 16838;
-  static const _pageH = 11906;
+  // Lado largo y corto del papel en veinteavos de punto, con márgenes de
+  // 1,27 cm.
+  static (int, int) _paperSides(ScriptDocPaper paper) => switch (paper) {
+    ScriptDocPaper.a4 => (16838, 11906),
+    ScriptDocPaper.letter => (15840, 12240),
+  };
   static const _margin = 720;
 
   /// Unidades EMU por veinteavo de punto.
@@ -185,7 +188,11 @@ class TechnicalScriptDocxExporter {
     Map<int, int> pages = const {},
     DocxFontFiles? fonts,
   }) {
-    const contentWidth = _pageW - _margin * 2;
+    final (long, short) = _paperSides(doc.paper);
+    final pageW = doc.landscape ? long : short;
+    final pageH = doc.landscape ? short : long;
+    final contentWidth = pageW - _margin * 2;
+    final bodySize = doc.fontSize ?? 9;
     final totalWeight = doc.columns.fold<double>(0, (a, c) => a + c.weight);
     final widths = [
       for (final c in doc.columns)
@@ -243,7 +250,12 @@ class TechnicalScriptDocxExporter {
         body.write(
           _cell(
             _paragraph(
-              _runs(doc.columns[i].label, size: 9, bold: true, markup: false),
+              _runs(
+                doc.columns[i].label,
+                size: bodySize,
+                bold: true,
+                markup: false,
+              ),
               centered: true,
             ),
             width: widths[i],
@@ -292,7 +304,7 @@ class TechnicalScriptDocxExporter {
             content = paragraphs.isEmpty ? _paragraph('') : '$paragraphs';
           } else {
             content = _paragraph(
-              _runs(row.cells[column.key] ?? ''),
+              _runs(row.cells[column.key] ?? '', size: bodySize),
               centered: column.centered,
             );
           }
@@ -318,7 +330,8 @@ class TechnicalScriptDocxExporter {
         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
         'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">'
         '<w:body>$body'
-        '<w:sectPr><w:pgSz w:w="$_pageW" w:h="$_pageH" w:orient="landscape"/>'
+        '<w:sectPr><w:pgSz w:w="$pageW" w:h="$pageH"'
+        '${doc.landscape ? ' w:orient="landscape"' : ''}/>'
         '<w:pgMar w:top="$_margin" w:right="$_margin" w:bottom="$_margin" '
         'w:left="$_margin" w:header="360" w:footer="360" w:gutter="0"/>'
         '</w:sectPr></w:body></w:document>';

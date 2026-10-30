@@ -10,6 +10,7 @@ import 'package:xml/xml.dart';
 
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/utils/shot_reference_import.dart';
+import 'package:iris_dp/features/technical_script/script_export_dialog.dart';
 import 'package:iris_dp/features/technical_script/technical_script_export.dart';
 import 'package:iris_dp/features/technical_script/technical_script_settings.dart';
 import 'package:iris_dp/shared/pdf_export/technical_script_pdf.dart';
@@ -369,5 +370,55 @@ void main() {
     expect(xml, contains('GUION *PRUEBA* __X__'));
     expect(xml, contains('*CASA*'));
     expect(xml, isNot(contains('<w:i/>')));
+  });
+
+  test('las opciones de exportar eligen columnas, storyboard, letra y papel',
+      () async {
+    const options = ScriptExportOptions(
+      hiddenColumns: {'ref', 'notes'},
+      fontSize: 10,
+      paper: ScriptDocPaper.letter,
+      landscape: false,
+    );
+    final built = (await buildNarrativeScriptDoc(
+      db,
+      projectId,
+      const TechnicalScriptSettings(),
+      hiddenColumns: options.hiddenColumns,
+    ))!;
+    final doc = options.applyTo(built);
+    final keys = doc.columns.map((c) => c.key).toList();
+    expect(keys, containsAll(['esc', 'plano', 'action', 'story', 'dur']));
+    expect(keys, isNot(contains('ref')));
+    expect(keys, isNot(contains('notes')));
+    // El storyboard sin imagen propia toma la de referencia.
+    expect(doc.sections.first.rows.first.imagesOf('story'), hasLength(1));
+    expect(doc.sections.first.rows.first.imagesOf('ref'), isEmpty);
+
+    // Carta vertical en el Word, con la letra elegida.
+    final zip = ZipDecoder().decodeBytes(
+      TechnicalScriptDocxExporter.buildBytes(doc),
+    );
+    final xml = utf8.decode(
+      zip.files.firstWhere((f) => f.name == 'word/document.xml').content,
+    );
+    final size = XmlDocument.parse(xml).findAllElements('w:pgSz').single;
+    expect(size.getAttribute('w:w'), '12240');
+    expect(size.getAttribute('w:h'), '15840');
+    expect(size.getAttribute('w:orient'), isNull);
+    expect(xml, contains('<w:sz w:val="20"/>'));
+
+    // El PDF sale en Carta vertical (612 × 792 pt).
+    final pdf = latin1.decode(await TechnicalScriptPdfExporter.buildBytes(doc));
+    expect(pdf, contains('/MediaBox[0 0 612 792]'));
+
+    // Las opciones se guardan y se leen igual.
+    final again = ScriptExportOptions.fromJson(
+      jsonDecode(jsonEncode(options.toJson())) as Map<String, dynamic>,
+    );
+    expect(again.hiddenColumns, options.hiddenColumns);
+    expect(again.fontSize, 10);
+    expect(again.paper, ScriptDocPaper.letter);
+    expect(again.landscape, isFalse);
   });
 }

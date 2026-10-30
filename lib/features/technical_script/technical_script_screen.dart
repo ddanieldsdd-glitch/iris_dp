@@ -324,7 +324,8 @@ class TechnicalScriptScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
   ) async {
-    final choice = await showScriptExportDialog(context);
+    final settings = ref.read(technicalScriptSettingsProvider);
+    final choice = await showScriptExportDialog(context, screen: settings);
     if (choice == null || !context.mounted) return;
     final word = choice.word;
     final db = ref.read(databaseProvider);
@@ -332,9 +333,10 @@ class TechnicalScriptScreen extends ConsumerWidget {
       final built = await buildNarrativeScriptDoc(
         db,
         projectId,
-        ref.read(technicalScriptSettingsProvider),
+        settings,
+        hiddenColumns: choice.hiddenColumns,
       );
-      final doc = built?.copyWith(includeIndex: choice.index);
+      final doc = built == null ? null : choice.applyTo(built);
       if (!context.mounted) return;
       if (doc == null || doc.sections.isEmpty) {
         AppSnackBar.show(context, 'No hay escenas para exportar.');

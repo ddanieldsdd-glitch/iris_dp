@@ -259,15 +259,23 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
                                 scenes: scenes,
                                 onTap: () => _openEditor(context, doc),
                                 onExport: doc.kind == kShootDayKind
-                                    ? (word) => exportShootDayDocument(
-                                        context,
-                                        db,
-                                        ref.read(
+                                    ? (word) async {
+                                        final settings = ref.read(
                                           technicalScriptSettingsProvider,
-                                        ),
-                                        doc.id,
-                                        (word: word, index: lastScriptExportIndex),
-                                      )
+                                        );
+                                        final saved =
+                                            await savedScriptExportOptions(
+                                              settings,
+                                            );
+                                        if (!context.mounted) return;
+                                        await exportShootDayDocument(
+                                          context,
+                                          db,
+                                          settings,
+                                          doc.id,
+                                          saved.copyWith(word: word),
+                                        );
+                                      }
                                     : null,
                                 onSetPrimary: () => db.setPrimaryShootDocument(
                                   widget.projectId,
@@ -305,15 +313,18 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
 
   /// Exporta el guion técnico entero, en orden de guion.
   Future<void> _exportFullScript(BuildContext context) async {
-    final choice = await showScriptExportDialog(context);
+    final settings = ref.read(technicalScriptSettingsProvider);
+    final choice = await showScriptExportDialog(context, screen: settings);
     if (choice == null || !context.mounted) return;
     final db = ref.read(databaseProvider);
     try {
-      final doc = (await buildNarrativeScriptDoc(
+      final built = await buildNarrativeScriptDoc(
         db,
         widget.projectId,
-        ref.read(technicalScriptSettingsProvider),
-      ))?.copyWith(includeIndex: choice.index);
+        settings,
+        hiddenColumns: choice.hiddenColumns,
+      );
+      final doc = built == null ? null : choice.applyTo(built);
       if (!context.mounted) return;
       if (doc == null || doc.sections.isEmpty) {
         AppSnackBar.show(context, 'El guion técnico aún no tiene escenas.');

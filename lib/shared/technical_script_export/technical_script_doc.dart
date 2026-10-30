@@ -1,5 +1,21 @@
 import 'dart:typed_data';
 
+/// Tamaño de papel del documento.
+enum ScriptDocPaper {
+  a4('A4'),
+  letter('Carta');
+
+  final String label;
+  const ScriptDocPaper(this.label);
+
+  static ScriptDocPaper? parse(Object? name) {
+    for (final v in values) {
+      if (v.name == name) return v;
+    }
+    return null;
+  }
+}
+
 /// Guion técnico listo para exportar: lo mismo que se ve en la hoja, sin
 /// depender de la pantalla. El PDF y el Word pintan este modelo.
 class TechnicalScriptDoc {
@@ -17,6 +33,13 @@ class TechnicalScriptDoc {
   /// Índice de escenas al principio, con su página y enlace a cada una.
   final bool includeIndex;
 
+  final ScriptDocPaper paper;
+  final bool landscape;
+
+  /// Cuerpo del texto de la tabla, en puntos. Nulo: el de cada formato
+  /// (8,5 en el PDF, 9 en el Word).
+  final double? fontSize;
+
   const TechnicalScriptDoc({
     required this.title,
     required this.columns,
@@ -24,17 +47,28 @@ class TechnicalScriptDoc {
     this.subtitle,
     this.fontFamily = 'Inter',
     this.includeIndex = true,
+    this.paper = ScriptDocPaper.a4,
+    this.landscape = true,
+    this.fontSize,
   });
 
-  TechnicalScriptDoc copyWith({bool? includeIndex, String? fontFamily}) =>
-      TechnicalScriptDoc(
-        title: title,
-        subtitle: subtitle,
-        columns: columns,
-        sections: sections,
-        fontFamily: fontFamily ?? this.fontFamily,
-        includeIndex: includeIndex ?? this.includeIndex,
-      );
+  TechnicalScriptDoc copyWith({
+    bool? includeIndex,
+    String? fontFamily,
+    ScriptDocPaper? paper,
+    bool? landscape,
+    double? fontSize,
+  }) => TechnicalScriptDoc(
+    title: title,
+    subtitle: subtitle,
+    columns: columns,
+    sections: sections,
+    fontFamily: fontFamily ?? this.fontFamily,
+    includeIndex: includeIndex ?? this.includeIndex,
+    paper: paper ?? this.paper,
+    landscape: landscape ?? this.landscape,
+    fontSize: fontSize ?? this.fontSize,
+  );
 
   /// Hay índice que poner.
   bool get hasIndex => includeIndex && sections.isNotEmpty;
@@ -68,6 +102,7 @@ const kScriptDocColumns = [
   ScriptDocColumn('dur', 'DUR.', 700, centered: true),
   ScriptDocColumn('action', 'ACCIÓN', 3570),
   ScriptDocColumn('ref', 'REFERENCIA', 2625, centered: true),
+  ScriptDocColumn('story', 'STORYBOARD', 2625, centered: true),
   ScriptDocColumn('planta', 'PLANTA', 2100, centered: true),
   ScriptDocColumn('notes', 'APUNTES', 2190),
 ];
@@ -135,18 +170,23 @@ class ScriptDocRow {
   /// Imágenes de la celda de planta: la planta dibujada y sus bocetos.
   final List<Uint8List> planImages;
 
+  /// Imagen de la celda de storyboard.
+  final List<Uint8List> storyboardImages;
+
   const ScriptDocRow({
     required this.cells,
     this.fill,
     this.cellFills = const {},
     this.images = const [],
     this.planImages = const [],
+    this.storyboardImages = const [],
   });
 
   /// Imágenes de una columna de imágenes; nulo si la columna es de texto.
   List<Uint8List>? imagesOf(String column) => switch (column) {
     'ref' => images,
     'planta' => planImages,
+    'story' => storyboardImages,
     _ => null,
   };
 

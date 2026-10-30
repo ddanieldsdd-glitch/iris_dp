@@ -34,15 +34,17 @@ Future<void> exportShootDayDocument(
   AppDatabase db,
   TechnicalScriptSettings settings,
   int documentId,
-  ScriptExportChoice choice,
+  ScriptExportOptions choice,
 ) async {
   final word = choice.word;
   try {
-    final doc = (await buildShootDayScriptDoc(
+    final built = await buildShootDayScriptDoc(
       db,
       documentId,
       settings,
-    ))?.copyWith(includeIndex: choice.index);
+      hiddenColumns: choice.hiddenColumns,
+    );
+    final doc = built == null ? null : choice.applyTo(built);
     if (!context.mounted) return;
     if (doc == null || doc.sections.isEmpty) {
       AppSnackBar.show(context, 'Añade planos a la jornada para exportarla.');
@@ -189,6 +191,7 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
   Future<void> _export() async {
     final choice = await showScriptExportDialog(
       context,
+      screen: ref.read(technicalScriptSettingsProvider),
       title: 'Exportar la jornada',
     );
     if (choice == null || !mounted) return;

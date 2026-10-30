@@ -27,8 +27,10 @@ int _rgb(Color color) => color.toARGB32() & 0xFFFFFF;
 Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
   AppDatabase db,
   int projectId,
-  TechnicalScriptSettings settings,
-) async {
+  TechnicalScriptSettings settings, {
+  Set<String>? hiddenColumns,
+}) async {
+  final hidden = hiddenColumns ?? _screenHidden(settings);
   final project = await db.getProject(projectId);
   if (project == null) return null;
 
@@ -47,7 +49,7 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
     AppPalette.dark,
   );
 
-  final plans = await _loadPlans(db, projectId, settings);
+  final plans = await _loadPlans(db, projectId, hidden);
 
   final shotsByScene = <int, List<Shot>>{};
   for (final shot in shots) {
@@ -66,6 +68,8 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
           sheet,
           plans: plans,
           planView: settings.planView,
+          storyboard: !hidden.contains('story'),
+          references: !hidden.contains('ref'),
         ),
       );
     }
@@ -86,18 +90,17 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
     subtitle: project.director == null || project.director!.trim().isEmpty
         ? null
         : 'Dirección: ${project.director}',
-    columns: scriptDocColumns(
-      hidden: {
-        if (!settings.shows(ScriptColumn.fStop)) 'f',
-        if (!settings.shows(ScriptColumn.personajes)) 'pers',
-        if (!settings.shows(ScriptColumn.duracion)) 'dur',
-        if (!settings.shows(ScriptColumn.planta)) 'planta',
-      },
-    ),
+    columns: scriptDocColumns(hidden: hidden),
     sections: sections,
     fontFamily: settings.fontFamily,
   );
 }
+
+/// Columnas que no salen cuando se exporta como se ve la hoja.
+Set<String> _screenHidden(TechnicalScriptSettings settings) => {
+  for (final c in ScriptColumn.optional)
+    if (!settings.shows(c)) c,
+};
 
 /// Línea del índice de [scene], con los planos [shots] si es un tramo.
 String _indexLabel(Scene scene, [List<Shot> shots = const []]) =>
@@ -119,6 +122,8 @@ Future<ScriptDocRow> _docRow(
   int? order,
   PlanProjectData? plans,
   ScriptPlanView planView = ScriptPlanView.both,
+  bool storyboard = false,
+  bool references = true,
 }) async {
   final cellFills = <String, int>{};
   final raw = shot.cellStylesJson;
@@ -142,10 +147,18 @@ Future<ScriptDocRow> _docRow(
     await db.watchReferencesForShot(shot.id).first,
   );
   final images = <Uint8List>[];
-  for (final path in own.isEmpty ? [referenceImageOf(shot)] : own) {
+  for (final path in !references
+      ? const <String?>[]
+      : own.isEmpty
+      ? [referenceImageOf(shot)]
+      : own) {
     final bytes = await PdfSafeImage.loadFromPathMaxEdge(path, maxEdge: 1200);
     if (bytes != null) images.add(bytes);
   }
+  final storyPath = storyboard ? storyboardImageOf(shot) : null;
+  final story = storyPath == null
+      ? null
+      : await PdfSafeImage.loadFromPathMaxEdge(storyPath, maxEdge: 1200);
   return ScriptDocRow(
     cells: {
       if (order != null) 'orden': '$order',
@@ -166,6 +179,7 @@ Future<ScriptDocRow> _docRow(
     fill: rowFill == null ? null : _rgb(rowFill),
     cellFills: cellFills,
     images: images,
+    storyboardImages: [if (story != null) story],
     planImages: plans == null
         ? const []
         : await _planImages(
@@ -177,13 +191,13 @@ Future<ScriptDocRow> _docRow(
 }
 
 /// Las plantas del proyecto, para pintar la columna de planta; nulo si la
-/// columna está oculta.
+/// columna no sale.
 Future<PlanProjectData?> _loadPlans(
   AppDatabase db,
   int projectId,
-  TechnicalScriptSettings settings,
+  Set<String> hidden,
 ) async {
-  if (!settings.shows(ScriptColumn.planta)) return null;
+  if (hidden.contains('planta')) return null;
   return PlanProjectData(
     sites: await db.watchSitesForProject(projectId).first,
     sets: await db.watchLocationsForProject(projectId).first,
@@ -322,8 +336,10 @@ shootDayWeather(ShootDocument day, LocationSite? site, {DateTime? now}) {
 Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
   AppDatabase db,
   int documentId,
-  TechnicalScriptSettings settings,
-) async {
+  TechnicalScriptSettings settings, {
+  Set<String>? hiddenColumns,
+}) async {
+  final hidden = hiddenColumns ?? _screenHidden(settings);
   final day = await db.getShootDocument(documentId);
   if (day == null) return null;
   final project = await db.getProject(day.projectId);
@@ -341,7 +357,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
     settings.copyWith(view: ScriptView.sheet),
     AppPalette.dark,
   );
-  final plans = await _loadPlans(db, day.projectId, settings);
+  final plans = await _loadPlans(db, day.projectId, hidden);
   final sceneById = {for (final s in scenes) s.id: s};
   final shotById = {for (final s in shots) s.id: s};
   final site = sites.where((s) => s.id == day.locationSiteId).firstOrNull;
@@ -386,6 +402,8 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
         order: order,
         plans: plans,
         planView: settings.planView,
+        storyboard: !hidden.contains('story'),
+        references: !hidden.contains('ref'),
       ),
     );
   }
@@ -414,14 +432,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
     ].join('\n'),
     columns: [
       const ScriptDocColumn('orden', 'ORDEN', 760, centered: true),
-      ...scriptDocColumns(
-        hidden: {
-          if (!settings.shows(ScriptColumn.fStop)) 'f',
-          if (!settings.shows(ScriptColumn.personajes)) 'pers',
-          if (!settings.shows(ScriptColumn.duracion)) 'dur',
-          if (!settings.shows(ScriptColumn.planta)) 'planta',
-        },
-      ),
+      ...scriptDocColumns(hidden: hidden),
     ],
     sections: sections,
     fontFamily: settings.fontFamily,
