@@ -1202,6 +1202,13 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 
 ### F6.22.5 · Dos maneras de ver el 3D · todos
 
+**Estado:** hecho, falta probarlo en el PC (`plan/f6-22-5-vistas-3d`).
+- En «Qué se ve», un selector **Luz · EV n / Claro** sustituye al interruptor «Luz real».
+- **Luz:** solo la luz de los focos, las telas y los rebotes, y el sol o el cielo si toca, a la exposición de la cámara.
+- **Claro:**
+  - luz de trabajo pareja (cielo, ambiente y una luz suave desde arriba), sin luz de los focos, sin sol ni sombras;
+  - con los nombres de todo y los conos visibles, para colocar.
+
 - **Luz:** el set iluminado solo por los focos (y el sol o el cielo si toca), con la exposición de la cámara (F6.21.4). Es lo que se ensaya.
 - **Claro:** luz de trabajo uniforme, con los focos, los marcos y los palios bien visibles, sus haces en línea y sus nombres, para colocar y ver dónde va cada cosa.
 - Un botón en la barra del 3D para pasar de una a otra. Sustituye al interruptor «Luz real».

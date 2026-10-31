@@ -66,6 +66,9 @@
   // etiquetas con el nombre de cada pieza.
   let palette = {};
   let showNames = false;
+  // Vista «Claro» (F6.22.5): luz de trabajo pareja, sin sombras ni luz de
+  // los focos, y con todos los nombres.
+  let clearView = false;
   // Miniaturas 3/4 de los assets de Unreal (F6.20 B4): clave → textura.
   const thumbTex = {};
   const labelsGroup = new THREE.Group();
@@ -733,7 +736,7 @@
   function updateLabels() {
     for (const l of labels) {
       const layerShown = l.userData.layer ? shown[l.userData.layer] !== false : true;
-      l.visible = layerShown && (showNames || l.userData.id === selectedId);
+      l.visible = layerShown && (showNames || clearView || l.userData.id === selectedId);
     }
   }
 
@@ -764,6 +767,7 @@
     // encendido (o con «Luz de trabajo») se ve con la luz de siempre.
     const anyLit = (sc.fixtures || []).some((f) => f.on && f.source && f.source.cd > 0);
     const env = (sc.environment && sc.environment.kind) || 'interior';
+    clearView = sc.lightMode === 'work';
     const physical = !!(sc.exposure && sc.exposure.scale > 0 && sc.lightMode !== 'work' &&
       (anyLit || sc.sun));
     // Fondo según el entorno (F6.21.1): plató negro, exterior con cielo.
@@ -781,6 +785,13 @@
         root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, skyLux * k));
         root.add(new THREE.AmbientLight(0xffffff, 0.2 * k));
       }
+    } else if (clearView) {
+      // Luz de trabajo pareja: todo se ve, nada deslumbra.
+      root.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 1.0));
+      root.add(new THREE.AmbientLight(0xffffff, 0.45));
+      const work = new THREE.DirectionalLight(0xffffff, 0.35);
+      work.position.set(4, 10, 6);
+      root.add(work);
     } else {
       root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, sc.sun ? 0.6 : 0.38));
       root.add(new THREE.AmbientLight(0xffffff, 0.12));
@@ -912,7 +923,7 @@
       body.name = (f.name || 'Foco') + ' · ' + f.id;
       body.userData.id = f.id; body.userData.movable = true; body.userData.dragY = p.y; body.userData.aim = a.clone(); picks.push(body);
       L.fixtures.add(body);
-      if (!f.on) return;
+      if (!f.on || clearView) return;
       if (i >= next && lit < maxLights) {
         next += step; lit++;
         const half = clamp((f.beamDeg || 60) / 2, 5, 80) * Math.PI / 180;
@@ -1017,8 +1028,8 @@
     tag(sc.scans, null, (q) => V(q.at[0], q.at[1], (q.z0 || 0) + 0.5));
     updateLabels();
 
-    // El sol, con sombras de lo que tapa.
-    if (sc.sun) {
+    // El sol, con sombras de lo que tapa (en «Claro», no).
+    if (sc.sun && !clearView) {
       const d = sc.sun.dir;
       const sun = new THREE.DirectionalLight(
         cctColor(sc.sun.cct || 5400),
@@ -1066,7 +1077,7 @@
       root.add(grp);
     }
     // La luz que sale de telas y rebotes, la del fotómetro.
-    for (const s of sc.soft || []) {
+    for (const s of clearView ? [] : sc.soft || []) {
       if (lit >= maxLights + 6) break;
       lit++;
       const col = cctColor(s.cct || 5600);
