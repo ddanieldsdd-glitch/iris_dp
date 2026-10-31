@@ -1087,6 +1087,20 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 
 ### F6.22.1 · Marcos y palios, distintos · todos
 
+**Estado:** en curso (`plan/f6-22-1-palios`).
+- **Hecho:**
+  - en la ficha del marco de difusión y del rebote, **Formato**: Marco 1×1 o 2×1 (solo difusión), o Palio 2×2, 3×3, 4×4 o 6×6;
+  - **Ancho**, **Alto** y **Altura del centro** para todo el grip;
+  - el marco admite además una **gelatina**, que tiñe lo que sale;
+  - sin medidas propias, el grip mide como antes.
+- **Hecho después:**
+  - **Paneo** e **Inclinación** (de 0°, vertical, a 90°, horizontal sobre las cabezas) en marcos, palios, rebotes y negros;
+  - inclinados, el motor de luz los calcula como paneles en 3D (intersección exacta del rayo con la tela): tapan la luz que les cae, también la del sol, y la sueltan por la otra cara según el ángulo con que les llega; si sale hacia abajo, cae como un aparato colgado;
+  - el 3D y Unreal los inclinan igual.
+- **Falta:**
+  - el dibujo de su sombra en la planta 2D (los haces de la planta aún no la recortan, aunque el fotómetro y el mapa de exposición sí);
+  - entradas «Marco» y «Palio» propias en la paleta.
+
 - **Marco:**
   - 1×1 o 2×1 m, de madera;
   - lleva una **gelatina** (corrección o color) o una **tela de difusión** dentro.
@@ -1099,6 +1113,16 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 - **Hecho cuando:** se pone un palio de 4×4 con Grid Cloth sobre dos actores, se cambia a seda, y la ficha, la planta y el fotómetro cambian.
 
 ### F6.22.2 · La difusión y el corte, iguales en la planta, el 3D y Unreal · todos
+
+**Estado:** en curso (`plan/f6-22-1-palios`).
+- **Hecho:**
+  - negros, cortes, rebotes, marcos, palios, redes y gelatinas llegan al 3D y a Unreal como **paneles a su tamaño y altura**, del color de su tela, y **dan sombra**;
+  - la luz que sale de cada tela y cada rebote es la que calcula el motor de luz, la del fotómetro;
+  - esa luz va al 3D como fuente blanda y a Unreal como **RectLight** de su tamaño, 5 cm por delante de la tela;
+  - más difusión da menos luz y más abierta.
+- **Falta:**
+  - la tela translúcida en Unreal: hoy es opaca y tapa toda la luz directa, que es lo correcto para la difusión pero no se transparenta;
+  - la luz directa sobrante en el 3D de IRIS cuando el foco no está entre los cuatro que dan sombra.
 
 - **Planta 2D:** como hoy, que ya está bien según Daniel.
 - **3D de IRIS:**

@@ -889,6 +889,9 @@
     // Con un escaneo se ensaya la luz sobre la localización: los primeros
     // focos dan sombra (F6.12.4). Son caras, así que solo unos pocos.
     const hasScans = (sc.scans || []).length > 0;
+    // Con grip (negros, marcos, palios) también: es lo que corta la luz.
+    const hasGrip = (sc.grip || []).length > 0;
+    const castShadows = hasScans || hasGrip;
     const maxShadows = 4;
     let shadows = 0;
     fixtures.forEach((f, i) => {
@@ -916,7 +919,7 @@
           : new THREE.SpotLight(col, 0.6 + (f.watts || 500) / 1600, 0, half, 0.45, 1);
         sl.position.copy(p);
         sl.target.position.copy(a);
-        if (hasScans && shadows < maxShadows) {
+        if (castShadows && shadows < maxShadows) {
           shadows++;
           sl.castShadow = true;
           sl.shadow.mapSize.set(1024, 1024);
@@ -1034,7 +1037,45 @@
       floor.castShadow = false;
     }
 
-    if (hasScans && !sc.sun) {
+    // Los paneles de grip (F6.22.2): a su tamaño, del color de su tela, y
+    // dan sombra (una tela tapa la luz directa; lo que deja pasar sale de
+    // ella como fuente blanda, abajo).
+    for (const g of sc.grip || []) {
+      const tilted = (g.tiltDeg || 0) >= 1;
+      const h = tilted ? Math.max(g.heightM || 1, 0.05) : Math.max((g.top || 2.5) - (g.bottom || 0), 0.05);
+      const mat = new THREE.MeshStandardMaterial({ color: g.rgb, roughness: 0.9,
+        transparent: g.opacity < 1, opacity: g.opacity, side: THREE.DoubleSide });
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(g.widthM || 1, h, 0.03), mat);
+      panel.castShadow = true;
+      panel.receiveShadow = true;
+      const grp = new THREE.Group();
+      panel.position.y = tilted ? (g.centreM || 1.5) : (g.bottom || 0) + h / 2;
+      // Inclinado hacia su cara delantera, sobre su ancho (F6.22.1).
+      if (tilted) panel.rotation.x = (g.tiltDeg || 0) * Math.PI / 180;
+      grp.add(panel);
+      grp.position.copy(V(g.at[0], g.at[1], g.z0 || 0));
+      grp.rotation.y = -(g.yawDeg || 0) * Math.PI / 180;
+      grp.name = (g.name || 'Grip') + ' · ' + g.id;
+      grp.userData.id = g.id; grp.userData.movable = true; grp.userData.dragY = g.z0 || 0;
+      picks.push(grp);
+      root.add(grp);
+    }
+    // La luz que sale de telas y rebotes, la del fotómetro.
+    for (const s of sc.soft || []) {
+      if (lit >= maxLights + 6) break;
+      lit++;
+      const col = cctColor(s.cct || 5600);
+      const p = V(s.pos[0] + s.dir[0] * 0.05, s.pos[1] + s.dir[1] * 0.05, s.pos[2]);
+      const half = clamp((s.beamDeg || 120) / 2, 20, 85) * Math.PI / 180;
+      const sl = physical
+        ? new THREE.SpotLight(col, (s.cd || 0) * k, 0, half, 1, 2)
+        : new THREE.SpotLight(col, 0.5, 0, half, 1, 1);
+      sl.position.copy(p);
+      sl.target.position.copy(p.clone().add(V(s.dir[0], s.dir[1], s.dir[2]).multiplyScalar(3)));
+      root.add(sl, sl.target);
+    }
+
+    if (castShadows && !sc.sun) {
       root.traverse((o) => {
         if (!o.isMesh || (o.material && o.material.blending === THREE.AdditiveBlending)) return;
         o.castShadow = true;

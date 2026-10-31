@@ -5,6 +5,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
+import 'light/plan_grip.dart';
 import 'light/light_scene.dart';
 import 'light/modifiers.dart';
 import 'light/plan_light.dart';
@@ -611,16 +612,99 @@ class PlanPieceControls extends StatelessWidget {
       ]);
     } else if (_isGrip(el)) {
       final length = LightScene.lengthOf(el);
+      // Marco o palio, con su medida (F6.22.1). El rebote, solo palio.
+      if (PlanGrip.takesFormat(el)) {
+        final formats = [
+          for (final f in GripFormat.values)
+            if (f.palio || el.lightType == LightType.diffusionFrame) f,
+        ];
+        children.add(
+          choice<GripFormat>(
+            'Formato',
+            PlanGrip.formatOf(el),
+            [(null, 'A medida'), for (final f in formats) (f, f.label)],
+            (f) {
+              if (f == null) {
+                el.props.remove(PlanGrip.formatKey);
+              } else {
+                PlanGrip.applyFormat(el, f, metersPerUnit);
+              }
+            },
+          ),
+        );
+      }
       children.add(
         slider(
-          'Largo',
+          'Ancho',
           meters(length),
           current: length,
           min: 0.3 / metersPerUnit,
           max: 6 / metersPerUnit,
-          onChanged: (v) => el.props[LightScene.lenKey] = v,
+          onChanged: (v) {
+            el.props[LightScene.lenKey] = v;
+            el.props.remove(PlanGrip.formatKey);
+          },
         ),
       );
+      final gripHeight = PlanGrip.heightM(el, metersPerUnit);
+      children.addAll([
+        slider(
+          'Alto',
+          '${gripHeight.toStringAsFixed(2)} m',
+          current: gripHeight,
+          min: 0.3,
+          max: 6,
+          onChanged: (v) {
+            el.props[PlanGrip.heightKey] = (v * 20).round() / 20;
+            el.props.remove(PlanGrip.formatKey);
+          },
+        ),
+        slider(
+          'Altura del centro',
+          '${PlanGrip.centreM(el, metersPerUnit).toStringAsFixed(2)} m',
+          current: PlanGrip.centreM(el, metersPerUnit),
+          min: 0.2,
+          max: 8,
+          onChanged: (v) => el.props[PlanGrip.centreKey] = (v * 20).round() / 20,
+        ),
+        slider(
+          'Paneo',
+          '${el.rotation.round()}°',
+          current: el.rotation,
+          min: 0,
+          max: 359,
+          onChanged: (v) => el.rotation = v.roundToDouble(),
+        ),
+        if (PlanGrip.canTilt(el)) ...[
+          slider(
+            'Inclinación',
+            switch (PlanGrip.tiltDeg(el).round()) {
+              0 => 'vertical',
+              90 => 'horizontal, sobre las cabezas',
+              final d => '$d°',
+            },
+            current: PlanGrip.tiltDeg(el),
+            min: 0,
+            max: 90,
+            onChanged: (v) {
+              final d = v.roundToDouble();
+              if (d < 1) {
+                el.props.remove(PlanGrip.tiltKey);
+              } else {
+                el.props[PlanGrip.tiltKey] = d;
+              }
+            },
+          ),
+          Text(
+            'Inclinada, el fotómetro, el 3D y Unreal la calculan en el '
+            'espacio: un palio horizontal tapa la luz que le cae de arriba '
+            '(también el sol) y la suelta hacia abajo.',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary),
+          ),
+        ],
+      ]);
       switch (el.lightType) {
         case LightType.bounce:
           final material = SurfaceMaterial.byId(
@@ -633,9 +717,12 @@ class PlanPieceControls extends StatelessWidget {
             ], (id) => el.props[LightScene.materialKey] = id),
           );
         case LightType.diffusionFrame:
-          children.add(
+          children.addAll([
             filter('Tela', ModifierKind.diffusion, allowNone: false),
-          );
+            // Un marco puede llevar además una gelatina (F6.22.1).
+            if (!(PlanGrip.formatOf(el)?.palio ?? false))
+              filter('Gelatina', ModifierKind.correction),
+          ]);
         case LightType.net:
           children.add(filter('Red', ModifierKind.scrim, allowNone: false));
         case LightType.gel:
