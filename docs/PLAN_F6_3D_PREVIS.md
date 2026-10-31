@@ -1048,9 +1048,107 @@ Pedido por Daniel el 2026-10-31. Objetivo: que un esquema de luz ensayado en IRI
 
 Cada punto con su prueba de Dart (contrato del paquete y conversión de unidades), y su prueba en el PC con Unreal 5.5 en `docs/PRUEBA_IRIS_STAGE.md`.
 
+## F6.22 · Grip, cámara y navegación como en un set de verdad
+
+Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.21.2.
+
+### Lo que hay hoy (revisado el 2026-10-31)
+
+- **Tipos de grip:** negro (*flag*), corte (*cutter*), rebote, marco de difusión, red y gelatina (`LightType`, `camera_plan_constants.dart`). El catálogo de telas existe (Grid Cloth y sus variantes, sedas, gasas: `light/modifiers.dart`).
+- **El motor de luz** los cuenta en la planta 2D: corte, transmisión y difusión, y aparecen en «Qué aporta cada fuente».
+- **El 3D y Unreal no:**
+  - en el 3D, un marco o un corte no cambian la luz de los focos, porque las SpotLight no tienen sombras de grip ni difusión;
+  - en Unreal el grip no llega si no tiene asset.
+- **No hay palios:** un marco de difusión es una sola cosa, sea de 1×1 o de 6×6.
+- **La cámara en Unreal** lleva su focal y su sensor, pero va en horizontal (sin inclinación) y sin ISO, diafragma, obturador ni foco.
+
+### F6.22.1 · Marcos y palios, distintos · todos
+
+- **Marco:**
+  - 1×1 o 2×1 m, de madera;
+  - lleva una **gelatina** (corrección o color) o una **tela de difusión** dentro.
+- **Palio:**
+  - 2×2, 3×3, 4×4 o 6×6 m;
+  - es el único que lleva **telas grandes** (Grid Cloth full, ½ o ¼, Silent Grid, sedas, muselina) o **rebotes** (Cinebounce, Ultrabounce, griffolyn blanco o negro).
+- La tela o el rebote se elige en la ficha, del catálogo de `modifiers.dart`. Cada uno tiene su transmisión y cuánto abre la luz.
+- Altura, paneo e inclinación como los focos (F6.21.5): un palio puede ir horizontal sobre los actores (*overhead*) o vertical.
+- **Compatibilidad:** el «Marco de difusión» de antes se lee como un marco de 1×1 con la tela que tenga.
+- **Hecho cuando:** se pone un palio de 4×4 con Grid Cloth sobre dos actores, se cambia a seda, y la ficha, la planta y el fotómetro cambian.
+
+### F6.22.2 · La difusión y el corte, iguales en la planta, el 3D y Unreal · todos
+
+- **Planta 2D:** como hoy, que ya está bien según Daniel.
+- **3D de IRIS:**
+  - el marco o el palio se ve como una tela del color y la opacidad de su material;
+  - la luz que pasa por él sale de la tela como una fuente blanda (RectAreaLight del tamaño de la tela), con la intensidad transmitida;
+  - el foco original queda tapado detrás;
+  - los negros y los cortes son opacos y dan sombra en los actores y el suelo (las SpotLight de los focos afectados dan sombra);
+  - un rebote devuelve luz como una fuente blanda de su tamaño.
+- **Unreal:**
+  - el marco, el palio, el negro y el corte llegan como mallas a su tamaño, con su altura y su inclinación;
+  - la tela es translúcida y el negro opaco, así que dan sombra con Lumen;
+  - la luz que atraviesa una tela se emula con una **RectLight** del tamaño de la tela, con la intensidad que deja pasar y el color si hay gelatina, apuntando como sale la luz;
+  - el foco que la ilumina queda tapado por la malla;
+  - un rebote es una RectLight hacia donde mira, con lo que recibe por su reflectancia.
+- **Cuanta más difusión, más blanda y más baja:** sale de la transmisión y del ángulo de cada tela del catálogo.
+- **Hecho cuando:**
+  - un negro delante de un foco corta la luz de la cara en la planta, el 3D y Unreal;
+  - pasar de ¼ Grid Cloth a Grid Cloth full baja la luz y la ablanda en los tres.
+
+### F6.22.3 · La exposición del personaje refleja el grip · todos
+
+- **Qué:**
+  - con un palio o un marco de difusión entre el foco y un actor, la lectura del fotómetro en ese actor baja lo que quita la tela;
+  - la cara en el 3D («Luz real») también baja;
+  - con un negro, se corta.
+- **Revisar:**
+  - que el grip colgado o inclinado cuente en 3D (altura e inclinación), no solo como una línea en planta;
+  - que el rebote sume luz al actor.
+- **Hecho cuando:** la lectura del actor de la prueba de F6.22.1 baja al poner la tela, sube al quitarla y coincide con lo que se ve en el 3D.
+
+### F6.22.4 · La cámara de IRIS en Unreal, con todos sus parámetros · todos
+
+- **Qué:**
+  - la cámara llega a Unreal (CineCameraActor) con:
+    - su **altura**, **paneo**, **inclinación** y **giro sobre su eje**, que se editan en IRIS como los focos;
+    - focal y sensor;
+    - **diafragma T** (`CurrentAperture`), **ISO** y **obturador** (sus ajustes de exposición);
+    - **distancia de foco**;
+  - «Ver por la cámara» y las capturas salen como la cámara de rodaje, con la profundidad de campo del diafragma.
+  - Lo que se mueve en Unreal vuelve a IRIS, como en los focos.
+- **Hecho cuando:**
+  - una cámara a 1,20 m, inclinada −10°, con un 35 mm a T2.8 e ISO 800, se ve igual en Unreal;
+  - cambiar el diafragma en IRIS cambia la profundidad de campo en el visor de Unreal.
+
+### F6.22.5 · Dos maneras de ver el 3D · todos
+
+- **Luz:** el set iluminado solo por los focos (y el sol o el cielo si toca), con la exposición de la cámara (F6.21.4). Es lo que se ensaya.
+- **Claro:** luz de trabajo uniforme, con los focos, los marcos y los palios bien visibles, sus haces en línea y sus nombres, para colocar y ver dónde va cada cosa.
+- Un botón en la barra del 3D para pasar de una a otra. Sustituye al interruptor «Luz real».
+
+### F6.22.6 · Navegar como en Unreal · todos
+
+- **Planta 2D:**
+  - el clic izquierdo, tal cual: seleccionar, mover, dibujar;
+  - **arrastrar con el botón derecho desplaza la vista**;
+  - el menú del botón derecho sale solo con un clic sin arrastrar.
+- **3D:**
+  - con el **botón derecho pulsado**, el ratón mira y **W, A, S, D** mueven (Q y E bajan y suben, la rueda cambia la velocidad), como el visor de Unreal;
+  - sin el botón derecho, el ratón selecciona y arrastra piezas como hoy.
+- **Ajustes:** «Navegación del 3D: como Unreal o en órbita (la de antes)».
+- **Hecho cuando:** en el PC se recorre el set en el 3D con el botón derecho y WASD, y la planta se desplaza arrastrando con el derecho.
+
+### Orden
+
+1. **F6.22.6:** rápido y de uso diario.
+2. **F6.22.1 y F6.22.2:** marcos, palios y difusión.
+3. **F6.22.3.**
+4. **F6.22.4.**
+5. **F6.22.5.**
+
 ## Orden propuesto y dependencias
 
-0. **F6.21** (ensayos de luz fieles, pedido el 2026-10-31): va antes que el resto, en su propio orden.
+0. **F6.21** (ensayos de luz fieles, pedido el 2026-10-31) y después **F6.22** (grip, cámara y navegación): van antes que el resto, cada uno en su orden.
 1. **F6.0** (con 0.1b WebGPU), **F6.13.1–13.2** (IRIS Stage como contenedor) y **F6.16.1** (paquete versionado desde el principio, para que cada pieza nueva nazca exportable).
 2. **F6.1:** paridad (1.5b, 1.9b, 1.6, 1.7, 1.1, 1.2), **F6.2.8–2.10** (caseta) y **F6.18.1–18.2** (plató y tomas).
 3. **F6.4** y **F6.8** (cámara y pilotar, con 8.3b) y **F6.10.1–10.2** (capturas). Es lo que sustituye a Cine Tracer para componer.
