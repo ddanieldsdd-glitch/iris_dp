@@ -59,6 +59,7 @@ SUN_ID = "_sun"
 SKY_ID = "_sky"
 ATMOSPHERE_ID = "_atmosphere"
 FLOOR_ID = "_floor"
+POST_ID = "_post"
 WORLD_ROOT = "/Game/IRIS"
 SCAN_ROOT = WORLD_ROOT + "/Scans"
 # Una malla de más de un escaneo (la importación da varias): id#p<n>.
@@ -67,7 +68,7 @@ CUBE = "/Engine/BasicShapes/Cube.Cube"
 PLANE = "/Engine/BasicShapes/Plane.Plane"
 
 # Lo que no se borra al mandar IRIS la escena entera.
-_FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID}
+_FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID, POST_ID}
 
 # Etiqueta con la ruta del asset que hace de una pieza (F6.20 B2): si el
 # asset cambia, el actor se rehace.
@@ -655,6 +656,38 @@ def _apply_scan(s, folders):
              if p.startswith(uid + PART) and int(p[len(uid + PART):] or 0) >= max(len(parts), 1)])
 
 
+def _apply_exposure(e):
+    """Exposición fija con la cámara de IRIS (F6.21.4): manual y con la
+    cámara física (ISO, obturador, diafragma), en un PostProcessVolume que
+    vale para todo el nivel. Así la luz se ve como la mide IRIS, y bajar un
+    foco al 50 % se ve la mitad."""
+    vol = _ensure(POST_ID, unreal.PostProcessVolume, "IRIS_Exposicion",
+                  unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    _set(vol, "unbound", True)
+    s = vol.get_editor_property("settings")
+    values = [
+        ("auto_exposure_method", unreal.AutoExposureMethod.AEM_MANUAL),
+        ("auto_exposure_apply_physical_camera_exposure", True),
+        ("camera_iso", float(e.get("iso", 800))),
+        ("camera_shutter_speed", 1.0 / max(float(e.get("shutterS", 1 / 48.0)), 1e-4)),
+        ("depth_of_field_fstop", float(e.get("tStop", 2.8))),
+        # El ND quita luz: compensación negativa.
+        ("auto_exposure_bias", -float(e.get("nd", 0))),
+        # Nada que cambie el nivel de la imagen por su cuenta.
+        ("vignette_intensity", 0.0),
+        ("bloom_intensity", 0.2),
+        ("local_exposure_highlight_contrast_scale", 1.0),
+        ("local_exposure_shadow_contrast_scale", 1.0),
+    ]
+    for name, value in values:
+        try:
+            s.set_editor_property("override_" + name, True)
+            s.set_editor_property(name, value)
+        except Exception as exc:
+            unreal.log_warning("[IRIS Stage] exposición %s: %s" % (name, exc))
+    vol.set_editor_property("settings", s)
+
+
 def _remove(ids):
     ids = list(ids) + [str(uid) + BODY for uid in ids if not str(uid).endswith(BODY)]
     # Las otras mallas de un escaneo se van con él.
@@ -698,6 +731,8 @@ def _apply(data):
         _apply_sun(data["sun"])
     if "sky" in data:
         _apply_sky(data["sky"])
+    if data.get("exposure"):
+        _apply_exposure(data["exposure"])
     return len(lights)
 
 

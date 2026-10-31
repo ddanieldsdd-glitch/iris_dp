@@ -968,6 +968,15 @@ Pedido por Daniel el 2026-10-31. Objetivo: que un esquema de luz ensayado en IRI
 
 ### F6.21.4 · La luz con la misma intensidad en IRIS y en Unreal · todos
 
+**Estado:** en curso (`plan/pulido-rodaje`).
+- **Hecho:**
+  - la escena lleva la exposición de la cámara del plano: ISO, obturador, ND y diafragma de trabajo, con su EV100 (`PlanScene3d.exposureOf`);
+  - Unreal pone un PostProcessVolume del nivel con exposición manual y cámara física, sin viñeta, y activa `ExtendDefaultLuminanceRange`;
+  - el visor de IRIS, con «Luz real», usa candelas y lux con la misma escala que el fotómetro; sin luces encendidas, o con «Luz de trabajo», se ve como antes.
+- **Falta:**
+  - la comparación de lux IRIS/Unreal en un punto. Necesita calibrar la captura HDR de Unreal en el PC, y no se hace a ciegas para no dar números falsos;
+  - el visor solo enciende 14 focos de verdad.
+
 - **Qué:**
   - el **porcentaje de regulación** (y las difusiones, las gelatinas y la distancia) da la misma luz en el fotómetro de IRIS, en el visor 3D de IRIS y en Unreal.
 - **Unreal:**

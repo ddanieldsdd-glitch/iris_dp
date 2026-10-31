@@ -2898,6 +2898,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       onOpenUnreal: _openInUnreal,
       projectId: widget.projectId,
       onScanTop: _addScanTop,
+      exposure: _exposure,
+      stop: _targetStop,
     );
   }
 
@@ -5290,6 +5292,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   onOpenUnreal: _openInUnreal,
                                   projectId: widget.projectId,
                                   onScanTop: _addScanTop,
+                                  exposure: _exposure,
+                                  stop: _targetStop,
                                 ),
                               ),
                             ],

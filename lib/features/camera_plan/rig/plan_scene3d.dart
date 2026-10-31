@@ -4,6 +4,7 @@ import 'dart:ui';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
+import '../light/exposure.dart';
 import '../light/light_scene.dart';
 import '../plan_category.dart';
 import '../../unreal_link/unreal_asset_ref.dart';
@@ -43,6 +44,11 @@ class PlanScene3d {
 
     /// Sol y cielo del esquema de luz, si lo hay.
     PlanAmbient? ambient,
+
+    /// La cámara con la que se mide (ISO, obturador, ND) y su diafragma:
+    /// el 3D y Unreal exponen igual que el fotómetro (F6.21.4).
+    ExposureSettings? exposure,
+    double? stop,
   }) {
     final mpu = metersPerUnit;
     List<double> xy(Offset p) => [_r(p.dx * mpu), _r(-p.dy * mpu)];
@@ -68,6 +74,8 @@ class PlanScene3d {
       // Colores por categoría: los mismos que en la planta 2D.
       'palette': PlanCategory.palette,
       if (ambient != null && ambient.hasSun) 'sun': _sun(ambient),
+      if (exposure != null && stop != null && stop > 0)
+        'exposure': exposureOf(exposure, stop),
       'halls': [
         for (final MapEntry(key: uid, value: (el, r)) in halls.entries)
           _hall(uid, el, r, mpu),
@@ -336,6 +344,26 @@ class PlanScene3d {
 
   /// Apunta una luz a un punto del 3D (metros): su giro en planta y, si
   /// cuelga, su inclinación desde la vertical.
+  /// La exposición para el 3D y Unreal: la de la cámara a [stop]. `ev100`
+  /// es la del fotómetro (N² = E · ISO · t / C, con el ND) y `scale` lo que
+  /// multiplica la luminancia (cd/m²) para que el gris medio de lo bien
+  /// expuesto quede en el gris medio de la imagen: 1 / (1,2 · 2^EV100).
+  static Map<String, dynamic> exposureOf(ExposureSettings e, double stop) {
+    final t = e.exposureTime;
+    final ev100 =
+        math.log(stop * stop / t) / math.ln2 -
+        math.log(e.iso / 100) / math.ln2 +
+        e.ndStops;
+    return {
+      'iso': e.iso,
+      'shutterS': t,
+      'tStop': stop,
+      'nd': e.ndStops,
+      'ev100': (ev100 * 100).round() / 100,
+      'scale': 1 / (1.2 * math.pow(2, ev100)),
+    };
+  }
+
   static void aimAt(
     PlanElement light,
     double x,

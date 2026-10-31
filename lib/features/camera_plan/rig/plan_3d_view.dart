@@ -15,6 +15,7 @@ import '../../../core/utils/export_file_saver.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
+import '../light/exposure.dart';
 import '../light/plan_light.dart';
 import '../plan_cad_export.dart';
 import '../plan_piece_controls.dart';
@@ -99,6 +100,10 @@ class Plan3dView extends StatefulWidget {
   /// rectángulo dado en metros de la planta.
   final ScanTopSink? onScanTop;
 
+  /// La cámara con la que se mide y su diafragma (F6.21.4).
+  final ExposureSettings? exposure;
+  final double? stop;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -117,6 +122,8 @@ class Plan3dView extends StatefulWidget {
     this.onOpenUnreal,
     this.projectId,
     this.onScanTop,
+    this.exposure,
+    this.stop,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -133,6 +140,12 @@ class _Plan3dViewState extends State<Plan3dView> {
   Timer? _debounce;
   String _view = 'iso';
   bool _cones = true;
+
+  /// Luz real (con la exposición de la cámara) o luz de trabajo (F6.21.4).
+  bool _realLight = true;
+
+  /// La EV100 con la que expone el 3D, si va con luz real.
+  double? _ev100;
   bool _roof = true;
 
   /// Etiquetas con el nombre de cada pieza (la del seleccionado, siempre).
@@ -216,11 +229,15 @@ class _Plan3dViewState extends State<Plan3dView> {
     final scene = PlanScene3d.build(
       widget.elements,
       metersPerUnit: widget.metersPerUnit,
+      exposure: widget.exposure,
+      stop: widget.stop,
       name: widget.name,
       ambient: widget.ambient,
     );
-    // Unreal recibe la misma escena, esté o no listo el visor.
+    // Unreal recibe la misma escena, esté o no listo el visor (siempre con
+    // la exposición: la luz de trabajo es solo para el visor).
     UnrealLink.instance.offer(scene, world: widget.unrealWorld);
+    if (!_realLight) scene['lightMode'] = 'work';
     final web = _web;
     if (!_ready || web == null) return;
     final json = jsonEncode(scene);
@@ -347,6 +364,13 @@ class _Plan3dViewState extends State<Plan3dView> {
           message['file'] as String,
           projectId: widget.projectId,
         ).then((bytes) => bytes == null ? null : base64Encode(bytes));
+      case 'lightMode':
+        final ev = message['ev100'];
+        if (mounted) {
+          setState(() => _ev100 = message['physical'] == true && ev is num
+              ? ev.toDouble()
+              : null);
+        }
       case 'scanError':
         if (mounted) {
           setState(() => _status = 'Escaneo: ${message['message']}');
@@ -1030,6 +1054,16 @@ class _Plan3dViewState extends State<Plan3dView> {
         toggle('Cubierta', _roof, () => _toggle('roof')),
         toggle('Conos de luz', _cones, () => _toggle('cones')),
         toggle(
+          _ev100 == null
+              ? 'Luz real (como la cámara)'
+              : 'Luz real · EV ${_ev100!.toStringAsFixed(1)}',
+          _realLight,
+          () => setState(() {
+            _realLight = !_realLight;
+            _schedule();
+          }),
+        ),
+        toggle(
           _floorBusy ? 'Luz en el suelo (calculando…)' : 'Luz en el suelo',
           _floor,
           () => _toggle('floor'),
@@ -1433,6 +1467,8 @@ class Plan3dScreen extends StatefulWidget {
   final Future<void> Function()? onOpenUnreal;
   final int? projectId;
   final ScanTopSink? onScanTop;
+  final ExposureSettings? exposure;
+  final double? stop;
 
   const Plan3dScreen({
     super.key,
@@ -1449,6 +1485,8 @@ class Plan3dScreen extends StatefulWidget {
     this.onOpenUnreal,
     this.projectId,
     this.onScanTop,
+    this.exposure,
+    this.stop,
   });
 
   static Future<void> show(
@@ -1466,6 +1504,8 @@ class Plan3dScreen extends StatefulWidget {
     Future<void> Function()? onOpenUnreal,
     int? projectId,
     ScanTopSink? onScanTop,
+    ExposureSettings? exposure,
+    double? stop,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -1482,6 +1522,8 @@ class Plan3dScreen extends StatefulWidget {
         onOpenUnreal: onOpenUnreal,
         projectId: projectId,
         onScanTop: onScanTop,
+        exposure: exposure,
+        stop: stop,
       ),
     ),
   );
@@ -1527,6 +1569,8 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       onOpenUnreal: widget.onOpenUnreal,
       projectId: widget.projectId,
       onScanTop: widget.onScanTop,
+      exposure: widget.exposure,
+      stop: widget.stop,
     ),
   );
 }

@@ -216,6 +216,19 @@ class UnrealStagePayload {
     };
   }
 
+  /// La exposición de la cámara para el PostProcessVolume del set.
+  static Map<String, dynamic>? exposure(Map? e) {
+    if (e == null) return null;
+    double n(String k, double or) => ((e[k] ?? or) as num).toDouble();
+    return {
+      'iso': n('iso', 800),
+      'shutterS': n('shutterS', 1 / 48),
+      'tStop': n('tStop', 2.8),
+      'nd': n('nd', 0),
+      'ev100': n('ev100', 0),
+    };
+  }
+
   /// Las listas de piezas que se comparan una a una.
   static const kinds = ['lights', 'cameras', 'props', 'assets', 'scans'];
 
@@ -250,6 +263,9 @@ class UnrealStagePayload {
           ?camera(c),
       ],
       'sun': sunNow,
+      // Exposición fija con la cámara de IRIS (F6.21.4): sin ella Unreal se
+      // autoexpone y un foco al 50 % se ve casi como al 100 %.
+      'exposure': ?exposure(scene['exposure'] as Map?),
       // De día, cielo físico (SkyAtmosphere y SkyLight) con el sol.
       'sky': sunNow == null ? null : {'scale': 1.0},
     };
@@ -290,15 +306,19 @@ class UnrealStagePayload {
     final sunChanged =
         jsonEncode(before['sun']) != jsonEncode(now['sun']) ||
         jsonEncode(before['sky']) != jsonEncode(now['sky']);
+    final exposureChanged =
+        jsonEncode(before['exposure']) != jsonEncode(now['exposure']);
     if (kinds.every((k) => (out[k] as List).isEmpty) &&
         remove.isEmpty &&
-        !sunChanged) {
+        !sunChanged &&
+        !exposureChanged) {
       return null;
     }
     return {
       ...out,
       if (remove.isNotEmpty) 'remove': remove,
       if (sunChanged) ...{'sun': now['sun'], 'sky': now['sky']},
+      if (exposureChanged) 'exposure': now['exposure'],
     };
   }
 }

@@ -128,6 +128,22 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
 - [ ] **Plantas de antes.** Un foco colgado e inclinado de antes de este cambio sigue apuntando igual: 30° desde la vertical se lee como −60°.
 - [ ] **Ojo: altura por defecto en trípode.** Un foco de trípode sin altura propia ahora va a 2 m en el 3D y en Unreal (antes, 3 m). El fotómetro lo sigue midiendo como siempre hasta que le pongas altura o inclinación.
 
+## 11 · La misma luz en IRIS y en Unreal (F6.21.4)
+
+- [ ] **Luz real en el 3D de IRIS.**
+  - En una planta de plano con su cámara y unos focos encendidos, abre el 3D.
+  - En «Qué se ve» está activada **«Luz real · EV n»**, la exposición de la cámara.
+  - Baja un foco al 50 % en su ficha: en el 3D se ve la mitad de luz, no casi igual.
+  - Desactívala: vuelve la luz de trabajo de siempre.
+- [ ] **Coincide con el fotómetro.** Donde el fotómetro dice que estás al diafragma de trabajo, la cara de una persona se ve en un gris medio. Donde dice dos stops por debajo, se ve claramente oscura.
+- [ ] **Diafragma, ISO y ND.** Cambia el diafragma de trabajo (o el ISO, o el ND) de la cámara: el 3D se aclara o se oscurece como se aclararía la imagen de la cámara.
+- [ ] **Una planta sin luces encendidas** sigue viéndose (con la luz de trabajo), no negra.
+- [ ] **Unreal.**
+  - Tras «Abrir en Unreal» (que instala el script y la configuración nuevos) y reiniciar Unreal, en el Outliner aparece **IRIS_Exposicion** (PostProcessVolume).
+  - La imagen ya no se autoexpone: bajar un foco al 50 % en IRIS lo baja a la mitad en Unreal.
+  - Cerrar o abrir el diafragma en IRIS oscurece o aclara Unreal.
+- [ ] **Compara.** La misma escena vista en el 3D de IRIS (Luz real) y en Render RTX debería tener el mismo nivel general. Anota si una sale claramente más clara u oscura y en cuántos stops; es el dato para calibrar.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.
