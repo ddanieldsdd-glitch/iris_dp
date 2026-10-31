@@ -274,6 +274,8 @@ class UnrealStagePayload {
       ],
       'sun': sunNow,
       'environment': ?scene['environment'],
+      // Niebla o humo (F6.21.2); sin ella, `null` la quita.
+      'fog': scene['fog'],
       // Exposición fija con la cámara de IRIS (F6.21.4): sin ella Unreal se
       // autoexpone y un foco al 50 % se ve casi como al 100 %.
       'exposure': ?exposure(scene['exposure'] as Map?),
@@ -323,6 +325,7 @@ class UnrealStagePayload {
         jsonEncode(before['sky']) != jsonEncode(now['sky']);
     final exposureChanged =
         jsonEncode(before['exposure']) != jsonEncode(now['exposure']);
+    final fogChanged = jsonEncode(before['fog']) != jsonEncode(now['fog']);
     final environmentChanged =
         jsonEncode(before['environment']) != jsonEncode(now['environment']);
     final structureChanged =
@@ -332,6 +335,7 @@ class UnrealStagePayload {
         !sunChanged &&
         !exposureChanged &&
         !environmentChanged &&
+        !fogChanged &&
         !structureChanged) {
       return null;
     }
@@ -340,6 +344,7 @@ class UnrealStagePayload {
       if (remove.isNotEmpty) 'remove': remove,
       if (sunChanged) ...{'sun': now['sun'], 'sky': now['sky']},
       if (exposureChanged) 'exposure': now['exposure'],
+      if (fogChanged) 'fog': now['fog'],
       if (environmentChanged) ...{
         'environment': now['environment'],
         'sun': now['sun'],

@@ -707,6 +707,17 @@
     }
     post({ type: 'lightMode', physical, ev100: physical ? sc.exposure.ev100 : null });
 
+    // Niebla o humo (F6.21.2): espesa la escena y hace visibles los haces.
+    const fog = sc.fog && sc.fog.pct > 0 ? sc.fog : null;
+    const fogAmount = fog ? fog.pct / 100 : 0;
+    if (fog) {
+      const perM = { haze: 0.06, smoke: 0.14, exterior: 0.03 }[fog.kind] || 0.06;
+      const light = fog.day && env !== 'studio';
+      scene.fog = new THREE.FogExp2(light ? 0xc9ced6 : 0x24272d, perM * fogAmount);
+    } else {
+      scene.fog = null;
+    }
+
     // Lo que ocupa la escena, para el suelo y la cámara.
     const box = new THREE.Box3();
     const grow = (x, y, z) => box.expandByPoint(V(x, y, z || 0));
@@ -841,7 +852,9 @@
       const half = clamp((f.beamDeg || 60) / 2, 4, 62) * Math.PI / 180;
       const cg = new THREE.ConeGeometry(t * Math.tan(half), t, 36, 1, true);
       cg.translate(0, -t / 2, 0);
-      const cone = new THREE.Mesh(cg, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: f.beamDeg > 80 ? 0.05 : 0.11, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      // Con niebla, el haz se ve más (hasta unas tres veces).
+      const beamOpacity = (f.beamDeg > 80 ? 0.05 : 0.11) * (1 + 2 * fogAmount);
+      const cone = new THREE.Mesh(cg, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: beamOpacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
       cone.position.copy(p);
       cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
       cone.visible = showCones;
