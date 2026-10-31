@@ -525,7 +525,13 @@ class LightScene {
     // de su techo (o la que se le haya puesto), sin atravesarlo.
     double fixtureZ(PlanElement el) {
       final base = ground(el.position);
-      if (!PlanLight.isOverhead(el)) return base + PlanLight.subjectHeightM;
+      if (!PlanLight.isOverhead(el)) {
+        // En trípode, a su altura si la tiene (F6.21.5); si no, a la cara.
+        return base +
+            (PlanLight.hasOwnAim(el)
+                ? PlanLight.heightOf(el)
+                : PlanLight.subjectHeightM);
+      }
       final ceiling = _ceilingAt(rooms, el.position);
       final mount = el.props[PlanLight.heightKey] != null
           ? PlanLight.heightOf(el)
@@ -542,14 +548,18 @@ class LightScene {
             aim: aimOf(el),
             // Sin altura propia, cuelga del techo del recinto donde está.
             overheadM: !PlanLight.isOverhead(el)
-                ? null
+                ? _standDrop(el)
                 : el.props[PlanLight.heightKey] != null
                 ? PlanLight.overheadDrop(el)
                 : ((_ceilingAt(rooms, el.position) ??
                               PlanLight.defaultCeilingHeight) -
                           PlanLight.subjectHeightM)
                       .clamp(0.3, 50.0),
-            tiltDeg: PlanLight.tiltOf(el),
+            tiltDeg: PlanLight.isOverhead(el)
+                ? PlanLight.tiltOf(el)
+                : _standDrop(el) == null
+                ? 0
+                : (90 + PlanLight.elevationOf(el)).clamp(0.0, 89.0),
             z: fixtureZ(el),
             fixture: light,
             label: (el.props['name'] as String?) ?? el.displayLabel,
@@ -2003,6 +2013,17 @@ class LightScene {
   // ── Cuánta luz llega ──────────────────────────────────────────────────────
 
   /// Hacia dónde apunta una luz: el eje de su haz.
+  /// Un foco de trípode con altura o inclinación propias, por encima de la
+  /// cara (F6.21.5), alumbra como uno colgado: desde su altura y con el
+  /// ángulo de su haz, así que lo que queda por debajo del eje recibe menos.
+  /// Sin altura ni inclinación propias, o a la altura de la cara, sigue como
+  /// siempre: `null`.
+  static double? _standDrop(PlanElement el) {
+    if (PlanLight.isOverhead(el) || !PlanLight.hasOwnAim(el)) return null;
+    final drop = PlanLight.heightOf(el) - PlanLight.subjectHeightM;
+    return drop < 0.3 ? null : drop;
+  }
+
   static Offset aimOf(PlanElement el) {
     final rad = el.rotation * math.pi / 180;
     return Offset(math.sin(rad), -math.cos(rad));

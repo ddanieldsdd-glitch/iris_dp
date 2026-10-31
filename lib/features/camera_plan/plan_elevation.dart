@@ -306,10 +306,11 @@ class PlanElevation {
           final dir = LightScene.aimOf(el);
           final across = acrossOf(dir, side);
           double? aim;
-          if (overhead) {
-            // Cuelga y mira abajo; inclinada, hacia donde apunta.
-            final tilt = PlanLight.tiltOf(el) * math.pi / 180;
-            aim = -math.pi / 2 + (across >= 0 ? tilt : -tilt);
+          // Con su inclinación (F6.21.5): hacia el lado al que apunta en
+          // planta, subiendo o bajando lo que diga el tilt.
+          final tilt = PlanLight.elevationOf(el) * math.pi / 180;
+          if (overhead || PlanLight.hasOwnAim(el)) {
+            aim = across >= 0 ? tilt : math.pi - tilt;
           } else if (across.abs() > 0.2) {
             aim = across > 0 ? 0 : math.pi;
           }

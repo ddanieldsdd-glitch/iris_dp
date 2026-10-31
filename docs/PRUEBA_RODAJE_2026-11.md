@@ -113,6 +113,21 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
   Los botones de cada paso hacen lo que dicen.
 - [ ] **Quitar de la biblioteca.** Quita un asset de la biblioteca y pulsa «Buscar en Unreal» o «Recoger de Fab»: no vuelve. En otro equipo, tras sincronizar los ajustes, tampoco. Si lo asignas otra vez a un elemento, vuelve.
 
+## 10 · Altura, paneo e inclinación de los focos (F6.21.5)
+
+- [ ] **Ficha del foco.** Selecciona un foco de trípode en la planta. En la ficha (Montaje) salen **Altura** (0,3–12 m), **Paneo** (0–359°) e **Inclinación (tilt)** (−90° a +90°). Lo mismo en un foco colgado.
+- [ ] **En el 3D.**
+  - Sube un foco de trípode a 2,5 m e inclínalo −30°: en el 3D se ve a esa altura y apuntando hacia abajo.
+  - En el panel 3D del foco, el deslizador «Inclinación (tilt)» hace lo mismo.
+- [ ] **El fotómetro.** Con ese foco apuntando a una persona, la lectura cambia al inclinarlo: apuntado a ella da más que en horizontal por encima.
+- [ ] **En el alzado.** El foco se ve a su altura y con el ángulo de su haz.
+- [ ] **Unreal.** Con IRIS Stage conectado:
+  - el foco llega a 2,5 m y −30°;
+  - inclínalo a −45° en el editor de Unreal: en la ficha de IRIS pone −45° y la altura no cambia;
+  - súbelo en Unreal: en IRIS cambia la altura.
+- [ ] **Plantas de antes.** Un foco colgado e inclinado de antes de este cambio sigue apuntando igual: 30° desde la vertical se lee como −60°.
+- [ ] **Ojo: altura por defecto en trípode.** Un foco de trípode sin altura propia ahora va a 2 m en el 3D y en Unreal (antes, 3 m). El fotómetro lo sigue midiendo como siempre hasta que le pongas altura o inclinación.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.

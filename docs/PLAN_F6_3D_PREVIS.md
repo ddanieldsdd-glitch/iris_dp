@@ -985,6 +985,18 @@ Pedido por Daniel el 2026-10-31. Objetivo: que un esquema de luz ensayado en IRI
 
 ### F6.21.5 · Altura, paneo e inclinación de los focos, en IRIS y en Unreal · todos
 
+**Estado:** en curso (`plan/pulido-rodaje`).
+- **Hecho:**
+  - `PlanLight.tiltDegKey` / `elevationOf` / `setElevation`, que leen lo de antes;
+  - altura, paneo e inclinación de −90 a +90 en la ficha 2D y en el panel 3D, para cualquier montaje;
+  - el 3D y Unreal apuntan con la inclinación; desde Unreal vuelven la altura y la inclinación (`aimAt`);
+  - el fotómetro calcula en 3D un trípode con altura o inclinación propias;
+  - el alzado dibuja el ángulo.
+- **Falta:**
+  - arrastrar la altura en el alzado y en el 3D;
+  - el haz de la planta 2D, que no se acorta con la inclinación;
+  - el *roll* de los paneles.
+
 - **Qué:**
   - cada foco, sea de techo, de trípode o de suelo, tiene:
     - **altura** (de 0 a 12 m, o hasta el techo o la parrilla si cuelga);
