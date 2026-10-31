@@ -30,6 +30,7 @@ import '../../unreal_link/unreal_return.dart';
 import '../../unreal_link/unreal_stage_payload.dart';
 import '../../unreal_link/unreal_thumbs.dart';
 import '../../../core/sync/plan_scan_store.dart';
+import '../../../core/utils/media_storage.dart';
 import 'scan_store.dart';
 import 'rig_report.dart';
 
@@ -185,6 +186,41 @@ class _Plan3dViewState extends State<Plan3dView> {
 
   StreamSubscription<String>? _scanArrivals;
 
+  /// Huella de la estructura ya guardada para Unreal, y espera tras el
+  /// último cambio antes de exportarla de nuevo.
+  String? _structureKey;
+  Timer? _structureTimer;
+
+  /// Con Unreal conectado, la estructura del set (paredes, huecos, techos,
+  /// telas, truss) va a Unreal como malla cuando cambia (F6.21.3).
+  void _offerStructure(Map<String, dynamic> scene) {
+    final key = PlanScene3d.structureKey(scene);
+    if (key == null || key == _structureKey) return;
+    if (!UnrealLink.instance.isOn || widget.projectId == null) return;
+    _structureTimer?.cancel();
+    _structureTimer = Timer(const Duration(seconds: 2), () async {
+      final web = _web, projectId = widget.projectId;
+      if (!mounted || web == null || !_ready || projectId == null) return;
+      final result = await web.callAsyncJavaScript(
+        functionBody: 'return await iris.structureGlb();',
+      );
+      final b64 = result?.value;
+      if (b64 is! String || b64.isEmpty) return;
+      final path = await MediaStorage.writeProjectFileBytes(
+        projectId: projectId,
+        subfolder: 'unreal_sets',
+        bytes: base64Decode(b64),
+        fileName: '$key.glb',
+      );
+      _structureKey = key;
+      UnrealStagePayload.structure = {
+        'file': '$key.glb',
+        'folder': File(path).parent.path,
+      };
+      if (mounted) _schedule();
+    });
+  }
+
   /// Unreal, en este mismo PC, importa los escaneos de estas carpetas.
   Future<void> _shareScanFolders() async {
     final projectId = widget.projectId;
@@ -211,6 +247,7 @@ class _Plan3dViewState extends State<Plan3dView> {
   void dispose() {
     _fromUnreal?.cancel();
     _scanArrivals?.cancel();
+    _structureTimer?.cancel();
     UnrealThumbs.instance.removeListener(_onThumbs);
     _debounce?.cancel();
     _realLength.dispose();
@@ -236,7 +273,13 @@ class _Plan3dViewState extends State<Plan3dView> {
     );
     // Unreal recibe la misma escena, esté o no listo el visor (siempre con
     // la exposición: la luz de trabajo es solo para el visor).
+    // Otra estructura (otro set, o una pared movida): la anterior no se
+    // manda mientras se exporta la nueva.
+    if (PlanScene3d.structureKey(scene) != _structureKey) {
+      UnrealStagePayload.structure = null;
+    }
     UnrealLink.instance.offer(scene, world: widget.unrealWorld);
+    _offerStructure(scene);
     if (!_realLight) scene['lightMode'] = 'work';
     final web = _web;
     if (!_ready || web == null) return;

@@ -137,6 +137,7 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 - **Qué:** mesa, silla, sofá, cama, vehículo, árbol (copa que filtra la luz), roca, rectángulo genérico con su tamaño y su altura (`LightScene.propSizeM` y `propHeightM`).
 
 **F6.1.5b Atrezzo con medidas y forma** · todos
+- **Estado:** en parte (F6.21.3): ancho, fondo y alto de mesa, silla, sofá, cama y pieza. Faltan la forma (redonda u ovalada), las asas y los datos por tipo (plazas, alto del asiento).
 - **Qué:** todo el atrezzo se edita como una pieza de verdad:
   - forma: rectangular, cuadrada, redonda u ovalada;
   - ancho, fondo y alto en centímetros;
@@ -953,6 +954,16 @@ Pedido por Daniel el 2026-10-31. Objetivo: que un esquema de luz ensayado en IRI
 - **Hecho cuando:** subir la niebla en IRIS espesa la escena y los haces en IRIS y en Unreal a la vez, y 0 % la quita.
 
 ### F6.21.3 · El set a escala en Unreal: paredes, aberturas y atrezzo con sus medidas · todos
+
+**Estado:** en curso (`plan/pulido-rodaje`).
+- **Hecho:**
+  - con Unreal conectado, la estructura del set va a Unreal como malla cuando cambia: paredes con sus huecos, techos, cristales, telas, pilares y rigging;
+  - la estructura sale del mismo 3D de IRIS, con cada pieza ya colocada en su malla, y Unreal la importa a `/Game/IRIS/Estructura/S_<huella>`;
+  - los muebles (mesa, silla, sofá, cama y pieza) tienen ancho, fondo y alto en la ficha, y salen a esas medidas en la planta 2D, en el 3D y en Unreal;
+  - un asset de Unreal les pone sus medidas.
+- **Falta:**
+  - los materiales de pared y suelo con su reflectancia en Unreal, que hoy van con el color del 3D;
+  - quitar de la estructura la pieza que tiene asset de Unreal.
 
 - **Qué:**
   - **todo** lo de la planta llega a Unreal con su geometría real, aunque no tenga asset:

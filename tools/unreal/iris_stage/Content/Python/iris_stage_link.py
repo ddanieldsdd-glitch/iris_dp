@@ -60,6 +60,8 @@ SKY_ID = "_sky"
 ATMOSPHERE_ID = "_atmosphere"
 FLOOR_ID = "_floor"
 POST_ID = "_post"
+STRUCTURE_ID = "_structure"
+STRUCTURE_ROOT = WORLD_ROOT + "/Estructura"
 WORLD_ROOT = "/Game/IRIS"
 SCAN_ROOT = WORLD_ROOT + "/Scans"
 # Una malla de más de un escaneo (la importación da varias): id#p<n>.
@@ -68,7 +70,7 @@ CUBE = "/Engine/BasicShapes/Cube.Cube"
 PLANE = "/Engine/BasicShapes/Plane.Plane"
 
 # Lo que no se borra al mandar IRIS la escena entera.
-_FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID, POST_ID}
+_FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID, POST_ID, STRUCTURE_ID}
 
 # Etiqueta con la ruta del asset que hace de una pieza (F6.20 B2): si el
 # asset cambia, el actor se rehace.
@@ -596,11 +598,11 @@ def _apply_sky(sky):
         _set(comp, "intensity", float(sky.get("scale", 1.0)))
 
 
-def _scan_meshes(file, folders):
+def _scan_meshes(file, folders, root=None):
     """Las mallas de un escaneo importado; si aún no está, se importa del
     archivo que tiene IRIS en este PC. Vacío si no se encuentra."""
     base = re.sub(r"[^0-9a-zA-Z_]", "_", os.path.splitext(os.path.basename(file))[0])
-    dest = "%s/S_%s" % (SCAN_ROOT, base)
+    dest = "%s/S_%s" % (root or SCAN_ROOT, base)
     lib = unreal.EditorAssetLibrary
 
     def meshes():
@@ -654,6 +656,24 @@ def _apply_scan(s, folders):
     # Mallas que ya no tiene (otra importación del mismo escaneo).
     _remove([p for p in list(_actors)
              if p.startswith(uid + PART) and int(p[len(uid + PART):] or 0) >= max(len(parts), 1)])
+
+
+def _apply_structure(s):
+    """La estructura del set (F6.21.3): paredes con sus huecos, techos,
+    cristales, telas, pilares y rigging, en un GLB que IRIS guarda en este
+    PC. Cada pieza ya trae su sitio en la malla, así que todas van en el
+    origen, sin giro ni escala. La de antes se quita."""
+    parts = _scan_meshes(s["file"], [s.get("folder")], root=STRUCTURE_ROOT)
+    if not parts:
+        return
+    _rescan()
+    _remove([uid for uid in list(_actors)
+             if uid == STRUCTURE_ID or uid.startswith(STRUCTURE_ID + PART)])
+    origin, flat = unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0)
+    for i, path in enumerate(parts):
+        uid = STRUCTURE_ID if i == 0 else "%s%s%d" % (STRUCTURE_ID, PART, i)
+        _place_asset(uid, "IRIS_Estructura" if i == 0 else "IRIS_Estructura (%d)" % i,
+                     path, origin, flat)
 
 
 def _apply_exposure(e):
@@ -733,6 +753,8 @@ def _apply(data):
         _apply_sky(data["sky"])
     if data.get("exposure"):
         _apply_exposure(data["exposure"])
+    if data.get("structure"):
+        _apply_structure(data["structure"])
     return len(lights)
 
 

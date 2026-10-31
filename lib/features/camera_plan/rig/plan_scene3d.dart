@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
+
+import 'package:crypto/crypto.dart';
 
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
@@ -179,6 +182,8 @@ class PlanScene3d {
             'z0': level,
             'yawDeg': el.rotation,
             'sizeM': _r(LightScene.propSizeM(el)),
+            'widthM': _r(LightScene.furnitureSizeM(el).width),
+            'depthM': _r(LightScene.furnitureSizeM(el).depth),
             'heightM': _r(LightScene.propHeightM(el)),
             'asset': ?UnrealAssetRef.of(el)?.toPayload(),
             // Miniatura 3/4 del asset (F6.20 B4): el visor la pone de cartel.
@@ -344,6 +349,20 @@ class PlanScene3d {
 
   /// Apunta una luz a un punto del 3D (metros): su giro en planta y, si
   /// cuelga, su inclinación desde la vertical.
+  /// Huella de la estructura del set (F6.21.3): paredes y huecos, telas,
+  /// pilares, truss, rigging y naves. Mover un foco o una cámara no la
+  /// cambia; mover una pared, sí. `null` si no hay estructura.
+  static String? structureKey(Map<String, dynamic> scene) {
+    const kinds = ['walls', 'drapes', 'pillars', 'trusses', 'rigging', 'halls'];
+    final parts = {
+      for (final k in kinds)
+        if ((scene[k] as List?)?.isNotEmpty ?? false) k: scene[k],
+    };
+    if (parts.isEmpty) return null;
+    final hash = sha1.convert(utf8.encode(jsonEncode(parts))).toString();
+    return hash.substring(0, 16);
+  }
+
   /// La exposición para el 3D y Unreal: la de la cámara a [stop]. `ev100`
   /// es la del fotómetro (N² = E · ISO · t / C, con el ND) y `scale` lo que
   /// multiplica la luminancia (cd/m²) para que el gris medio de lo bien

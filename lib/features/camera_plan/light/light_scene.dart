@@ -751,6 +751,37 @@ class LightScene {
         _ => 0.5,
       };
 
+  /// Ancho y fondo de un mueble (F6.1.5b, F6.21.3), en metros: el fondo va
+  /// en la dirección a la que mira en planta y el ancho de lado.
+  static const widthKey = 'widthM';
+  static const depthKey = 'depthM';
+
+  /// Medidas por defecto de cada mueble, ancho × fondo.
+  static (double, double) _furnitureDefault(PropType? type) => switch (type) {
+    PropType.table => (1.6, 0.9),
+    PropType.chair => (0.45, 0.5),
+    PropType.sofa => (2.0, 0.9),
+    PropType.bed => (1.5, 2.0),
+    _ => (0.5, 0.5),
+  };
+
+  /// Ancho y fondo de [el]. Sin medidas propias: las de un mueble típico de
+  /// su tipo; si tenía el tamaño antiguo (un solo lado), las que salían de
+  /// él, para que se vea como antes.
+  static ({double width, double depth}) furnitureSizeM(PlanElement el) {
+    final w = (el.props[widthKey] as num?)?.toDouble();
+    final d = (el.props[depthKey] as num?)?.toDouble();
+    final old = (el.props[sizeKey] as num?)?.toDouble();
+    final (dw, dd) = old == null
+        ? _furnitureDefault(el.propType)
+        : switch (el.propType) {
+            PropType.sofa => (old, math.min(old * 0.45, 0.95)),
+            PropType.bed => (old * 0.7, old),
+            _ => (old, old),
+          };
+    return (width: w ?? dw, depth: d ?? dd);
+  }
+
   /// Altura de un árbol, una roca, un vehículo, una colina o un relieve.
   static double propHeightM(PlanElement el) =>
       (el.props[heightKey] as num?)?.toDouble() ??

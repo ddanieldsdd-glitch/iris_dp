@@ -149,13 +149,18 @@ class UnrealStagePayload {
     if (at == null) return null;
     final rad = ((p['yawDeg'] ?? 0) as num) * math.pi / 180;
     final size = _r(((p['sizeM'] ?? 0.5) as num) * 100);
+    // El +X del bloque mira hacia donde mira la pieza: ahí va su fondo, y el
+    // ancho de lado (F6.21.3).
+    final depth = _r(((p['depthM'] ?? p['sizeM'] ?? 0.5) as num) * 100);
+    final width = _r(((p['widthM'] ?? p['sizeM'] ?? 0.5) as num) * 100);
     return {
       'id': p['id'],
       'name': p['name'],
       'type': p['type'],
       'loc': loc([at[0], at[1], p['z0'] ?? 0]),
       'rot': rotToward(math.sin(rad), math.cos(rad), 0),
-      'sizeCm': [size, size, _r(((p['heightM'] ?? 0.8) as num) * 100)],
+      'sizeCm': [depth, width, _r(((p['heightM'] ?? 0.8) as num) * 100)],
+      'footCm': size,
       'asset': ?p['asset'],
     };
   }
@@ -179,6 +184,10 @@ class UnrealStagePayload {
   /// Carpetas de este equipo donde están los escaneos de la planta: Unreal,
   /// en el mismo PC, los importa de ahí. Las pone la vista 3D del proyecto.
   static List<String> scanFolders = const [];
+
+  /// La estructura del set guardada en GLB en este equipo (F6.21.3):
+  /// `{file, folder}`. La pone la vista 3D cuando cambia.
+  static Map<String, String>? structure;
 
   /// Un escaneo de la planta (glb, gltf u obj): su archivo, en su sitio, con
   /// su giro y su escala. Las nubes de puntos (ply) no van a Unreal.
@@ -254,6 +263,7 @@ class UnrealStagePayload {
           ?scan(s),
       ],
       if (scanFolders.isNotEmpty) 'scanFolders': scanFolders,
+      'structure': ?structure,
       'lights': [
         for (final f in (scene['fixtures'] as List? ?? const []).cast<Map>())
           ?light(f),
@@ -308,10 +318,13 @@ class UnrealStagePayload {
         jsonEncode(before['sky']) != jsonEncode(now['sky']);
     final exposureChanged =
         jsonEncode(before['exposure']) != jsonEncode(now['exposure']);
+    final structureChanged =
+        jsonEncode(before['structure']) != jsonEncode(now['structure']);
     if (kinds.every((k) => (out[k] as List).isEmpty) &&
         remove.isEmpty &&
         !sunChanged &&
-        !exposureChanged) {
+        !exposureChanged &&
+        !structureChanged) {
       return null;
     }
     return {
@@ -319,6 +332,7 @@ class UnrealStagePayload {
       if (remove.isNotEmpty) 'remove': remove,
       if (sunChanged) ...{'sun': now['sun'], 'sky': now['sky']},
       if (exposureChanged) 'exposure': now['exposure'],
+      if (structureChanged) 'structure': now['structure'],
     };
   }
 }

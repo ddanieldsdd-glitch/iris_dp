@@ -144,6 +144,22 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
   - Cerrar o abrir el diafragma en IRIS oscurece o aclara Unreal.
 - [ ] **Compara.** La misma escena vista en el 3D de IRIS (Luz real) y en Render RTX debería tener el mismo nivel general. Anota si una sale claramente más clara u oscura y en cuántos stops; es el dato para calibrar.
 
+## 12 · El set a escala en Unreal (F6.21.3)
+
+- [ ] **Muebles a su tamaño.**
+  - Pon una mesa en la planta. En su ficha salen **Ancho**, **Fondo** y **Alto** en cm (por defecto 160 × 90 × 80).
+  - En la planta 2D se dibuja a ese tamaño, ya no como un icono pequeño.
+  - Lo mismo con silla, sofá y cama.
+- [ ] **Muebles de antes.** Un mueble que ya tenía un tamaño propio se ve igual que antes. Uno sin tamaño propio ahora sale con medidas típicas: la mesa de 1,60 m en lugar de un cuadrado de 50 cm.
+- [ ] **En el 3D.** La mesa de 160 × 90 se ve rectangular, con sus patas en las esquinas. Gírala: se gira con su fondo hacia donde mira.
+- [ ] **En Unreal.**
+  - Con IRIS Stage conectado y el 3D abierto en una planta con paredes, puerta y ventana, a los 2 s aparece en Unreal **IRIS_Estructura**, que es la habitación.
+  - Mide con la regla de Unreal una pared de 4 m: 400 cm. Comprueba que los huecos de la puerta y de la ventana están.
+- [ ] **Una pared movida en IRIS.** Mueve una pared: en unos segundos Unreal cambia la estructura por la nueva.
+- [ ] **La luz.** Un foco fuera de la ventana entra por el hueco y las paredes dan sombra (Render RTX).
+- [ ] **La mesa en Unreal.** Llega como un bloque de 160 × 90 × 80, girado como en la planta.
+- [ ] **Anota** si alguna pieza de la estructura sale en otro sitio o con otro giro: sería el importador de glTF de Unreal, y se corrige con ese dato.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.

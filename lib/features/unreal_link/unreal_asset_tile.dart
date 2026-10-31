@@ -50,6 +50,12 @@ class UnrealAssetTile extends StatefulWidget {
       el.props[LightScene.sizeKey] =
           (math.max(s[0], s[1])).roundToDouble() / 100;
       el.props[LightScene.heightKey] = s[2].roundToDouble() / 100;
+      // Ancho y fondo: lo largo de lado, salvo en la cama, que es al revés.
+      final long = math.max(s[0], s[1]).roundToDouble() / 100;
+      final short = math.min(s[0], s[1]).roundToDouble() / 100;
+      final bed = el.propType == PropType.bed;
+      el.props[LightScene.widthKey] = bed ? short : long;
+      el.props[LightScene.depthKey] = bed ? long : short;
     }
   }
 

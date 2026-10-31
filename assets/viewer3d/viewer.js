@@ -527,6 +527,8 @@
   function propShape(p, mat) {
     const g = new THREE.Group();
     const s = Math.max(p.sizeM || 0.5, 0.1), h = Math.max(p.heightM || 0.8, 0.05);
+    // Ancho (de lado) y fondo (hacia donde mira), F6.21.3.
+    const w = Math.max(p.widthM || s, 0.1), d = Math.max(p.depthM || s, 0.1);
     const leg = (x, z, top) => {
       const m = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, top, 8), mat);
       m.position.set(x, top / 2, z);
@@ -534,30 +536,30 @@
     };
     switch (p.type) {
       case 'table': {
-        const t = Math.min(0.05, h * 0.1), e = s / 2 - 0.06;
-        g.add(box(s, t, s, mat, 0, h - t / 2));
-        for (const [x, z] of [[-e, -e], [e, -e], [-e, e], [e, e]]) g.add(leg(x, z, h - t));
+        const t = Math.min(0.05, h * 0.1), ex = w / 2 - 0.06, ez = d / 2 - 0.06;
+        g.add(box(w, t, d, mat, 0, h - t / 2));
+        for (const [x, z] of [[-ex, -ez], [ex, -ez], [-ex, ez], [ex, ez]]) g.add(leg(x, z, h - t));
         break;
       }
       case 'chair': {
-        const seat = Math.min(0.46, h * 0.58), e = s / 2 - 0.04;
-        g.add(box(s, 0.05, s, mat, 0, seat));
-        g.add(box(s, h - seat, 0.05, mat, 0, seat + (h - seat) / 2, s / 2 - 0.025));
-        for (const [x, z] of [[-e, -e], [e, -e], [-e, e], [e, e]]) g.add(leg(x, z, seat));
+        const seat = Math.min(0.46, h * 0.58), ex = w / 2 - 0.04, ez = d / 2 - 0.04;
+        g.add(box(w, 0.05, d, mat, 0, seat));
+        g.add(box(w, h - seat, 0.05, mat, 0, seat + (h - seat) / 2, d / 2 - 0.025));
+        for (const [x, z] of [[-ex, -ez], [ex, -ez], [-ex, ez], [ex, ez]]) g.add(leg(x, z, seat));
         break;
       }
       case 'sofa': {
-        const d = Math.min(s * 0.45, 0.95), seat = Math.min(0.45, h * 0.55);
-        g.add(box(s, seat, d, mat));
-        g.add(box(s, h - seat, 0.18, mat, 0, seat + (h - seat) / 2, d / 2 - 0.09));
-        g.add(box(0.16, seat + 0.18, d, mat, -s / 2 + 0.08, (seat + 0.18) / 2));
-        g.add(box(0.16, seat + 0.18, d, mat, s / 2 - 0.08, (seat + 0.18) / 2));
+        const seat = Math.min(0.45, h * 0.55);
+        g.add(box(w, seat, d, mat));
+        g.add(box(w, h - seat, 0.18, mat, 0, seat + (h - seat) / 2, d / 2 - 0.09));
+        g.add(box(0.16, seat + 0.18, d, mat, -w / 2 + 0.08, (seat + 0.18) / 2));
+        g.add(box(0.16, seat + 0.18, d, mat, w / 2 - 0.08, (seat + 0.18) / 2));
         break;
       }
       case 'bed': {
-        const w = s * 0.7, top = Math.min(0.55, h);
-        g.add(box(w, top, s, mat));
-        g.add(box(w, Math.max(h, top + 0.4) - top, 0.08, mat, 0, top + (Math.max(h, top + 0.4) - top) / 2, s / 2 - 0.04));
+        const top = Math.min(0.55, h);
+        g.add(box(w, top, d, mat));
+        g.add(box(w, Math.max(h, top + 0.4) - top, 0.08, mat, 0, top + (Math.max(h, top + 0.4) - top) / 2, d / 2 - 0.04));
         break;
       }
       case 'vehicle': {
@@ -583,7 +585,7 @@
         break;
       }
       default:
-        g.add(box(s, h, s, mat));
+        g.add(box(w, h, d, mat));
     }
     return g;
   }
@@ -675,8 +677,25 @@
 
     lastScene = sc;
     palette = sc.palette || {};
-    root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, sc.sun ? 0.6 : 0.38));
-    root.add(new THREE.AmbientLight(0xffffff, 0.12));
+    // Luz real (F6.21.4): con la exposición de la cámara de IRIS, los focos
+    // en candelas, el sol en lux y todo multiplicado por la misma escala que
+    // usa el fotómetro, así que un foco al 50 % se ve la mitad. Sin nada
+    // encendido (o con «Luz de trabajo») se ve con la luz de siempre.
+    const anyLit = (sc.fixtures || []).some((f) => f.on && f.source && f.source.cd > 0);
+    const physical = !!(sc.exposure && sc.exposure.scale > 0 && sc.lightMode !== 'work' &&
+      (anyLit || sc.sun));
+    const k = physical ? sc.exposure.scale : 1;
+    renderer.physicallyCorrectLights = physical;
+    if (physical) {
+      // Cielo de día (aprox. un cuarto del sol) o un poco de rebote de noche.
+      const skyLux = sc.sun ? (sc.sun.lux || 0) * 0.25 : 0.5;
+      root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, skyLux * k));
+      root.add(new THREE.AmbientLight(0xffffff, 0.2 * k));
+    } else {
+      root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, sc.sun ? 0.6 : 0.38));
+      root.add(new THREE.AmbientLight(0xffffff, 0.12));
+    }
+    post({ type: 'lightMode', physical, ev100: physical ? sc.exposure.ev100 : null });
 
     // Lo que ocupa la escena, para el suelo y la cámara.
     const box = new THREE.Box3();
@@ -785,7 +804,9 @@
       if (i >= next && lit < maxLights) {
         next += step; lit++;
         const half = clamp((f.beamDeg || 60) / 2, 5, 80) * Math.PI / 180;
-        const sl = new THREE.SpotLight(col, 0.6 + (f.watts || 500) / 1600, 0, half, 0.45, 1);
+        const sl = physical
+          ? new THREE.SpotLight(col, ((f.source && f.source.cd) || 0) * k, 0, half, 0.45, 2)
+          : new THREE.SpotLight(col, 0.6 + (f.watts || 500) / 1600, 0, half, 0.45, 1);
         sl.position.copy(p);
         sl.target.position.copy(a);
         if (hasScans && shadows < maxShadows) {
@@ -882,7 +903,10 @@
     // El sol, con sombras de lo que tapa.
     if (sc.sun) {
       const d = sc.sun.dir;
-      const sun = new THREE.DirectionalLight(cctColor(sc.sun.cct || 5400), 1.5);
+      const sun = new THREE.DirectionalLight(
+        cctColor(sc.sun.cct || 5400),
+        physical ? (sc.sun.lux || 0) * k : 1.5,
+      );
       const reach = Math.max(sz.x, sz.z, 10) * 1.2;
       sun.position.copy(c).add(V(d[0], d[1], d[2]).multiplyScalar(reach * 2));
       sun.target.position.copy(c);
@@ -1168,6 +1192,36 @@
   }
 
   // glTF de lo que se ve, en base64, para exportar desde la app.
+  // La estructura del set para Unreal (F6.21.3): paredes con sus huecos,
+  // techos, cristales, telas, pilares y rigging, cada pieza con su sitio
+  // metido en la propia malla (sin transformaciones de nodo), para que el
+  // importador de Unreal la deje donde va aunque separe las piezas.
+  function structureGlb() {
+    const out = new THREE.Group();
+    for (const g of [...roofs, L.walls, L.glass, L.drapes, L.pillars, L.rig].filter(Boolean)) {
+      g.updateWorldMatrix(true, true);
+      g.traverse((o) => {
+        if (!o.isMesh || !o.geometry) return;
+        const mat = o.material;
+        if (mat && mat.blending === THREE.AdditiveBlending) return;
+        const geo = o.geometry.clone();
+        geo.applyMatrix4(o.matrixWorld);
+        const m = new THREE.Mesh(geo, mat);
+        m.name = o.name || 'IRIS';
+        out.add(m);
+      });
+    }
+    if (!out.children.length) return Promise.resolve(null);
+    return new Promise((resolve, reject) => {
+      new THREE.GLTFExporter().parse(out, (glb) => {
+        const bytes = new Uint8Array(glb);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        resolve(btoa(bin));
+      }, reject, { binary: true });
+    });
+  }
+
   function exportGlb(opts) {
     // Solo la estructura (para el MVR, que lleva los focos aparte), o todo.
     const what = opts && opts.structure
@@ -1266,6 +1320,7 @@
     select: (id) => highlight(id),
     floor: (f) => setFloorLight(f),
     exportGlb,
+    structureGlb,
     // Miniaturas que manda la app: {clave: dataURL}. El atrezzo se rehace
     // con ellas cuando están cargadas.
     thumbs: (map) => {

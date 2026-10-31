@@ -2941,29 +2941,35 @@ class CameraPlanPainter extends CustomPainter {
       ..strokeWidth = 1.5;
 
     final mpu = metersPerUnit ?? defaultMetersPerUnit;
+    // Los muebles a su tamaño (F6.21.3): ancho de lado y fondo hacia donde
+    // miran (arriba en el lienzo sin girar).
+    final size = LightScene.furnitureSizeM(el);
+    final w = size.width / mpu, d = size.depth / mpu;
+    final body = Rect.fromCenter(center: Offset.zero, width: w, height: d);
     switch (el.propType) {
       case PropType.table:
-        canvas.drawRect(const Rect.fromLTWH(-16, -10, 32, 20), paint);
-        for (final x in [-12.0, 12.0]) {
-          canvas.drawLine(Offset(x, 10), Offset(x, 16), paint);
-        }
+        canvas.drawRect(body, paint);
       case PropType.chair:
-        canvas.drawRect(const Rect.fromLTWH(-10, -2, 20, 14), paint);
-        canvas.drawRect(const Rect.fromLTWH(-10, -14, 20, 12), paint);
-      case PropType.sofa:
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            const Rect.fromLTWH(-18, -8, 36, 16),
-            const Radius.circular(4),
-          ),
+        // El asiento delante y el respaldo detrás.
+        canvas.drawRect(body, paint);
+        canvas.drawRect(
+          Rect.fromLTWH(body.left, body.bottom - d * 0.2, w, d * 0.2),
           paint,
         );
-        canvas.drawLine(const Offset(-18, -8), const Offset(-18, -14), paint);
-        canvas.drawLine(const Offset(18, -8), const Offset(18, -14), paint);
-      case PropType.bed:
-        canvas.drawRect(const Rect.fromLTWH(-20, -8, 40, 16), paint);
+      case PropType.sofa:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(body, Radius.circular(math.min(w, d) * 0.1)),
+          paint,
+        );
         canvas.drawRect(
-          const Rect.fromLTWH(-20, -8, 12, 16),
+          Rect.fromLTWH(body.left, body.bottom - d * 0.22, w, d * 0.22),
+          paint,
+        );
+      case PropType.bed:
+        canvas.drawRect(body, paint);
+        // La almohada, en la cabecera (detrás).
+        canvas.drawRect(
+          Rect.fromLTWH(body.left, body.bottom - d * 0.15, w, d * 0.15),
           paint..style = PaintingStyle.fill,
         );
       case PropType.meter:
@@ -3041,7 +3047,7 @@ class CameraPlanPainter extends CustomPainter {
         canvas.drawRect(const Rect.fromLTWH(-14, -20, 28, 12), paint);
       case PropType.rectangle:
       case null:
-        canvas.drawRect(const Rect.fromLTWH(-12, -12, 24, 24), paint);
+        canvas.drawRect(body, paint);
     }
   }
 
