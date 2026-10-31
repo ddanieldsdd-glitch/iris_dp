@@ -160,6 +160,18 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
 - [ ] **La mesa en Unreal.** Llega como un bloque de 160 × 90 × 80, girado como en la planta.
 - [ ] **Anota** si alguna pieza de la estructura sale en otro sitio o con otro giro: sería el importador de glTF de Unreal, y se corrige con ese dato.
 
+## 13 · Plató, interior o exterior (F6.21.1)
+
+- [ ] **El botón.** En la planta de un set, junto al sol y la luna de la barra, hay un botón **Entorno** (cámara, casa o árbol). Elige **Plató**.
+- [ ] **El fotómetro en plató.** Con un esquema de día, la lectura ya no incluye el sol ni el cielo: solo los focos. En «Qué aporta cada fuente» no sale el sol.
+- [ ] **El 3D en plató.** Fondo negro y suelo gris; con «Luz real», solo alumbran los focos.
+- [ ] **Exterior.** Cambia a **Exterior · Asfalto**: el 3D tiene fondo de cielo (de día) y un suelo gris oscuro grande, con el sol del esquema.
+- [ ] **Se guarda.** Cierra y abre la planta: sigue con su entorno. En otro equipo, tras sincronizar, también.
+- [ ] **Unreal.** Con IRIS Stage (tras «Abrir en Unreal» y reiniciar Unreal):
+  - **Plató:** sin sol, cielo ni atmósfera, y el suelo gris;
+  - **Exterior:** el suelo del terreno hasta el horizonte, con cielo y sol;
+  - **Interior:** como antes.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.

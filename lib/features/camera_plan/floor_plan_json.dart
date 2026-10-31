@@ -96,11 +96,16 @@ class FloorPlanDocument {
   /// lo escribe `PlanAmbient.toJson`.
   final Map<String, dynamic>? ambient;
 
+  /// Entorno del set o de la localización (F6.21.1): plató, interior o
+  /// exterior, tal como lo escribe `SetEnvironment.toJson`.
+  final Map<String, dynamic>? environment;
+
   const FloorPlanDocument({
     this.elements = const [],
     this.metersPerUnit,
     this.underlay,
     this.ambient,
+    this.environment,
   });
 
   bool get isEmpty => elements.isEmpty && underlay == null;
@@ -122,6 +127,7 @@ class FloorPlanJson {
       'metersPerUnit': ?document.metersPerUnit,
       'underlay': ?document.underlay?.toJson(),
       'ambient': ?document.ambient,
+      'environment': ?document.environment,
       'elements': document.elements.map(_elementToJson).toList(),
     });
   }
@@ -142,6 +148,9 @@ class FloorPlanJson {
         underlay: FloorPlanUnderlay.fromJson(data['underlay']),
         ambient: data['ambient'] is Map
             ? Map<String, dynamic>.from(data['ambient'] as Map)
+            : null,
+        environment: data['environment'] is Map
+            ? Map<String, dynamic>.from(data['environment'] as Map)
             : null,
       );
     } catch (_) {

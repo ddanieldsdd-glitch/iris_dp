@@ -273,11 +273,16 @@ class UnrealStagePayload {
           ?camera(c),
       ],
       'sun': sunNow,
+      'environment': ?scene['environment'],
       // Exposición fija con la cámara de IRIS (F6.21.4): sin ella Unreal se
       // autoexpone y un foco al 50 % se ve casi como al 100 %.
       'exposure': ?exposure(scene['exposure'] as Map?),
-      // De día, cielo físico (SkyAtmosphere y SkyLight) con el sol.
-      'sky': sunNow == null ? null : {'scale': 1.0},
+      // De día, cielo físico (SkyAtmosphere y SkyLight) con el sol; en un
+      // plató, nunca (F6.21.1).
+      'sky': sunNow == null ||
+              (scene['environment'] as Map?)?['kind'] == 'studio'
+          ? null
+          : {'scale': 1.0},
     };
   }
 
@@ -318,12 +323,15 @@ class UnrealStagePayload {
         jsonEncode(before['sky']) != jsonEncode(now['sky']);
     final exposureChanged =
         jsonEncode(before['exposure']) != jsonEncode(now['exposure']);
+    final environmentChanged =
+        jsonEncode(before['environment']) != jsonEncode(now['environment']);
     final structureChanged =
         jsonEncode(before['structure']) != jsonEncode(now['structure']);
     if (kinds.every((k) => (out[k] as List).isEmpty) &&
         remove.isEmpty &&
         !sunChanged &&
         !exposureChanged &&
+        !environmentChanged &&
         !structureChanged) {
       return null;
     }
@@ -332,6 +340,11 @@ class UnrealStagePayload {
       if (remove.isNotEmpty) 'remove': remove,
       if (sunChanged) ...{'sun': now['sun'], 'sky': now['sky']},
       if (exposureChanged) 'exposure': now['exposure'],
+      if (environmentChanged) ...{
+        'environment': now['environment'],
+        'sun': now['sun'],
+        'sky': now['sky'],
+      },
       if (structureChanged) 'structure': now['structure'],
     };
   }
