@@ -707,6 +707,9 @@ class PlanScene3d {
   ) {
     final type = el.lightType;
     if (type == null || type == LightType.sun) return null;
+    // Negros, telas, palios y rebotes no alumbran por sí mismos: van como
+    // paneles (`grip`), no con cuerpo de foco.
+    if (PlanGrip.isGrip(el)) return null;
     final beam = LightBeam.of(el);
     final rad = el.rotation * math.pi / 180;
     // Hacia dónde mira en planta, con los ejes del visor.

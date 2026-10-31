@@ -160,4 +160,40 @@ void main() {
       expect(block['loc'][2], 100);
     });
   });
+
+  test('el grip no sale como foco: ni en el 3D ni en Unreal', () {
+    final scene = PlanScene3d.build([
+      fresnel(),
+      grip(LightType.bounce),
+      grip(LightType.diffusionFrame),
+      grip(LightType.flag),
+    ], metersPerUnit: mpu);
+    expect((scene['fixtures'] as List), hasLength(1));
+    expect((scene['grip'] as List), hasLength(3));
+    final lights = UnrealStagePayload.build(scene)['lights'] as List;
+    expect(
+      lights.cast<Map>().where((l) => !'${l['id']}'.contains('#luz')),
+      hasLength(1),
+    );
+  });
+
+  test('palio y marco, aparte: cada uno con sus medidas', () {
+    final frame = grip(LightType.diffusionFrame);
+    expect(PlanGrip.isPalio(frame), isFalse);
+    expect(PlanGrip.formatsFor(frame), [
+      GripFormat.frame1x1,
+      GripFormat.frame2x1,
+    ]);
+    final palio = grip(
+      LightType.diffusionFrame,
+      props: {PlanGrip.kindKey: PlanGrip.palioKind},
+    );
+    expect(PlanGrip.isPalio(palio), isTrue);
+    expect(PlanGrip.formatsFor(palio).every((f) => f.palio), isTrue);
+    // Un palio de rebote sigue siendo palio.
+    palio.lightType = LightType.bounce;
+    expect(PlanGrip.isPalio(palio), isTrue);
+    // Un rebote suelto no tiene formatos.
+    expect(PlanGrip.formatsFor(grip(LightType.bounce)), isEmpty);
+  });
 }

@@ -195,6 +195,13 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
 
 ## 16 · Marcos, palios y difusión (F6.22.1–22.2)
 
+> **Corregido tras la primera prueba (2026-10-31):**
+> - el palio de rebote salía con un foco dentro; ahora el grip va solo como panel;
+> - **Palio** y **Marco de difusión** van aparte:
+>   - el **Palio** está en la paleta, en «Grip · Difunde y filtra». Mide 2×2 a 6×6 y lleva **Tela o rebote** (Grid Cloth, seda… o Cinebounce, Ultrabounce, griffolyn);
+>   - el **Marco de difusión** mide 1×1 o 2×1 y solo difumina, con gelatina opcional;
+> - IRIS Stage Link no cargaba en Unreal, por un fallo del script.
+
 - [ ] **Formato.** Pon un **Marco de difusión** en la planta. En su ficha, en **Formato**, elige **Marco 2×1**: mide 2 m de ancho y 1 de alto. Cambia a **Palio 4×4**.
 - [ ] **Medidas.** **Alto** y **Altura del centro** suben y bajan la tela. En el alzado se ve a su altura.
 - [ ] **Telas.** **Tela:** Grid Cloth, ½ o ¼, sedas. En un marco (no en un palio) sale también **Gelatina**: un CTO tiñe la luz que sale.
