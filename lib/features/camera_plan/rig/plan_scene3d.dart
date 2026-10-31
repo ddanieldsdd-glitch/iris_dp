@@ -8,6 +8,7 @@ import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
 import '../light/exposure.dart';
+import '../set_environment.dart';
 import '../light/light_scene.dart';
 import '../plan_category.dart';
 import '../../unreal_link/unreal_asset_ref.dart';
@@ -52,6 +53,9 @@ class PlanScene3d {
     /// el 3D y Unreal exponen igual que el fotómetro (F6.21.4).
     ExposureSettings? exposure,
     double? stop,
+
+    /// Plató, interior o exterior (F6.21.1).
+    SetEnvironment? environment,
   }) {
     final mpu = metersPerUnit;
     List<double> xy(Offset p) => [_r(p.dx * mpu), _r(-p.dy * mpu)];
@@ -76,7 +80,9 @@ class PlanScene3d {
       'name': ?name,
       // Colores por categoría: los mismos que en la planta 2D.
       'palette': PlanCategory.palette,
-      if (ambient != null && ambient.hasSun) 'sun': _sun(ambient),
+      if (ambient != null && ambient.hasSun && !(environment?.isStudio ?? false))
+        'sun': _sun(ambient),
+      'environment': ?environment?.toScene(),
       if (exposure != null && stop != null && stop > 0)
         'exposure': exposureOf(exposure, stop),
       'halls': [

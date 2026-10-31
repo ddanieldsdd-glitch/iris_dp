@@ -35,7 +35,8 @@
   document.body.prepend(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#1a2229');
+  let baseBg = '#1a2229';
+  scene.background = new THREE.Color(baseBg);
   const camP = new THREE.PerspectiveCamera(45, 1, 0.05, 2000);
   const camO = new THREE.OrthographicCamera(-10, 10, 10, -10, -1000, 2000);
   let cam = camP;
@@ -682,15 +683,24 @@
     // usa el fotómetro, así que un foco al 50 % se ve la mitad. Sin nada
     // encendido (o con «Luz de trabajo») se ve con la luz de siempre.
     const anyLit = (sc.fixtures || []).some((f) => f.on && f.source && f.source.cd > 0);
+    const env = (sc.environment && sc.environment.kind) || 'interior';
     const physical = !!(sc.exposure && sc.exposure.scale > 0 && sc.lightMode !== 'work' &&
       (anyLit || sc.sun));
+    // Fondo según el entorno (F6.21.1): plató negro, exterior con cielo.
+    scene.background = new THREE.Color(
+      env === 'studio' ? '#050505'
+        : env === 'exterior' ? (sc.sun ? '#9cbfdf' : '#0b1020')
+        : baseBg);
     const k = physical ? sc.exposure.scale : 1;
     renderer.physicallyCorrectLights = physical;
     if (physical) {
       // Cielo de día (aprox. un cuarto del sol) o un poco de rebote de noche.
-      const skyLux = sc.sun ? (sc.sun.lux || 0) * 0.25 : 0.5;
-      root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, skyLux * k));
-      root.add(new THREE.AmbientLight(0xffffff, 0.2 * k));
+      // En un plató, solo los focos.
+      if (env !== 'studio') {
+        const skyLux = sc.sun ? (sc.sun.lux || 0) * 0.25 : 0.5;
+        root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, skyLux * k));
+        root.add(new THREE.AmbientLight(0xffffff, 0.2 * k));
+      }
     } else {
       root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, sc.sun ? 0.6 : 0.38));
       root.add(new THREE.AmbientLight(0xffffff, 0.12));
@@ -716,7 +726,13 @@
     const c = box.getCenter(new THREE.Vector3());
     const sz = box.getSize(new THREE.Vector3());
     const span = Math.max(sz.x, sz.z, 6);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(span + 30, span + 30), new THREE.MeshStandardMaterial({ color: 0x8a8378, roughness: 0.95 }));
+    // Suelo: gris neutro en plató, del terreno elegido fuera y, mucho más
+    // grande, hasta el horizonte.
+    const floorColor = env === 'studio' ? 0x767676
+      : env === 'exterior' ? ((sc.environment && sc.environment.groundRgb) || 0x4f6b35)
+      : 0x8a8378;
+    const floorSpan = env === 'exterior' ? span + 400 : span + 30;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(floorSpan, floorSpan), new THREE.MeshStandardMaterial({ color: floorColor, roughness: 0.95 }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(c.x, -0.01, c.z);
     root.add(floor);
@@ -1344,7 +1360,11 @@
       if ('cones' in o) { showCones = !!o.cones; cones.forEach((c) => (c.visible = showCones)); }
       if ('roof' in o) { showRoof = !!o.roof; roofs.forEach((r) => (r.visible = showRoof)); }
       if ('ortho' in o) setOrtho(!!o.ortho);
-      if (o.bg) scene.background = new THREE.Color(o.bg);
+      if (o.bg) {
+        baseBg = o.bg;
+        const env = lastScene && lastScene.environment && lastScene.environment.kind;
+        if (!env || env === 'interior') scene.background = new THREE.Color(o.bg);
+      }
       if ('names' in o) { showNames = !!o.names; updateLabels(); }
       if ('measure' in o) {
         measuring = !!o.measure;

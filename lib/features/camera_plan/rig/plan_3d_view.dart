@@ -16,6 +16,7 @@ import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
 import '../light/exposure.dart';
+import '../set_environment.dart';
 import '../light/plan_light.dart';
 import '../plan_cad_export.dart';
 import '../plan_piece_controls.dart';
@@ -105,6 +106,9 @@ class Plan3dView extends StatefulWidget {
   final ExposureSettings? exposure;
   final double? stop;
 
+  /// Plató, interior o exterior (F6.21.1).
+  final SetEnvironment? environment;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -125,6 +129,7 @@ class Plan3dView extends StatefulWidget {
     this.onScanTop,
     this.exposure,
     this.stop,
+    this.environment,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -268,6 +273,7 @@ class _Plan3dViewState extends State<Plan3dView> {
       metersPerUnit: widget.metersPerUnit,
       exposure: widget.exposure,
       stop: widget.stop,
+      environment: widget.environment,
       name: widget.name,
       ambient: widget.ambient,
     );
@@ -1512,6 +1518,7 @@ class Plan3dScreen extends StatefulWidget {
   final ScanTopSink? onScanTop;
   final ExposureSettings? exposure;
   final double? stop;
+  final SetEnvironment? environment;
 
   const Plan3dScreen({
     super.key,
@@ -1530,6 +1537,7 @@ class Plan3dScreen extends StatefulWidget {
     this.onScanTop,
     this.exposure,
     this.stop,
+    this.environment,
   });
 
   static Future<void> show(
@@ -1549,6 +1557,7 @@ class Plan3dScreen extends StatefulWidget {
     ScanTopSink? onScanTop,
     ExposureSettings? exposure,
     double? stop,
+    SetEnvironment? environment,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -1567,6 +1576,7 @@ class Plan3dScreen extends StatefulWidget {
         onScanTop: onScanTop,
         exposure: exposure,
         stop: stop,
+        environment: environment,
       ),
     ),
   );
@@ -1614,6 +1624,7 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       onScanTop: widget.onScanTop,
       exposure: widget.exposure,
       stop: widget.stop,
+      environment: widget.environment,
     ),
   );
 }

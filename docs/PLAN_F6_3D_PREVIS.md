@@ -925,6 +925,20 @@ Pedido por Daniel el 2026-10-31. Objetivo: que un esquema de luz ensayado en IRI
 
 ### F6.21.1 · Tipo de entorno al crear el set · todos
 
+**Estado:** en curso (`plan/f6-21-1-entorno`).
+- **Hecho:**
+  - **Plató, Interior o Exterior** (con suelo de hierba, tierra, asfalto u hormigón), elegido con el botón «Entorno» de la barra de la planta;
+  - se guarda en la planta del set (o de la localización) y viaja con ella; sin elegir, es Interior, lo de siempre;
+  - **en plató:**
+    - el fotómetro no cuenta ni el sol ni el cielo, aunque el esquema sea de día;
+    - el 3D va con fondo negro y suelo gris, sin cielo;
+    - Unreal apaga el sol y el cielo, quita la atmósfera y pone el suelo gris;
+  - **en exterior:** fondo de cielo, el suelo del terreno hasta el horizonte (2 km en Unreal) y el sol y el cielo del esquema.
+- **Falta:**
+  - elegirlo al crear el set en Localizaciones;
+  - nubes volumétricas;
+  - el ciclorama de plató (F6.18).
+
 - **Qué:**
   - al crear un set (o en su ficha), y en el diálogo «Abrir en Unreal», se elige **Plató** o **Exterior (naturaleza)**;
   - después se puede cambiar; se guarda en el set (`props` de la planta del set) y viaja con el proyecto.

@@ -676,6 +676,67 @@ def _apply_structure(s):
                      path, origin, flat)
 
 
+GROUND_ROOT = WORLD_ROOT + "/Materiales"
+_BASIC_MAT = "/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"
+
+
+def _ground_material(name, rgb):
+    """Un material liso del color [rgb] (0xRRGGBB) para el suelo, creado
+    una vez como instancia del material básico de Unreal."""
+    path = "%s/Suelo_%s" % (GROUND_ROOT, name)
+    lib = unreal.EditorAssetLibrary
+    if lib.does_asset_exist(path):
+        return lib.load_asset(path)
+    tools = unreal.AssetToolsHelpers.get_asset_tools()
+    mic = tools.create_asset("Suelo_%s" % name, GROUND_ROOT,
+                             unreal.MaterialInstanceConstant,
+                             unreal.MaterialInstanceConstantFactoryNew())
+    mic.set_editor_property("parent", lib.load_asset(_BASIC_MAT))
+    color = unreal.LinearColor(((rgb >> 16) & 255) / 255.0, ((rgb >> 8) & 255) / 255.0,
+                               (rgb & 255) / 255.0, 1.0)
+    unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(
+        mic, "Color", color)
+    lib.save_loaded_asset(mic)
+    return mic
+
+
+def _apply_environment(e):
+    """Plató, interior o exterior (F6.21.1). En un plató solo alumbran los
+    focos: sin sol, cielo ni atmósfera, y el suelo gris neutro. Fuera, el
+    suelo del terreno, grande, con el cielo y el sol que mande IRIS."""
+    kind = e.get("kind", "interior")
+    floor = _find(FLOOR_ID)
+    if kind == "studio":
+        sun = _find(SUN_ID)
+        if sun is not None:
+            comp = sun.get_component_by_class(unreal.DirectionalLightComponent)
+            if comp is not None:
+                _set(comp, "intensity", 0.0)
+        sky = _find(SKY_ID)
+        if sky is not None:
+            comp = sky.get_component_by_class(unreal.SkyLightComponent)
+            if comp is not None:
+                _set(comp, "intensity", 0.0)
+        atmosphere = _find(ATMOSPHERE_ID)
+        if atmosphere is not None:
+            _actor_subsystem().destroy_actor(atmosphere)
+            _actors.pop(ATMOSPHERE_ID, None)
+    if floor is None:
+        return
+    comp = floor.static_mesh_component
+    if kind == "studio":
+        comp.set_material(0, _ground_material("Plato", 0x767676))
+        floor.set_actor_scale3d(unreal.Vector(100, 100, 1))
+    elif kind == "exterior":
+        comp.set_material(0, _ground_material(
+            str(e.get("ground", "grass")).capitalize(), int(e.get("groundRgb", 0x4f6b35))))
+        # Hasta el horizonte: 2 km.
+        floor.set_actor_scale3d(unreal.Vector(2000, 2000, 1))
+    else:
+        comp.set_material(0, _ground_material("Interior", 0x8a8378))
+        floor.set_actor_scale3d(unreal.Vector(100, 100, 1))
+
+
 def _apply_exposure(e):
     """Exposición fija con la cámara de IRIS (F6.21.4): manual y con la
     cámara física (ISO, obturador, diafragma), en un PostProcessVolume que
@@ -747,10 +808,13 @@ def _apply(data):
         _apply_asset(a)
     for s in scans:
         _apply_scan(s, data.get("scanFolders", []))
+    studio = (data.get("environment") or {}).get("kind") == "studio"
     if "sun" in data:
-        _apply_sun(data["sun"])
-    if "sky" in data:
+        _apply_sun(None if studio else data["sun"])
+    if "sky" in data and not studio:
         _apply_sky(data["sky"])
+    if data.get("environment"):
+        _apply_environment(data["environment"])
     if data.get("exposure"):
         _apply_exposure(data["exposure"])
     if data.get("structure"):

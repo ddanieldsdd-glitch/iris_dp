@@ -10,6 +10,7 @@ import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
 import 'light/ambient.dart';
 import 'light_overrides.dart';
+import 'set_environment.dart';
 import 'plan_prefs.dart';
 
 /// Capas de una planta, de abajo arriba. Cada nivel ve las anteriores por
@@ -142,8 +143,44 @@ class FloorPlanRepository {
         metersPerUnit: previous.metersPerUnit,
         underlay: previous.underlay,
         ambient: previous.ambient,
+        environment: previous.environment,
       ),
     );
+  }
+
+  /// El entorno de un set o una localización (F6.21.1), de su planta.
+  static SetEnvironment environmentOf(String? planJson) =>
+      SetEnvironment.fromJson(FloorPlanJson.decodeDocument(planJson).environment);
+
+  /// Guarda el entorno en la planta del set [setId] o, sin set, en la de la
+  /// localización [siteId], sin tocar lo demás.
+  Future<void> saveEnvironment(
+    SetEnvironment environment, {
+    int? setId,
+    int? siteId,
+  }) async {
+    String with_(String? json) {
+      final doc = FloorPlanJson.decodeDocument(json);
+      return FloorPlanJson.encodeDocument(
+        FloorPlanDocument(
+          elements: doc.elements,
+          metersPerUnit: doc.metersPerUnit,
+          underlay: doc.underlay,
+          ambient: doc.ambient,
+          environment: environment.toJson(),
+        ),
+      );
+    }
+
+    if (setId != null) {
+      final set = await db.getLocationById(setId);
+      if (set == null) return;
+      await db.saveFloorPlanToSet(setId, with_(set.floorPlanJson));
+    } else if (siteId != null) {
+      final site = await db.getSiteById(siteId);
+      if (site == null) return;
+      await db.saveFloorPlanToSite(siteId, with_(site.floorPlanJson));
+    }
   }
 
   Future<void> _replaceShotElements(
@@ -340,6 +377,7 @@ class FloorPlanRepository {
               metersPerUnit: doc.metersPerUnit,
               underlay: doc.underlay,
               ambient: ambient.toJson(),
+              environment: doc.environment,
             ),
           ),
         ),
