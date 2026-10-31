@@ -241,6 +241,15 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
 - [ ] **De vuelta.** Inclina la cámara en Unreal: en la ficha de IRIS cambia la inclinación.
 - [ ] **Foco automático.** Sin foco propio (deslizador del todo a la izquierda), enfoca al actor que tiene delante.
 
+## 19 · Luz o Claro en el 3D (F6.22.5)
+
+- [ ] **El selector.** En el panel del 3D, en «Qué se ve», hay un selector **Luz · EV n | Claro**.
+- [ ] **Luz.** El set se ve solo con la luz de los focos, las telas y los rebotes, a la exposición de la cámara: lo que no alumbra ningún foco queda oscuro.
+- [ ] **Claro.**
+  - Todo se ve con una luz pareja, sin sombras, y salen los **nombres** de cada foco, marco, palio y actor.
+  - Los conos siguen visibles para ver hacia dónde apunta cada foco.
+- [ ] **Al cambiar,** el 3D pasa de una a otra al momento; en Unreal no cambia nada.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.

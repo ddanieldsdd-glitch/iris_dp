@@ -1107,19 +1107,43 @@ class _Plan3dViewState extends State<Plan3dView> {
                 : AppTypography.mono(palette),
           ),
         header('Qué se ve'),
-        toggle('Nombres', _names, () => _toggle('names')),
-        toggle('Cubierta', _roof, () => _toggle('roof')),
-        toggle('Conos de luz', _cones, () => _toggle('cones')),
-        toggle(
-          _ev100 == null
-              ? 'Luz real (como la cámara)'
-              : 'Luz real · EV ${_ev100!.toStringAsFixed(1)}',
-          _realLight,
-          () => setState(() {
-            _realLight = !_realLight;
+        // Dos maneras de ver el set (F6.22.5): con la luz de los focos, como
+        // la cámara, o claro, para colocar.
+        SegmentedButton<bool>(
+          showSelectedIcon: false,
+          segments: [
+            ButtonSegment(
+              value: true,
+              icon: const Icon(Icons.lightbulb_outline, size: 16),
+              label: Text(
+                _ev100 == null ? 'Luz' : 'Luz · EV ${_ev100!.toStringAsFixed(1)}',
+              ),
+            ),
+            const ButtonSegment(
+              value: false,
+              icon: Icon(Icons.wb_sunny_outlined, size: 16),
+              label: Text('Claro'),
+            ),
+          ],
+          selected: {_realLight},
+          onSelectionChanged: (v) => setState(() {
+            _realLight = v.first;
             _schedule();
           }),
         ),
+        Text(
+          _realLight
+              ? 'Solo la luz de los focos (y el sol o el cielo si toca), a la '
+                    'exposición de la cámara.'
+              : 'Luz de trabajo pareja, sin sombras, con los nombres: para ver '
+                    'dónde va cada foco, marco y palio.',
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textTertiary),
+        ),
+        toggle('Nombres', _names, () => _toggle('names')),
+        toggle('Cubierta', _roof, () => _toggle('roof')),
+        toggle('Conos de luz', _cones, () => _toggle('cones')),
         toggle(
           _floorBusy ? 'Luz en el suelo (calculando…)' : 'Luz en el suelo',
           _floor,
