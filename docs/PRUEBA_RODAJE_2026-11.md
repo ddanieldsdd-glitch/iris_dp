@@ -183,6 +183,16 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
   - subir o bajar la niebla en IRIS cambia Unreal al momento;
   - a 0 % desaparece.
 
+## 15 · Navegar como en Unreal (F6.22.6)
+
+- [ ] **Planta 2D.** Arrastra con el botón derecho: la planta se desplaza y no sale ningún menú. Un clic derecho sin arrastrar abre el menú de siempre (copiar, pegar…).
+- [ ] **3D.**
+  - Haz clic una vez dentro del 3D. Con el **botón derecho pulsado**, mueve el ratón para mirar y usa **W A S D** para moverte; **Q** y **E** bajan y suben.
+  - La rueda, con el derecho pulsado, cambia la velocidad, y **Mayúsculas** corre.
+  - Al soltar, la vista se queda donde estás y se puede girar como antes.
+- [ ] **El ajuste.** En **Ajustes → Plantas**, apaga **«3D como Unreal»** y vuelve a abrir el 3D: el botón derecho vuelve a desplazar como antes.
+- [ ] **Anota** si las teclas no responden. En Windows, el 3D necesita tener el foco: haz clic dentro antes.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.
