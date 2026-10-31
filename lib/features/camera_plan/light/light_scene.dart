@@ -20,6 +20,80 @@ import 'surfaces.dart';
 /// Algo que se interpone entre una luz y un punto: una pared, una ventana,
 /// una bandera, una persona. [transmission] es la parte de la luz que deja
 /// pasar; [miredShift], el tinte que le da (una gelatina).
+/// Un marco, palio, rebote o negro inclinado (F6.22.1): un rectángulo en
+/// el espacio. La luz que lo cruza se mira en 3D (la planta no basta: un
+/// palio horizontal tapa desde arriba). [blocker] lleva lo que hace la tela
+/// (transmisión, difusión, color) y es la «superficie» de la luz que suelta.
+class GripPanel {
+  /// Centro en el lienzo, eje del ancho (el tramo) y normal en planta.
+  final Offset centre;
+  final Offset tangent;
+  final Offset normal;
+  final double widthUnits;
+  final double heightM;
+
+  /// Altura del centro, ya con la cota del suelo.
+  final double centreZ;
+  final double tiltRad;
+  final LightBlocker blocker;
+
+  const GripPanel({
+    required this.centre,
+    required this.tangent,
+    required this.normal,
+    required this.widthUnits,
+    required this.heightM,
+    required this.centreZ,
+    required this.tiltRad,
+    required this.blocker,
+  });
+
+  /// Eje «hacia arriba» de la tela, en metros con los ejes del lienzo (x, y
+  /// del lienzo; z hacia arriba): se inclina hacia [normal].
+  (double, double, double) get up => (
+    normal.dx * math.sin(tiltRad),
+    normal.dy * math.sin(tiltRad),
+    math.cos(tiltRad),
+  );
+
+  /// Normal de la tela (unitaria), con los mismos ejes.
+  (double, double, double) get facing {
+    final (vx, vy, vz) = up;
+    final ux = tangent.dx, uy = tangent.dy;
+    return (uy * vz, -ux * vz, ux * vy - uy * vx);
+  }
+
+  /// Dónde corta la tela un rayo que sale de [from] (lienzo) hacia [dir]
+  /// (unitario, lienzo) a la altura [zFrom] y sube [slope] metros por
+  /// unidad: la distancia en unidades del lienzo, o `null` si no la toca.
+  double? hit(
+    Offset from,
+    Offset dir,
+    double zFrom,
+    double slope,
+    double metersPerUnit,
+  ) {
+    final m = metersPerUnit;
+    final (nx, ny, nz) = facing;
+    final dx = dir.dx * m, dy = dir.dy * m, dz = slope;
+    final denom = nx * dx + ny * dy + nz * dz;
+    if (denom.abs() < 1e-9) return null;
+    final px = centre.dx * m - from.dx * m;
+    final py = centre.dy * m - from.dy * m;
+    final pz = centreZ - zFrom;
+    final t = (nx * px + ny * py + nz * pz) / denom;
+    if (t <= 0) return null;
+    final qx = dx * t - px, qy = dy * t - py, qz = dz * t - pz;
+    final along = qx * tangent.dx + qy * tangent.dy;
+    final (vx, vy, vz) = up;
+    final across = qx * vx + qy * vy + qz * vz;
+    if (along.abs() > widthUnits * m / 2 || across.abs() > heightM / 2) {
+      return null;
+    }
+    return t;
+  }
+}
+
 class LightBlocker {
   final Offset a;
   final Offset b;
@@ -350,7 +424,12 @@ class LightScene {
     this.ambient,
     this.apertures = const [],
     this.rooms = const [],
+    this.panels = const [],
   });
+
+  /// Marcos, palios, rebotes y negros inclinados (F6.22.1), que se miran en
+  /// 3D aparte de los topes de la planta.
+  final List<GripPanel> panels;
 
   /// Lomas: lo que da cota al suelo.
   late final List<LightBlocker> hills = [
@@ -566,6 +645,12 @@ class LightScene {
             label: (el.props['name'] as String?) ?? el.displayLabel,
           ),
     ];
+    // Los inclinados, como paneles en 3D, sobre la cota de su suelo.
+    final panels = [
+      for (final el in all)
+        if (PlanGrip.canTilt(el) && PlanGrip.isTilted(el))
+          _panelOf(el, metersPerUnit, ground(el.position)),
+    ];
     final bare = LightScene(
       lights: fixtures,
       blockers: blockers,
@@ -573,8 +658,10 @@ class LightScene {
       ambient: ambient,
       apertures: apertures,
       rooms: rooms,
+      panels: panels,
     );
     LightScene stage(List<SceneLight> lights) => LightScene(
+      panels: panels,
       lights: lights,
       blockers: blockers,
       metersPerUnit: metersPerUnit,
@@ -602,6 +689,44 @@ class LightScene {
       ),
       ...direct._floorSunSources(),
     ]);
+  }
+
+  /// El panel de un grip inclinado, con lo que hace su tela.
+  static GripPanel _panelOf(PlanElement el, double mpu, double groundM) {
+    final rad = el.rotation * math.pi / 180;
+    final tangent = Offset(math.cos(rad), math.sin(rad));
+    final heightM = PlanGrip.heightM(el, mpu);
+    final width = lengthOf(el);
+    final (a, b) = _span(el, width);
+    final LightBlocker blocker;
+    if (el.lightType == LightType.diffusionFrame) {
+      final cloth = diffusionOf(el);
+      final gel = _filters(el)
+          .where((m) => m.kind == ModifierKind.correction)
+          .fold(0.0, (t, m) => t + m.miredShift);
+      blocker = LightBlocker(
+        a,
+        b,
+        miredShift: cloth.miredShift + gel,
+        heightM: heightM,
+        diffuseDeg: cloth.spreadDeg ?? 120,
+        diffuseKeep: cloth.transmission,
+        label: cloth.name,
+        element: el,
+      );
+    } else {
+      blocker = LightBlocker(a, b, heightM: heightM, element: el);
+    }
+    return GripPanel(
+      centre: el.position,
+      tangent: tangent,
+      normal: Offset(-tangent.dy, tangent.dx),
+      widthUnits: width,
+      heightM: heightM,
+      centreZ: groundM + PlanGrip.centreM(el, mpu),
+      tiltRad: PlanGrip.tiltDeg(el) * math.pi / 180,
+      blocker: blocker,
+    );
   }
 
   static double? _ceilingAt(List<SceneRoom> rooms, Offset point) {
@@ -842,6 +967,8 @@ class LightScene {
           }
           continue;
         case ElementType.light:
+          // Inclinados: van como paneles en 3D (`_panelOf`).
+          if (PlanGrip.canTilt(el) && PlanGrip.isTilted(el)) continue;
           final (a, b) = _span(el, lengthOf(el));
           switch (el.lightType) {
             case LightType.flag || LightType.cutter || LightType.bounce:
@@ -1456,6 +1583,142 @@ class LightScene {
       flush();
     }
 
+    // Un panel inclinado (F6.22.1) recibe luz por una cara según el ángulo
+    // con que le llega y la suelta por la otra (tela) o por la misma
+    // (rebote). Si sale hacia abajo, cae como un aparato colgado.
+    void emitPanel(
+      GripPanel p, {
+      required double keep,
+      required double mired,
+      required double beamDeg,
+      required bool through,
+      required String label,
+    }) {
+      final m = metersPerUnit;
+      final (nx, ny, nz) = p.facing;
+      final areaM2 = p.widthUnits * m * p.heightM;
+      final matte = beamDeg >= 90;
+      final spread = matte ? math.pi : LightSource.solidAngle(beamDeg);
+      final cx = p.centre.dx * m, cy = p.centre.dy * m, cz = p.centreZ;
+
+      void out(double lux, double kelvin, PhotometryStatus status,
+          (double, double, double) lit, String from) {
+        final flux = lux * areaM2 * keep;
+        final candela = flux / spread;
+        if (candela < 1) return;
+        final (lx, ly, lz) = lit;
+        final (ex, ey, ez) = through ? (-lx, -ly, -lz) : (lx, ly, lz);
+        final flat = math.sqrt(ex * ex + ey * ey);
+        final aim = flat > 1e-3 ? Offset(ex / flat, ey / flat) : p.normal;
+        final down = ez < -0.25;
+        result.add(
+          SceneLight(
+            source: LightSource(
+              candela: candela,
+              beamDeg: beamDeg,
+              sizeM: math.max(p.widthUnits * m, p.heightM),
+              cct: _shift(kelvin, mired),
+              status: status,
+              lambertian: matte,
+            ),
+            position: p.centre,
+            aim: aim,
+            frontOnly: true,
+            z: cz,
+            overheadM: down
+                ? math.max(
+                    cz - groundAt(p.centre) - PlanLight.subjectHeightM,
+                    0.3,
+                  )
+                : null,
+            tiltDeg: down
+                ? (math.acos((-ez).clamp(-1.0, 1.0)) * 180 / math.pi)
+                      .clamp(0.0, 80.0)
+                : 0,
+            surface: p.blocker,
+            label: '$label ← $from',
+          ),
+        );
+      }
+
+      for (final light in lights) {
+        if (identical(light.surface, p.blocker)) continue;
+        if (light.source.candela <= 0) continue;
+        final tx = light.position.dx * m - cx;
+        final ty = light.position.dy * m - cy;
+        final tz = light.z - cz;
+        final dist = math.sqrt(tx * tx + ty * ty + tz * tz);
+        if (dist < 1e-6) continue;
+        final dot = (tx * nx + ty * ny + tz * nz) / dist;
+        if (dot.abs() <= 0.02) continue;
+        final lit = dot > 0 ? (nx, ny, nz) : (-nx, -ny, -nz);
+        final passed = _throughput(
+          light.position,
+          p.centre,
+          ignore: p.blocker,
+          zFrom: light.z,
+          zTo: cz,
+        );
+        if (passed.transmission <= 0) continue;
+        final span = p.centre - light.position;
+        final units = span.distance;
+        final off = units > 1e-6 ? _offAxis(light, span / units) : 0.0;
+        final lux =
+            luxFrom(light, units, off, receiverZ: cz) *
+            passed.transmission *
+            dot.abs();
+        if (lux < 0.5) continue;
+        out(
+          lux,
+          _shift(light.source.cct, passed.miredShift),
+          light.source.status,
+          lit,
+          light.label,
+        );
+      }
+
+      // El sol (un palio sobre las cabezas es, sobre todo, para el sol).
+      final env = ambient;
+      if (env != null && env.hasSun) {
+        final elev = env.sunElevation.clamp(2.0, 89.0) * math.pi / 180;
+        final t = env.towardSun;
+        final sx = t.dx * math.cos(elev), sy = t.dy * math.cos(elev);
+        final sz = math.sin(elev);
+        final dot = sx * nx + sy * ny + sz * nz;
+        if (dot.abs() > 0.02) {
+          final lit = dot > 0 ? (nx, ny, nz) : (-nx, -ny, -nz);
+          final passed = _ray(
+            p.centre,
+            t,
+            double.infinity,
+            cz,
+            _sunTan * metersPerUnit,
+            ignore: p.blocker,
+          );
+          final lux = env.condition.sunLux * dot.abs() * passed.transmission;
+          if (lux >= 0.5) {
+            out(lux, env.condition.sunCct, PhotometryStatus.estimated, lit,
+                'Sol');
+          }
+        }
+      }
+    }
+
+    if (diffusers) {
+      for (final p in panels) {
+        final beam = p.blocker.diffuseDeg;
+        if (beam == null || p.blocker.diffuseKeep <= 0) continue;
+        emitPanel(
+          p,
+          keep: p.blocker.diffuseKeep,
+          mired: p.blocker.miredShift,
+          beamDeg: beam,
+          through: true,
+          label: p.blocker.label ?? 'Difusión',
+        );
+      }
+    }
+
     if (diffusers) {
       // Telas, cortinas y filtros de difusión: en marcos de grip o en los
       // huecos de las paredes.
@@ -1494,6 +1757,23 @@ class LightScene {
     for (final el in elements) {
       if (el.type != ElementType.light) continue;
       if (el.lightType != LightType.bounce) continue;
+      // Un rebote inclinado: desde su panel, en 3D.
+      final panel = panels.where((p) => identical(p.blocker.element, el));
+      if (panel.isNotEmpty) {
+        final material = SurfaceMaterial.byId(
+          el.props[materialKey] as String?,
+          kBounceMaterials,
+        );
+        emitPanel(
+          panel.first,
+          keep: material.reflectance,
+          mired: material.miredShift,
+          beamDeg: material.beamDeg,
+          through: false,
+          label: '${el.displayLabel} (${material.name})',
+        );
+        continue;
+      }
       final rad = el.rotation * math.pi / 180;
       final tangent = Offset(math.cos(rad), math.sin(rad));
       final length = lengthOf(el);
@@ -1672,6 +1952,15 @@ class LightScene {
       if (transmission <= 0) blocked = true;
     });
     if (blocked) return none;
+    // Los paneles inclinados, en 3D.
+    for (final panel in panels) {
+      if (identical(panel.blocker, ignore)) continue;
+      final t = panel.hit(from, dir, zFrom, slope, metersPerUnit);
+      if (t == null || t < 0.5 || t >= length - 0.5) continue;
+      transmission *= panel.blocker.transmission;
+      mired += panel.blocker.miredShift;
+      if (transmission <= 0) return none;
+    }
     for (final hill in hills) {
       if (identical(hill, ignore)) continue;
       if (_domeBlocks(from, dir, hill, zAt, length)) return none;

@@ -208,7 +208,14 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
   - Los paneles llegan a su tamaño, altura y giro, negros, blancos o del color de la tela.
   - Delante de cada tela hay una **RectLight** de su tamaño con la luz que deja pasar.
   - Al cambiar la tela en IRIS, cambia su intensidad en Unreal.
-- [ ] **Anota** cómo se ve el palio: por ahora es vertical. El palio horizontal sobre las cabezas viene después.
+- [ ] **Paneo e inclinación.** En la ficha del palio, **Paneo** lo gira y **Inclinación** lo tumba. A 90° queda **horizontal, sobre las cabezas**.
+- [ ] **Palio al sol.**
+  - Un exterior de día con sol alto, un actor y un **Palio 4×4** a 90° con el centro a 3 m sobre él.
+  - Con **Grid Cloth full**, la lectura del actor baja y el sol directo desaparece de «Qué aporta cada fuente»: sale la luz de la tela.
+  - Con un **negro** (Negro con Inclinación 90°), la lectura baja mucho más.
+- [ ] **Palio inclinado ante un foco.** Inclínalo 45°: la luz de la tela sale hacia abajo y hacia delante, y cambia con el ángulo.
+- [ ] **3D y Unreal.** El palio se ve tumbado, a su altura y con su giro, en el 3D y en Unreal. Su luz cae hacia abajo (RectLight mirando al suelo).
+- [ ] **Anota** si en Unreal se inclina hacia el lado contrario que en IRIS: sería el signo del giro, y se corrige con ese dato.
 
 ## 8 · Pendiente (no está en estas ramas)
 

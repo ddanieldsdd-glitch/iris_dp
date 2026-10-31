@@ -283,6 +283,10 @@ class PlanScene3d {
       'top': _r(span.top),
       'widthM': _r(PlanGrip.widthM(el, mpu)),
       'yawDeg': el.rotation,
+      // Inclinación desde la vertical, alto y centro (F6.22.1).
+      'tiltDeg': PlanGrip.tiltDeg(el),
+      'heightM': _r(PlanGrip.heightM(el, mpu)),
+      'centreM': _r(PlanGrip.centreM(el, mpu)),
       'rgb': rgb,
       'opacity': opacity,
       'format': ?PlanGrip.formatOf(el)?.name,
@@ -322,13 +326,21 @@ class PlanScene3d {
         'id': '$uid#luz$n',
         'name': light.label,
         'pos': [...xy(light.position), _r(light.z)],
-        // La cara por la que sale, con los ejes de la escena.
-        'dir': [_r(light.aim.dx), _r(-light.aim.dy), 0.0],
+        // La cara por la que sale, con los ejes de la escena: en horizontal
+        // o, si cae desde arriba, con su ángulo.
+        'dir': light.overheadM == null
+            ? [_r(light.aim.dx), _r(-light.aim.dy), 0.0]
+            : [
+                _r(light.aim.dx * math.sin(light.tiltDeg * math.pi / 180)),
+                _r(-light.aim.dy * math.sin(light.tiltDeg * math.pi / 180)),
+                _r(-math.cos(light.tiltDeg * math.pi / 180)),
+              ],
         'cd': _r(light.source.candela),
         'beamDeg': _r(light.source.beamDeg),
         'cct': _r(light.source.cct),
         'widthM': _r(light.source.sizeM),
         'heightM': _r(surface.heightM - surface.baseM),
+        'tilted': light.overheadM != null,
       });
     }
     return out;

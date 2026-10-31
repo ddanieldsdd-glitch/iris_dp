@@ -1041,14 +1041,17 @@
     // dan sombra (una tela tapa la luz directa; lo que deja pasar sale de
     // ella como fuente blanda, abajo).
     for (const g of sc.grip || []) {
-      const h = Math.max((g.top || 2.5) - (g.bottom || 0), 0.05);
+      const tilted = (g.tiltDeg || 0) >= 1;
+      const h = tilted ? Math.max(g.heightM || 1, 0.05) : Math.max((g.top || 2.5) - (g.bottom || 0), 0.05);
       const mat = new THREE.MeshStandardMaterial({ color: g.rgb, roughness: 0.9,
         transparent: g.opacity < 1, opacity: g.opacity, side: THREE.DoubleSide });
       const panel = new THREE.Mesh(new THREE.BoxGeometry(g.widthM || 1, h, 0.03), mat);
       panel.castShadow = true;
       panel.receiveShadow = true;
       const grp = new THREE.Group();
-      panel.position.y = (g.bottom || 0) + h / 2;
+      panel.position.y = tilted ? (g.centreM || 1.5) : (g.bottom || 0) + h / 2;
+      // Inclinado hacia su cara delantera, sobre su ancho (F6.22.1).
+      if (tilted) panel.rotation.x = (g.tiltDeg || 0) * Math.PI / 180;
       grp.add(panel);
       grp.position.copy(V(g.at[0], g.at[1], g.z0 || 0));
       grp.rotation.y = -(g.yawDeg || 0) * Math.PI / 180;

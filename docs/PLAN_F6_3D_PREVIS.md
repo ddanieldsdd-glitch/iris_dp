@@ -1093,9 +1093,12 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
   - **Ancho**, **Alto** y **Altura del centro** para todo el grip;
   - el marco admite además una **gelatina**, que tiñe lo que sale;
   - sin medidas propias, el grip mide como antes.
+- **Hecho después:**
+  - **Paneo** e **Inclinación** (de 0°, vertical, a 90°, horizontal sobre las cabezas) en marcos, palios, rebotes y negros;
+  - inclinados, el motor de luz los calcula como paneles en 3D (intersección exacta del rayo con la tela): tapan la luz que les cae, también la del sol, y la sueltan por la otra cara según el ángulo con que les llega; si sale hacia abajo, cae como un aparato colgado;
+  - el 3D y Unreal los inclinan igual.
 - **Falta:**
-  - el palio **horizontal** sobre las cabezas (*overhead*): el motor de luz solo sabe de grip vertical;
-  - la inclinación del grip;
+  - el dibujo de su sombra en la planta 2D (los haces de la planta aún no la recortan, aunque el fotómetro y el mapa de exposición sí);
   - entradas «Marco» y «Palio» propias en la paleta.
 
 - **Marco:**

@@ -36,6 +36,32 @@ abstract final class PlanGrip {
   /// Altura del centro de la tela sobre el suelo, en metros.
   static const centreKey = 'gripZ';
 
+  /// Inclinación de la tela, en grados: 0 vertical (de pie), 90 horizontal
+  /// (un palio sobre las cabezas). Se inclina hacia su cara delantera.
+  static const tiltKey = 'gripTilt';
+
+  static double tiltDeg(PlanElement el) =>
+      ((el.props[tiltKey] as num?)?.toDouble() ?? 0).clamp(0.0, 90.0);
+
+  /// A partir de 1° se calcula como panel inclinado, en 3D.
+  static bool isTilted(PlanElement el) => tiltDeg(el) >= 1;
+
+  /// Si se puede inclinar: marcos, palios, rebotes y negros.
+  static bool canTilt(PlanElement el) => switch (el.lightType) {
+    LightType.diffusionFrame ||
+    LightType.bounce ||
+    LightType.flag ||
+    LightType.cutter => true,
+    _ => false,
+  };
+
+  /// Altura del centro de la tela sobre su suelo.
+  static double centreM(PlanElement el, double metersPerUnit) {
+    final s = span(el, metersPerUnit);
+    if (el.props[centreKey] case final num c) return c.toDouble();
+    return (s.bottom + s.top) / 2;
+  }
+
   static bool isGrip(PlanElement el) =>
       el.type == ElementType.light &&
       switch (el.lightType) {

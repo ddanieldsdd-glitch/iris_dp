@@ -647,7 +647,6 @@ class PlanPieceControls extends StatelessWidget {
         ),
       );
       final gripHeight = PlanGrip.heightM(el, metersPerUnit);
-      final span = PlanGrip.span(el, metersPerUnit);
       children.addAll([
         slider(
           'Alto',
@@ -662,12 +661,49 @@ class PlanPieceControls extends StatelessWidget {
         ),
         slider(
           'Altura del centro',
-          '${((span.bottom + span.top) / 2).toStringAsFixed(2)} m',
-          current: (span.bottom + span.top) / 2,
+          '${PlanGrip.centreM(el, metersPerUnit).toStringAsFixed(2)} m',
+          current: PlanGrip.centreM(el, metersPerUnit),
           min: 0.2,
           max: 8,
           onChanged: (v) => el.props[PlanGrip.centreKey] = (v * 20).round() / 20,
         ),
+        slider(
+          'Paneo',
+          '${el.rotation.round()}°',
+          current: el.rotation,
+          min: 0,
+          max: 359,
+          onChanged: (v) => el.rotation = v.roundToDouble(),
+        ),
+        if (PlanGrip.canTilt(el)) ...[
+          slider(
+            'Inclinación',
+            switch (PlanGrip.tiltDeg(el).round()) {
+              0 => 'vertical',
+              90 => 'horizontal, sobre las cabezas',
+              final d => '$d°',
+            },
+            current: PlanGrip.tiltDeg(el),
+            min: 0,
+            max: 90,
+            onChanged: (v) {
+              final d = v.roundToDouble();
+              if (d < 1) {
+                el.props.remove(PlanGrip.tiltKey);
+              } else {
+                el.props[PlanGrip.tiltKey] = d;
+              }
+            },
+          ),
+          Text(
+            'Inclinada, el fotómetro, el 3D y Unreal la calculan en el '
+            'espacio: un palio horizontal tapa la luz que le cae de arriba '
+            '(también el sol) y la suelta hacia abajo.',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary),
+          ),
+        ],
       ]);
       switch (el.lightType) {
         case LightType.bounce:

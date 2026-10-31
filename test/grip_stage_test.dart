@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
+import 'package:iris_dp/features/camera_plan/light/ambient.dart';
 import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_grip.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
@@ -99,5 +100,64 @@ void main() {
     );
     expect(rect['kind'], 'rect');
     expect(rect['widthCm'], greaterThan(0));
+  });
+
+  group('palio inclinado (F6.22.1)', () {
+    const sunny = PlanAmbient(day: true, sunElevation: 85);
+    const under = Offset(0, -150);
+    PlanElement palio(LightType type, {List<String>? cloth}) {
+      final el = grip(
+        type,
+        props: {
+          PlanGrip.tiltKey: 90.0,
+          PlanGrip.centreKey: 3.0,
+          if (cloth != null) PlanLight.modifiersKey: cloth,
+        },
+      );
+      PlanGrip.applyFormat(el, GripFormat.palio4, mpu);
+      return el;
+    }
+
+    double lux(List<PlanElement> els) => LightScene.from(
+      els,
+      metersPerUnit: mpu,
+      ambient: sunny,
+    ).luxAt(under);
+
+    test('un palio negro horizontal tapa el sol; uno de tela lo ablanda', () {
+      final open = lux(const []);
+      final black = lux([palio(LightType.flag)]);
+      final silk = lux([
+        palio(LightType.diffusionFrame, cloth: ['grid-full']),
+      ]);
+      expect(open, greaterThan(1000));
+      expect(black, lessThan(open * 0.3));
+      expect(silk, greaterThan(black));
+      expect(silk, lessThan(open));
+    });
+
+    test('la tela horizontal suelta su luz hacia abajo, y así va al 3D y a '
+        'Unreal', () {
+      final el = palio(LightType.diffusionFrame, cloth: ['grid-full']);
+      final scene = LightScene.from([el], metersPerUnit: mpu, ambient: sunny);
+      final soft = scene.lights.where((l) => identical(l.surface?.element, el));
+      expect(soft, isNotEmpty);
+      expect(soft.first.overheadM, isNotNull);
+
+      final s3d = PlanScene3d.build([el], metersPerUnit: mpu, ambient: sunny);
+      final panel = (s3d['grip'] as List).single as Map;
+      expect(panel['tiltDeg'], 90);
+      expect(panel['centreM'], 3);
+      final dir = ((s3d['soft'] as List).first as Map)['dir'] as List;
+      expect(dir[2], lessThan(-0.9));
+
+      final payload = UnrealStagePayload.build(s3d);
+      final block = (payload['props'] as List).cast<Map>().firstWhere(
+        (p) => p['type'] == 'grip',
+      );
+      expect(block['rot'][0], 90);
+      // Centrado a 3 m: la base del bloque, a 1 m (alto 4 m).
+      expect(block['loc'][2], 100);
+    });
   });
 }

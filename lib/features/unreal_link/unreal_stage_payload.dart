@@ -187,14 +187,24 @@ class UnrealStagePayload {
     final at = g['at'] as List?;
     if (at == null) return null;
     final rad = ((g['yawDeg'] ?? 0) as num) * math.pi / 180;
-    final bottom = ((g['bottom'] ?? 0) as num).toDouble();
-    final top = ((g['top'] ?? 2.5) as num).toDouble();
+    final tilt = ((g['tiltDeg'] ?? 0) as num).toDouble();
+    var bottom = ((g['bottom'] ?? 0) as num).toDouble();
+    var top = ((g['top'] ?? 2.5) as num).toDouble();
+    if (tilt >= 1) {
+      // Inclinado: el bloque gira sobre su centro, a la altura del centro.
+      final h = ((g['heightM'] ?? (top - bottom)) as num).toDouble();
+      final c = ((g['centreM'] ?? (top + bottom) / 2) as num).toDouble();
+      bottom = c - h / 2;
+      top = c + h / 2;
+    }
+    final facing = rotToward(math.sin(rad), math.cos(rad), 0);
     return {
       'id': g['id'],
       'name': g['name'],
       'type': 'grip',
       'loc': loc([at[0], at[1], ((g['z0'] ?? 0) as num) + bottom]),
-      'rot': rotToward(math.sin(rad), math.cos(rad), 0),
+      // Se inclina hacia su cara delantera: cabecea sobre su ancho.
+      'rot': [_r(tilt), facing[1], 0.0],
       // Fondo (el grosor), ancho y alto.
       'sizeCm': [
         3.0,
