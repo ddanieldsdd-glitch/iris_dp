@@ -478,6 +478,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Dónde está el cursor sobre la planta: ahí se pega lo copiado.
   Offset? _cursor;
   bool _middlePan = false;
+
+  /// Botón derecho (F6.22.6): arrastrar desplaza la vista; un clic sin
+  /// arrastrar abre el menú, al soltar.
+  Offset? _rightDown;
+  Offset? _rightDownCanvas;
+  bool _rightPanned = false;
   double _pinchScale = 1;
 
   /// Lo copiado, compartido entre plantas mientras dure la sesión.
@@ -5112,10 +5118,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         kSecondaryMouseButton) {
                                                       _canvasFocus
                                                           .requestFocus();
-                                                      _showContextMenu(
-                                                        e.position,
-                                                        _cursor!,
-                                                      );
+                                                      _rightDown = e.position;
+                                                      _rightDownCanvas =
+                                                          _cursor;
+                                                      _rightPanned = false;
                                                     }
                                                   },
                                                   onPointerMove: (e) {
@@ -5124,12 +5130,48 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         () => _canvasOffset +=
                                                             e.delta,
                                                       );
+                                                    } else if (_rightDown !=
+                                                            null &&
+                                                        e.buttons ==
+                                                            kSecondaryMouseButton) {
+                                                      // Más de 4 px: es un
+                                                      // arrastre, no un clic.
+                                                      if (!_rightPanned &&
+                                                          (e.position -
+                                                                      _rightDown!)
+                                                                  .distance >
+                                                              4) {
+                                                        _rightPanned = true;
+                                                      }
+                                                      if (_rightPanned) {
+                                                        setState(
+                                                          () =>
+                                                              _canvasOffset +=
+                                                                  e.delta,
+                                                        );
+                                                      }
                                                     }
                                                   },
-                                                  onPointerUp: (_) =>
-                                                      _middlePan = false,
-                                                  onPointerCancel: (_) =>
-                                                      _middlePan = false,
+                                                  onPointerUp: (e) {
+                                                    _middlePan = false;
+                                                    final down = _rightDown;
+                                                    final at = _rightDownCanvas;
+                                                    _rightDown = null;
+                                                    if (down != null &&
+                                                        at != null &&
+                                                        !_rightPanned) {
+                                                      _showContextMenu(
+                                                        down,
+                                                        at,
+                                                      );
+                                                    }
+                                                    _rightPanned = false;
+                                                  },
+                                                  onPointerCancel: (_) {
+                                                    _middlePan = false;
+                                                    _rightDown = null;
+                                                    _rightPanned = false;
+                                                  },
                                                   // La rueda del ratón: zoom
                                                   // hacia el cursor.
                                                   onPointerSignal: (e) {

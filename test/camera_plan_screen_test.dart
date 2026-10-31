@@ -218,6 +218,70 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
+  testWidgets('botón derecho: un clic abre el menú; arrastrar desplaza la '
+      'vista sin abrirlo (F6.22.6)', (tester) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    late int projectId;
+    late int shotId;
+    await tester.runAsync(() async {
+      projectId = await db.insertProject(
+        ProjectsCompanion.insert(name: 'Ratón'),
+      );
+      final sceneId = await db.insertScene(
+        ScenesCompanion.insert(
+          projectId: projectId,
+          number: 1,
+          name: 'Escena 1',
+          locationCanonical: 'INT. SALA - DÍA',
+          locationPureName: 'SALA',
+        ),
+      );
+      shotId = await db.insertShot(
+        ShotsCompanion.insert(sceneId: sceneId, projectId: projectId, number: 1),
+      );
+    });
+    await tester.pumpWidget(
+      host(
+        CameraPlanEditor.shot(
+          projectId: projectId,
+          shotId: shotId,
+          shotLabel: 'Esc 1 · Plano 1',
+        ),
+      ),
+    );
+    await settle(tester);
+    final centre = tester.getCenter(find.byType(CameraPlanEditor));
+
+    // Arrastrar con el derecho: no hay menú.
+    final drag = await tester.startGesture(
+      centre,
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await drag.moveBy(const Offset(60, 30));
+    await drag.moveBy(const Offset(60, 30));
+    await drag.up();
+    await settle(tester);
+    expect(find.textContaining('Pegar aquí'), findsNothing);
+
+    // Un clic con el derecho: sale el menú.
+    final click = await tester.startGesture(
+      centre,
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await click.up();
+    await settle(tester);
+    expect(find.textContaining('Pegar aquí'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
   group('un solo lienzo', () {
     late int projectId;
     late int siteId;

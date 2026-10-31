@@ -32,6 +32,9 @@
   renderer.autoClear = false;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Que pueda tener el foco: W A S D llegan al visor (F6.22.6).
+  renderer.domElement.tabIndex = 0;
+  renderer.domElement.style.outline = 'none';
   document.body.prepend(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -167,9 +170,86 @@
     return rayAt(e).ray.intersectPlane(plane, p) ? p : null;
   }
 
+  // ── Navegar como Unreal (F6.22.6) ─────────────────────────────────────
+  // Con el botón derecho pulsado, el ratón mira y W A S D mueven (Q y E
+  // bajan y suben; la rueda cambia la velocidad). Al soltar, la órbita
+  // sigue desde donde se quedó.
+  let navMode = 'unreal';
+  let fly = null;
+  let flySpeed = 3;
+  const keys = new Set();
+  renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+  window.addEventListener('keydown', (e) => { if (fly) { keys.add(e.code); e.preventDefault(); } });
+  window.addEventListener('keyup', (e) => keys.delete(e.code));
+  window.addEventListener('blur', () => keys.clear());
+  renderer.domElement.addEventListener('wheel', (e) => {
+    if (!fly) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    flySpeed = Math.min(Math.max(flySpeed * (e.deltaY < 0 ? 1.25 : 0.8), 0.3), 40);
+  }, { capture: true, passive: false });
+
+  function startFly(e) {
+    const euler = new THREE.Euler().setFromQuaternion(cam.quaternion, 'YXZ');
+    fly = { yaw: euler.y, pitch: euler.x, last: performance.now(),
+      dist: Math.max(cam.position.distanceTo(controls.target), 2) };
+    controls.enabled = false;
+    renderer.domElement.setPointerCapture(e.pointerId);
+    renderer.domElement.focus();
+  }
+
+  function endFly() {
+    const dir = new THREE.Vector3();
+    cam.getWorldDirection(dir);
+    controls.target.copy(cam.position).add(dir.multiplyScalar(fly.dist));
+    fly = null;
+    keys.clear();
+    controls.enabled = true;
+    controls.update();
+  }
+
+  function stepFly(now) {
+    const dt = Math.min((now - fly.last) / 1000, 0.1);
+    fly.last = now;
+    const fwd = new THREE.Vector3();
+    cam.getWorldDirection(fwd);
+    const right = new THREE.Vector3().crossVectors(fwd, cam.up).normalize();
+    const move = new THREE.Vector3();
+    if (keys.has('KeyW')) move.add(fwd);
+    if (keys.has('KeyS')) move.sub(fwd);
+    if (keys.has('KeyD')) move.add(right);
+    if (keys.has('KeyA')) move.sub(right);
+    if (keys.has('KeyE')) move.y += 1;
+    if (keys.has('KeyQ')) move.y -= 1;
+    if (move.lengthSq() > 0) {
+      const fast = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 3 : 1;
+      cam.position.add(move.normalize().multiplyScalar(flySpeed * fast * dt));
+    }
+  }
+
+  renderer.domElement.addEventListener('pointermove', (e) => {
+    if (!fly) return;
+    e.stopImmediatePropagation();
+    fly.yaw -= e.movementX * 0.0035;
+    fly.pitch = Math.min(Math.max(fly.pitch - e.movementY * 0.0035, -1.5), 1.5);
+    cam.quaternion.setFromEuler(new THREE.Euler(fly.pitch, fly.yaw, 0, 'YXZ'));
+  }, true);
+
+  renderer.domElement.addEventListener('pointerup', (e) => {
+    if (fly && e.button === 2) {
+      e.stopImmediatePropagation();
+      endFly();
+    }
+  }, true);
+
   renderer.domElement.addEventListener('pointerdown', (e) => {
     const { w } = size();
     const x = e.clientX, y = e.clientY;
+    if (navMode === 'unreal' && e.button === 2 && cam === camP) {
+      e.stopImmediatePropagation();
+      startFly(e);
+      return;
+    }
     const cx = w - M - CUBE, cy = M;
     if (x >= cx && x <= cx + CUBE && y >= cy && y <= cy + CUBE) {
       e.stopImmediatePropagation();
@@ -1200,7 +1280,8 @@
   function loop(now) {
     requestAnimationFrame(loop);
     if (anim) anim(now || performance.now());
-    controls.update();
+    if (fly) stepFly(now || performance.now());
+    else controls.update();
     if (selectedBox) selectedBox.update();
     scaleLabels();
     const { w, h } = size();
@@ -1373,6 +1454,7 @@
       if ('cones' in o) { showCones = !!o.cones; cones.forEach((c) => (c.visible = showCones)); }
       if ('roof' in o) { showRoof = !!o.roof; roofs.forEach((r) => (r.visible = showRoof)); }
       if ('ortho' in o) setOrtho(!!o.ortho);
+      if (o.nav) navMode = o.nav === 'orbit' ? 'orbit' : 'unreal';
       if (o.bg) {
         baseBg = o.bg;
         const env = lastScene && lastScene.environment && lastScene.environment.kind;

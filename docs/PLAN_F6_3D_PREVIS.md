@@ -1151,6 +1151,14 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 
 ### F6.22.6 · Navegar como en Unreal · todos
 
+**Estado:** hecho, falta probarlo en el PC (`plan/f6-22-6-navegacion`).
+- **Planta 2D:** arrastrar con el botón derecho desplaza la vista, y un clic sin arrastrar abre el menú al soltar.
+- **3D:**
+  - con «3D como Unreal» (encendido por defecto), botón derecho pulsado más W, A, S, D (Q y E, la rueda para la velocidad y Mayúsculas para ir más rápido);
+  - al soltar, la órbita sigue desde ahí;
+  - apagado en Ajustes → Plantas, se navega en órbita como antes;
+  - el cambio de ajuste vale al volver a abrir el 3D.
+
 - **Planta 2D:**
   - el clic izquierdo, tal cual: seleccionar, mover, dibujar;
   - **arrastrar con el botón derecho desplaza la vista**;

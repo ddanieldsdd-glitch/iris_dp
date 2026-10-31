@@ -15,7 +15,9 @@ import '../../../core/utils/export_file_saver.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
+import '../../../core/settings/app_prefs.dart';
 import '../light/exposure.dart';
+import '../plan_prefs.dart';
 import '../set_environment.dart';
 import '../light/plan_light.dart';
 import '../plan_cad_export.dart';
@@ -386,6 +388,12 @@ class _Plan3dViewState extends State<Plan3dView> {
           'ortho': _ortho,
           'names': _names,
           'show': _show,
+          'nav': AppPrefs.instance.get(
+                PlanPrefs.unrealNav,
+                projectId: widget.projectId,
+              )
+              ? 'unreal'
+              : 'orbit',
         });
         _push();
       case 'select':
