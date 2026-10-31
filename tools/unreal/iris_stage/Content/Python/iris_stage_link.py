@@ -308,6 +308,10 @@ def _apply_prop(p):
     now = actor.get_actor_scale3d()
     if max(abs(now.x - scale.x), abs(now.y - scale.y), abs(now.z - scale.z)) > 0.001:
         actor.set_actor_scale3d(scale)
+    # El grip (F6.22.2) lleva el color de su tela: negro, rebote o difusión.
+    if p.get("rgb") is not None:
+        rgb = int(p["rgb"])
+        comp.set_material(0, _ground_material("Grip_%06X" % rgb, rgb))
 
 
 def _slug(text):

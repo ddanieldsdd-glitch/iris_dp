@@ -193,6 +193,23 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
 - [ ] **El ajuste.** En **Ajustes → Plantas**, apaga **«3D como Unreal»** y vuelve a abrir el 3D: el botón derecho vuelve a desplazar como antes.
 - [ ] **Anota** si las teclas no responden. En Windows, el 3D necesita tener el foco: haz clic dentro antes.
 
+## 16 · Marcos, palios y difusión (F6.22.1–22.2)
+
+- [ ] **Formato.** Pon un **Marco de difusión** en la planta. En su ficha, en **Formato**, elige **Marco 2×1**: mide 2 m de ancho y 1 de alto. Cambia a **Palio 4×4**.
+- [ ] **Medidas.** **Alto** y **Altura del centro** suben y bajan la tela. En el alzado se ve a su altura.
+- [ ] **Telas.** **Tela:** Grid Cloth, ½ o ¼, sedas. En un marco (no en un palio) sale también **Gelatina**: un CTO tiñe la luz que sale.
+- [ ] **Rebote como palio.** Un **Rebote** con Formato **Palio 3×3** y Material **Cinebounce**.
+- [ ] **Fotómetro.** Un foco detrás de la tela, apuntando a un actor. Cambia de ¼ Grid Cloth a Grid Cloth full: la lectura del actor baja. En «Qué aporta cada fuente» sale la tela.
+- [ ] **El 3D.**
+  - La tela se ve como un panel blanco translúcido a su tamaño y el negro como uno negro.
+  - El negro da **sombra** en el actor y el suelo.
+  - Con «Luz real», la luz que sale de la tela ilumina al actor, más baja con más difusión.
+- [ ] **Unreal.**
+  - Los paneles llegan a su tamaño, altura y giro, negros, blancos o del color de la tela.
+  - Delante de cada tela hay una **RectLight** de su tamaño con la luz que deja pasar.
+  - Al cambiar la tela en IRIS, cambia su intensidad en Unreal.
+- [ ] **Anota** cómo se ve el palio: por ahora es vertical. El palio horizontal sobre las cabezas viene después.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.

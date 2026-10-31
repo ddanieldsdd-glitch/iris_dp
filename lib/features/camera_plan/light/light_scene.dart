@@ -12,6 +12,7 @@ import '../rig/plan_rig.dart';
 import 'ambient.dart';
 import 'modifiers.dart';
 import 'photometry.dart';
+import 'plan_grip.dart';
 import 'plan_light.dart';
 import 'rooms.dart';
 import 'surfaces.dart';
@@ -844,22 +845,35 @@ class LightScene {
           final (a, b) = _span(el, lengthOf(el));
           switch (el.lightType) {
             case LightType.flag || LightType.cutter || LightType.bounce:
-              // Negro, cortador y rebote no dejan pasar nada.
-              blockers.add(LightBlocker(a, b, element: el));
-            case LightType.diffusionFrame:
-              // La tela corta el haz directo: lo que sale de ella es una
-              // fuente nueva, más ancha (ver `_secondarySources`). El
-              // marco es cuadrado y va centrado a la altura de la cara.
-              final cloth = diffusionOf(el);
-              final side = lengthOf(el) * metersPerUnit;
-              final base = math.max(0.0, PlanLight.subjectHeightM - side / 2);
+              // Negro, cortador y rebote no dejan pasar nada, a su alto
+              // (F6.22.1; sin medidas propias, del suelo a 2,5 m).
+              final span = PlanGrip.span(el, metersPerUnit);
               blockers.add(
                 LightBlocker(
                   a,
                   b,
-                  miredShift: cloth.miredShift,
-                  baseM: base,
-                  heightM: base + side,
+                  baseM: span.bottom,
+                  heightM: span.top,
+                  element: el,
+                ),
+              );
+            case LightType.diffusionFrame:
+              // La tela corta el haz directo: lo que sale de ella es una
+              // fuente nueva, más ancha (ver `_secondarySources`). Sin
+              // medidas propias, cuadrado y centrado a la altura de la cara;
+              // un marco con gelatina además la tiñe (F6.22.1).
+              final cloth = diffusionOf(el);
+              final span = PlanGrip.span(el, metersPerUnit);
+              final gel = _filters(el)
+                  .where((m) => m.kind == ModifierKind.correction)
+                  .fold(0.0, (t, m) => t + m.miredShift);
+              blockers.add(
+                LightBlocker(
+                  a,
+                  b,
+                  miredShift: cloth.miredShift + gel,
+                  baseM: span.bottom,
+                  heightM: span.top,
                   diffuseDeg: cloth.spreadDeg ?? 120,
                   diffuseKeep: cloth.transmission,
                   label: cloth.name,
@@ -1487,11 +1501,17 @@ class LightScene {
         el.props[materialKey] as String?,
         kBounceMaterials,
       );
+      // Con medidas propias (un palio, F6.22.1), su alto y su altura; si
+      // no, cuadrado desde el suelo, como siempre.
+      final own = PlanGrip.hasOwnSize(el)
+          ? PlanGrip.span(el, metersPerUnit)
+          : null;
       emit(
         centre: el.position,
         tangent: tangent,
         lengthUnits: length,
-        heightM: length * metersPerUnit,
+        heightM: own == null ? length * metersPerUnit : own.top - own.bottom,
+        baseM: own?.bottom ?? 0,
         keep: material.reflectance,
         mired: material.miredShift,
         beamDeg: material.beamDeg,

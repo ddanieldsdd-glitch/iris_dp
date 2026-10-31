@@ -5,6 +5,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
+import 'light/plan_grip.dart';
 import 'light/light_scene.dart';
 import 'light/modifiers.dart';
 import 'light/plan_light.dart';
@@ -611,16 +612,63 @@ class PlanPieceControls extends StatelessWidget {
       ]);
     } else if (_isGrip(el)) {
       final length = LightScene.lengthOf(el);
+      // Marco o palio, con su medida (F6.22.1). El rebote, solo palio.
+      if (PlanGrip.takesFormat(el)) {
+        final formats = [
+          for (final f in GripFormat.values)
+            if (f.palio || el.lightType == LightType.diffusionFrame) f,
+        ];
+        children.add(
+          choice<GripFormat>(
+            'Formato',
+            PlanGrip.formatOf(el),
+            [(null, 'A medida'), for (final f in formats) (f, f.label)],
+            (f) {
+              if (f == null) {
+                el.props.remove(PlanGrip.formatKey);
+              } else {
+                PlanGrip.applyFormat(el, f, metersPerUnit);
+              }
+            },
+          ),
+        );
+      }
       children.add(
         slider(
-          'Largo',
+          'Ancho',
           meters(length),
           current: length,
           min: 0.3 / metersPerUnit,
           max: 6 / metersPerUnit,
-          onChanged: (v) => el.props[LightScene.lenKey] = v,
+          onChanged: (v) {
+            el.props[LightScene.lenKey] = v;
+            el.props.remove(PlanGrip.formatKey);
+          },
         ),
       );
+      final gripHeight = PlanGrip.heightM(el, metersPerUnit);
+      final span = PlanGrip.span(el, metersPerUnit);
+      children.addAll([
+        slider(
+          'Alto',
+          '${gripHeight.toStringAsFixed(2)} m',
+          current: gripHeight,
+          min: 0.3,
+          max: 6,
+          onChanged: (v) {
+            el.props[PlanGrip.heightKey] = (v * 20).round() / 20;
+            el.props.remove(PlanGrip.formatKey);
+          },
+        ),
+        slider(
+          'Altura del centro',
+          '${((span.bottom + span.top) / 2).toStringAsFixed(2)} m',
+          current: (span.bottom + span.top) / 2,
+          min: 0.2,
+          max: 8,
+          onChanged: (v) => el.props[PlanGrip.centreKey] = (v * 20).round() / 20,
+        ),
+      ]);
       switch (el.lightType) {
         case LightType.bounce:
           final material = SurfaceMaterial.byId(
@@ -633,9 +681,12 @@ class PlanPieceControls extends StatelessWidget {
             ], (id) => el.props[LightScene.materialKey] = id),
           );
         case LightType.diffusionFrame:
-          children.add(
+          children.addAll([
             filter('Tela', ModifierKind.diffusion, allowNone: false),
-          );
+            // Un marco puede llevar además una gelatina (F6.22.1).
+            if (!(PlanGrip.formatOf(el)?.palio ?? false))
+              filter('Gelatina', ModifierKind.correction),
+          ]);
         case LightType.net:
           children.add(filter('Red', ModifierKind.scrim, allowNone: false));
         case LightType.gel:

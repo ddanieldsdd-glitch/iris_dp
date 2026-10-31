@@ -181,6 +181,54 @@ class UnrealStagePayload {
     };
   }
 
+  /// Un panel de grip (F6.22.2): un bloque fino a su tamaño y altura, del
+  /// color de su tela, que tapa la luz que tiene detrás.
+  static Map<String, dynamic>? gripPanel(Map g) {
+    final at = g['at'] as List?;
+    if (at == null) return null;
+    final rad = ((g['yawDeg'] ?? 0) as num) * math.pi / 180;
+    final bottom = ((g['bottom'] ?? 0) as num).toDouble();
+    final top = ((g['top'] ?? 2.5) as num).toDouble();
+    return {
+      'id': g['id'],
+      'name': g['name'],
+      'type': 'grip',
+      'loc': loc([at[0], at[1], ((g['z0'] ?? 0) as num) + bottom]),
+      'rot': rotToward(math.sin(rad), math.cos(rad), 0),
+      // Fondo (el grosor), ancho y alto.
+      'sizeCm': [
+        3.0,
+        _r(((g['widthM'] ?? 1) as num) * 100),
+        _r((top - bottom) * 100),
+      ],
+      'rgb': g['rgb'],
+    };
+  }
+
+  /// La luz que sale de una tela o un rebote, como RectLight de su tamaño,
+  /// 5 cm por delante de la tela para que la tela no la tape.
+  static Map<String, dynamic>? softLight(Map s) {
+    final pos = s['pos'] as List?, dir = s['dir'] as List?;
+    if (pos == null || dir == null) return null;
+    double n(Object? v) => (v as num).toDouble();
+    final dx = n(dir[0]), dy = n(dir[1]), dz = n(dir[2]);
+    final w = _r(n(s['widthM'] ?? 1) * 100), h = _r(n(s['heightM'] ?? 1) * 100);
+    return {
+      'id': s['id'],
+      'name': s['name'],
+      'kind': 'rect',
+      'loc': loc([n(pos[0]) + dx * 0.05, n(pos[1]) + dy * 0.05, n(pos[2])]),
+      'rot': rotToward(dx, dy, dz),
+      'cd': _r(n(s['cd'] ?? 0)),
+      'cct': _r(n(s['cct'] ?? 5600)),
+      'on': true,
+      'widthCm': w,
+      'heightCm': h,
+      'sizeCm': math.max(w, h),
+      'reachCm': 3000.0,
+    };
+  }
+
   /// Carpetas de este equipo donde están los escaneos de la planta: Unreal,
   /// en el mismo PC, los importa de ahí. Las pone la vista 3D del proyecto.
   static List<String> scanFolders = const [];
@@ -253,6 +301,8 @@ class UnrealStagePayload {
       'props': [
         for (final p in (scene['props'] as List? ?? const []).cast<Map>())
           ?prop(p),
+        for (final g in (scene['grip'] as List? ?? const []).cast<Map>())
+          ?gripPanel(g),
       ],
       'assets': [
         for (final a in (scene['assets'] as List? ?? const []).cast<Map>())
@@ -267,6 +317,8 @@ class UnrealStagePayload {
       'lights': [
         for (final f in (scene['fixtures'] as List? ?? const []).cast<Map>())
           ?light(f),
+        for (final s in (scene['soft'] as List? ?? const []).cast<Map>())
+          ?softLight(s),
       ],
       'cameras': [
         for (final c in (scene['cameras'] as List? ?? const []).cast<Map>())

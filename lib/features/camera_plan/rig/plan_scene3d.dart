@@ -12,6 +12,7 @@ import '../set_environment.dart';
 import '../light/light_scene.dart';
 import '../plan_category.dart';
 import '../../unreal_link/unreal_asset_ref.dart';
+import '../light/plan_grip.dart';
 import '../light/plan_light.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
@@ -244,10 +245,92 @@ class PlanScene3d {
       ..['cameras'] = cameras
       ..['scans'] = scans
       ..['props'] = props
+      ..['grip'] = [
+        for (final (i, el) in elements.indexed)
+          if (PlanGrip.isGrip(el)) _gripPanel(el, idOf(el, i), mpu, xy),
+      ]
+      ..['soft'] = _softSources(elements, mpu, ambient, xy)
       ..['assets'] = [
         for (final (i, el) in elements.indexed)
           ?_asset(el, idOf(el, i), mpu),
       ];
+    return out;
+  }
+
+  /// Un negro, corte, rebote, marco o palio como panel a su tamaño (F6.22.2):
+  /// centrado en su sitio, girado con su tramo, de su alto y a su altura.
+  static Map<String, dynamic> _gripPanel(
+    PlanElement el,
+    String uid,
+    double mpu,
+    List<double> Function(Offset) xy,
+  ) {
+    final span = PlanGrip.span(el, mpu);
+    final (rgb, opacity) = switch (el.lightType) {
+      LightType.flag || LightType.cutter => (0x111111, 1.0),
+      LightType.bounce => (0xf4f4f0, 1.0),
+      LightType.diffusionFrame => (0xf2f2f2, 0.45),
+      LightType.net => (0x2a2a2a, 0.5),
+      _ => (0xffa040, 0.35),
+    };
+    return {
+      'id': uid,
+      'name': el.displayLabel,
+      'type': el.lightType!.dbValue,
+      'at': xy(el.position),
+      'z0': PlanLevel.of(el),
+      'bottom': _r(span.bottom),
+      'top': _r(span.top),
+      'widthM': _r(PlanGrip.widthM(el, mpu)),
+      'yawDeg': el.rotation,
+      'rgb': rgb,
+      'opacity': opacity,
+      'format': ?PlanGrip.formatOf(el)?.name,
+    };
+  }
+
+  /// La luz que sale de las telas y los rebotes, tal como la calcula el
+  /// motor de luz (la que sale en el fotómetro): el 3D y Unreal la
+  /// encienden como fuentes blandas (F6.22.2).
+  static List<Map<String, dynamic>> _softSources(
+    List<PlanElement> elements,
+    double mpu,
+    PlanAmbient? ambient,
+    List<double> Function(Offset) xy,
+  ) {
+    final hasCloth = elements.any(
+      (el) =>
+          el.type == ElementType.light &&
+          (el.lightType == LightType.diffusionFrame ||
+              el.lightType == LightType.bounce),
+    );
+    if (!hasCloth) return const [];
+    final scene = LightScene.from(elements, metersPerUnit: mpu, ambient: ambient);
+    final out = <Map<String, dynamic>>[];
+    final count = <String, int>{};
+    for (final light in scene.lights) {
+      final el = light.surface?.element;
+      if (el == null ||
+          (el.lightType != LightType.diffusionFrame &&
+              el.lightType != LightType.bounce)) {
+        continue;
+      }
+      final uid = idOf(el, elements.indexOf(el));
+      final n = count[uid] = (count[uid] ?? 0) + 1;
+      final surface = light.surface!;
+      out.add({
+        'id': '$uid#luz$n',
+        'name': light.label,
+        'pos': [...xy(light.position), _r(light.z)],
+        // La cara por la que sale, con los ejes de la escena.
+        'dir': [_r(light.aim.dx), _r(-light.aim.dy), 0.0],
+        'cd': _r(light.source.candela),
+        'beamDeg': _r(light.source.beamDeg),
+        'cct': _r(light.source.cct),
+        'widthM': _r(light.source.sizeM),
+        'heightM': _r(surface.heightM - surface.baseM),
+      });
+    }
     return out;
   }
 
