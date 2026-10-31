@@ -954,6 +954,15 @@ Pedido por Daniel el 2026-10-31. Objetivo: que un esquema de luz ensayado en IRI
 
 ### F6.21.2 · Niebla y humo, con cantidad · todos (cierra F6.9.1 y F6.9.1b)
 
+**Estado:** en curso (`plan/f6-21-2-niebla`).
+- **Hecho:**
+  - en el ambiente del esquema de luz: **Niebla** de 0 a 100 %, de tipo Bruma, Humo o Niebla exterior, que viaja con el esquema;
+  - en el 3D, niebla (FogExp2, clara de día y oscura de noche o en plató), y los haces de los focos se ven más cuanto más niebla;
+  - en Unreal, ExponentialHeightFog con niebla volumétrica, más densa y pegada al suelo en el humo y por distancia en la exterior, que se quita al ponerla a 0.
+- **Falta:**
+  - el humo localizado (volúmenes por zona, F6.9.1c);
+  - la pérdida de luz por la bruma en el fotómetro.
+
 - **Qué:**
   - en el esquema de luz, un control **«Niebla»** de 0 a 100 %, más el tipo:
     - bruma de ambiente (*haze*);

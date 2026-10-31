@@ -172,6 +172,17 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
   - **Exterior:** el suelo del terreno hasta el horizonte, con cielo y sol;
   - **Interior:** como antes.
 
+## 14 · Niebla y humo (F6.21.2)
+
+- [ ] **El control.** En una planta con esquema de luz, abre el botón del sol o la luna (Ambiente). Abajo sale **Niebla**, de 0 a 100 %, y al subirla, el tipo: **Bruma**, **Humo** o **Niebla exterior**.
+- [ ] **En el 3D.** Sube la bruma al 40 %: la escena se espesa y los conos de los focos se ven más. Al 0 % vuelve a estar limpia.
+- [ ] **Humo y exterior.** El humo es más denso; la niebla exterior se nota sobre todo a lo lejos.
+- [ ] **Se guarda con el esquema.** Otro esquema de luz del mismo set puede llevar otra niebla.
+- [ ] **Unreal.** Con IRIS Stage (tras «Abrir en Unreal» y reiniciar Unreal):
+  - aparece **IRIS_Niebla**, y los haces de los focos se ven en el aire (Render RTX);
+  - subir o bajar la niebla en IRIS cambia Unreal al momento;
+  - a 0 % desaparece.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.

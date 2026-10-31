@@ -83,6 +83,12 @@ class PlanScene3d {
       if (ambient != null && ambient.hasSun && !(environment?.isStudio ?? false))
         'sun': _sun(ambient),
       'environment': ?environment?.toScene(),
+      if (ambient != null && ambient.hasFog)
+        'fog': {
+          'pct': ambient.fogPct,
+          'kind': ambient.fogKind.name,
+          'day': ambient.day,
+        },
       if (exposure != null && stop != null && stop > 0)
         'exposure': exposureOf(exposure, stop),
       'halls': [

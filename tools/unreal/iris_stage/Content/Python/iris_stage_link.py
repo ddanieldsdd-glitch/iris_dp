@@ -60,6 +60,7 @@ SKY_ID = "_sky"
 ATMOSPHERE_ID = "_atmosphere"
 FLOOR_ID = "_floor"
 POST_ID = "_post"
+FOG_ID = "_fog"
 STRUCTURE_ID = "_structure"
 STRUCTURE_ROOT = WORLD_ROOT + "/Estructura"
 WORLD_ROOT = "/Game/IRIS"
@@ -70,7 +71,7 @@ CUBE = "/Engine/BasicShapes/Cube.Cube"
 PLANE = "/Engine/BasicShapes/Plane.Plane"
 
 # Lo que no se borra al mandar IRIS la escena entera.
-_FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID, POST_ID, STRUCTURE_ID}
+_FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID, POST_ID, STRUCTURE_ID, FOG_ID}
 
 # Etiqueta con la ruta del asset que hace de una pieza (F6.20 B2): si el
 # asset cambia, el actor se rehace.
@@ -737,6 +738,41 @@ def _apply_environment(e):
         floor.set_actor_scale3d(unreal.Vector(100, 100, 1))
 
 
+# Por tipo de niebla: densidad a 100 %, caída con la altura (alta = pegada
+# al suelo) y cuánto apaga la niebla volumétrica.
+_FOG_KINDS = {
+    "haze": (0.08, 0.2, 2.0),
+    "smoke": (0.35, 1.5, 4.0),
+    "exterior": (0.04, 0.05, 1.0),
+}
+
+
+def _apply_fog(fog):
+    """Niebla o humo del esquema (F6.21.2): ExponentialHeightFog con niebla
+    volumétrica, que hace visibles los haces de los focos. Sin niebla, se
+    quita."""
+    actor = _find(FOG_ID)
+    pct = float((fog or {}).get("pct", 0)) / 100.0
+    if pct <= 0:
+        if actor is not None:
+            _actor_subsystem().destroy_actor(actor)
+            _actors.pop(FOG_ID, None)
+        return
+    density, falloff, extinction = _FOG_KINDS.get(fog.get("kind"), _FOG_KINDS["haze"])
+    if actor is None:
+        actor = _spawn(FOG_ID, unreal.ExponentialHeightFog, "IRIS_Niebla",
+                       unreal.Vector(0, 0, 0), unreal.Rotator())
+    comp = actor.get_component_by_class(unreal.ExponentialHeightFogComponent)
+    if comp is None:
+        return
+    _set(comp, "fog_density", density * pct)
+    _set(comp, "fog_height_falloff", falloff)
+    _set(comp, "volumetric_fog", True)
+    _set(comp, "volumetric_fog_extinction_scale", 1.0 + extinction * pct)
+    # Hacia delante: los haces brillan al mirar hacia el foco, como en set.
+    _set(comp, "volumetric_fog_scattering_distribution", 0.6)
+
+
 def _apply_exposure(e):
     """Exposición fija con la cámara de IRIS (F6.21.4): manual y con la
     cámara física (ISO, obturador, diafragma), en un PostProcessVolume que
@@ -815,6 +851,8 @@ def _apply(data):
         _apply_sky(data["sky"])
     if data.get("environment"):
         _apply_environment(data["environment"])
+    if "fog" in data:
+        _apply_fog(data["fog"])
     if data.get("exposure"):
         _apply_exposure(data["exposure"])
     if data.get("structure"):
