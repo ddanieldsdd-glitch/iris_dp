@@ -13,6 +13,8 @@ import '../light/light_scene.dart';
 import '../plan_category.dart';
 import '../../unreal_link/unreal_asset_ref.dart';
 import '../light/plan_grip.dart';
+import '../camera_aim.dart';
+import '../light/meter.dart';
 import '../light/plan_light.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
@@ -222,8 +224,17 @@ class PlanScene3d {
             'at': xy(el.position),
             'z0': level,
             // Altura del objetivo: la guardada o la de cámara en mano.
-            'z': _r((el.props[PlanLight.heightKey] as num?)?.toDouble() ?? 1.5),
+            'z': _r(CameraAim.heightM(el)),
             'dir': [_r(math.sin(rad)), _r(math.cos(rad))],
+            // Inclinación, giro sobre su eje y foco (F6.22.4).
+            'tiltDeg': CameraAim.tiltDeg(el),
+            'rollDeg': CameraAim.rollDeg(el),
+            'focusM': _r(CameraAim.focusM(el, elements, mpu)),
+            // Su exposición: la misma que usa el fotómetro.
+            'iso': CameraExposure.settingsOf(el).iso,
+            'shutterS': CameraExposure.settingsOf(el).exposureTime,
+            'nd': CameraExposure.settingsOf(el).ndStops,
+            'tStop': CameraExposure.stopOf(el),
             'hfovDeg': _r(
               cameraFovDegrees(el.lens, sensorWidthMm: sensorMm) ?? 40,
             ),

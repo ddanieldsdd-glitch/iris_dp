@@ -8,6 +8,7 @@ import 'camera_plan_element_model.dart';
 import 'light/plan_grip.dart';
 import 'light/light_scene.dart';
 import 'light/modifiers.dart';
+import 'camera_aim.dart';
 import 'light/plan_light.dart';
 import 'light/surfaces.dart';
 import 'plan_marks.dart';
@@ -754,6 +755,77 @@ class PlanPieceControls extends StatelessWidget {
             (pose) => el.props[PlanMarks.poseKey] = pose,
           ),
         );
+      }
+      if (el.type == ElementType.camera) {
+        final focus = CameraAim.ownFocusM(el);
+        children.addAll([
+          slider(
+            'Altura del objetivo',
+            '${CameraAim.heightM(el).toStringAsFixed(2)} m',
+            current: CameraAim.heightM(el),
+            min: 0.1,
+            max: 8,
+            onChanged: (v) =>
+                el.props[PlanLight.heightKey] = (v * 20).round() / 20,
+          ),
+          slider(
+            'Paneo',
+            '${el.rotation.round()}°',
+            current: el.rotation,
+            min: 0,
+            max: 359,
+            onChanged: (v) => el.rotation = v.roundToDouble(),
+          ),
+          slider(
+            'Inclinación',
+            switch (CameraAim.tiltDeg(el).round()) {
+              0 => 'horizontal',
+              final d when d < 0 => '$d° (picado)',
+              final d => '+$d° (contrapicado)',
+            },
+            current: CameraAim.tiltDeg(el),
+            min: -60,
+            max: 60,
+            onChanged: (v) {
+              final d = v.roundToDouble();
+              if (d == 0) {
+                el.props.remove(CameraAim.tiltKey);
+              } else {
+                el.props[CameraAim.tiltKey] = d;
+              }
+            },
+          ),
+          slider(
+            'Giro (holandés)',
+            '${CameraAim.rollDeg(el).round()}°',
+            current: CameraAim.rollDeg(el),
+            min: -45,
+            max: 45,
+            onChanged: (v) {
+              final d = v.roundToDouble();
+              if (d == 0) {
+                el.props.remove(CameraAim.rollKey);
+              } else {
+                el.props[CameraAim.rollKey] = d;
+              }
+            },
+          ),
+          slider(
+            'Foco',
+            focus == null ? 'al actor de delante' : '${focus.toStringAsFixed(2)} m',
+            current: focus ?? 0.2,
+            min: 0.2,
+            max: 30,
+            onChanged: (v) {
+              // Del todo a la izquierda, vuelve al actor de delante.
+              if (v <= 0.25) {
+                el.props.remove(CameraAim.focusKey);
+              } else {
+                el.props[CameraAim.focusKey] = (v * 20).round() / 20;
+              }
+            },
+          ),
+        ]);
       }
       children.add(
         toggle('Hace sombra', el.props[LightScene.noShadowKey] != true, (v) {

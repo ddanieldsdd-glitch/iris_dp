@@ -280,6 +280,34 @@ def _apply_camera(cam):
         filmback.sensor_height = sensor * 9 / 16
         comp.set_editor_property("filmback", filmback)
     _set(comp, "current_focal_length", float(cam.get("focalMm", 35)))
+    # Diafragma, foco y exposición de la cámara de rodaje (F6.22.4).
+    if cam.get("tStop"):
+        _set(comp, "current_aperture", float(cam["tStop"]))
+    if cam.get("focusCm"):
+        try:
+            fs = comp.get_editor_property("focus_settings")
+            fs.set_editor_property("focus_method", unreal.CameraFocusMethod.MANUAL)
+            fs.set_editor_property("manual_focus_distance", float(cam["focusCm"]))
+            comp.set_editor_property("focus_settings", fs)
+        except Exception as exc:
+            unreal.log_warning("[IRIS Stage] foco: %s" % exc)
+    if cam.get("iso") and cam.get("shutterS"):
+        pp = comp.get_editor_property("post_process_settings")
+        for name, value in [
+            ("auto_exposure_method", unreal.AutoExposureMethod.AEM_MANUAL),
+            ("auto_exposure_apply_physical_camera_exposure", True),
+            ("camera_iso", float(cam["iso"])),
+            ("camera_shutter_speed", 1.0 / max(float(cam["shutterS"]), 1e-4)),
+            ("depth_of_field_fstop", float(cam.get("tStop") or 2.8)),
+            ("auto_exposure_bias", -float(cam.get("nd") or 0)),
+        ]:
+            try:
+                pp.set_editor_property("override_" + name, True)
+                pp.set_editor_property(name, value)
+            except Exception as exc:
+                unreal.log_warning("[IRIS Stage] cámara %s: %s" % (name, exc))
+        comp.set_editor_property("post_process_settings", pp)
+        _set(comp, "post_process_blend_weight", 1.0)
 
 
 def _apply_prop(p):
