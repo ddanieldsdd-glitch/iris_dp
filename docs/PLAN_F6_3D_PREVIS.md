@@ -1144,6 +1144,26 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 
 ### F6.22.3 · La exposición del personaje refleja el grip · todos
 
+**Estado:** hecho, falta probarlo en IRIS (`plan/f6-22-3-exposicion-actor`). Las pruebas con un actor real (`test/actor_grip_exposure_test.dart`) encontraron un fallo del motor:
+- **El fallo:** una tela grande cerca del foco daba **más** luz que sin tela, porque recogía la luz del centro multiplicada por toda su superficie y la volvía a soltar como un foco nuevo, más cerca del actor.
+- **Arreglado:**
+  - la tela recoge la media de lo que le llega en 3 × 3 puntos, con su distancia, su ángulo con el haz y su ángulo de incidencia;
+  - una difusión ligera solo alumbra al actor desde la parte central, la que está en línea con el foco.
+- **Ahora**, con un fresnel a 3 m y la tela a mitad de camino, la luz baja respecto a sin tela:
+
+  | Tela | Stops |
+  |---|---|
+  | ¼ Grid Cloth | −1 |
+  | ½ Grid Cloth | −1,5 |
+  | Grid Cloth full | −2,5 |
+  | Seda China | −1 |
+
+- **También comprobado:**
+  - el negro corta la luz del actor;
+  - un rebote de lado le suma luz;
+  - un palio horizontal le baja el sol.
+- **En el 3D**, con grip dan sombra hasta 8 focos.
+
 - **Qué:**
   - con un palio o un marco de difusión entre el foco y un actor, la lectura del fotómetro en ese actor baja lo que quita la tela;
   - la cara en el 3D («Luz real») también baja;

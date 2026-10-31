@@ -892,7 +892,9 @@
     // Con grip (negros, marcos, palios) también: es lo que corta la luz.
     const hasGrip = (sc.grip || []).length > 0;
     const castShadows = hasScans || hasGrip;
-    const maxShadows = 4;
+    // Con grip, más: si un foco no da sombra, su luz directa atravesaría
+    // el negro o la tela (F6.22.3).
+    const maxShadows = (sc.grip || []).length > 0 ? 8 : 4;
     let shadows = 0;
     fixtures.forEach((f, i) => {
       const col = cctColor(f.cct || 3200);
