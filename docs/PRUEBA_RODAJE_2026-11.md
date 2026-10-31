@@ -217,6 +217,19 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
 - [ ] **3D y Unreal.** El palio se ve tumbado, a su altura y con su giro, en el 3D y en Unreal. Su luz cae hacia abajo (RectLight mirando al suelo).
 - [ ] **Anota** si en Unreal se inclina hacia el lado contrario que en IRIS: sería el signo del giro, y se corrige con ese dato.
 
+## 17 · La exposición del actor con grip (F6.22.3)
+
+- [ ] **Tela entre el foco y el actor.** Un fresnel a 3 m de un actor y un marco de difusión de 2×2 a mitad de camino. La lectura del actor ahora **baja**:
+  - ¼ Grid Cloth: más o menos 1 stop;
+  - ½ Grid Cloth: más o menos 1,5 stops;
+  - Grid Cloth full: más o menos 2,5 stops.
+
+  Antes la ¼ podía dar más luz que sin tela.
+- [ ] **Negro.** Un negro en el mismo sitio: la lectura cae casi del todo.
+- [ ] **Rebote de lado.** Detrás del actor y a un lado, de cara al foco: la lectura del actor sube un poco.
+- [ ] **En el 3D («Luz real»).** La cara del actor se oscurece al poner la tela o el negro, y más con Grid Cloth full que con ¼.
+- [ ] **Anota** cualquier lectura que no te cuadre con lo que verías en el set, con las medidas y la distancia: es el dato para afinar el motor.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.

@@ -729,6 +729,65 @@ class LightScene {
     );
   }
 
+  /// Superficie de una tela o un rebote que de verdad alumbra a algo que
+  /// está delante (F6.22.3). Una difusión ligera (Grid Cloth ¼, haz de 70°)
+  /// apenas desvía la luz: a un actor solo le llega de la parte central, la
+  /// que está en línea con el foco; una muy difusa (Grid Cloth full, mate) le
+  /// llega de toda. [litM2] es lo que recoge la tela; [lampM], la distancia
+  /// del foco a la tela.
+  static double _gatherM2(double litM2, double beamDeg, double lampM) {
+    if (beamDeg >= 90) return litM2;
+    // Desvío permitido a cada lado, repartido entre el camino del foco a la
+    // tela y el de la tela al actor (que se toma igual).
+    final x = (beamDeg / 2 * math.pi / 180) / 2 * math.max(lampM, 0.1);
+    return math.min(litM2, math.pi * x * x);
+  }
+
+  /// Cuánto de lo que llega al centro de una superficie le llega de media
+  /// (0–1): se mide en 3 × 3 puntos repartidos por ella, con su distancia,
+  /// su ángulo con el haz y su ángulo de incidencia. [along] es el eje del
+  /// ancho en el lienzo; [up] y [normal], en metros con los ejes del lienzo.
+  double _spreadOver(
+    SceneLight light, {
+    required Offset centre,
+    required double z,
+    required Offset along,
+    required (double, double, double) up,
+    required (double, double, double) normal,
+    required double halfWidthM,
+    required double halfHeightM,
+  }) {
+    final m = metersPerUnit;
+    final (ux, uy, uz) = up;
+    final (nx, ny, nz) = normal;
+    double at(double a, double b) {
+      // El punto, en el lienzo y en altura.
+      final px = centre.dx + (along.dx * a + ux * b) / m;
+      final py = centre.dy + (along.dy * a + uy * b) / m;
+      final pz = z + uz * b;
+      final span = Offset(px, py) - light.position;
+      final units = span.distance;
+      final dx = span.dx * m, dy = span.dy * m, dz = pz - light.z;
+      final dist = math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist < 1e-6) return 0;
+      // Lo que le llega de frente a la cara que mira a la fuente.
+      final cos = -(dx * nx + dy * ny + dz * nz) / dist;
+      if (cos <= 0) return 0;
+      final off = units > 1e-6 ? _offAxis(light, span / units) : 0.0;
+      return luxFrom(light, units, off, receiverZ: pz) * cos;
+    }
+
+    final centreLux = at(0, 0);
+    if (centreLux <= 0) return 1;
+    var sum = 0.0;
+    for (final a in [-2 / 3, 0.0, 2 / 3]) {
+      for (final b in [-2 / 3, 0.0, 2 / 3]) {
+        sum += at(a * halfWidthM, b * halfHeightM);
+      }
+    }
+    return (sum / 9 / centreLux).clamp(0.0, 1.0);
+  }
+
   static double? _ceilingAt(List<SceneRoom> rooms, Offset point) {
     for (final room in rooms) {
       if (room.roofed && room.room.contains(point)) return room.ceilingM;
@@ -1491,7 +1550,31 @@ class LightScene {
             : normalA * -1;
         final incident = _incident(light, centre, facing, own, z: z);
         if (incident == null) continue;
-        final flux = incident.lux * areaM2 * keep;
+        // Lo que recoge de un aparato es la media sobre toda la tela, no lo
+        // del centro multiplicado por su superficie (F6.22.3): los bordes
+        // están más lejos, de lado y fuera del centro del haz.
+        final spread3 = light.fixture == null
+            ? 1.0
+            : _spreadOver(
+                light,
+                centre: centre,
+                z: z,
+                along: tangent,
+                up: (0.0, 0.0, 1.0),
+                normal: (facing.dx, facing.dy, 0.0),
+                halfWidthM: lengthUnits * metersPerUnit / 2,
+                halfHeightM: heightM / 2,
+              );
+        final flat = toLight.distance * metersPerUnit;
+        final rise = z - light.z;
+        final flux =
+            incident.lux *
+            _gatherM2(
+              areaM2 * spread3,
+              beamDeg,
+              math.sqrt(flat * flat + rise * rise),
+            ) *
+            keep;
         final candela = flux / spread;
         if (candela < 1) continue;
         final incoming = toLight.distance < 1e-6
@@ -1602,8 +1685,11 @@ class LightScene {
       final cx = p.centre.dx * m, cy = p.centre.dy * m, cz = p.centreZ;
 
       void out(double lux, double kelvin, PhotometryStatus status,
-          (double, double, double) lit, String from) {
-        final flux = lux * areaM2 * keep;
+          (double, double, double) lit, String from, {double? fromM}) {
+        final flux =
+            lux *
+            (fromM == null ? areaM2 : _gatherM2(areaM2, beamDeg, fromM)) *
+            keep;
         final candela = flux / spread;
         if (candela < 1) return;
         final (lx, ly, lz) = lit;
@@ -1669,11 +1755,24 @@ class LightScene {
             dot.abs();
         if (lux < 0.5) continue;
         out(
-          lux,
+          lux *
+              (light.fixture == null
+                  ? 1.0
+                  : _spreadOver(
+                      light,
+                      centre: p.centre,
+                      z: cz,
+                      along: p.tangent,
+                      up: p.up,
+                      normal: lit,
+                      halfWidthM: p.widthUnits * m / 2,
+                      halfHeightM: p.heightM / 2,
+                    )),
           _shift(light.source.cct, passed.miredShift),
           light.source.status,
           lit,
           light.label,
+          fromM: dist,
         );
       }
 
