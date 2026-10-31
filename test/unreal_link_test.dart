@@ -59,7 +59,7 @@ void main() {
       expect(scans, hasLength(1));
       expect(scans.single['file'], 'abc.glb');
       expect(scans.single['loc'], [200, 100, 10]);
-      expect(scans.single['rot'][1], -30);
+      expect(scans.single['rot'][1], 30);
       expect(scans.single['scale'], 0.5);
       expect(payload['scanFolders'], ['C:/IRIS/plan_scans']);
 
@@ -70,7 +70,7 @@ void main() {
         payload,
         UnrealStagePayload.build(moved),
       )!;
-      expect((diff['scans'] as List).single['rot'][1], -45);
+      expect((diff['scans'] as List).single['rot'][1], 45);
       expect(diff['scanFolders'], ['C:/IRIS/plan_scans']);
     });
 
