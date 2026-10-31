@@ -230,6 +230,17 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
 - [ ] **En el 3D («Luz real»).** La cara del actor se oscurece al poner la tela o el negro, y más con Grid Cloth full que con ¼.
 - [ ] **Anota** cualquier lectura que no te cuadre con lo que verías en el set, con las medidas y la distancia: es el dato para afinar el motor.
 
+## 18 · La cámara en Unreal (F6.22.4)
+
+- [ ] **Ficha de la cámara.** Selecciona una cámara: salen **Altura del objetivo**, **Paneo**, **Inclinación**, **Giro (holandés)** y **Foco**. Ponla a 1,20 m, −10°, foco 2,5 m.
+- [ ] **En el 3D.** La cámara se ve a esa altura y mirando un poco hacia abajo. «Ver por la cámara» mira igual.
+- [ ] **En Unreal** (tras «Abrir en Unreal» y reiniciar Unreal):
+  - la CineCamera de IRIS está a 1,20 m, inclinada −10° y con 5° de giro si se lo pones;
+  - tiene el 35 mm a T2.8, el foco manual a 250 cm, y el ISO y el obturador en su posproceso.
+- [ ] **Profundidad de campo.** «Ver por la cámara» en Unreal: cambia el diafragma de trabajo en IRIS (T1.4, T8) y la profundidad de campo cambia.
+- [ ] **De vuelta.** Inclina la cámara en Unreal: en la ficha de IRIS cambia la inclinación.
+- [ ] **Foco automático.** Sin foco propio (deslizador del todo a la izquierda), enfoca al actor que tiene delante.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.

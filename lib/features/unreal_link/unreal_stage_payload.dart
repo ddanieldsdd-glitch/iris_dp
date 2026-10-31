@@ -131,13 +131,25 @@ class UnrealStagePayload {
       'id': c['id'],
       'name': c['name'],
       'loc': loc([at[0], at[1], z]),
-      'rot': rotToward(
-        (dir[0] as num).toDouble(),
-        (dir[1] as num).toDouble(),
-        0,
-      ),
+      // Paneo de la planta, inclinación (pitch) y giro sobre su eje (roll).
+      'rot': [
+        _r(((c['tiltDeg'] ?? 0) as num).toDouble()),
+        rotToward(
+          (dir[0] as num).toDouble(),
+          (dir[1] as num).toDouble(),
+          0,
+        )[1],
+        _r(((c['rollDeg'] ?? 0) as num).toDouble()),
+      ],
       'focalMm': _r(sensor / (2 * math.tan(hfov / 2))),
       'sensorMm': _r(sensor),
+      // La exposición y el foco de la cámara de rodaje (F6.22.4).
+      if (c['tStop'] != null) 'tStop': _r((c['tStop'] as num).toDouble()),
+      if (c['iso'] != null) 'iso': (c['iso'] as num).toDouble(),
+      if (c['shutterS'] != null) 'shutterS': (c['shutterS'] as num).toDouble(),
+      if (c['nd'] != null) 'nd': (c['nd'] as num).toDouble(),
+      if (c['focusM'] != null)
+        'focusCm': _r((c['focusM'] as num).toDouble() * 100),
       'asset': ?c['asset'],
     };
   }

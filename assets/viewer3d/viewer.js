@@ -962,8 +962,11 @@
     for (const q of sc.cameras || []) {
       const g = new THREE.Group();
       g.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.25, 0.35), dark));
-      g.position.copy(V(q.at[0], q.at[1], (q.z0 || 0) + 1.5));
-      g.lookAt(V(q.at[0] + q.dir[0], q.at[1] + q.dir[1], (q.z0 || 0) + 1.5));
+      // A su altura, con su paneo y su inclinación (F6.22.4).
+      const cz = (q.z0 || 0) + (q.z || 1.5);
+      const tilt = (q.tiltDeg || 0) * Math.PI / 180;
+      g.position.copy(V(q.at[0], q.at[1], cz));
+      g.lookAt(V(q.at[0] + q.dir[0] * Math.cos(tilt), q.at[1] + q.dir[1] * Math.cos(tilt), cz + Math.sin(tilt)));
       g.userData.id = q.id; g.userData.movable = true; g.userData.dragY = q.z0 || 0; picks.push(g);
       L.people.add(g);
     }
@@ -1149,7 +1152,8 @@
     const z = (q.z0 || 0) + (q.z || 1.5);
     const pos = V(q.at[0], q.at[1], z);
     cam.position.copy(pos);
-    controls.target.copy(V(q.at[0] + q.dir[0] * 5, q.at[1] + q.dir[1] * 5, z));
+    const tilt = (q.tiltDeg || 0) * Math.PI / 180;
+    controls.target.copy(V(q.at[0] + q.dir[0] * 5 * Math.cos(tilt), q.at[1] + q.dir[1] * 5 * Math.cos(tilt), z + 5 * Math.sin(tilt)));
     controls.update();
     anim = null;
     placeFrame();

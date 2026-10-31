@@ -1175,6 +1175,19 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 
 ### F6.22.4 · La cámara de IRIS en Unreal, con todos sus parámetros · todos
 
+**Estado:** hecho, falta probarlo con Unreal (`plan/f6-22-4-camara-unreal`).
+- **En la ficha de la cámara:** Altura del objetivo, Paneo, Inclinación (picado o contrapicado), Giro (plano holandés) y Foco. Sin foco propio, enfoca al actor que tiene delante (dentro de 30°) o a 3 m.
+- **En Unreal, la CineCamera llega con:**
+  - altura, paneo, inclinación y giro;
+  - focal y sensor;
+  - diafragma T (`current_aperture`, con su profundidad de campo);
+  - foco manual a esa distancia;
+  - ISO, obturador y ND en su propio posproceso, con exposición manual y cámara física.
+- **Ver por la cámara:** en Unreal enseña lo que vería la cámara de rodaje.
+- **Desde Unreal:** inclinarla o girarla vuelve a la ficha de IRIS.
+- **3D de IRIS:** la cámara y «Ver por la cámara» con su altura e inclinación.
+- **Falta:** el giro holandés en el 3D de IRIS; en Unreal sí está.
+
 - **Qué:**
   - la cámara llega a Unreal (CineCameraActor) con:
     - su **altura**, **paneo**, **inclinación** y **giro sobre su eje**, que se editan en IRIS como los focos;

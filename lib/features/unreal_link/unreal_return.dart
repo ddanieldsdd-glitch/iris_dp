@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../camera_plan/camera_plan_constants.dart';
 import '../camera_plan/camera_plan_element_model.dart';
+import '../camera_plan/camera_aim.dart';
 import '../camera_plan/light/plan_light.dart';
 import '../camera_plan/light_beam.dart';
 import '../camera_plan/plan_segment.dart';
@@ -153,6 +154,12 @@ class UnrealReturn {
         // Cámara o pieza: hacia dónde mira en planta.
         final deg = math.atan2(d.x, d.y) * 180 / math.pi;
         el.rotation = ((deg % 360 + 360) % 360 * 2).roundToDouble() / 2;
+        // La cámara, además, su inclinación y su giro (F6.22.4).
+        if (edit.camera) {
+          double half(num v) => (v.toDouble() * 2).roundToDouble() / 2;
+          el.props[CameraAim.tiltKey] = half(rot[0]);
+          el.props[CameraAim.rollKey] = half(rot[2]);
+        }
       } else {
         // Apunta a un punto a 5 m en la dirección nueva.
         final x = loc[0] / 100, y = -loc[1] / 100, z = loc[2] / 100;
