@@ -59,10 +59,11 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
 
   final sections = <ScriptDocSection>[];
   for (final scene in scenes) {
-    final rows = <ScriptDocRow>[];
-    for (final shot in shotsByScene[scene.id] ?? const <Shot>[]) {
-      rows.add(
-        await _docRow(
+    // Los planos de una escena a la vez: sus imágenes se preparan en
+    // paralelo (cada una en su isolate).
+    final rows = await Future.wait([
+      for (final shot in shotsByScene[scene.id] ?? const <Shot>[])
+        _docRow(
           db,
           scene,
           shot,
@@ -72,8 +73,7 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
           storyboard: !hidden.contains('story'),
           references: !hidden.contains('ref'),
         ),
-      );
-    }
+    ]);
     sections.add(
       ScriptDocSection(
         title:
