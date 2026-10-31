@@ -149,13 +149,18 @@ class UnrealStagePayload {
     if (at == null) return null;
     final rad = ((p['yawDeg'] ?? 0) as num) * math.pi / 180;
     final size = _r(((p['sizeM'] ?? 0.5) as num) * 100);
+    // El +X del bloque mira hacia donde mira la pieza: ahí va su fondo, y el
+    // ancho de lado (F6.21.3).
+    final depth = _r(((p['depthM'] ?? p['sizeM'] ?? 0.5) as num) * 100);
+    final width = _r(((p['widthM'] ?? p['sizeM'] ?? 0.5) as num) * 100);
     return {
       'id': p['id'],
       'name': p['name'],
       'type': p['type'],
       'loc': loc([at[0], at[1], p['z0'] ?? 0]),
       'rot': rotToward(math.sin(rad), math.cos(rad), 0),
-      'sizeCm': [size, size, _r(((p['heightM'] ?? 0.8) as num) * 100)],
+      'sizeCm': [depth, width, _r(((p['heightM'] ?? 0.8) as num) * 100)],
+      'footCm': size,
       'asset': ?p['asset'],
     };
   }
@@ -176,6 +181,35 @@ class UnrealStagePayload {
     };
   }
 
+  /// Carpetas de este equipo donde están los escaneos de la planta: Unreal,
+  /// en el mismo PC, los importa de ahí. Las pone la vista 3D del proyecto.
+  static List<String> scanFolders = const [];
+
+  /// La estructura del set guardada en GLB en este equipo (F6.21.3):
+  /// `{file, folder}`. La pone la vista 3D cuando cambia.
+  static Map<String, String>? structure;
+
+  /// Un escaneo de la planta (glb, gltf u obj): su archivo, en su sitio, con
+  /// su giro y su escala. Las nubes de puntos (ply) no van a Unreal.
+  static Map<String, dynamic>? scan(Map s) {
+    final at = s['at'] as List?;
+    final format = s['format'] as String? ?? 'glb';
+    if (at == null || s['file'] == null || format == 'ply') return null;
+    // En la escena gira -yaw sobre la vertical (en el sentido de la planta,
+    // con y hacia abajo); Unreal invierte la y, así que allí es +yaw. El
+    // importador de glTF de Unreal ya pasa de Y arriba a Z arriba (cambia
+    // y por z), así que no hace falta otro giro de base.
+    final yaw = ((s['yawDeg'] ?? 0) as num).toDouble();
+    return {
+      'id': s['id'],
+      'name': s['name'],
+      'file': s['file'],
+      'loc': loc([at[0], at[1], s['z0'] ?? 0]),
+      'rot': [0.0, _r(yaw), 0.0],
+      'scale': ((s['scale'] ?? 1) as num).toDouble(),
+    };
+  }
+
   /// El sol: la escena da hacia dónde está; la luz va al revés.
   static Map<String, dynamic>? sun(Map? s) {
     final d = s?['dir'] as List?;
@@ -191,8 +225,21 @@ class UnrealStagePayload {
     };
   }
 
+  /// La exposición de la cámara para el PostProcessVolume del set.
+  static Map<String, dynamic>? exposure(Map? e) {
+    if (e == null) return null;
+    double n(String k, double or) => ((e[k] ?? or) as num).toDouble();
+    return {
+      'iso': n('iso', 800),
+      'shutterS': n('shutterS', 1 / 48),
+      'tStop': n('tStop', 2.8),
+      'nd': n('nd', 0),
+      'ev100': n('ev100', 0),
+    };
+  }
+
   /// Las listas de piezas que se comparan una a una.
-  static const kinds = ['lights', 'cameras', 'props', 'assets'];
+  static const kinds = ['lights', 'cameras', 'props', 'assets', 'scans'];
 
   /// La escena entera para Unreal, en el mundo (nivel) [world].
   static Map<String, dynamic> build(
@@ -211,6 +258,12 @@ class UnrealStagePayload {
         for (final a in (scene['assets'] as List? ?? const []).cast<Map>())
           ?asset(a),
       ],
+      'scans': [
+        for (final s in (scene['scans'] as List? ?? const []).cast<Map>())
+          ?scan(s),
+      ],
+      if (scanFolders.isNotEmpty) 'scanFolders': scanFolders,
+      'structure': ?structure,
       'lights': [
         for (final f in (scene['fixtures'] as List? ?? const []).cast<Map>())
           ?light(f),
@@ -220,6 +273,9 @@ class UnrealStagePayload {
           ?camera(c),
       ],
       'sun': sunNow,
+      // Exposición fija con la cámara de IRIS (F6.21.4): sin ella Unreal se
+      // autoexpone y un foco al 50 % se ve casi como al 100 %.
+      'exposure': ?exposure(scene['exposure'] as Map?),
       // De día, cielo físico (SkyAtmosphere y SkyLight) con el sol.
       'sky': sunNow == null ? null : {'scale': 1.0},
     };
@@ -237,7 +293,10 @@ class UnrealStagePayload {
         jsonEncode(before['world']) != jsonEncode(now['world'])) {
       return {...now, 'full': true};
     }
-    final out = <String, dynamic>{'v': version};
+    final out = <String, dynamic>{
+      'v': version,
+      'scanFolders': ?now['scanFolders'],
+    };
     final remove = <String>[];
     for (final kind in kinds) {
       Map<String, String> byId(Map<String, dynamic> p) => {
@@ -257,15 +316,23 @@ class UnrealStagePayload {
     final sunChanged =
         jsonEncode(before['sun']) != jsonEncode(now['sun']) ||
         jsonEncode(before['sky']) != jsonEncode(now['sky']);
+    final exposureChanged =
+        jsonEncode(before['exposure']) != jsonEncode(now['exposure']);
+    final structureChanged =
+        jsonEncode(before['structure']) != jsonEncode(now['structure']);
     if (kinds.every((k) => (out[k] as List).isEmpty) &&
         remove.isEmpty &&
-        !sunChanged) {
+        !sunChanged &&
+        !exposureChanged &&
+        !structureChanged) {
       return null;
     }
     return {
       ...out,
       if (remove.isNotEmpty) 'remove': remove,
       if (sunChanged) ...{'sun': now['sun'], 'sky': now['sky']},
+      if (exposureChanged) 'exposure': now['exposure'],
+      if (structureChanged) 'structure': now['structure'],
     };
   }
 }

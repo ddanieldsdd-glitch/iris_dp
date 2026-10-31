@@ -16,6 +16,7 @@ import '../../core/weather/weather_summary.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
 import '../camera_plan/plan_data.dart';
 import '../camera_plan/plan_thumbnail.dart';
+import '../shoot_documents/shoot_day_on_set.dart';
 import 'table/script_sheet_theme.dart';
 import 'technical_script_settings.dart';
 
@@ -27,8 +28,10 @@ int _rgb(Color color) => color.toARGB32() & 0xFFFFFF;
 Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
   AppDatabase db,
   int projectId,
-  TechnicalScriptSettings settings,
-) async {
+  TechnicalScriptSettings settings, {
+  Set<String>? hiddenColumns,
+}) async {
+  final hidden = hiddenColumns ?? _screenHidden(settings);
   final project = await db.getProject(projectId);
   if (project == null) return null;
 
@@ -47,7 +50,7 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
     AppPalette.dark,
   );
 
-  final plans = await _loadPlans(db, projectId, settings);
+  final plans = await _loadPlans(db, projectId, hidden);
 
   final shotsByScene = <int, List<Shot>>{};
   for (final shot in shots) {
@@ -56,24 +59,27 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
 
   final sections = <ScriptDocSection>[];
   for (final scene in scenes) {
-    final rows = <ScriptDocRow>[];
-    for (final shot in shotsByScene[scene.id] ?? const <Shot>[]) {
-      rows.add(
-        await _docRow(
+    // Los planos de una escena a la vez: sus imágenes se preparan en
+    // paralelo (cada una en su isolate).
+    final rows = await Future.wait([
+      for (final shot in shotsByScene[scene.id] ?? const <Shot>[])
+        _docRow(
           db,
           scene,
           shot,
           sheet,
           plans: plans,
           planView: settings.planView,
+          storyboard: !hidden.contains('story'),
+          references: !hidden.contains('ref'),
         ),
-      );
-    }
+    ]);
     sections.add(
       ScriptDocSection(
         title:
             '${scene.label}. ${scene.locationCanonical}'
             '${scene.offScript ? ' (fuera del guion)' : ''}',
+        indexLabel: _indexLabel(scene),
         headerFill: _rgb(sheet.headerFill(colors.sceneColor(scene))),
         rows: rows,
       ),
@@ -85,17 +91,27 @@ Future<TechnicalScriptDoc?> buildNarrativeScriptDoc(
     subtitle: project.director == null || project.director!.trim().isEmpty
         ? null
         : 'Dirección: ${project.director}',
-    columns: scriptDocColumns(
-      hidden: {
-        if (!settings.shows(ScriptColumn.fStop)) 'f',
-        if (!settings.shows(ScriptColumn.personajes)) 'pers',
-        if (!settings.shows(ScriptColumn.duracion)) 'dur',
-        if (!settings.shows(ScriptColumn.planta)) 'planta',
-      },
-    ),
+    columns: scriptDocColumns(hidden: hidden),
     sections: sections,
+    fontFamily: settings.fontFamily,
   );
 }
+
+/// Columnas que no salen cuando se exporta como se ve la hoja.
+Set<String> _screenHidden(TechnicalScriptSettings settings) => {
+  for (final c in ScriptColumn.optional)
+    if (!settings.shows(c)) c,
+};
+
+/// Línea del índice de [scene], con los planos [shots] si es un tramo.
+String _indexLabel(Scene scene, [List<Shot> shots = const []]) =>
+    scriptIndexLabel(
+      sceneLabel: scene.label,
+      intExt: scene.intExt,
+      location: scene.locationPureName,
+      dayNight: scene.dayNight,
+      shots: [for (final s in shots) '${s.number}'],
+    );
 
 /// Fila del documento para un plano, con sus colores y su imagen. [order]
 /// es su puesto en el orden de rodaje, cuando el documento es una jornada.
@@ -105,8 +121,11 @@ Future<ScriptDocRow> _docRow(
   Shot shot,
   ScriptSheetTheme sheet, {
   int? order,
+  String? orderNote,
   PlanProjectData? plans,
   ScriptPlanView planView = ScriptPlanView.both,
+  bool storyboard = false,
+  bool references = true,
 }) async {
   final cellFills = <String, int>{};
   final raw = shot.cellStylesJson;
@@ -130,13 +149,22 @@ Future<ScriptDocRow> _docRow(
     await db.watchReferencesForShot(shot.id).first,
   );
   final images = <Uint8List>[];
-  for (final path in own.isEmpty ? [referenceImageOf(shot)] : own) {
+  for (final path in !references
+      ? const <String?>[]
+      : own.isEmpty
+      ? [referenceImageOf(shot)]
+      : own) {
     final bytes = await PdfSafeImage.loadFromPathMaxEdge(path, maxEdge: 1200);
     if (bytes != null) images.add(bytes);
   }
+  final storyPath = storyboard ? storyboardImageOf(shot) : null;
+  final story = storyPath == null
+      ? null
+      : await PdfSafeImage.loadFromPathMaxEdge(storyPath, maxEdge: 1200);
   return ScriptDocRow(
     cells: {
-      if (order != null) 'orden': '$order',
+      if (order != null)
+        'orden': orderNote == null ? '$order' : '$order\n$orderNote',
       'esc': scene.label,
       'plano': '${shot.number}',
       'encuadre': shot.framing ?? '',
@@ -154,6 +182,7 @@ Future<ScriptDocRow> _docRow(
     fill: rowFill == null ? null : _rgb(rowFill),
     cellFills: cellFills,
     images: images,
+    storyboardImages: [if (story != null) story],
     planImages: plans == null
         ? const []
         : await _planImages(
@@ -165,13 +194,13 @@ Future<ScriptDocRow> _docRow(
 }
 
 /// Las plantas del proyecto, para pintar la columna de planta; nulo si la
-/// columna está oculta.
+/// columna no sale.
 Future<PlanProjectData?> _loadPlans(
   AppDatabase db,
   int projectId,
-  TechnicalScriptSettings settings,
+  Set<String> hidden,
 ) async {
-  if (!settings.shows(ScriptColumn.planta)) return null;
+  if (hidden.contains('planta')) return null;
   return PlanProjectData(
     sites: await db.watchSitesForProject(projectId).first,
     sets: await db.watchLocationsForProject(projectId).first,
@@ -310,8 +339,10 @@ shootDayWeather(ShootDocument day, LocationSite? site, {DateTime? now}) {
 Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
   AppDatabase db,
   int documentId,
-  TechnicalScriptSettings settings,
-) async {
+  TechnicalScriptSettings settings, {
+  Set<String>? hiddenColumns,
+}) async {
+  final hidden = hiddenColumns ?? _screenHidden(settings);
   final day = await db.getShootDocument(documentId);
   if (day == null) return null;
   final project = await db.getProject(day.projectId);
@@ -329,7 +360,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
     settings.copyWith(view: ScriptView.sheet),
     AppPalette.dark,
   );
-  final plans = await _loadPlans(db, day.projectId, settings);
+  final plans = await _loadPlans(db, day.projectId, hidden);
   final sceneById = {for (final s in scenes) s.id: s};
   final shotById = {for (final s in shots) s.id: s};
   final site = sites.where((s) => s.id == day.locationSiteId).firstOrNull;
@@ -337,6 +368,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
   final sections = <ScriptDocSection>[];
   Scene? current;
   var rows = <ScriptDocRow>[];
+  var tract = <Shot>[];
   var order = 0;
   void close() {
     final scene = current;
@@ -344,11 +376,13 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
     sections.add(
       ScriptDocSection(
         title: '${scene.label}. ${scene.locationCanonical}',
+        indexLabel: _indexLabel(scene, tract),
         headerFill: _rgb(sheet.headerFill(colors.sceneColor(scene))),
         rows: rows,
       ),
     );
     rows = <ScriptDocRow>[];
+    tract = <Shot>[];
   }
 
   for (final block in blocks) {
@@ -361,6 +395,7 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
       current = scene;
     }
     order++;
+    tract.add(shot);
     rows.add(
       await _docRow(
         db,
@@ -368,8 +403,15 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
         shot,
         sheet,
         order: order,
+        orderNote: switch (OnSetMark.of(block).status) {
+          OnSetStatus.done => '**HECHO**',
+          OnSetStatus.dropped => 'DESCART.',
+          OnSetStatus.pending => null,
+        },
         plans: plans,
         planView: settings.planView,
+        storyboard: !hidden.contains('story'),
+        references: !hidden.contains('ref'),
       ),
     );
   }
@@ -398,16 +440,10 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
     ].join('\n'),
     columns: [
       const ScriptDocColumn('orden', 'ORDEN', 760, centered: true),
-      ...scriptDocColumns(
-        hidden: {
-          if (!settings.shows(ScriptColumn.fStop)) 'f',
-          if (!settings.shows(ScriptColumn.personajes)) 'pers',
-          if (!settings.shows(ScriptColumn.duracion)) 'dur',
-          if (!settings.shows(ScriptColumn.planta)) 'planta',
-        },
-      ),
+      ...scriptDocColumns(hidden: hidden),
     ],
     sections: sections,
+    fontFamily: settings.fontFamily,
   );
 }
 

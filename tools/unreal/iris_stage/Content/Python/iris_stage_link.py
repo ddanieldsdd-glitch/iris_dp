@@ -27,7 +27,12 @@ Funciones:
   Capture(json)      → {"ok": true, "token": …}: foto en alta por una cámara
   CaptureResult(tok) → {"ok": true, "ready": bool, "png": base64}
   FindAssets(texto)  → {"ok": true, "assets": [{path, name, kind, source, sizeCm}]}
+  FindFabAssets(txt) → lo mismo, solo lo bajado de Fab y Megascans (F6.20 D2)
   AssetPreview(ruta) → {"ok": true, "top": png64, "threeQuarter": png64, "topSpanCm"}
+
+Los escaneos de la planta (RealityScan, Polycam…, F6.12) llegan con el
+nombre de su archivo y las carpetas de IRIS donde buscarlo en este PC; se
+importan una vez a `/Game/IRIS/Scans/<nombre>` y se ponen en su sitio.
 
 La ruta del objeto para Remote Control es
 `/Game/Python/iris_stage_link_PY.Default__IrisStageLink` (el módulo tiene
@@ -54,12 +59,18 @@ SUN_ID = "_sun"
 SKY_ID = "_sky"
 ATMOSPHERE_ID = "_atmosphere"
 FLOOR_ID = "_floor"
+POST_ID = "_post"
+STRUCTURE_ID = "_structure"
+STRUCTURE_ROOT = WORLD_ROOT + "/Estructura"
 WORLD_ROOT = "/Game/IRIS"
+SCAN_ROOT = WORLD_ROOT + "/Scans"
+# Una malla de más de un escaneo (la importación da varias): id#p<n>.
+PART = "#p"
 CUBE = "/Engine/BasicShapes/Cube.Cube"
 PLANE = "/Engine/BasicShapes/Plane.Plane"
 
 # Lo que no se borra al mandar IRIS la escena entera.
-_FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID}
+_FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID, POST_ID, STRUCTURE_ID}
 
 # Etiqueta con la ruta del asset que hace de una pieza (F6.20 B2): si el
 # asset cambia, el actor se rehace.
@@ -386,9 +397,10 @@ def _source_of(package):
     return "project"
 
 
-def _find_assets(query, limit=40):
+def _find_assets(query, limit=40, sources=None):
     """Mallas, Blueprints y personajes del proyecto que contienen todas las
-    palabras de [query] en su nombre o su carpeta."""
+    palabras de [query] en su nombre o su carpeta. Con [sources], solo los
+    de esos orígenes («fab», «megascans», «project»)."""
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     classes = {"StaticMesh": "mesh", "Blueprint": "blueprint", "SkeletalMesh": "skeletal"}
     flt = unreal.ARFilter(
@@ -399,6 +411,8 @@ def _find_assets(query, limit=40):
     for data in registry.get_assets(flt):
         package = str(data.package_name)
         if package.startswith(WORLD_ROOT + "/"):
+            continue
+        if sources and _source_of(package) not in sources:
             continue
         name = str(data.asset_name)
         hay = (package + " " + name).lower()
@@ -584,8 +598,121 @@ def _apply_sky(sky):
         _set(comp, "intensity", float(sky.get("scale", 1.0)))
 
 
+def _scan_meshes(file, folders, root=None):
+    """Las mallas de un escaneo importado; si aún no está, se importa del
+    archivo que tiene IRIS en este PC. Vacío si no se encuentra."""
+    base = re.sub(r"[^0-9a-zA-Z_]", "_", os.path.splitext(os.path.basename(file))[0])
+    dest = "%s/S_%s" % (root or SCAN_ROOT, base)
+    lib = unreal.EditorAssetLibrary
+
+    def meshes():
+        if not lib.does_directory_exist(dest):
+            return []
+        out = []
+        for path in lib.list_assets(dest, recursive=True, include_folder=False):
+            data = lib.find_asset_data(path)
+            if str(data.asset_class_path.asset_name) == "StaticMesh":
+                out.append(str(data.package_name) + "." + str(data.asset_name))
+        return sorted(out)
+
+    found = meshes()
+    if found:
+        return found
+    source = None
+    for folder in folders or []:
+        candidate = os.path.join(folder, os.path.basename(file))
+        if os.path.isfile(candidate):
+            source = candidate
+            break
+    if source is None:
+        unreal.log_warning("[IRIS Stage] El escaneo %s no está en este PC." % file)
+        return []
+    task = unreal.AssetImportTask()
+    task.filename = source
+    task.destination_path = dest
+    task.automated = True
+    task.save = True
+    task.replace_existing = True
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+    found = meshes()
+    if not found:
+        unreal.log_warning("[IRIS Stage] No se ha podido importar %s." % source)
+    return found
+
+
+def _apply_scan(s, folders):
+    """Un escaneo de la planta: sus mallas en su sitio, giro y escala."""
+    uid = str(s["id"])
+    label = "IRIS_%s" % (s.get("name") or uid)
+    loc, rot = _vec(s["loc"]), _rot(s["rot"])
+    scale = float(s.get("scale") or 1.0)
+    parts = _scan_meshes(s["file"], folders)
+    for i, path in enumerate(parts):
+        part_uid = uid if i == 0 else "%s%s%d" % (uid, PART, i)
+        actor = _place_asset(part_uid, label if i == 0 else "%s (%d)" % (label, i),
+                             path, loc, rot)
+        if actor is not None:
+            actor.set_actor_scale3d(unreal.Vector(scale, scale, scale))
+    # Mallas que ya no tiene (otra importación del mismo escaneo).
+    _remove([p for p in list(_actors)
+             if p.startswith(uid + PART) and int(p[len(uid + PART):] or 0) >= max(len(parts), 1)])
+
+
+def _apply_structure(s):
+    """La estructura del set (F6.21.3): paredes con sus huecos, techos,
+    cristales, telas, pilares y rigging, en un GLB que IRIS guarda en este
+    PC. Cada pieza ya trae su sitio en la malla, así que todas van en el
+    origen, sin giro ni escala. La de antes se quita."""
+    parts = _scan_meshes(s["file"], [s.get("folder")], root=STRUCTURE_ROOT)
+    if not parts:
+        return
+    _rescan()
+    _remove([uid for uid in list(_actors)
+             if uid == STRUCTURE_ID or uid.startswith(STRUCTURE_ID + PART)])
+    origin, flat = unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0)
+    for i, path in enumerate(parts):
+        uid = STRUCTURE_ID if i == 0 else "%s%s%d" % (STRUCTURE_ID, PART, i)
+        _place_asset(uid, "IRIS_Estructura" if i == 0 else "IRIS_Estructura (%d)" % i,
+                     path, origin, flat)
+
+
+def _apply_exposure(e):
+    """Exposición fija con la cámara de IRIS (F6.21.4): manual y con la
+    cámara física (ISO, obturador, diafragma), en un PostProcessVolume que
+    vale para todo el nivel. Así la luz se ve como la mide IRIS, y bajar un
+    foco al 50 % se ve la mitad."""
+    vol = _ensure(POST_ID, unreal.PostProcessVolume, "IRIS_Exposicion",
+                  unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    _set(vol, "unbound", True)
+    s = vol.get_editor_property("settings")
+    values = [
+        ("auto_exposure_method", unreal.AutoExposureMethod.AEM_MANUAL),
+        ("auto_exposure_apply_physical_camera_exposure", True),
+        ("camera_iso", float(e.get("iso", 800))),
+        ("camera_shutter_speed", 1.0 / max(float(e.get("shutterS", 1 / 48.0)), 1e-4)),
+        ("depth_of_field_fstop", float(e.get("tStop", 2.8))),
+        # El ND quita luz: compensación negativa.
+        ("auto_exposure_bias", -float(e.get("nd", 0))),
+        # Nada que cambie el nivel de la imagen por su cuenta.
+        ("vignette_intensity", 0.0),
+        ("bloom_intensity", 0.2),
+        ("local_exposure_highlight_contrast_scale", 1.0),
+        ("local_exposure_shadow_contrast_scale", 1.0),
+    ]
+    for name, value in values:
+        try:
+            s.set_editor_property("override_" + name, True)
+            s.set_editor_property(name, value)
+        except Exception as exc:
+            unreal.log_warning("[IRIS Stage] exposición %s: %s" % (name, exc))
+    vol.set_editor_property("settings", s)
+
+
 def _remove(ids):
     ids = list(ids) + [str(uid) + BODY for uid in ids if not str(uid).endswith(BODY)]
+    # Las otras mallas de un escaneo se van con él.
+    ids += [p for p in list(_actors) for uid in list(ids)
+            if PART not in str(uid) and p.startswith(str(uid) + PART)]
     for uid in ids:
         actor = _find(str(uid))
         if actor is not None:
@@ -598,15 +725,17 @@ def _apply(data):
     cameras = data.get("cameras", [])
     props = data.get("props", [])
     assets = data.get("assets", [])
+    scans = data.get("scans", [])
     if data.get("world"):
         _ensure_world(data["world"])
     if data.get("full"):
         # Escena entera: lo de IRIS que ya no está, fuera.
         _rescan()
-        keep = ({str(x["id"]) for x in lights + cameras + props + assets}
+        keep = ({str(x["id"]) for x in lights + cameras + props + assets + scans}
                 | {str(x["id"]) + BODY for x in lights + cameras if x.get("asset")}
                 | _FIXED)
-        _remove([uid for uid in list(_actors) if uid not in keep])
+        _remove([uid for uid in list(_actors)
+                 if uid not in keep and uid.split(PART)[0] not in keep])
     _remove(data.get("remove", []))
     for light in lights:
         _apply_light(light)
@@ -616,10 +745,16 @@ def _apply(data):
         _apply_prop(p)
     for a in assets:
         _apply_asset(a)
+    for s in scans:
+        _apply_scan(s, data.get("scanFolders", []))
     if "sun" in data:
         _apply_sun(data["sun"])
     if "sky" in data:
         _apply_sky(data["sky"])
+    if data.get("exposure"):
+        _apply_exposure(data["exposure"])
+    if data.get("structure"):
+        _apply_structure(data["structure"])
     return len(lights)
 
 
@@ -706,6 +841,15 @@ class IrisStageLink(unreal.BlueprintFunctionLibrary):
     def FindAssets(query):
         try:
             return json.dumps({"ok": True, "assets": _find_assets(query)})
+        except Exception as exc:
+            return json.dumps({"ok": False, "error": str(exc)})
+
+    @unreal.ufunction(static=True, params=[str], ret=str,
+                      meta=dict(Category="IRIS Stage"))
+    def FindFabAssets(query):
+        try:
+            return json.dumps({"ok": True, "assets": _find_assets(
+                query, limit=300, sources=("fab", "megascans"))})
         except Exception as exc:
             return json.dumps({"ok": False, "error": str(exc)})
 

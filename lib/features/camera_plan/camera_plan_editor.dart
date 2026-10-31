@@ -2897,7 +2897,49 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       onUnrealCapture: widget.shotId == null ? null : _saveUnrealCapture,
       onOpenUnreal: _openInUnreal,
       projectId: widget.projectId,
+      onScanTop: _addScanTop,
+      exposure: _exposure,
+      stop: _targetStop,
     );
+  }
+
+  /// La cenital de un escaneo, de fondo y a escala en esta planta, como un
+  /// terreno: [metres] es su rectángulo en metros de la planta.
+  Future<void> _addScanTop(Uint8List png, Rect metres) async {
+    final layer = _ownImageLayer;
+    if (layer == null) {
+      _showSnack('Guarda antes la planta para poder poner imágenes.');
+      return;
+    }
+    final mpu = _metersPerUnit;
+    final rect = Rect.fromLTWH(
+      metres.left / mpu,
+      metres.top / mpu,
+      metres.width / mpu,
+      metres.height / mpu,
+    );
+    final added = await _imageStore.add(
+      projectId: widget.projectId,
+      scope: layer.$1,
+      targetId: layer.$2,
+      bytes: png,
+      extension: '.png',
+      source: PlanImageSource.file,
+      center: rect.center,
+      caption: 'Cenital del escaneo',
+    );
+    await _imageStore.save(
+      added.copyWith(
+        x: rect.left,
+        y: rect.top,
+        w: rect.width,
+        h: rect.height,
+        terrain: true,
+        opacity: 0.85,
+      ),
+    );
+    await _reloadImages();
+    if (mounted) _showSnack('Cenital del escaneo puesta de fondo.');
   }
 
   /// Un asset de la biblioteca de Unreal, puesto en la planta: un actor si
@@ -5249,6 +5291,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                       : _saveUnrealCapture,
                                   onOpenUnreal: _openInUnreal,
                                   projectId: widget.projectId,
+                                  onScanTop: _addScanTop,
+                                  exposure: _exposure,
+                                  stop: _targetStop,
                                 ),
                               ),
                             ],

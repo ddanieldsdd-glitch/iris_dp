@@ -1,9 +1,13 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
+
+import 'package:crypto/crypto.dart';
 
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
+import '../light/exposure.dart';
 import '../light/light_scene.dart';
 import '../plan_category.dart';
 import '../../unreal_link/unreal_asset_ref.dart';
@@ -43,6 +47,11 @@ class PlanScene3d {
 
     /// Sol y cielo del esquema de luz, si lo hay.
     PlanAmbient? ambient,
+
+    /// La cámara con la que se mide (ISO, obturador, ND) y su diafragma:
+    /// el 3D y Unreal exponen igual que el fotómetro (F6.21.4).
+    ExposureSettings? exposure,
+    double? stop,
   }) {
     final mpu = metersPerUnit;
     List<double> xy(Offset p) => [_r(p.dx * mpu), _r(-p.dy * mpu)];
@@ -68,6 +77,8 @@ class PlanScene3d {
       // Colores por categoría: los mismos que en la planta 2D.
       'palette': PlanCategory.palette,
       if (ambient != null && ambient.hasSun) 'sun': _sun(ambient),
+      if (exposure != null && stop != null && stop > 0)
+        'exposure': exposureOf(exposure, stop),
       'halls': [
         for (final MapEntry(key: uid, value: (el, r)) in halls.entries)
           _hall(uid, el, r, mpu),
@@ -171,6 +182,8 @@ class PlanScene3d {
             'z0': level,
             'yawDeg': el.rotation,
             'sizeM': _r(LightScene.propSizeM(el)),
+            'widthM': _r(LightScene.furnitureSizeM(el).width),
+            'depthM': _r(LightScene.furnitureSizeM(el).depth),
             'heightM': _r(LightScene.propHeightM(el)),
             'asset': ?UnrealAssetRef.of(el)?.toPayload(),
             // Miniatura 3/4 del asset (F6.20 B4): el visor la pone de cartel.
@@ -336,6 +349,40 @@ class PlanScene3d {
 
   /// Apunta una luz a un punto del 3D (metros): su giro en planta y, si
   /// cuelga, su inclinación desde la vertical.
+  /// Huella de la estructura del set (F6.21.3): paredes y huecos, telas,
+  /// pilares, truss, rigging y naves. Mover un foco o una cámara no la
+  /// cambia; mover una pared, sí. `null` si no hay estructura.
+  static String? structureKey(Map<String, dynamic> scene) {
+    const kinds = ['walls', 'drapes', 'pillars', 'trusses', 'rigging', 'halls'];
+    final parts = {
+      for (final k in kinds)
+        if ((scene[k] as List?)?.isNotEmpty ?? false) k: scene[k],
+    };
+    if (parts.isEmpty) return null;
+    final hash = sha1.convert(utf8.encode(jsonEncode(parts))).toString();
+    return hash.substring(0, 16);
+  }
+
+  /// La exposición para el 3D y Unreal: la de la cámara a [stop]. `ev100`
+  /// es la del fotómetro (N² = E · ISO · t / C, con el ND) y `scale` lo que
+  /// multiplica la luminancia (cd/m²) para que el gris medio de lo bien
+  /// expuesto quede en el gris medio de la imagen: 1 / (1,2 · 2^EV100).
+  static Map<String, dynamic> exposureOf(ExposureSettings e, double stop) {
+    final t = e.exposureTime;
+    final ev100 =
+        math.log(stop * stop / t) / math.ln2 -
+        math.log(e.iso / 100) / math.ln2 +
+        e.ndStops;
+    return {
+      'iso': e.iso,
+      'shutterS': t,
+      'tStop': stop,
+      'nd': e.ndStops,
+      'ev100': (ev100 * 100).round() / 100,
+      'scale': 1 / (1.2 * math.pow(2, ev100)),
+    };
+  }
+
   static void aimAt(
     PlanElement light,
     double x,
@@ -352,11 +399,12 @@ class PlanScene3d {
       final deg = math.atan2(hx, hy) * 180 / math.pi;
       light.rotation = (deg % 360 + 360) % 360;
     }
-    if (PlanLight.isOverhead(light)) {
-      final drop = PlanLevel.of(light) + PlanLight.heightOf(light) - z;
-      final tilt = math.atan2(horizontal, math.max(drop, 0.01)) * 180 / math.pi;
-      light.props[PlanLight.tiltKey] = (tilt * 2).round() / 2;
-    }
+    // La inclinación, para cualquier montaje: del foco al punto.
+    final rise = z - (PlanLevel.of(light) + PlanLight.heightOf(light));
+    PlanLight.setElevation(
+      light,
+      math.atan2(rise, math.max(horizontal, 0.001)) * 180 / math.pi,
+    );
   }
 
   /// El sol: hacia dónde está (vector unitario con los ejes del visor),
@@ -546,18 +594,12 @@ class PlanScene3d {
     // Hacia dónde mira en planta, con los ejes del visor.
     final hx = math.sin(rad), hy = math.cos(rad);
     final z = level + PlanLight.heightOf(el);
-    final double dx, dy, dz;
-    if (PlanLight.isOverhead(el)) {
-      final tilt = PlanLight.tiltOf(el) * math.pi / 180;
-      dx = math.sin(tilt) * hx;
-      dy = math.sin(tilt) * hy;
-      dz = -math.cos(tilt);
-    } else {
-      final len = math.sqrt(1 + 0.15 * 0.15);
-      dx = hx / len;
-      dy = hy / len;
-      dz = -0.15 / len;
-    }
+    // Paneo (el giro en planta) e inclinación desde la horizontal (F6.21.5),
+    // igual para cualquier montaje.
+    final tilt = PlanLight.elevationOf(el) * math.pi / 180;
+    final dx = math.cos(tilt) * hx;
+    final dy = math.cos(tilt) * hy;
+    final dz = math.sin(tilt);
     // Apunta al suelo si llega; si no, a lo que alcanza el haz.
     final reach = (beam?.reach ?? 300) * mpu;
     final t = dz < -0.02 ? math.min((z - level) / -dz, reach) : reach;

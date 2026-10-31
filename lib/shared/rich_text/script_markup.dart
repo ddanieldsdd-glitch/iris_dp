@@ -5,6 +5,11 @@
 /// - `*cursiva*`
 /// - `__subrayado__`
 /// - `==marcado==` (amarillo) o `==g:marcado==` con otro color
+/// - `{{r:texto}}` con la letra en otro color
+///
+/// Las marcas de negrita, cursiva y subrayado tienen que ir pegadas al
+/// texto (`*así*`, no `* así *`) y la cursiva no cruza saltos de línea:
+/// un asterisco suelto («2 * 3») no pone nada en cursiva.
 ///
 /// Una marca sin su pareja se deja como texto normal. Código puro.
 library;
@@ -17,7 +22,25 @@ const kScriptMarkerColors = {
   'b': 'Azul',
 };
 
-enum ScriptMark { bold, italic, underline, marker }
+/// Colores de letra: letra de la marca → nombre.
+const kScriptTextColors = {
+  'r': 'Rojo',
+  'a': 'Azul',
+  'v': 'Verde',
+  'n': 'Naranja',
+  'm': 'Morado',
+};
+
+/// Color RGB de cada color de letra (el mismo en pantalla y al exportar).
+const kScriptTextColorRgb = {
+  'r': 0xD32F2F,
+  'a': 0x1565C0,
+  'v': 0x2E7D32,
+  'n': 0xEF6C00,
+  'm': 0x7B1FA2,
+};
+
+enum ScriptMark { bold, italic, underline, marker, textColor }
 
 /// Trozo de texto con su formato.
 class ScriptSpan {
@@ -29,6 +52,9 @@ class ScriptSpan {
   /// Letra del color del marcador, o nulo si no va marcado.
   final String? marker;
 
+  /// Letra del color de la letra ([kScriptTextColors]), o nulo.
+  final String? textColor;
+
   /// Es una marca (`**`, `==g:`…), no contenido: se oculta al leer y se
   /// atenúa al escribir.
   final bool isMarkup;
@@ -39,15 +65,18 @@ class ScriptSpan {
     this.italic = false,
     this.underline = false,
     this.marker,
+    this.textColor,
     this.isMarkup = false,
   });
 
-  bool get isPlain => !bold && !italic && !underline && marker == null;
+  bool get isPlain =>
+      !bold && !italic && !underline && marker == null && textColor == null;
 
   @override
   String toString() =>
       'ScriptSpan("$text"${bold ? ' b' : ''}${italic ? ' i' : ''}'
       '${underline ? ' u' : ''}${marker != null ? ' m:$marker' : ''}'
+      '${textColor != null ? ' c:$textColor' : ''}'
       '${isMarkup ? ' markup' : ''})';
 }
 
@@ -56,18 +85,39 @@ class _Style {
   final bool italic;
   final bool underline;
   final String? marker;
+  final String? textColor;
 
   const _Style({
     this.bold = false,
     this.italic = false,
     this.underline = false,
     this.marker,
+    this.textColor,
   });
+
+  _Style copyWith({
+    bool? bold,
+    bool? italic,
+    bool? underline,
+    String? marker,
+    String? textColor,
+  }) => _Style(
+    bold: bold ?? this.bold,
+    italic: italic ?? this.italic,
+    underline: underline ?? this.underline,
+    marker: marker ?? this.marker,
+    textColor: textColor ?? this.textColor,
+  );
 }
 
-// El orden importa: `**` antes que `*`.
+// El orden importa: `**` antes que `*`. Negrita, subrayado y cursiva van
+// pegadas al texto; la cursiva, además, en una sola línea.
 final _pattern = RegExp(
-  r'\*\*(.+?)\*\*|__(.+?)__|\*(.+?)\*|==(?:([ygpb]):)?(.+?)==',
+  r'\*\*(\S(?:.*?\S)?)\*\*'
+  r'|__(\S(?:.*?\S)?)__'
+  r'|\*([^\s*](?:[^\n]*?[^\s*])?)\*'
+  r'|==(?:([ygpb]):)?(.+?)=='
+  r'|\{\{([ravnm]):(.+?)\}\}',
   dotAll: true,
 );
 
@@ -87,6 +137,7 @@ List<ScriptSpan> parseScriptMarkup(String text, {bool keepMarkup = false}) {
         italic: style.italic,
         underline: style.underline,
         marker: style.marker,
+        textColor: style.textColor,
         isMarkup: markup,
       ),
     );
@@ -103,41 +154,27 @@ List<ScriptSpan> parseScriptMarkup(String text, {bool keepMarkup = false}) {
       if (match.group(1) != null) {
         open = close = '**';
         inner = match.group(1)!;
-        next = _Style(
-          bold: true,
-          italic: style.italic,
-          underline: style.underline,
-          marker: style.marker,
-        );
+        next = style.copyWith(bold: true);
       } else if (match.group(2) != null) {
         open = close = '__';
         inner = match.group(2)!;
-        next = _Style(
-          bold: style.bold,
-          italic: style.italic,
-          underline: true,
-          marker: style.marker,
-        );
+        next = style.copyWith(underline: true);
       } else if (match.group(3) != null) {
         open = close = '*';
         inner = match.group(3)!;
-        next = _Style(
-          bold: style.bold,
-          italic: true,
-          underline: style.underline,
-          marker: style.marker,
-        );
+        next = style.copyWith(italic: true);
+      } else if (match.group(6) != null) {
+        final color = match.group(6)!;
+        open = '{{$color:';
+        close = '}}';
+        inner = match.group(7)!;
+        next = style.copyWith(textColor: color);
       } else {
         final color = match.group(4);
         open = color == null ? '==' : '==$color:';
         close = '==';
         inner = match.group(5)!;
-        next = _Style(
-          bold: style.bold,
-          italic: style.italic,
-          underline: style.underline,
-          marker: color ?? 'y',
-        );
+        next = style.copyWith(marker: color ?? 'y');
       }
       emit(open, next, markup: true);
       walk(inner, next);
@@ -177,6 +214,7 @@ String _open(ScriptMark mark, String? color) => switch (mark) {
   ScriptMark.italic => '*',
   ScriptMark.underline => '__',
   ScriptMark.marker => color == null || color == 'y' ? '==' : '==$color:',
+  ScriptMark.textColor => '{{$color:',
 };
 
 String _close(ScriptMark mark) => switch (mark) {
@@ -184,7 +222,12 @@ String _close(ScriptMark mark) => switch (mark) {
   ScriptMark.italic => '*',
   ScriptMark.underline => '__',
   ScriptMark.marker => '==',
+  ScriptMark.textColor => '}}',
 };
+
+/// Marcas que tienen color: con [color] nulo se quitan.
+bool _isColored(ScriptMark mark) =>
+    mark == ScriptMark.marker || mark == ScriptMark.textColor;
 
 /// Resultado de aplicar un formato: el texto y la selección que queda.
 typedef ScriptMarkupEdit = ({String text, int start, int end});
@@ -206,12 +249,27 @@ ScriptMarkupEdit toggleScriptMarkup(
   }
   start = start.clamp(0, text.length);
   end = end.clamp(0, text.length);
+  // Los blancos de los bordes quedan fuera: `*así*`, no `*así *`, que no
+  // se leería como cursiva.
+  while (start < end && _isBlank(text[start])) {
+    start++;
+  }
+  while (end > start && _isBlank(text[end - 1])) {
+    end--;
+  }
   if (start == end) return (text: text, start: start, end: end);
 
   final close = _close(mark);
-  final opens = mark == ScriptMark.marker
-      ? ['==', for (final c in kScriptMarkerColors.keys) '==$c:']
-      : [_open(mark, null)];
+  final opens = switch (mark) {
+    ScriptMark.marker => [
+      '==',
+      for (final c in kScriptMarkerColors.keys) '==$c:',
+    ],
+    ScriptMark.textColor => [
+      for (final c in kScriptTextColors.keys) '{{$c:',
+    ],
+    _ => [_open(mark, null)],
+  };
   // Las más largas primero: `==g:` antes que `==`.
   opens.sort((a, b) => b.length.compareTo(a.length));
 
@@ -227,7 +285,7 @@ ScriptMarkupEdit toggleScriptMarkup(
           selected +
           text.substring(end + close.length);
       final newStart = start - open.length;
-      if (mark == ScriptMark.marker &&
+      if (_isColored(mark) &&
           color != null &&
           _open(mark, color) != open) {
         return toggleScriptMarkup(
@@ -252,7 +310,7 @@ ScriptMarkupEdit toggleScriptMarkup(
         selected.length - close.length,
       );
       final without = text.substring(0, start) + inner + text.substring(end);
-      if (mark == ScriptMark.marker &&
+      if (_isColored(mark) &&
           color != null &&
           _open(mark, color) != open) {
         return toggleScriptMarkup(
@@ -267,7 +325,7 @@ ScriptMarkupEdit toggleScriptMarkup(
     }
   }
 
-  if (mark == ScriptMark.marker && color == null) {
+  if (_isColored(mark) && color == null) {
     return (text: text, start: start, end: end);
   }
 
@@ -280,3 +338,5 @@ ScriptMarkupEdit toggleScriptMarkup(
     end: start + open.length + selected.length,
   );
 }
+
+bool _isBlank(String char) => char.trim().isEmpty;

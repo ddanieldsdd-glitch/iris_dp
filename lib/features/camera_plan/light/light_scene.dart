@@ -525,7 +525,13 @@ class LightScene {
     // de su techo (o la que se le haya puesto), sin atravesarlo.
     double fixtureZ(PlanElement el) {
       final base = ground(el.position);
-      if (!PlanLight.isOverhead(el)) return base + PlanLight.subjectHeightM;
+      if (!PlanLight.isOverhead(el)) {
+        // En trípode, a su altura si la tiene (F6.21.5); si no, a la cara.
+        return base +
+            (PlanLight.hasOwnAim(el)
+                ? PlanLight.heightOf(el)
+                : PlanLight.subjectHeightM);
+      }
       final ceiling = _ceilingAt(rooms, el.position);
       final mount = el.props[PlanLight.heightKey] != null
           ? PlanLight.heightOf(el)
@@ -542,14 +548,18 @@ class LightScene {
             aim: aimOf(el),
             // Sin altura propia, cuelga del techo del recinto donde está.
             overheadM: !PlanLight.isOverhead(el)
-                ? null
+                ? _standDrop(el)
                 : el.props[PlanLight.heightKey] != null
                 ? PlanLight.overheadDrop(el)
                 : ((_ceilingAt(rooms, el.position) ??
                               PlanLight.defaultCeilingHeight) -
                           PlanLight.subjectHeightM)
                       .clamp(0.3, 50.0),
-            tiltDeg: PlanLight.tiltOf(el),
+            tiltDeg: PlanLight.isOverhead(el)
+                ? PlanLight.tiltOf(el)
+                : _standDrop(el) == null
+                ? 0
+                : (90 + PlanLight.elevationOf(el)).clamp(0.0, 89.0),
             z: fixtureZ(el),
             fixture: light,
             label: (el.props['name'] as String?) ?? el.displayLabel,
@@ -740,6 +750,37 @@ class LightScene {
         PropType.hill => 4,
         _ => 0.5,
       };
+
+  /// Ancho y fondo de un mueble (F6.1.5b, F6.21.3), en metros: el fondo va
+  /// en la dirección a la que mira en planta y el ancho de lado.
+  static const widthKey = 'widthM';
+  static const depthKey = 'depthM';
+
+  /// Medidas por defecto de cada mueble, ancho × fondo.
+  static (double, double) _furnitureDefault(PropType? type) => switch (type) {
+    PropType.table => (1.6, 0.9),
+    PropType.chair => (0.45, 0.5),
+    PropType.sofa => (2.0, 0.9),
+    PropType.bed => (1.5, 2.0),
+    _ => (0.5, 0.5),
+  };
+
+  /// Ancho y fondo de [el]. Sin medidas propias: las de un mueble típico de
+  /// su tipo; si tenía el tamaño antiguo (un solo lado), las que salían de
+  /// él, para que se vea como antes.
+  static ({double width, double depth}) furnitureSizeM(PlanElement el) {
+    final w = (el.props[widthKey] as num?)?.toDouble();
+    final d = (el.props[depthKey] as num?)?.toDouble();
+    final old = (el.props[sizeKey] as num?)?.toDouble();
+    final (dw, dd) = old == null
+        ? _furnitureDefault(el.propType)
+        : switch (el.propType) {
+            PropType.sofa => (old, math.min(old * 0.45, 0.95)),
+            PropType.bed => (old * 0.7, old),
+            _ => (old, old),
+          };
+    return (width: w ?? dw, depth: d ?? dd);
+  }
 
   /// Altura de un árbol, una roca, un vehículo, una colina o un relieve.
   static double propHeightM(PlanElement el) =>
@@ -2003,6 +2044,17 @@ class LightScene {
   // ── Cuánta luz llega ──────────────────────────────────────────────────────
 
   /// Hacia dónde apunta una luz: el eje de su haz.
+  /// Un foco de trípode con altura o inclinación propias, por encima de la
+  /// cara (F6.21.5), alumbra como uno colgado: desde su altura y con el
+  /// ángulo de su haz, así que lo que queda por debajo del eje recibe menos.
+  /// Sin altura ni inclinación propias, o a la altura de la cara, sigue como
+  /// siempre: `null`.
+  static double? _standDrop(PlanElement el) {
+    if (PlanLight.isOverhead(el) || !PlanLight.hasOwnAim(el)) return null;
+    final drop = PlanLight.heightOf(el) - PlanLight.subjectHeightM;
+    return drop < 0.3 ? null : drop;
+  }
+
   static Offset aimOf(PlanElement el) {
     final rad = el.rotation * math.pi / 180;
     return Offset(math.sin(rad), -math.cos(rad));

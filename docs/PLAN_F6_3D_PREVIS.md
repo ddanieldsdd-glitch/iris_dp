@@ -137,6 +137,7 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 - **Qué:** mesa, silla, sofá, cama, vehículo, árbol (copa que filtra la luz), roca, rectángulo genérico con su tamaño y su altura (`LightScene.propSizeM` y `propHeightM`).
 
 **F6.1.5b Atrezzo con medidas y forma** · todos
+- **Estado:** en parte (F6.21.3): ancho, fondo y alto de mesa, silla, sofá, cama y pieza. Faltan la forma (redonda u ovalada), las asas y los datos por tipo (plazas, alto del asiento).
 - **Qué:** todo el atrezzo se edita como una pieza de verdad:
   - forma: rectangular, cuadrada, redonda u ovalada;
   - ancho, fondo y alto en centímetros;
@@ -552,13 +553,13 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 **F6.12.2 Recortar y limpiar** · Mac
 - **Qué:** caja de recorte y borrador del escaneo, guardados con el escaneo.
 
-**F6.12.3 Del escaneo a la planta** · Mac
+**F6.12.3 Del escaneo a la planta** · Mac · **en curso** (`plan/f6-12-escaneos-rodaje`: cenital a escala como fondo de la planta; falta proponer paredes)
 - **Qué:** vista cenital y corte a 1 m como fondo de la planta para calcar, y propuesta de paredes detectadas.
 
-**F6.12.4 Luz sobre el escaneo** · Mac
+**F6.12.4 Luz sobre el escaneo** · Mac · **en curso** (`plan/f6-12-escaneos-rodaje`: con un escaneo, cuatro focos dan sombra y el escaneo la recibe; sin malla simplificada todavía)
 - **Qué:** una malla de colisión simplificada del escaneo para que las luces de IRIS lo iluminen y den sombra.
 
-**F6.12.5 Sincronizar escaneos** · todos
+**F6.12.5 Sincronizar escaneos** · todos · **hecho** (`plan/f6-12-escaneos-rodaje`: `PlanScanStore`, como archivo por la nube, hasta 50 MB)
 - **Qué:** los escaneos viajan con los medios del proyecto (como las imágenes de la planta) y están en el iPad.
 
 **F6.12.6 Localizaciones con coordenadas** · todos
@@ -894,12 +895,260 @@ Plan aprobado por Daniel el 2026-10-27. Un PR por fase, en ramas que salen de `p
 | B1–B2 | Un solo modelo `props['unreal']` (`UnrealAssetRef`; lee también `unrealAsset` y un `unrealMeshPath` propio) y asset para cualquier elemento: el cuerpo de focos y cámaras unido a ellos, el atrezzo, y paredes, actores, grip y rigging en la lista `assets`. Selector en la ficha 2D y en el 3D; `FindAssets` busca mallas, Blueprints y personajes, con su origen | en curso (PR 4) |
 | B3–B4 | Miniaturas que renderiza Unreal (`AssetPreview`: cenital ortográfica con transparencia y 3/4, PNG de 512 px, lejos del set y con luces propias) guardadas con `UnrealThumbStore` (#56, viajan por la nube); «Vista de assets» en la planta (la cenital a escala y girada), cartel con la 3/4 en el 3D y miniatura en la ficha | en curso (PR 5) |
 | B5 | Biblioteca de Unreal (`UnrealLibrary`): lo usado y lo encontrado, con miniatura, origen y medidas; favoritos; búsqueda sin Unreal; «Buscar en Unreal» y «Hacer las miniaturas que faltan»; «Poner en la planta» crea el elemento del tipo que dice el nombre (o un actor si es un personaje) con medidas y asset. Viaja con `user_settings`. En IRIS Stage y en la barra de la planta | en curso (PR 6) |
-| C1–C4 | IRIS Stage como lista de seis pasos, tutorial y guía | pendiente |
-| D1–D4 | Buscar en Fab y Quixel desde IRIS, recogida automática, tejidos y packs de partida | pendiente |
-| E1–E5 | RealityScan/RealityCapture sin interfaz: de vídeo a malla, ortofoto y paredes propuestas, con ida y vuelta | pendiente |
+| C1–C4 | IRIS Stage como lista de seis pasos, tutorial y guía | en curso (`plan/pulido-rodaje`): la guía de seis pasos con su estado y botón (`unreal_stage_steps.dart`) y quitar de la biblioteca con constancia. Falta la miniatura del esquema de luz con colores y nombres |
+| D1–D4 | Buscar en Fab y Quixel desde IRIS, recogida automática, tejidos y packs de partida | en curso (`plan/f6-20-d-fab-quixel`): D1 «Buscar en Fab» y «Megascans» abren la búsqueda en el navegador (Fab no tiene API pública); D2 `FindFabAssets` recoge lo bajado a `/Game/Fab` y `/Game/Megascans` al abrir la biblioteca, al volver a IRIS y con «Recoger de Fab»; D4 «Packs de partida» (búsquedas para vestir un set). Falta D3: tejidos y superficies de Fab en paredes y suelo |
+| E1–E5 | RealityScan/RealityCapture sin interfaz: de vídeo a malla, ortofoto y paredes propuestas, con ida y vuelta | en curso: el escaneo exportado (GLB/OBJ) se importa, viaja por la nube, da la cenital de fondo, recibe sombras y llega a Unreal (`scans` en IRIS Stage, importado a `/Game/IRIS/Scans`). Falta la captura sin interfaz y las paredes propuestas |
+
+## F6.21 · Ensayos de luz fieles en IRIS y en Unreal
+
+Pedido por Daniel el 2026-10-31. Objetivo: que un esquema de luz ensayado en IRIS se vea y se mida igual en Unreal, con el set, la luz y la atmósfera a escala, para que el ensayo sirva de verdad en el rodaje.
+
+### Lo que hay hoy (revisado el 2026-10-31)
+
+- **Lo que llega a Unreal:**
+  - focos, cámaras, sol y cielo, escaneos y lo que tiene asset;
+  - el atrezzo sin asset llega como un bloque cuadrado: ancho = fondo = `LightScene.propSizeM`, más su alto (`iris_stage_link.py`, `_apply_prop`);
+  - **las paredes, puertas, ventanas, telas, pilares, truss y la nave no llegan** si no tienen asset de Unreal. Por eso el set no se ve con sus proporciones.
+- **Intensidad:** Unreal recibe las candelas de IRIS (`source.cd`, con regulación, difusiones y gelatinas) en unidades de candela. Pero:
+  - Unreal tiene la **autoexposición** activa, y la autoexposición iguala los niveles: un foco al 50 % se ve casi como al 100 %;
+  - el **visor 3D de IRIS no usa las candelas**: su intensidad es `0.6 + vatios/1600` (`viewer.js`), así que la regulación no se nota en el 3D.
+- **Altura e inclinación:**
+  - la altura existe para todos los focos (`PlanLight.heightKey`, 3 m por defecto);
+  - la **inclinación** solo existe para los colgados del techo (`tiltKey`, de 0 a 80° desde la vertical);
+  - los de trípode apuntan siempre unos 8,5° hacia abajo (`plan_scene3d.dart`, `dz = -0.15`);
+  - el paneo es el giro en planta;
+  - desde Unreal vuelven la altura y la dirección (`unreal_return.dart`, `aimAt`), pero en un trípode la inclinación se pierde.
+- **Entorno y niebla:**
+  - cada set es un nivel de Unreal (`/Game/IRIS/<localización>/<set>`), con suelo, sol y cielo físico si hay sol;
+  - no se elige si es plató o exterior;
+  - la niebla está pendiente (F6.9.1).
+
+### F6.21.1 · Tipo de entorno al crear el set · todos
+
+- **Qué:**
+  - al crear un set (o en su ficha), y en el diálogo «Abrir en Unreal», se elige **Plató** o **Exterior (naturaleza)**;
+  - después se puede cambiar; se guarda en el set (`props` de la planta del set) y viaja con el proyecto.
+- **Plató:**
+  - sin sol ni cielo, el ciclorama o las paredes del plató (F6.18) y el suelo neutro;
+  - SkyLight a 0 y la exposición fija de F6.21.4: solo alumbran los focos.
+- **Exterior:**
+  - SkyAtmosphere, sol de la posición y la hora reales (F6.3.5), SkyLight;
+  - suelo de terreno (hierba, tierra, asfalto) con su reflectancia;
+  - nubes volumétricas opcionales.
+- **En IRIS:** el visor 3D aplica lo mismo (fondo negro o gris en plató; cielo y sol fuera) y el motor de luz quita el cielo y el sol en plató.
+- **Hecho cuando:** crear un set de plató y otro de exterior y abrir los dos en Unreal da dos niveles distintos, y la lectura del fotómetro en plató solo depende de los focos.
+
+### F6.21.2 · Niebla y humo, con cantidad · todos (cierra F6.9.1 y F6.9.1b)
+
+- **Qué:**
+  - en el esquema de luz, un control **«Niebla»** de 0 a 100 %, más el tipo:
+    - bruma de ambiente (*haze*);
+    - humo (más denso, cerca del suelo);
+    - niebla exterior (por distancia);
+  - se guarda en el esquema de luz, porque cada esquema puede llevar su humo.
+- **En Unreal:**
+  - ExponentialHeightFog con niebla volumétrica;
+  - el humo es un LocalFogVolume a la altura indicada;
+  - los focos dan **haces visibles** (`volumetric_scattering_intensity`) que crecen con la niebla.
+- **En IRIS:** niebla en el visor (FogExp2, con los conos de luz más o menos visibles) y aviso en el fotómetro de la pérdida de luz por la bruma, si se activa.
+- **Hecho cuando:** subir la niebla en IRIS espesa la escena y los haces en IRIS y en Unreal a la vez, y 0 % la quita.
+
+### F6.21.3 · El set a escala en Unreal: paredes, aberturas y atrezzo con sus medidas · todos
+
+**Estado:** en curso (`plan/pulido-rodaje`).
+- **Hecho:**
+  - con Unreal conectado, la estructura del set va a Unreal como malla cuando cambia: paredes con sus huecos, techos, cristales, telas, pilares y rigging;
+  - la estructura sale del mismo 3D de IRIS, con cada pieza ya colocada en su malla, y Unreal la importa a `/Game/IRIS/Estructura/S_<huella>`;
+  - los muebles (mesa, silla, sofá, cama y pieza) tienen ancho, fondo y alto en la ficha, y salen a esas medidas en la planta 2D, en el 3D y en Unreal;
+  - un asset de Unreal les pone sus medidas.
+- **Falta:**
+  - los materiales de pared y suelo con su reflectancia en Unreal, que hoy van con el color del 3D;
+  - quitar de la estructura la pieza que tiene asset de Unreal.
+
+- **Qué:**
+  - **todo** lo de la planta llega a Unreal con su geometría real, aunque no tenga asset:
+    - paredes con su largo, grosor y alto, y sus huecos de puerta y ventana;
+    - suelo y techos de los recintos (`PlanRooms`);
+    - telas, pilares, truss y la nave;
+  - el atrezzo sin asset llega con **ancho, fondo y alto** propios (F6.1.5b: `widthM`, `depthM`, `heightM`, forma), no como un cubo cuadrado.
+- **Cómo:**
+  - el visor ya construye toda esa geometría (la exporta como glTF para el MVR: `iris.exportGlb({structure: true})`);
+  - IRIS manda esa estructura a Unreal como malla (importada como los escaneos, a `/Game/IRIS/Sets/…`), se rehace solo cuando cambia la estructura (no al mover un foco) y lleva los materiales de pared y suelo (`kWallMaterials`, `kFloorMaterials`) con su color y reflectancia;
+  - lo que tiene asset de Unreal sigue sustituyendo a su pieza.
+- **Hecho cuando:** una habitación de 4 × 3 m con una puerta y una ventana mide en Unreal lo mismo que en la planta (comprobado con la regla de Unreal), y una mesa de 160 × 90 × 75 cm llega con esas medidas.
+
+### F6.21.4 · La luz con la misma intensidad en IRIS y en Unreal · todos
+
+**Estado:** en curso (`plan/pulido-rodaje`).
+- **Hecho:**
+  - la escena lleva la exposición de la cámara del plano: ISO, obturador, ND y diafragma de trabajo, con su EV100 (`PlanScene3d.exposureOf`);
+  - Unreal pone un PostProcessVolume del nivel con exposición manual y cámara física, sin viñeta, y activa `ExtendDefaultLuminanceRange`;
+  - el visor de IRIS, con «Luz real», usa candelas y lux con la misma escala que el fotómetro; sin luces encendidas, o con «Luz de trabajo», se ve como antes.
+- **Falta:**
+  - la comparación de lux IRIS/Unreal en un punto. Necesita calibrar la captura HDR de Unreal en el PC, y no se hace a ciegas para no dar números falsos;
+  - el visor solo enciende 14 focos de verdad.
+
+- **Qué:**
+  - el **porcentaje de regulación** (y las difusiones, las gelatinas y la distancia) da la misma luz en el fotómetro de IRIS, en el visor 3D de IRIS y en Unreal.
+- **Unreal:**
+  - **exposición fija**: un PostProcessVolume del set con exposición manual, calculada con la cámara de IRIS (ISO, diafragma T, obturador, `exposure.dart`), y sin autoexposición, sin *bloom* exagerado ni oscurecimiento de bordes;
+  - los focos siguen en candelas, con el cono interior y exterior ajustados al haz y al campo de IRIS, y con un radio de alcance que no corte la luz;
+  - los paneles (RectLight) y los fresnel (SpotLight) con el tamaño de su fuente, para que la sombra sea igual de dura o suave;
+  - el sol en lux y el cielo en cd/m² con las unidades físicas de Unreal.
+- **Visor de IRIS:** las luces del 3D pasan a unidades físicas (candelas) con la misma exposición, en vez de la fórmula por vatios. El 50 % se ve como el 50 %.
+- **Comprobación:**
+  - IRIS manda a Unreal un **punto de medida** por cada lectura del fotómetro, y Unreal devuelve los lux que calcula ahí, con una sonda de iluminación en ese punto;
+  - IRIS los enseña junto a los suyos: «IRIS 820 lx · Unreal 790 lx».
+- **Hecho cuando:**
+  - un foco al 100 % y al 50 % da en Unreal la mitad de lux en el mismo punto, con menos de un 10 % de diferencia con IRIS;
+  - la imagen de Unreal a la exposición de la cámara del plano se ve como dice el fotómetro: medio stop por debajo se ve medio stop más oscura.
+
+### F6.21.5 · Altura, paneo e inclinación de los focos, en IRIS y en Unreal · todos
+
+**Estado:** en curso (`plan/pulido-rodaje`).
+- **Hecho:**
+  - `PlanLight.tiltDegKey` / `elevationOf` / `setElevation`, que leen lo de antes;
+  - altura, paneo e inclinación de −90 a +90 en la ficha 2D y en el panel 3D, para cualquier montaje;
+  - el 3D y Unreal apuntan con la inclinación; desde Unreal vuelven la altura y la inclinación (`aimAt`);
+  - el fotómetro calcula en 3D un trípode con altura o inclinación propias;
+  - el alzado dibuja el ángulo.
+- **Falta:**
+  - arrastrar la altura en el alzado y en el 3D;
+  - el haz de la planta 2D, que no se acorta con la inclinación;
+  - el *roll* de los paneles.
+
+- **Qué:**
+  - cada foco, sea de techo, de trípode o de suelo, tiene:
+    - **altura** (de 0 a 12 m, o hasta el techo o la parrilla si cuelga);
+    - **paneo** horizontal (de 0 a 360°, el giro en planta);
+    - **inclinación** vertical, de −90° (apunta al suelo) a +90° (apunta arriba);
+    - opcionalmente **giro sobre su eje** (*roll*) para los paneles.
+  - Hoy los de trípode van fijos a −8,5°; el valor nuevo se guarda en `props['tiltDeg']`. Los colgados de antes (`tilt` desde la vertical) se leen con su ángulo equivalente.
+- **En la planta:**
+  - en la ficha del foco: altura, paneo e inclinación con deslizadores y número;
+  - en la planta: el haz dibujado se acorta con la inclinación;
+  - en el alzado (`plan_elevation_screen`): el foco se ve a su altura, con su ángulo, y se arrastra.
+- **En el 3D de IRIS:** las asas de apuntar (`aimAt`) cambian también la inclinación de los de trípode, y la altura se sube y baja arrastrando.
+- **En Unreal:**
+  - mover, subir o girar el foco en el editor (pitch y yaw) vuelve a IRIS con su altura, paneo e inclinación;
+  - el *roll* vuelve en los paneles.
+- **Motor de luz:** el fotómetro y el mapa de luz usan la dirección real del haz con su inclinación, también en los de trípode.
+- **Hecho cuando:**
+  - subir un foco de trípode a 2,5 m e inclinarlo −30° en IRIS lo deja igual en Unreal;
+  - inclinarlo a −45° en Unreal lo deja a −45° en la ficha de IRIS;
+  - el fotómetro cambia con el ángulo.
+
+### Orden propuesto
+
+1. **F6.21.5 · altura e inclinación:** es la base para apuntar bien y la más pedida para ensayar.
+2. **F6.21.4 · intensidad igual:** exposición fija en Unreal, el visor en candelas y la comprobación de lux.
+3. **F6.21.3 · el set a escala**, empezando por paredes y atrezzo con medidas.
+4. **F6.21.1 · plató o exterior.**
+5. **F6.21.2 · niebla y humo.**
+
+Cada punto con su prueba de Dart (contrato del paquete y conversión de unidades), y su prueba en el PC con Unreal 5.5 en `docs/PRUEBA_IRIS_STAGE.md`.
+
+## F6.22 · Grip, cámara y navegación como en un set de verdad
+
+Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.21.2.
+
+### Lo que hay hoy (revisado el 2026-10-31)
+
+- **Tipos de grip:** negro (*flag*), corte (*cutter*), rebote, marco de difusión, red y gelatina (`LightType`, `camera_plan_constants.dart`). El catálogo de telas existe (Grid Cloth y sus variantes, sedas, gasas: `light/modifiers.dart`).
+- **El motor de luz** los cuenta en la planta 2D: corte, transmisión y difusión, y aparecen en «Qué aporta cada fuente».
+- **El 3D y Unreal no:**
+  - en el 3D, un marco o un corte no cambian la luz de los focos, porque las SpotLight no tienen sombras de grip ni difusión;
+  - en Unreal el grip no llega si no tiene asset.
+- **No hay palios:** un marco de difusión es una sola cosa, sea de 1×1 o de 6×6.
+- **La cámara en Unreal** lleva su focal y su sensor, pero va en horizontal (sin inclinación) y sin ISO, diafragma, obturador ni foco.
+
+### F6.22.1 · Marcos y palios, distintos · todos
+
+- **Marco:**
+  - 1×1 o 2×1 m, de madera;
+  - lleva una **gelatina** (corrección o color) o una **tela de difusión** dentro.
+- **Palio:**
+  - 2×2, 3×3, 4×4 o 6×6 m;
+  - es el único que lleva **telas grandes** (Grid Cloth full, ½ o ¼, Silent Grid, sedas, muselina) o **rebotes** (Cinebounce, Ultrabounce, griffolyn blanco o negro).
+- La tela o el rebote se elige en la ficha, del catálogo de `modifiers.dart`. Cada uno tiene su transmisión y cuánto abre la luz.
+- Altura, paneo e inclinación como los focos (F6.21.5): un palio puede ir horizontal sobre los actores (*overhead*) o vertical.
+- **Compatibilidad:** el «Marco de difusión» de antes se lee como un marco de 1×1 con la tela que tenga.
+- **Hecho cuando:** se pone un palio de 4×4 con Grid Cloth sobre dos actores, se cambia a seda, y la ficha, la planta y el fotómetro cambian.
+
+### F6.22.2 · La difusión y el corte, iguales en la planta, el 3D y Unreal · todos
+
+- **Planta 2D:** como hoy, que ya está bien según Daniel.
+- **3D de IRIS:**
+  - el marco o el palio se ve como una tela del color y la opacidad de su material;
+  - la luz que pasa por él sale de la tela como una fuente blanda (RectAreaLight del tamaño de la tela), con la intensidad transmitida;
+  - el foco original queda tapado detrás;
+  - los negros y los cortes son opacos y dan sombra en los actores y el suelo (las SpotLight de los focos afectados dan sombra);
+  - un rebote devuelve luz como una fuente blanda de su tamaño.
+- **Unreal:**
+  - el marco, el palio, el negro y el corte llegan como mallas a su tamaño, con su altura y su inclinación;
+  - la tela es translúcida y el negro opaco, así que dan sombra con Lumen;
+  - la luz que atraviesa una tela se emula con una **RectLight** del tamaño de la tela, con la intensidad que deja pasar y el color si hay gelatina, apuntando como sale la luz;
+  - el foco que la ilumina queda tapado por la malla;
+  - un rebote es una RectLight hacia donde mira, con lo que recibe por su reflectancia.
+- **Cuanta más difusión, más blanda y más baja:** sale de la transmisión y del ángulo de cada tela del catálogo.
+- **Hecho cuando:**
+  - un negro delante de un foco corta la luz de la cara en la planta, el 3D y Unreal;
+  - pasar de ¼ Grid Cloth a Grid Cloth full baja la luz y la ablanda en los tres.
+
+### F6.22.3 · La exposición del personaje refleja el grip · todos
+
+- **Qué:**
+  - con un palio o un marco de difusión entre el foco y un actor, la lectura del fotómetro en ese actor baja lo que quita la tela;
+  - la cara en el 3D («Luz real») también baja;
+  - con un negro, se corta.
+- **Revisar:**
+  - que el grip colgado o inclinado cuente en 3D (altura e inclinación), no solo como una línea en planta;
+  - que el rebote sume luz al actor.
+- **Hecho cuando:** la lectura del actor de la prueba de F6.22.1 baja al poner la tela, sube al quitarla y coincide con lo que se ve en el 3D.
+
+### F6.22.4 · La cámara de IRIS en Unreal, con todos sus parámetros · todos
+
+- **Qué:**
+  - la cámara llega a Unreal (CineCameraActor) con:
+    - su **altura**, **paneo**, **inclinación** y **giro sobre su eje**, que se editan en IRIS como los focos;
+    - focal y sensor;
+    - **diafragma T** (`CurrentAperture`), **ISO** y **obturador** (sus ajustes de exposición);
+    - **distancia de foco**;
+  - «Ver por la cámara» y las capturas salen como la cámara de rodaje, con la profundidad de campo del diafragma.
+  - Lo que se mueve en Unreal vuelve a IRIS, como en los focos.
+- **Hecho cuando:**
+  - una cámara a 1,20 m, inclinada −10°, con un 35 mm a T2.8 e ISO 800, se ve igual en Unreal;
+  - cambiar el diafragma en IRIS cambia la profundidad de campo en el visor de Unreal.
+
+### F6.22.5 · Dos maneras de ver el 3D · todos
+
+- **Luz:** el set iluminado solo por los focos (y el sol o el cielo si toca), con la exposición de la cámara (F6.21.4). Es lo que se ensaya.
+- **Claro:** luz de trabajo uniforme, con los focos, los marcos y los palios bien visibles, sus haces en línea y sus nombres, para colocar y ver dónde va cada cosa.
+- Un botón en la barra del 3D para pasar de una a otra. Sustituye al interruptor «Luz real».
+
+### F6.22.6 · Navegar como en Unreal · todos
+
+- **Planta 2D:**
+  - el clic izquierdo, tal cual: seleccionar, mover, dibujar;
+  - **arrastrar con el botón derecho desplaza la vista**;
+  - el menú del botón derecho sale solo con un clic sin arrastrar.
+- **3D:**
+  - con el **botón derecho pulsado**, el ratón mira y **W, A, S, D** mueven (Q y E bajan y suben, la rueda cambia la velocidad), como el visor de Unreal;
+  - sin el botón derecho, el ratón selecciona y arrastra piezas como hoy.
+- **Ajustes:** «Navegación del 3D: como Unreal o en órbita (la de antes)».
+- **Hecho cuando:** en el PC se recorre el set en el 3D con el botón derecho y WASD, y la planta se desplaza arrastrando con el derecho.
+
+### Orden
+
+1. **F6.22.6:** rápido y de uso diario.
+2. **F6.22.1 y F6.22.2:** marcos, palios y difusión.
+3. **F6.22.3.**
+4. **F6.22.4.**
+5. **F6.22.5.**
 
 ## Orden propuesto y dependencias
 
+0. **F6.21** (ensayos de luz fieles, pedido el 2026-10-31) y después **F6.22** (grip, cámara y navegación): van antes que el resto, cada uno en su orden.
 1. **F6.0** (con 0.1b WebGPU), **F6.13.1–13.2** (IRIS Stage como contenedor) y **F6.16.1** (paquete versionado desde el principio, para que cada pieza nueva nazca exportable).
 2. **F6.1:** paridad (1.5b, 1.9b, 1.6, 1.7, 1.1, 1.2), **F6.2.8–2.10** (caseta) y **F6.18.1–18.2** (plató y tomas).
 3. **F6.4** y **F6.8** (cámara y pilotar, con 8.3b) y **F6.10.1–10.2** (capturas). Es lo que sustituye a Cine Tracer para componer.

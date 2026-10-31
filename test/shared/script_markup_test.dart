@@ -101,6 +101,53 @@ void main() {
     expect(none.text, 'ojo aquí');
   });
 
+  test('los asteriscos sueltos no ponen cursiva', () {
+    expect(_show(parseScriptMarkup('2 * 3 * 4')), '2 * 3 * 4[]');
+    expect(_show(parseScriptMarkup('* nota *')), '* nota *[]');
+    // La cursiva no cruza líneas.
+    expect(_show(parseScriptMarkup('a *b\nc* d')), 'a *b\nc* d[]');
+    expect(_show(parseScriptMarkup('__ x __')), '__ x __[]');
+  });
+
+  test('color de letra en una parte del texto', () {
+    final spans = parseScriptMarkup('ojo {{r:FUEGO}} aquí');
+    expect(spans.map((s) => s.text).join('|'), 'ojo |FUEGO| aquí');
+    expect(spans[1].textColor, 'r');
+    expect(scriptMarkupToPlain('{{a:**AZUL**}}'), 'AZUL');
+  });
+
+  test('el color de letra se pone, se cambia y se quita', () {
+    final red = toggleScriptMarkup(
+      'ojo aquí',
+      0,
+      3,
+      ScriptMark.textColor,
+      color: 'r',
+    );
+    expect(red.text, '{{r:ojo}} aquí');
+    final blue = toggleScriptMarkup(
+      red.text,
+      red.start,
+      red.end,
+      ScriptMark.textColor,
+      color: 'a',
+    );
+    expect(blue.text, '{{a:ojo}} aquí');
+    final none = toggleScriptMarkup(
+      blue.text,
+      blue.start,
+      blue.end,
+      ScriptMark.textColor,
+    );
+    expect(none.text, 'ojo aquí');
+  });
+
+  test('los blancos de los bordes de la selección quedan fuera', () {
+    final r = toggleScriptMarkup('PP de ALI ', 5, 10, ScriptMark.italic);
+    expect(r.text, 'PP de *ALI* ');
+    expect(parseScriptMarkup(r.text).any((s) => s.italic), isTrue);
+  });
+
   test('sin selección no cambia nada', () {
     final r = toggleScriptMarkup('PP de ALI', 3, 3, ScriptMark.bold);
     expect(r.text, 'PP de ALI');

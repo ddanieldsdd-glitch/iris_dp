@@ -44,7 +44,17 @@ class PlanPieceControls extends StatelessWidget {
           el.propType == PropType.hill ||
           el.propType == PropType.vehicle);
 
+  /// Mesa, silla, sofá, cama o pieza: se le dan ancho, fondo y alto.
+  static bool _isFurniture(PlanElement el) =>
+      el.type == ElementType.prop &&
+      (el.propType == PropType.table ||
+          el.propType == PropType.chair ||
+          el.propType == PropType.sofa ||
+          el.propType == PropType.bed ||
+          el.propType == PropType.rectangle);
+
   static bool appliesTo(PlanElement el) =>
+      _isFurniture(el) ||
       PlanOpening.isOpening(el) ||
       PlanSegment.isSegment(el) ||
       RigControls.appliesTo(el) ||
@@ -475,6 +485,45 @@ class PlanPieceControls extends StatelessWidget {
               ? 'Tan bajo no tapa la luz de los aparatos; al sol le da '
                     'sombra corta.'
               : 'Tapa la luz y da sombra de sol según su altura.',
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textTertiary),
+        ),
+      ]);
+    } else if (_isFurniture(el)) {
+      final size = LightScene.furnitureSizeM(el);
+      final height = LightScene.propHeightM(el);
+      String cm(double m) => '${(m * 100).round()} cm';
+      children.addAll([
+        slider(
+          'Ancho',
+          cm(size.width),
+          current: size.width,
+          min: 0.2,
+          max: 4,
+          onChanged: (v) =>
+              el.props[LightScene.widthKey] = (v * 100).round() / 100,
+        ),
+        slider(
+          'Fondo',
+          cm(size.depth),
+          current: size.depth,
+          min: 0.2,
+          max: 4,
+          onChanged: (v) =>
+              el.props[LightScene.depthKey] = (v * 100).round() / 100,
+        ),
+        slider(
+          'Alto',
+          cm(height),
+          current: height,
+          min: 0.1,
+          max: 3,
+          onChanged: (v) =>
+              el.props[LightScene.heightKey] = (v * 100).round() / 100,
+        ),
+        Text(
+          'A sus medidas en la planta, en el 3D y en Unreal.',
           style: AppTypography.caption(
             palette,
           ).copyWith(color: palette.textTertiary),

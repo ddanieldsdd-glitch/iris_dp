@@ -10,6 +10,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/theme/app_layout.dart';
+import '../shoot_documents/shoot_day_on_set.dart';
+import '../shoot_documents/shoot_day_screen.dart';
 import '../../core/sync/live_editing.dart';
 import '../../core/sync/live_editing_scope.dart';
 import '../../core/sync/realtime_hub.dart';
@@ -40,6 +43,7 @@ import 'scene_form_sheet.dart';
 import 'table/editable_cell.dart';
 import 'table/script_sheet_theme.dart';
 import 'import/technical_script_import_action.dart';
+import 'script_export_dialog.dart';
 import 'technical_script_export.dart';
 import 'technical_script_settings.dart';
 import '../../core/utils/shot_technical_options.dart';
@@ -214,15 +218,15 @@ class TechnicalScriptScreen extends ConsumerWidget {
               return TechnicalScriptPdfExporter.buildBytes(doc);
             },
           ),
-          PopupMenuButton<bool>(
+          IconButton(
+            tooltip: 'Jornadas de rodaje',
+            icon: Icon(Icons.event_note_outlined, color: palette.accent),
+            onPressed: () => _showShootDays(context, ref, projectId),
+          ),
+          IconButton(
             tooltip: 'Exportar el guion técnico',
             icon: Icon(Icons.ios_share, color: palette.accent),
-            color: palette.surfaceElevated,
-            onSelected: (word) => _export(context, ref, word: word),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: false, child: Text('PDF')),
-              PopupMenuItem(value: true, child: Text('Word (.docx)')),
-            ],
+            onPressed: () => _export(context, ref),
           ),
           PopupMenuButton<String>(
             tooltip: 'Importar guion técnico',
@@ -268,8 +272,11 @@ class TechnicalScriptScreen extends ConsumerWidget {
         ],
       ),
       body: _HistoryKeys(
-        child: Column(
+        child: _CompactSwitch(
+          projectId: projectId,
+          table: (readSwitch) => Column(
           children: [
+            ?readSwitch,
             _FormatBar(settings: settings),
             Expanded(
               child: PlanDataBuilder(
@@ -319,6 +326,7 @@ class TechnicalScriptScreen extends ConsumerWidget {
               ),
             ),
           ],
+          ),
         ),
       ),
     ));
@@ -326,16 +334,21 @@ class TechnicalScriptScreen extends ConsumerWidget {
 
   Future<void> _export(
     BuildContext context,
-    WidgetRef ref, {
-    required bool word,
-  }) async {
+    WidgetRef ref,
+  ) async {
+    final settings = ref.read(technicalScriptSettingsProvider);
+    final choice = await showScriptExportDialog(context, screen: settings);
+    if (choice == null || !context.mounted) return;
+    final word = choice.word;
     final db = ref.read(databaseProvider);
     try {
-      final doc = await buildNarrativeScriptDoc(
+      final built = await buildNarrativeScriptDoc(
         db,
         projectId,
-        ref.read(technicalScriptSettingsProvider),
+        settings,
+        hiddenColumns: choice.hiddenColumns,
       );
+      final doc = built == null ? null : choice.applyTo(built);
       if (!context.mounted) return;
       if (doc == null || doc.sections.isEmpty) {
         AppSnackBar.show(context, 'No hay escenas para exportar.');
@@ -571,6 +584,32 @@ class _FormatBar extends ConsumerWidget {
                 onSelectionChanged: (s) =>
                     notifier.update((v) => v.copyWith(view: s.first)),
               ),
+              const SizedBox(width: 12),
+              PopupMenuButton<String>(
+                tooltip: 'Columnas visibles',
+                color: palette.surfaceElevated,
+                onSelected: notifier.toggleColumn,
+                itemBuilder: (_) => [
+                  for (final c in ScriptColumn.optional)
+                    CheckedPopupMenuItem(
+                      value: c,
+                      checked: settings.shows(c),
+                      child: Text(ScriptColumn.label(c)),
+                    ),
+                ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.view_column_outlined,
+                      size: 18,
+                      color: palette.textPrimary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text('Columnas', style: label),
+                  ],
+                ),
+              ),
               divider(),
               PopupMenuButton<String>(
                 tooltip: 'Tipografía de la tabla',
@@ -667,10 +706,10 @@ class _FormatBar extends ConsumerWidget {
                             size: 18,
                             color: palette.textPrimary,
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           for (final c in kScriptMarkerColors.entries)
                             Padding(
-                              padding: const EdgeInsets.only(right: 5),
+                              padding: const EdgeInsets.only(right: 3),
                               child: Tooltip(
                                 message: 'Marcador ${c.value.toLowerCase()}',
                                 child: InkResponse(
@@ -683,8 +722,8 @@ class _FormatBar extends ConsumerWidget {
                                           color: c.key,
                                         ),
                                   child: Container(
-                                    width: 18,
-                                    height: 18,
+                                    width: 16,
+                                    height: 16,
                                     decoration: BoxDecoration(
                                       color: kScriptMarkerFills[c.key],
                                       borderRadius: BorderRadius.circular(3),
@@ -694,15 +733,49 @@ class _FormatBar extends ConsumerWidget {
                                 ),
                               ),
                             ),
+                          const SizedBox(width: 4),
+                          // Color de la letra: el mismo color otra vez lo
+                          // quita.
+                          for (final c in kScriptTextColors.entries)
+                            Tooltip(
+                              message: 'Letra ${c.value.toLowerCase()}',
+                              child: InkResponse(
+                                radius: 12,
+                                onTap: editor == null
+                                    ? null
+                                    : () => applyScriptMark(
+                                        editor,
+                                        ScriptMark.textColor,
+                                        color: c.key,
+                                      ),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 18,
+                                  child: Center(
+                                    child: Text(
+                                      'A',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        color: kScriptTextColorValues[c.key],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           iconButton(
-                            tooltip: 'Quitar el marcador',
+                            tooltip: 'Quitar el marcador y el color',
                             icon: Icons.format_clear,
                             onTap: editor == null
                                 ? null
-                                : () => applyScriptMark(
-                                    editor,
-                                    ScriptMark.marker,
-                                  ),
+                                : () {
+                                    applyScriptMark(editor, ScriptMark.marker);
+                                    applyScriptMark(
+                                      editor,
+                                      ScriptMark.textColor,
+                                    );
+                                  },
                           ),
                         ],
                       ),
@@ -802,32 +875,6 @@ class _FormatBar extends ConsumerWidget {
                   ],
                 ),
               ),
-              divider(),
-              PopupMenuButton<String>(
-                tooltip: 'Columnas visibles',
-                color: palette.surfaceElevated,
-                onSelected: notifier.toggleColumn,
-                itemBuilder: (_) => [
-                  for (final c in ScriptColumn.optional)
-                    CheckedPopupMenuItem(
-                      value: c,
-                      checked: settings.shows(c),
-                      child: Text(ScriptColumn.label(c)),
-                    ),
-                ],
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.view_column_outlined,
-                      size: 18,
-                      color: palette.textPrimary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text('Columnas', style: label),
-                  ],
-                ),
-              ),
             ],
           ),
         ),
@@ -838,6 +885,171 @@ class _FormatBar extends ConsumerWidget {
 
 /// Guion técnico: una tabla por escena, como hojas de un documento. Ocupa
 /// todo el ancho; por debajo del mínimo, se desplaza entera.
+/// Las jornadas del proyecto, para abrir una desde el guion técnico (G5):
+/// en el iPhone, «En set»; si no, la jornada para ordenarla y exportarla.
+Future<void> _showShootDays(
+  BuildContext context,
+  WidgetRef ref,
+  int projectId,
+) async {
+  final db = ref.read(databaseProvider);
+  final days = [
+    for (final d in await db.watchShootDocumentsForProject(projectId).first)
+      if (d.kind == kShootDayKind) d,
+  ]..sort((a, b) => (a.shootDate ?? '').compareTo(b.shootDate ?? ''));
+  if (!context.mounted) return;
+  final palette = context.palette;
+  final picked = await showModalBottomSheet<ShootDocument>(
+    context: context,
+    backgroundColor: palette.surfaceElevated,
+    builder: (ctx) => SafeArea(
+      child: days.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Text(
+                'Aún no hay jornadas. Créalas en Documentos de rodaje.',
+                style: AppTypography.bodyMedium(palette),
+              ),
+            )
+          : ListView(
+              shrinkWrap: true,
+              children: [
+                for (final d in days)
+                  ListTile(
+                    leading: const Icon(Icons.event_note_outlined),
+                    title: Text(d.name),
+                    subtitle: d.shootDate == null
+                        ? null
+                        : Text(formatShootDate(d.shootDate)),
+                    onTap: () => Navigator.pop(ctx, d),
+                  ),
+              ],
+            ),
+    ),
+  );
+  if (picked == null || !context.mounted) return;
+  if (AppLayout.isCompact(context)) {
+    await ShootDayOnSetScreen.open(
+      context,
+      projectId: projectId,
+      documentId: picked.id,
+      title: picked.name,
+    );
+    return;
+  }
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) =>
+          ShootDayScreen(projectId: projectId, documentId: picked.id),
+    ),
+  );
+}
+
+/// En el iPhone (IP.2.3) el guion se abre en lectura: escenas y planos en
+/// tarjetas. La tabla sigue a un toque, para retocar algo suelto.
+class _CompactSwitch extends StatefulWidget {
+  final int projectId;
+
+  /// La tabla de siempre; en el iPhone recibe arriba el selector.
+  final Widget Function(Widget? readSwitch) table;
+
+  const _CompactSwitch({required this.projectId, required this.table});
+
+  @override
+  State<_CompactSwitch> createState() => _CompactSwitchState();
+}
+
+class _CompactSwitchState extends State<_CompactSwitch> {
+  bool _read = true;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!AppLayout.isCompact(context)) return widget.table(null);
+    final selector = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppLayout.gutter(context),
+        vertical: AppSpacing.sm,
+      ),
+      child: SegmentedButton<bool>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment(
+            value: true,
+            icon: Icon(Icons.view_agenda_outlined, size: 18),
+            label: Text('Lectura'),
+          ),
+          ButtonSegment(
+            value: false,
+            icon: Icon(Icons.table_chart_outlined, size: 18),
+            label: Text('Tabla'),
+          ),
+        ],
+        selected: {_read},
+        onSelectionChanged: (v) => setState(() => _read = v.first),
+      ),
+    );
+    if (!_read) return widget.table(selector);
+    return Column(
+      children: [
+        selector,
+        Expanded(child: _ScriptReadList(projectId: widget.projectId)),
+      ],
+    );
+  }
+}
+
+/// El guion técnico en tarjetas, en orden de guion.
+class _ScriptReadList extends ConsumerWidget {
+  final int projectId;
+
+  const _ScriptReadList({required this.projectId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final db = ref.watch(databaseProvider);
+    final gutter = AppLayout.gutter(context);
+    return StreamBuilder<List<Scene>>(
+      stream: db.watchScenesForProject(projectId),
+      builder: (context, sceneSnap) => StreamBuilder<List<Shot>>(
+        stream: db.watchShotsForProject(projectId),
+        builder: (context, shotSnap) {
+          final scenes = sceneSnap.data ?? const <Scene>[];
+          final byScene = <int, List<Shot>>{};
+          for (final shot in shotSnap.data ?? const <Shot>[]) {
+            byScene.putIfAbsent(shot.sceneId, () => []).add(shot);
+          }
+          return ListView(
+            padding: EdgeInsets.fromLTRB(gutter, 0, gutter, 40),
+            children: [
+              for (final scene in scenes) ...[
+                Padding(
+                  padding: const EdgeInsets.only(
+                    top: AppSpacing.lg,
+                    bottom: 6,
+                  ),
+                  child: Text(
+                    'ESC ${scene.label} · ${scene.locationCanonical}',
+                    style: AppTypography.titleMedium(palette),
+                  ),
+                ),
+                if ((byScene[scene.id] ?? const []).isEmpty)
+                  Text('Sin planos.', style: AppTypography.caption(palette)),
+                for (final shot in byScene[scene.id] ?? const <Shot>[])
+                  OnSetShotCard(
+                    order: shot.number,
+                    shot: shot,
+                    scene: scene,
+                  ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _ScriptTable extends StatelessWidget {
   final PlanProjectData data;
   final TechnicalScriptSettings settings;

@@ -74,6 +74,10 @@ class UnrealLibrary extends ChangeNotifier {
   static const prefsKey = 'iris_unreal_library';
 
   final _byPath = <String, UnrealLibraryEntry>{};
+
+  /// Lo quitado, con la fecha: viaja con la biblioteca para que otro equipo
+  /// no lo vuelva a traer (salvo que alguien lo use después).
+  final _removed = <String, DateTime>{};
   bool _loaded = false;
 
   /// Favoritos primero; luego lo último usado.
@@ -102,7 +106,13 @@ class UnrealLibrary extends ChangeNotifier {
     await prefs.setString(prefsKey, encode());
   }
 
-  String encode() => jsonEncode([for (final e in entries) e.toJson()]);
+  String encode() => jsonEncode({
+    'entries': [for (final e in entries) e.toJson()],
+    'removed': {
+      for (final MapEntry(:key, :value) in _removed.entries)
+        key: value.toUtc().toIso8601String(),
+    },
+  });
 
   /// Junta lo que llega (de otro equipo) con lo de aquí: por ruta, se queda
   /// lo último usado, favorito si lo es en alguno, y las miniaturas que
@@ -115,11 +125,29 @@ class UnrealLibrary extends ChangeNotifier {
     } catch (_) {
       return;
     }
-    if (raw is! List) return;
-    for (final item in raw) {
+    // Antes era solo la lista; ahora {entries, removed}.
+    final items = raw is List
+        ? raw
+        : raw is Map
+        ? (raw['entries'] as List? ?? const [])
+        : const [];
+    if (raw is Map && raw['removed'] is Map) {
+      for (final MapEntry(:key, :value) in (raw['removed'] as Map).entries) {
+        final at = DateTime.tryParse('$value');
+        if (at == null) continue;
+        final mine = _removed['$key'];
+        if (mine == null || at.isAfter(mine)) _removed['$key'] = at;
+      }
+    }
+    for (final item in items) {
       final e = UnrealLibraryEntry.fromJson(item);
       if (e != null) _merge(e);
     }
+    // Lo quitado no vuelve, salvo que se haya usado después de quitarlo.
+    _byPath.removeWhere((path, e) {
+      final at = _removed[path];
+      return at != null && !e.lastUsed.isAfter(at);
+    });
     if (notify) notifyListeners();
   }
 
@@ -149,6 +177,8 @@ class UnrealLibrary extends ChangeNotifier {
   Future<void> remember(UnrealAssetRef ref, {int? projectId}) async {
     await load();
     final old = _byPath[ref.path];
+    // Usarlo de nuevo lo devuelve a la biblioteca.
+    _removed.remove(ref.path);
     final hasThumbs = ref.thumb34 != null;
     _byPath[ref.path] = UnrealLibraryEntry(
       ref: hasThumbs || old == null
@@ -170,7 +200,10 @@ class UnrealLibrary extends ChangeNotifier {
     await load();
     var added = 0;
     for (final ref in found) {
-      if (_byPath.containsKey(ref.path)) continue;
+      // Lo que se quitó a propósito no vuelve con una búsqueda.
+      if (_byPath.containsKey(ref.path) || _removed.containsKey(ref.path)) {
+        continue;
+      }
       _byPath[ref.path] = UnrealLibraryEntry(
         ref: ref,
         lastUsed: DateTime.fromMillisecondsSinceEpoch(0),
@@ -189,7 +222,9 @@ class UnrealLibrary extends ChangeNotifier {
   }
 
   Future<void> remove(String path) async {
-    if (_byPath.remove(path) != null) await _save();
+    if (_byPath.remove(path) == null) return;
+    _removed[path] = DateTime.now().toUtc();
+    await _save();
   }
 
   /// Lo que contiene todas las palabras de [query] (nombre, ruta, origen o
@@ -215,6 +250,7 @@ class UnrealLibrary extends ChangeNotifier {
   @visibleForTesting
   void clearForTest() {
     _byPath.clear();
+    _removed.clear();
     _loaded = true;
   }
 
@@ -245,6 +281,12 @@ class UnrealLibrary extends ChangeNotifier {
     if (s != null && s.every((v) => v > 0)) {
       el.props[LightScene.sizeKey] = math.max(s[0], s[1]).roundToDouble() / 100;
       el.props[LightScene.heightKey] = s[2].roundToDouble() / 100;
+      // Ancho y fondo: lo largo de lado, salvo en la cama, que es al revés.
+      final long = math.max(s[0], s[1]).roundToDouble() / 100;
+      final short = math.min(s[0], s[1]).roundToDouble() / 100;
+      final bed = el.propType == PropType.bed;
+      el.props[LightScene.widthKey] = bed ? short : long;
+      el.props[LightScene.depthKey] = bed ? long : short;
     }
     UnrealAssetRef.set(el, ref);
     return el;

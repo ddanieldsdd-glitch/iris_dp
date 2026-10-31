@@ -10,6 +10,7 @@ import 'package:xml/xml.dart';
 
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/utils/shot_reference_import.dart';
+import 'package:iris_dp/features/technical_script/script_export_dialog.dart';
 import 'package:iris_dp/features/technical_script/technical_script_export.dart';
 import 'package:iris_dp/features/technical_script/technical_script_settings.dart';
 import 'package:iris_dp/shared/pdf_export/technical_script_pdf.dart';
@@ -282,5 +283,142 @@ void main() {
     expect(xml, contains('ámbar'));
     expect(document.findAllElements('w:drawing').length, 1);
     expect(part('word/_rels/document.xml.rels'), contains('referencia1.jpg'));
+  });
+
+  test('el índice lleva cada escena con su página y enlace, en PDF y Word',
+      () async {
+    final doc = await build();
+    expect(doc.sections.first.indexText, 'ESCENA 1. EXT CALLE RAVAL DÍA');
+
+    // El índice ocupa la primera página: las escenas empiezan después.
+    final pages = await TechnicalScriptPdfExporter.scenePages(doc);
+    expect(pages.keys, [0, 1]);
+    expect(pages[0], greaterThanOrEqualTo(2));
+    expect(pages[1], greaterThanOrEqualTo(pages[0]!));
+    final pdf = latin1.decode(await TechnicalScriptPdfExporter.buildBytes(doc));
+    expect(pdf, contains('/Outlines'));
+    expect(pdf, contains('esc_1'));
+    // Sin índice no hay marcadores.
+    final plain = latin1.decode(
+      await TechnicalScriptPdfExporter.buildBytes(
+        doc.copyWith(includeIndex: false),
+      ),
+    );
+    expect(plain, isNot(contains('esc_0')));
+
+    final fonts = await DocxFontFiles.load('Tinos');
+    Archive docx() => ZipDecoder().decodeBytes(
+          TechnicalScriptDocxExporter.buildBytes(
+            doc.copyWith(fontFamily: 'Tinos'),
+            pages: pages,
+            fonts: fonts,
+          ),
+        );
+    final zip = docx();
+    String part(String name) =>
+        utf8.decode(zip.files.firstWhere((f) => f.name == name).content);
+    final xml = part('word/document.xml');
+    XmlDocument.parse(xml);
+    expect(xml, contains('ÍNDICE'));
+    expect(xml, contains('<w:hyperlink w:anchor="esc_0"'));
+    expect(xml, contains('w:name="esc_1"'));
+    expect(xml, contains('PAGEREF esc_1 \\h'));
+    expect(xml, contains('<w:t>${pages[0]}</w:t>'));
+    expect(xml, isNot(contains('Calibri')));
+    // La tipografía de la hoja va en los estilos e incrustada.
+    final styles = part('word/styles.xml');
+    XmlDocument.parse(styles);
+    expect(styles, contains('w:ascii="Tinos"'));
+    expect(part('word/fontTable.xml'), contains('w:embedItalic'));
+    expect(
+      zip.files.where((f) => f.name.endsWith('.odttf')),
+      hasLength(4),
+    );
+    // Word no pregunta por actualizar campos al abrir.
+    expect(part('word/settings.xml'), isNot(contains('w:updateFields')));
+    // El mismo guion da siempre el mismo .docx.
+    final again = docx();
+    for (final f in zip.files) {
+      expect(
+        again.findFile(f.name)?.content,
+        f.content,
+        reason: f.name,
+      );
+    }
+  });
+
+  test('un asterisco en el título o la escena no pone nada en cursiva',
+      () async {
+    final doc = TechnicalScriptDoc(
+      title: 'GUION *PRUEBA* __X__',
+      columns: kScriptDocColumns,
+      sections: [
+        const ScriptDocSection(
+          title: '1. INT. *CASA* - NOCHE',
+          headerFill: 0xEEEEEE,
+          rows: [],
+        ),
+      ],
+    );
+    final xml = utf8.decode(
+      ZipDecoder()
+          .decodeBytes(TechnicalScriptDocxExporter.buildBytes(doc))
+          .files
+          .firstWhere((f) => f.name == 'word/document.xml')
+          .content,
+    );
+    expect(xml, contains('GUION *PRUEBA* __X__'));
+    expect(xml, contains('*CASA*'));
+    expect(xml, isNot(contains('<w:i/>')));
+  });
+
+  test('las opciones de exportar eligen columnas, storyboard, letra y papel',
+      () async {
+    const options = ScriptExportOptions(
+      hiddenColumns: {'ref', 'notes'},
+      fontSize: 10,
+      paper: ScriptDocPaper.letter,
+      landscape: false,
+    );
+    final built = (await buildNarrativeScriptDoc(
+      db,
+      projectId,
+      const TechnicalScriptSettings(),
+      hiddenColumns: options.hiddenColumns,
+    ))!;
+    final doc = options.applyTo(built);
+    final keys = doc.columns.map((c) => c.key).toList();
+    expect(keys, containsAll(['esc', 'plano', 'action', 'story', 'dur']));
+    expect(keys, isNot(contains('ref')));
+    expect(keys, isNot(contains('notes')));
+    // El storyboard sin imagen propia toma la de referencia.
+    expect(doc.sections.first.rows.first.imagesOf('story'), hasLength(1));
+    expect(doc.sections.first.rows.first.imagesOf('ref'), isEmpty);
+
+    // Carta vertical en el Word, con la letra elegida.
+    final zip = ZipDecoder().decodeBytes(
+      TechnicalScriptDocxExporter.buildBytes(doc),
+    );
+    final xml = utf8.decode(
+      zip.files.firstWhere((f) => f.name == 'word/document.xml').content,
+    );
+    final size = XmlDocument.parse(xml).findAllElements('w:pgSz').single;
+    expect(size.getAttribute('w:w'), '12240');
+    expect(size.getAttribute('w:h'), '15840');
+    expect(size.getAttribute('w:orient'), isNull);
+    expect(xml, contains('<w:sz w:val="20"/>'));
+
+    // El PDF sale en Carta vertical (612 × 792 pt).
+    final pdf = latin1.decode(await TechnicalScriptPdfExporter.buildBytes(doc));
+    expect(pdf, contains('/MediaBox[0 0 612 792]'));
+
+    // Las opciones se guardan y se leen igual.
+    final again = ScriptExportOptions.fromJson(
+      jsonDecode(jsonEncode(options.toJson())) as Map<String, dynamic>,
+    );
+    expect(again.hiddenColumns, options.hiddenColumns);
+    expect(again.fontSize, 10);
+    expect(again.paper, ScriptDocPaper.letter);
+    expect(again.landscape, isFalse);
   });
 }

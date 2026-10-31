@@ -1,10 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import 'fab_links.dart';
 import 'unreal_library.dart';
 import 'unreal_link.dart';
 import 'unreal_thumbs.dart';
@@ -21,14 +23,22 @@ class UnrealLibraryScreen extends StatefulWidget {
   final UnrealLink link;
   final UnrealLibrary library;
 
+  /// Abre una búsqueda de Fab; en las pruebas no abre nada.
+  final Future<void> Function(Uri) openUrl;
+
   UnrealLibraryScreen({
     super.key,
     this.projectId,
     this.onPlace,
     UnrealLink? link,
     UnrealLibrary? library,
+    Future<void> Function(Uri)? openUrl,
   }) : link = link ?? UnrealLink.instance,
-       library = library ?? UnrealLibrary.instance;
+       library = library ?? UnrealLibrary.instance,
+       openUrl = openUrl ?? _launch;
+
+  static Future<void> _launch(Uri uri) =>
+      launchUrl(uri, mode: LaunchMode.externalApplication);
 
   static Future<void> open(
     BuildContext context, {
@@ -45,23 +55,73 @@ class UnrealLibraryScreen extends StatefulWidget {
   State<UnrealLibraryScreen> createState() => _UnrealLibraryScreenState();
 }
 
-class _UnrealLibraryScreenState extends State<UnrealLibraryScreen> {
+class _UnrealLibraryScreenState extends State<UnrealLibraryScreen>
+    with WidgetsBindingObserver {
   final _query = TextEditingController();
   bool _favorites = false;
   bool _searching = false;
+  bool _collecting = false;
   String? _status;
   int _rendering = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.library.load();
+    // Lo bajado de Fab desde la última vez entra solo (F6.20 D2).
+    if (widget.link.isOn) _collectFab(quiet: true);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _query.dispose();
     super.dispose();
+  }
+
+  /// Al volver a IRIS (del navegador o de Unreal), se recoge lo nuevo.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.link.isOn) {
+      _collectFab(quiet: true);
+    }
+  }
+
+  /// Mete en la biblioteca lo que hay de Fab y Megascans en el proyecto de
+  /// Unreal. [quiet]: sin aviso si no hay nada nuevo.
+  Future<void> _collectFab({bool quiet = false}) async {
+    if (_collecting) return;
+    setState(() => _collecting = true);
+    try {
+      final found = await widget.link.findFabAssets();
+      final added = await widget.library.addFound([
+        for (final a in found) a.toRef(),
+      ]);
+      if (!quiet || added > 0) {
+        _status = found.isEmpty
+            ? 'Aún no hay nada de Fab ni de Megascans en el proyecto de '
+                  'Unreal. Descárgalo con el plugin Fab (Ventana → Fab).'
+            : '${found.length} de Fab y Megascans en Unreal, $added nuevos '
+                  'en la biblioteca.';
+      }
+    } catch (e) {
+      if (!quiet) _status = UnrealLink.describe(e);
+    } finally {
+      if (mounted) setState(() => _collecting = false);
+    }
+  }
+
+  Future<void> _openFab(String query, {bool megascans = false}) async {
+    await widget.openUrl(FabLinks.search(query, megascans: megascans));
+    if (mounted) {
+      setState(
+        () => _status =
+            'Fab abierto en el navegador. Añade lo que quieras a tu biblioteca '
+            'de Fab y descárgalo en Unreal con el plugin Fab (Ventana → Fab); '
+            'al volver a IRIS entra solo aquí.',
+      );
+    }
   }
 
   Future<void> _searchUnreal() async {
@@ -159,7 +219,53 @@ class _UnrealLibraryScreenState extends State<UnrealLibraryScreen> {
                       selected: _favorites,
                       onSelected: (v) => setState(() => _favorites = v),
                     ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.storefront_outlined, size: 18),
+                      label: const Text('Buscar en Fab'),
+                      onPressed: () => _openFab(_query.text),
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.landscape_outlined, size: 18),
+                      label: const Text('Megascans'),
+                      onPressed: () => _openFab(_query.text, megascans: true),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Packs de partida en Fab',
+                      onSelected: _openFab,
+                      itemBuilder: (_) => [
+                        for (final (label, query) in FabLinks.starterPacks)
+                          PopupMenuItem(value: query, child: Text(label)),
+                      ],
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.inventory_2_outlined, size: 18),
+                            SizedBox(width: 6),
+                            Text('Packs de partida'),
+                            Icon(Icons.arrow_drop_down, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
                     if (link.isOn) ...[
+                      FilledButton.tonalIcon(
+                        icon: _collecting
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.download_done, size: 18),
+                        label: const Text('Recoger de Fab'),
+                        onPressed: _collecting ? null : () => _collectFab(),
+                      ),
                       FilledButton.tonalIcon(
                         icon: _searching
                             ? const SizedBox(
