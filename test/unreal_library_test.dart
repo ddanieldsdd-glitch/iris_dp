@@ -11,6 +11,7 @@ import 'package:iris_dp/features/unreal_link/fab_links.dart';
 import 'package:iris_dp/features/unreal_link/unreal_library.dart';
 import 'package:iris_dp/features/unreal_link/unreal_library_screen.dart';
 import 'package:iris_dp/features/unreal_link/unreal_link.dart';
+import 'package:iris_dp/features/unreal_link/unreal_stage_steps.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 UnrealAssetRef _ref(String path, {List<double>? size, String? thumb}) =>
@@ -189,5 +190,55 @@ void main() {
     expect(lib.search('rock').single.ref.path,
         '/Game/Fab/Megascans/Rock/SM_Rock.SM_Rock');
     link.disconnect();
+  });
+
+  test('lo quitado no vuelve con una búsqueda ni desde otro equipo', () async {
+    final lib = UnrealLibrary()..clearForTest();
+    const rock = '/Game/Megascans/Rock/SM_Rock.SM_Rock';
+    await lib.addFound([_ref(rock)]);
+    final before = lib.encode();
+    await lib.remove(rock);
+    expect(await lib.addFound([_ref(rock)]), 0);
+    // Otro equipo con la versión de antes de quitarlo no lo devuelve.
+    lib.importJson(before, notify: false);
+    expect(lib.search('rock'), isEmpty);
+    // Usarlo de nuevo sí.
+    await lib.remember(_ref(rock));
+    expect(lib.search('rock'), hasLength(1));
+    // Las bibliotecas de antes (solo la lista) se siguen leyendo.
+    final other = UnrealLibrary()..clearForTest();
+    other.importJson(jsonEncode([
+      for (final e in lib.entries) e.toJson(),
+    ]), notify: false);
+    expect(other.search('rock'), hasLength(1));
+  });
+
+  test('IRIS Stage en seis pasos: el estado sale de lo que hay', () {
+    var steps = stageSteps(
+      projectId: 1,
+      onPc: true,
+      savedProject: null,
+      connected: false,
+      worldPath: null,
+      libraryCount: 0,
+    );
+    expect(steps, hasLength(6));
+    expect(steps.first.state, StageStepState.ready);
+    expect(steps[1].state, StageStepState.waiting);
+    expect(steps[4].state, StageStepState.waiting);
+    steps = stageSteps(
+      projectId: 1,
+      onPc: true,
+      savedProject: 'C:/Unreal/Proyecto.uproject',
+      connected: true,
+      worldPath: '/Game/IRIS/Casa/Salon',
+      libraryCount: 3,
+    );
+    expect(
+      steps.take(4).map((s) => s.state),
+      everyElement(StageStepState.done),
+    );
+    expect(steps[2].hint, contains('/Game/IRIS/Casa/Salon'));
+    expect(steps[5].state, StageStepState.ready);
   });
 }

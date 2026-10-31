@@ -19,6 +19,7 @@ import '../luka_export/iris_dp_export_service.dart';
 import '../luka_export/luka_bridge_preview_panel.dart';
 import '../luka_export/luka_export_preview.dart';
 import '../luka_export/unreal_render_import.dart';
+import '../unreal_link/unreal_stage_steps.dart';
 import '../unreal_link/unreal_library_screen.dart';
 import '../unreal_link/unreal_link.dart';
 import '../unreal_link/unreal_render_view.dart';
@@ -354,6 +355,11 @@ class _IrisStageScreenState extends ConsumerState<IrisStageScreen> {
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
+              UnrealStageSteps(
+                projectId: widget.projectId,
+                projectName: widget.projectName,
+              ),
+              const SizedBox(height: AppSpacing.md),
               UnrealStageCard(
                 projectId: widget.projectId,
                 projectName: widget.projectName,
