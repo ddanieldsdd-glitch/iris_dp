@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 
@@ -63,7 +64,8 @@ class ProjectHubCover extends StatelessWidget {
             ),
           ),
         ),
-        if (!hasCover && mosaic.isEmpty)
+        // En el iPhone no hay sitio: el icono quedaba debajo de las tiras.
+        if (!hasCover && mosaic.isEmpty && !AppLayout.isCompact(context))
           Center(
             child: Icon(
               Icons.movie_creation_outlined,

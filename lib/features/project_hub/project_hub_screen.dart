@@ -185,7 +185,9 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: compact ? 180 : 280,
+            // En el iPhone, con 180 las tiras de moodboard y storyboard se
+            // montaban sobre la flecha de volver.
+            expandedHeight: compact ? 220 : 280,
             pinned: true,
             backgroundColor: palette.surface,
             iconTheme: IconThemeData(color: palette.textPrimary),
