@@ -57,6 +57,7 @@ import 'light/plan_light.dart';
 import 'light_overrides.dart';
 import 'light_setup_actions.dart' show askPlanName;
 import 'plan_ambient_sheet.dart';
+import 'light/plan_grip.dart';
 import 'set_environment.dart';
 import 'plan_equipment.dart';
 import 'light/light_scene.dart';
@@ -2899,6 +2900,24 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     await _addElement(el);
   }
 
+  /// Un palio (F6.22.1): 4×4 con Grid Cloth de partida; la tela, el rebote,
+  /// la medida, la altura y la inclinación se cambian en su ficha.
+  Future<void> _addPalio() async {
+    final count = _elements.where((e) => e.type == ElementType.light).length;
+    final el = PlanElement(
+      id: 0,
+      type: ElementType.light,
+      position: Offset(300 + count * 40.0, 150),
+      lightType: LightType.diffusionFrame,
+      label: LightType.diffusionFrame.label,
+    );
+    el.props[PlanGrip.kindKey] = PlanGrip.palioKind;
+    el.props[PlanLight.modifiersKey] = ['grid-full'];
+    PlanGrip.applyFormat(el, GripFormat.palio4, _metersPerUnit);
+    el.customName = GripFormat.palio4.label;
+    await _addElement(el);
+  }
+
   /// Un fotómetro mide la luz del esquema: se guarda con él.
   Future<void> _addMeter() async {
     await _ensureLightSetup();
@@ -4930,6 +4949,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     ],
                     onAddCast: (name, color) => _addActor(color, name: name),
                     onAddLight: _addLight,
+                    onAddPalio: _addPalio,
                     onAddProp: _addProp,
                     onAddMeter: _addMeter,
                     projectLights: _gear.lights,

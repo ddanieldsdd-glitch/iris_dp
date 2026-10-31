@@ -613,12 +613,11 @@ class PlanPieceControls extends StatelessWidget {
       ]);
     } else if (_isGrip(el)) {
       final length = LightScene.lengthOf(el);
-      // Marco o palio, con su medida (F6.22.1). El rebote, solo palio.
-      if (PlanGrip.takesFormat(el)) {
-        final formats = [
-          for (final f in GripFormat.values)
-            if (f.palio || el.lightType == LightType.diffusionFrame) f,
-        ];
+      // Palio (2×2 a 6×6, tela o rebote) o marco (1×1, 2×1, solo difusión),
+      // con su medida (F6.22.1).
+      final palio = PlanGrip.isPalio(el);
+      final formats = PlanGrip.formatsFor(el);
+      if (formats.isNotEmpty) {
         children.add(
           choice<GripFormat>(
             'Formato',
@@ -629,7 +628,44 @@ class PlanPieceControls extends StatelessWidget {
                 el.props.remove(PlanGrip.formatKey);
               } else {
                 PlanGrip.applyFormat(el, f, metersPerUnit);
+                // Si aún se llama como su formato, el nombre sigue a la medida.
+                final name = el.customName;
+                if (palio &&
+                    (name == null || name.startsWith('Palio'))) {
+                  el.customName = f.label;
+                }
               }
+            },
+          ),
+        );
+      }
+      if (palio) {
+        // Un solo selector: una tela de difusión o un rebote.
+        final cloth = el.lightType == LightType.bounce
+            ? 'b:${SurfaceMaterial.byId(el.props[LightScene.materialKey] as String?, kBounceMaterials).id}'
+            : 'd:${LightScene.diffusionOf(el).id}';
+        children.add(
+          choice<String>(
+            'Tela o rebote',
+            cloth,
+            [
+              for (final m in LightModifier.ofKind(ModifierKind.diffusion))
+                ('d:${m.id}', 'Difusión · ${m.name}'),
+              for (final m in kBounceMaterials) ('b:${m.id}', 'Rebote · ${m.name}'),
+            ],
+            (v) {
+              if (v == null) return;
+              final id = v.substring(2);
+              if (v.startsWith('b:')) {
+                el.lightType = LightType.bounce;
+                el.props[LightScene.materialKey] = id;
+                el.props.remove(PlanLight.modifiersKey);
+              } else {
+                el.lightType = LightType.diffusionFrame;
+                el.props[PlanLight.modifiersKey] = [id];
+                el.props.remove(LightScene.materialKey);
+              }
+              el.props[PlanGrip.kindKey] = PlanGrip.palioKind;
             },
           ),
         );
@@ -706,7 +742,9 @@ class PlanPieceControls extends StatelessWidget {
           ),
         ],
       ]);
-      switch (el.lightType) {
+      switch (palio ? null : el.lightType) {
+        case null:
+          break;
         case LightType.bounce:
           final material = SurfaceMaterial.byId(
             el.props[LightScene.materialKey] as String?,
@@ -721,8 +759,7 @@ class PlanPieceControls extends StatelessWidget {
           children.addAll([
             filter('Tela', ModifierKind.diffusion, allowNone: false),
             // Un marco puede llevar además una gelatina (F6.22.1).
-            if (!(PlanGrip.formatOf(el)?.palio ?? false))
-              filter('Gelatina', ModifierKind.correction),
+            filter('Gelatina', ModifierKind.correction),
           ]);
         case LightType.net:
           children.add(filter('Red', ModifierKind.scrim, allowNone: false));

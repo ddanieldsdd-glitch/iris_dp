@@ -89,4 +89,22 @@ void main() {
     )!;
     expect(found.version, '5.7');
   });
+
+  test('con un Unreal ya abriéndose no se abre otro', () {
+    const path =
+        r'C:\Users\Dani\Documents\Unreal Projects\Rodaje\Rodaje.uproject';
+    expect(UnrealStageLauncher.alreadyOpening(const [], path), isNull);
+    expect(
+      UnrealStageLauncher.alreadyOpening(const [
+        r'"C:\Program Files\Epic Games\UE_5.5\Engine\Binaries\Win64\UnrealEditor.exe" "C:\Users\Dani\Documents\Unreal Projects\Rodaje\Rodaje.uproject" -RCWebControlEnable',
+      ], path),
+      contains('este proyecto'),
+    );
+    expect(
+      UnrealStageLauncher.alreadyOpening(const [
+        r'UnrealEditor.exe "D:\Otro\Otro.uproject"',
+      ], path),
+      contains('otro proyecto'),
+    );
+  });
 }

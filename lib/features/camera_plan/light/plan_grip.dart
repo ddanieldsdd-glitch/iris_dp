@@ -30,6 +30,24 @@ enum GripFormat {
 abstract final class PlanGrip {
   static const formatKey = 'gripFormat';
 
+  /// «palio»: un palio, que lleva tela de difusión o rebote. Sin él, un
+  /// marco de difusión es un marco (solo difumina) y un rebote, un rebote.
+  static const kindKey = 'gripKind';
+  static const palioKind = 'palio';
+
+  static bool isPalio(PlanElement el) =>
+      el.props[kindKey] == palioKind || (formatOf(el)?.palio ?? false);
+
+  /// Formatos que se ofrecen: los de palio para un palio; los de marco para
+  /// un marco de difusión; ninguno para el resto.
+  static List<GripFormat> formatsFor(PlanElement el) => [
+    for (final f in GripFormat.values)
+      if (isPalio(el)
+          ? f.palio
+          : el.lightType == LightType.diffusionFrame && !f.palio)
+        f,
+  ];
+
   /// Alto de la tela, en metros.
   static const heightKey = 'gripH';
 
