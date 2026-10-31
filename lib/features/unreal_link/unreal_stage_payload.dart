@@ -186,8 +186,11 @@ class UnrealStagePayload {
     final at = s['at'] as List?;
     final format = s['format'] as String? ?? 'glb';
     if (at == null || s['file'] == null || format == 'ply') return null;
-    // En el visor gira -yaw sobre la vertical; en Unreal, igual.
-    final yaw = -((s['yawDeg'] ?? 0) as num).toDouble();
+    // En la escena gira -yaw sobre la vertical (en el sentido de la planta,
+    // con y hacia abajo); Unreal invierte la y, así que allí es +yaw. El
+    // importador de glTF de Unreal ya pasa de Y arriba a Z arriba (cambia
+    // y por z), así que no hace falta otro giro de base.
+    final yaw = ((s['yawDeg'] ?? 0) as num).toDouble();
     return {
       'id': s['id'],
       'name': s['name'],

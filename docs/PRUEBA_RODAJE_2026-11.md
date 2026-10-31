@@ -91,10 +91,46 @@ Esta rama lleva todo lo anterior, más la biblioteca de assets (#58, ya en `main
 - [ ] **Deshacer en la jornada.** Mueve un tramo o un plano: el aviso «Orden de rodaje cambiado» trae «Deshacer» y lo devuelve. Quita un plano o una escena: «Deshacer» los vuelve a poner en su sitio.
 - [ ] **Estado en el PDF.** Marca planos «Hecho» y «Descartado» en «En set» y exporta la jornada: en la columna ORDEN pone **HECHO** o DESCART. bajo el número.
 
+## 9 · Lo nuevo del 31 de octubre (rama `plan/pulido-rodaje`)
+
+Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
+
+- [ ] **Exports rápidos.** Exporta el guion técnico completo a PDF y a Word: con muchos planos e imágenes tarda segundos, no minutos. En la prueba, 400 planos con imagen tardan unos 13 s en total, cuando antes eran casi 2 minutos. Las fotos se ven igual de bien.
+- [ ] **Transparencias.** Un boceto o un recorte con transparencia en la casilla Planta o en Referencia se sigue viendo con su fondo transparente, no negro.
+- [ ] **Escaneo en Unreal: el giro.** Gira el escaneo 90° en IRIS: en Unreal debe girar hacia el mismo lado. Se ha corregido el signo; si aún no cuadra, anota cuántos grados difiere.
+- [ ] **Storyboard en el iPhone** (o con la ventana a menos de 600 px):
+  - la barra de arriba cabe;
+  - al tocar un plano se abre el visor compacto;
+  - deslizando a izquierda o derecha se pasa de plano;
+  - pellizcando se amplía, y ampliada se puede mover;
+  - debajo de la imagen va la ficha: encuadre editable, óptica, acción y apuntes, con Anterior y Siguiente.
+- [ ] **IRIS Stage en seis pasos.** Proyecto → IRIS Stage: arriba aparece «IRIS Stage en seis pasos · n de 6». Cada paso se marca solo:
+  - el proyecto de Unreal preparado;
+  - conectado;
+  - la planta mandada (dice el nivel de Unreal);
+  - assets en la biblioteca.
+
+  Los botones de cada paso hacen lo que dicen.
+- [ ] **Quitar de la biblioteca.** Quita un asset de la biblioteca y pulsa «Buscar en Unreal» o «Recoger de Fab»: no vuelve. En otro equipo, tras sincronizar los ajustes, tampoco. Si lo asignas otra vez a un elemento, vuelve.
+
+## 10 · Altura, paneo e inclinación de los focos (F6.21.5)
+
+- [ ] **Ficha del foco.** Selecciona un foco de trípode en la planta. En la ficha (Montaje) salen **Altura** (0,3–12 m), **Paneo** (0–359°) e **Inclinación (tilt)** (−90° a +90°). Lo mismo en un foco colgado.
+- [ ] **En el 3D.**
+  - Sube un foco de trípode a 2,5 m e inclínalo −30°: en el 3D se ve a esa altura y apuntando hacia abajo.
+  - En el panel 3D del foco, el deslizador «Inclinación (tilt)» hace lo mismo.
+- [ ] **El fotómetro.** Con ese foco apuntando a una persona, la lectura cambia al inclinarlo: apuntado a ella da más que en horizontal por encima.
+- [ ] **En el alzado.** El foco se ve a su altura y con el ángulo de su haz.
+- [ ] **Unreal.** Con IRIS Stage conectado:
+  - el foco llega a 2,5 m y −30°;
+  - inclínalo a −45° en el editor de Unreal: en la ficha de IRIS pone −45° y la altura no cambia;
+  - súbelo en Unreal: en IRIS cambia la altura.
+- [ ] **Plantas de antes.** Un foco colgado e inclinado de antes de este cambio sigue apuntando igual: 30° desde la vertical se lee como −60°.
+- [ ] **Ojo: altura por defecto en trípode.** Un foco de trípode sin altura propia ahora va a 2 m en el 3D y en Unreal (antes, 3 m). El fotómetro lo sigue midiendo como siempre hasta que le pongas altura o inclinación.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.
-- **F6.20 C1–C4 · IRIS Stage en seis pasos, con tutorial y guía.** En `.claude/worktrees/f6-3d-pc` hay un inicio de C1 de la cuenta anterior, sin guardar: opciones del esquema de luz en la miniatura y «quitar» en la biblioteca.
+- **F6.20 C, lo que falta:** la miniatura del esquema de luz con colores por tipo y nombres para el PDF. Es lo que quedó a medias de la cuenta anterior en `plan_thumbnail.dart`, dentro de `.claude/worktrees/f6-3d-pc`.
 - **F6.20 E · RealityScan sin interfaz en el PC:** de fotos o vídeo a malla sin abrir RealityScan, y paredes propuestas a partir del escaneo.
-- **IP.2.2 · Storyboard compacto en el iPhone.**
 - **Revisar el bucle de `pullContentCloud`** (apartado 6).

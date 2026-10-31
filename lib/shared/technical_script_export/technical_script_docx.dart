@@ -494,6 +494,22 @@ class TechnicalScriptDocxExporter {
     int maxWidthTwips,
   ) {
     try {
+      // Un JPEG ya reducido (lo normal: viene de PdfSafeImage) va tal cual;
+      // sus medidas salen de la cabecera, sin decodificarlo.
+      final isJpeg =
+          source.length > 3 && source[0] == 0xFF && source[1] == 0xD8;
+      final info = isJpeg ? img.JpegDecoder().startDecode(source) : null;
+      if (info != null &&
+          info.width > 0 &&
+          info.height > 0 &&
+          info.width <= 1200) {
+        final widthEmu = maxWidthTwips * _emuPerTwip;
+        return (
+          bytes: source,
+          widthEmu: widthEmu,
+          heightEmu: (widthEmu * info.height / info.width).round(),
+        );
+      }
       final decoded = img.decodeImage(source);
       if (decoded == null || decoded.width == 0 || decoded.height == 0) {
         return null;

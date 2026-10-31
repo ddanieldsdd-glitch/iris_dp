@@ -23,9 +23,21 @@ void main() {
     final bytes = await tester.runAsync(
       () => PdfSafeImage.loadFromPathMaxEdge(bigPath),
     );
-    final decoded = img.decodePng(bytes!)!;
+    // Sin transparencia sale en JPEG, que pesa menos y el PDF mete tal cual.
+    expect(bytes![0], 0xFF);
+    final decoded = img.decodeImage(bytes)!;
     expect(decoded.width, 2048);
     expect(decoded.height, 683);
+  });
+
+  testWidgets('con transparencia sigue en PNG', (tester) async {
+    final path = '${dir.path}/recorte.png';
+    final image = img.Image(width: 3000, height: 1000, numChannels: 4);
+    File(path).writeAsBytesSync(img.encodePng(image));
+    final bytes = await tester.runAsync(
+      () => PdfSafeImage.loadFromPathMaxEdge(path),
+    );
+    expect(img.decodePng(bytes!)!.width, 2048);
   });
 
   testWidgets('dentro de una exportación la misma imagen se carga una vez', (

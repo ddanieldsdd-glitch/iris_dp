@@ -71,7 +71,7 @@ curso. En el iPhone, la jornada se abre en «En set»
 tramo, con «Hecho», «Descartar» y una nota de set, que se guardan en
 `contentOverridesJson.onSet` del bloque y viajan con la jornada. El guion
 técnico se abre en «Lectura» (tarjetas por escena) y la tabla sigue a un
-toque. Falta el storyboard compacto (IP.2.2) y llevar el estado al PDF.
+toque. El estado ya sale en el PDF de la jornada. IP.2.2 (`plan/pulido-rodaje`): visor del storyboard compacto, en el que se desliza entre planos y se pellizca para ampliar, con la ficha debajo; la barra del storyboard cabe a 390.
 
 - **IP.2.1** Documento del día a pantalla completa en el iPhone: abrir
   directamente el documento activo (`primaryDocument`) desde la pestaña

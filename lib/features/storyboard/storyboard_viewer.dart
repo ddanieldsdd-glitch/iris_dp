@@ -11,6 +11,7 @@ import '../../core/sync/editing_guard.dart';
 import '../../core/sync/live_editing_scope.dart';
 import '../../core/sync/realtime_hub.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/scene_format.dart';
@@ -172,6 +173,12 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
       liveEditingProvider.select((l) => l.holderOf(shot.uid)?.device),
     );
 
+    if (AppLayout.isCompact(context)) {
+      return LiveEditingScope(
+        child: _compactPage(sequence, index, scene, shot, lockedBy),
+      );
+    }
+
     return LiveEditingScope(child: CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): () =>
@@ -325,6 +332,224 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
         ),
       ),
     ));
+  }
+
+  final _zoom = TransformationController();
+  bool _zoomed = false;
+
+  @override
+  void dispose() {
+    _zoom.dispose();
+    super.dispose();
+  }
+
+  /// El visor en el iPhone (IP.2.2): barra corta con menú, la imagen a lo
+  /// ancho (deslizar para pasar de plano, pellizcar para ampliar) y debajo
+  /// la ficha del plano.
+  Widget _compactPage(
+    List<({Scene scene, Shot shot})> sequence,
+    int index,
+    Scene scene,
+    Shot shot,
+    String? lockedBy,
+  ) {
+    final palette = context.palette;
+    final db = ref.read(databaseProvider);
+    final body = AppTypography.bodyMedium(
+      palette,
+    ).copyWith(color: palette.textPrimary);
+    final optics = [
+      shot.lens,
+      shot.angle,
+      shot.movement,
+      shot.fStop,
+    ].where((v) => v != null && v.trim().isNotEmpty).join(' · ');
+    void go(int delta) {
+      _zoom.value = Matrix4.identity();
+      _zoomed = false;
+      _go(sequence, delta);
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: palette.surfaceElevated,
+        titleSpacing: AppSpacing.md,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Esc ${scene.label} · Plano ${shot.number}',
+              style: AppTypography.titleMedium(palette),
+            ),
+            Text(
+              '${index + 1} de ${sequence.length}',
+              style: AppTypography.caption(palette),
+            ),
+          ],
+        ),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Más',
+            onSelected: (v) async {
+              switch (v) {
+                case 'image':
+                  await showShotImageMenu(
+                    context,
+                    shot,
+                    target: ShotImageTarget.storyboard,
+                  );
+                case 'export':
+                  await showShotFramesExportSheet(
+                    context,
+                    scene: scene,
+                    shot: shot,
+                  );
+                case 'new':
+                  await _newShot(scene, sequence);
+                case 'more':
+                  widget.onMore?.call(shot);
+              }
+            },
+            itemBuilder: (_) => [
+              if (lockedBy == null)
+                const PopupMenuItem(value: 'image', child: Text('Imagen')),
+              const PopupMenuItem(value: 'export', child: Text('Exportar')),
+              const PopupMenuItem(value: 'new', child: Text('Plano nuevo')),
+              if (widget.onMore != null)
+                const PopupMenuItem(value: 'more', child: Text('Más opciones')),
+            ],
+          ),
+          IconButton(
+            tooltip: 'Cerrar',
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          children: [
+            GestureDetector(
+              // Sin ampliar, deslizar pasa de plano; ampliada, se mueve.
+              onHorizontalDragEnd: _zoomed
+                  ? null
+                  : (d) {
+                      final v = d.primaryVelocity ?? 0;
+                      if (v < -200) go(1);
+                      if (v > 200) go(-1);
+                    },
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: _compactImage(shot),
+              ),
+            ),
+            _strip(shot),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppLayout.gutter(context),
+                vertical: AppSpacing.md,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    locationFromCanonical(scene.locationCanonical),
+                    style: AppTypography.caption(palette),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  IgnorePointer(
+                    ignoring: lockedBy != null,
+                    child: _TitleField(
+                      key: ValueKey('titulo_${shot.id}'),
+                      initial: scriptMarkupToPlain(shot.framing),
+                      onFocusChanged: (focused) {
+                        final live = ref.read(liveEditingProvider);
+                        focused
+                            ? live.focusShot(shot.uid)
+                            : live.blurShot(shot.uid);
+                      },
+                      onChanged: (text) => db.updateShotFields(
+                        shot.id,
+                        ShotsCompanion(
+                          framing: Value(text.isEmpty ? null : text),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (lockedBy != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Editando en $lockedBy',
+                        style: AppTypography.caption(
+                          palette,
+                        ).copyWith(color: const Color(0xFF7F77DD)),
+                      ),
+                    ),
+                  if (optics.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(optics, style: AppTypography.mono(palette)),
+                  ],
+                  if ((shot.action ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(scriptMarkupToPlain(shot.action), style: body),
+                  ],
+                  if ((shot.notes ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      scriptMarkupToPlain(shot.notes),
+                      style: AppTypography.caption(palette),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: index > 0 ? () => go(-1) : null,
+                          icon: const Icon(Icons.chevron_left),
+                          label: const Text('Anterior'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: index < sequence.length - 1
+                              ? () => go(1)
+                              : null,
+                          icon: const Icon(Icons.chevron_right),
+                          label: const Text('Siguiente'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _compactImage(Shot shot) {
+    final path = _picked ?? storyboardImageOf(shot);
+    if (path == null || !File(path).existsSync()) return _image(shot);
+    return InteractiveViewer(
+      transformationController: _zoom,
+      minScale: 1,
+      maxScale: 4,
+      panEnabled: _zoomed,
+      onInteractionEnd: (_) {
+        final zoomed = _zoom.value.getMaxScaleOnAxis() > 1.01;
+        if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
+      },
+      child: Center(
+        child: Image.file(File(path), fit: BoxFit.contain, cacheWidth: 1600),
+      ),
+    );
   }
 
   Widget _arrow(String tooltip, IconData icon, VoidCallback? onPressed) {

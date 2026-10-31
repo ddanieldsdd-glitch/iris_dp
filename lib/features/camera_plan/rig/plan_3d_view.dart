@@ -1360,15 +1360,14 @@ class _LightControls extends StatelessWidget {
           max: 359,
           onChanged: (v) => el.rotation = v.roundToDouble(),
         ),
-        if (overhead)
-          slider(
-            'Inclinación desde la vertical',
-            '${PlanLight.tiltOf(el).round()}°',
-            current: PlanLight.tiltOf(el),
-            min: 0,
-            max: 80,
-            onChanged: (v) => el.props[PlanLight.tiltKey] = v.roundToDouble(),
-          ),
+        slider(
+          'Inclinación (tilt)',
+          PlanLight.tiltLabel(PlanLight.elevationOf(el)),
+          current: PlanLight.elevationOf(el),
+          min: -90,
+          max: 90,
+          onChanged: (v) => PlanLight.setElevation(el, v.roundToDouble()),
+        ),
       ],
     );
   }

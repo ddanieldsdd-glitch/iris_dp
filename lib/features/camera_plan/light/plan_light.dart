@@ -52,14 +52,65 @@ class PlanLight {
 
   static bool isOverhead(PlanElement el) => el.props[mountKey] == mountCeiling;
 
-  /// Grados que se inclina una luz colgada, desde la vertical.
+  /// Grados que se inclina una luz colgada, desde la vertical. Es la forma
+  /// antigua de guardarlo; desde F6.21.5 manda [tiltDegKey], que vale para
+  /// todos los montajes, y este se mantiene para versiones anteriores.
   static const tiltKey = 'tilt';
-  static double tiltOf(PlanElement el) => isOverhead(el)
-      ? ((el.props[tiltKey] as num?)?.toDouble() ?? 0).clamp(0.0, 80.0)
-      : 0;
+  static double tiltOf(PlanElement el) {
+    if (!isOverhead(el)) return 0;
+    if (el.props[tiltDegKey] case final num deg) {
+      return (90 + deg.toDouble()).clamp(0.0, 80.0);
+    }
+    return ((el.props[tiltKey] as num?)?.toDouble() ?? 0).clamp(0.0, 80.0);
+  }
 
+  /// Inclinación del haz desde la horizontal, en grados (F6.21.5): −90 a
+  /// plomo hacia el suelo, 0 en horizontal, +90 hacia arriba. Vale para
+  /// cualquier montaje; es el *tilt* del aparato.
+  static const tiltDegKey = 'tiltDeg';
+
+  /// La de un trípode sin inclinación propia: un poco hacia abajo.
+  static const double standTiltDeg = -8.5;
+
+  static double elevationOf(PlanElement el) {
+    if (el.props[tiltDegKey] case final num deg) {
+      return deg.toDouble().clamp(-90.0, 90.0);
+    }
+    if (isOverhead(el)) return -(90 - tiltOf(el));
+    return standTiltDeg;
+  }
+
+  /// Pone la inclinación desde la horizontal (y, si cuelga, la antigua desde
+  /// la vertical, para que la lea una versión anterior).
+  static void setElevation(PlanElement el, double deg) {
+    final clean = (deg.clamp(-90.0, 90.0) * 2).round() / 2;
+    el.props[tiltDegKey] = clean;
+    if (isOverhead(el)) {
+      el.props[tiltKey] = (90 + clean).clamp(0.0, 80.0);
+    }
+  }
+
+  /// Si el foco tiene altura o inclinación propias: entonces el motor de luz
+  /// lo trata en tres dimensiones aunque vaya en trípode.
+  static bool hasOwnAim(PlanElement el) =>
+      el.props[tiltDegKey] is num || el.props[heightKey] is num;
+
+  /// Altura a la que está el aparato, en metros sobre su suelo. Sin altura
+  /// propia: 3 m si cuelga y 2 m en trípode.
   static double heightOf(PlanElement el) =>
-      (el.props[heightKey] as num?)?.toDouble() ?? defaultCeilingHeight;
+      (el.props[heightKey] as num?)?.toDouble() ??
+      (isOverhead(el) ? defaultCeilingHeight : defaultStandHeight);
+
+  static const double defaultStandHeight = 2;
+
+  /// «−30° hacia abajo», «horizontal», «a plomo»…
+  static String tiltLabel(double deg) {
+    final d = deg.round();
+    if (d <= -89) return 'a plomo hacia abajo';
+    if (d >= 89) return 'a plomo hacia arriba';
+    if (d == 0) return 'horizontal';
+    return d < 0 ? '$d° hacia abajo' : '+$d° hacia arriba';
+  }
 
   /// Metros que hay del aparato al plano donde se mide, si cuelga del
   /// techo; `null` si va en trípode.

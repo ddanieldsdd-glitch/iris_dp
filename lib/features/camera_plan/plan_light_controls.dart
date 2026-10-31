@@ -218,66 +218,83 @@ class _PlanLightControlsState extends State<PlanLightControls> {
               widget.onUpdate();
             },
           ),
-          if (PlanLight.isOverhead(_el)) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: Text('Altura', style: AppTypography.caption(palette)),
-                ),
-                Text(
-                  '${PlanLight.heightOf(_el).toStringAsFixed(1)} m',
+          // Altura, paneo e inclinación para cualquier montaje (F6.21.5).
+          Row(
+            children: [
+              Expanded(
+                child: Text('Altura', style: AppTypography.caption(palette)),
+              ),
+              Text(
+                '${PlanLight.heightOf(_el).toStringAsFixed(2)} m',
+                style: AppTypography.caption(palette),
+              ),
+            ],
+          ),
+          Slider(
+            value: PlanLight.heightOf(_el).clamp(0.3, 12.0),
+            min: 0.3,
+            max: 12,
+            divisions: 234,
+            onChanged: (v) => setState(
+              () => _el.props[PlanLight.heightKey] = (v * 20).round() / 20,
+            ),
+            onChangeEnd: (_) => widget.onUpdate(),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Paneo (hacia dónde mira)',
                   style: AppTypography.caption(palette),
                 ),
-              ],
-            ),
-            Slider(
-              value: PlanLight.heightOf(_el).clamp(2.0, 10.0),
-              min: 2,
-              max: 10,
-              divisions: 32,
-              onChanged: (v) =>
-                  setState(() => _el.props[PlanLight.heightKey] = v),
-              onChangeEnd: (_) => widget.onUpdate(),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Inclinación',
-                    style: AppTypography.caption(palette),
-                  ),
-                ),
-                Text(
-                  PlanLight.tiltOf(_el) < 1
-                      ? 'recta hacia abajo'
-                      : '${PlanLight.tiltOf(_el).round()}°',
+              ),
+              Text(
+                '${_el.rotation.round()}°',
+                style: AppTypography.caption(palette),
+              ),
+            ],
+          ),
+          Slider(
+            value: _el.rotation.clamp(0.0, 359.0),
+            min: 0,
+            max: 359,
+            divisions: 359,
+            onChanged: (v) => setState(() => _el.rotation = v.roundToDouble()),
+            onChangeEnd: (_) => widget.onUpdate(),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Inclinación (tilt)',
                   style: AppTypography.caption(palette),
                 ),
-              ],
-            ),
-            Slider(
-              value: PlanLight.tiltOf(_el),
-              min: 0,
-              max: 80,
-              divisions: 16,
-              onChanged: (v) => setState(() {
-                if (v < 1) {
-                  _el.props.remove(PlanLight.tiltKey);
-                } else {
-                  _el.props[PlanLight.tiltKey] = v;
-                }
-              }),
-              onChangeEnd: (_) => widget.onUpdate(),
-            ),
-            Text(
-              'Colgada del techo, alumbra hacia abajo: hace un charco de luz '
-              'y pasa por encima de las personas. Inclinada, el charco se va '
-              'hacia donde apunta.',
-              style: AppTypography.caption(
-                palette,
-              ).copyWith(color: palette.textTertiary, fontSize: 10),
-            ),
-          ],
+              ),
+              Text(
+                PlanLight.tiltLabel(PlanLight.elevationOf(_el)),
+                style: AppTypography.caption(palette),
+              ),
+            ],
+          ),
+          Slider(
+            value: PlanLight.elevationOf(_el),
+            min: -90,
+            max: 90,
+            divisions: 180,
+            onChanged: (v) =>
+                setState(() => PlanLight.setElevation(_el, v.roundToDouble())),
+            onChangeEnd: (_) => widget.onUpdate(),
+          ),
+          Text(
+            PlanLight.isOverhead(_el)
+                ? 'Colgada: a −90° alumbra a plomo y hace un charco de luz; '
+                      'inclinada, el charco se va hacia donde apunta.'
+                : 'En trípode: súbelo y apúntalo hacia abajo para que el '
+                      'fotómetro lo cuente desde su altura.',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary, fontSize: 10),
+          ),
         ],
         if (widget.parts.contains(LightControlPart.filters)) ...[
           picker('Difusión', ModifierKind.diffusion),

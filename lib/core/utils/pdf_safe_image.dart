@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:isolate';
 import 'dart:ui' as ui;
+
+import 'package:image/image.dart' as img;
 
 /// Carga imágenes en formato compatible con el paquete `pdf` (PNG/JPEG).
 abstract final class PdfSafeImage {
@@ -80,15 +83,44 @@ abstract final class PdfSafeImage {
         targetHeight: targetHeight,
       );
       final resizedFrame = await codec.getNextFrame();
-      final data = await resizedFrame.image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      resizedFrame.image.dispose();
+      final frame = resizedFrame.image;
+      // Una foto (sin transparencia) va en JPEG: pesa una fracción del PNG
+      // y el PDF la mete tal cual, sin descomprimirla. Con transparencia
+      // (bocetos, recortes) sigue en PNG.
+      final raw = await frame.toByteData(format: ui.ImageByteFormat.rawRgba);
+      Uint8List? out;
+      if (raw != null && _opaque(raw)) {
+        final w = frame.width, h = frame.height;
+        final rgba = raw.buffer.asUint8List();
+        out = await Isolate.run(() => _jpeg(rgba, w, h));
+      } else {
+        final png = await frame.toByteData(format: ui.ImageByteFormat.png);
+        out = png?.buffer.asUint8List();
+      }
+      frame.dispose();
       codec.dispose();
-      return data?.buffer.asUint8List();
+      return out;
     } catch (_) {
       return null;
     }
+  }
+
+  static bool _opaque(ByteData rgba) {
+    final bytes = rgba.buffer.asUint8List(rgba.offsetInBytes, rgba.lengthInBytes);
+    for (var i = 3; i < bytes.length; i += 4) {
+      if (bytes[i] != 255) return false;
+    }
+    return true;
+  }
+
+  static Uint8List _jpeg(Uint8List rgba, int width, int height) {
+    final image = img.Image.fromBytes(
+      width: width,
+      height: height,
+      bytes: rgba.buffer,
+      numChannels: 4,
+    );
+    return Uint8List.fromList(img.encodeJpg(image, quality: 85));
   }
 
   static Uint8List? loadFromPathSync(String? path) {

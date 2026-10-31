@@ -294,44 +294,53 @@ class _StoryboardToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    // En el iPhone: sin la explicación y con el modo solo en iconos.
+    final compact = AppLayout.isCompact(context);
+    final modes = SegmentedButton<_StoryboardLayout>(
+      segments: [
+        ButtonSegment(
+          value: _StoryboardLayout.linear,
+          icon: const Icon(Icons.view_timeline_outlined, size: 18),
+          label: compact ? null : const Text('Lineal'),
+          tooltip: 'Lineal',
+        ),
+        ButtonSegment(
+          value: _StoryboardLayout.grid,
+          icon: const Icon(Icons.grid_view_outlined, size: 18),
+          label: compact ? null : const Text('Rejilla'),
+          tooltip: 'Rejilla',
+        ),
+        ButtonSegment(
+          value: _StoryboardLayout.list,
+          icon: const Icon(Icons.view_list_outlined, size: 18),
+          label: compact ? null : const Text('Lista'),
+          tooltip: 'Lista',
+        ),
+      ],
+      selected: {layout},
+      showSelectedIcon: false,
+      onSelectionChanged: (s) => onLayoutChanged(s.first),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Modo storyboard con datos del guion técnico. '
-          'Edita aquí o en la tabla: los cambios se sincronizan al instante.',
-          style: AppTypography.bodyMedium(palette),
-        ),
-        const SizedBox(height: AppSpacing.md),
+        if (!compact) ...[
+          Text(
+            'Modo storyboard con datos del guion técnico. '
+            'Edita aquí o en la tabla: los cambios se sincronizan al instante.',
+            style: AppTypography.bodyMedium(palette),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         Row(
           children: [
-            SegmentedButton<_StoryboardLayout>(
-              segments: const [
-                ButtonSegment(
-                  value: _StoryboardLayout.linear,
-                  icon: Icon(Icons.view_timeline_outlined, size: 18),
-                  label: Text('Lineal'),
-                ),
-                ButtonSegment(
-                  value: _StoryboardLayout.grid,
-                  icon: Icon(Icons.grid_view_outlined, size: 18),
-                  label: Text('Rejilla'),
-                ),
-                ButtonSegment(
-                  value: _StoryboardLayout.list,
-                  icon: Icon(Icons.view_list_outlined, size: 18),
-                  label: Text('Lista'),
-                ),
-              ],
-              selected: {layout},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) => onLayoutChanged(s.first),
-            ),
+            modes,
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: DropdownButtonFormField<_StoryboardFilter>(
                 initialValue: filter,
+                isExpanded: true,
                 dropdownColor: palette.surfaceElevated,
                 style: AppTypography.bodyMedium(palette),
                 decoration: const InputDecoration(

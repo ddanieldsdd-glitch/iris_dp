@@ -352,11 +352,12 @@ class PlanScene3d {
       final deg = math.atan2(hx, hy) * 180 / math.pi;
       light.rotation = (deg % 360 + 360) % 360;
     }
-    if (PlanLight.isOverhead(light)) {
-      final drop = PlanLevel.of(light) + PlanLight.heightOf(light) - z;
-      final tilt = math.atan2(horizontal, math.max(drop, 0.01)) * 180 / math.pi;
-      light.props[PlanLight.tiltKey] = (tilt * 2).round() / 2;
-    }
+    // La inclinación, para cualquier montaje: del foco al punto.
+    final rise = z - (PlanLevel.of(light) + PlanLight.heightOf(light));
+    PlanLight.setElevation(
+      light,
+      math.atan2(rise, math.max(horizontal, 0.001)) * 180 / math.pi,
+    );
   }
 
   /// El sol: hacia dónde está (vector unitario con los ejes del visor),
@@ -546,18 +547,12 @@ class PlanScene3d {
     // Hacia dónde mira en planta, con los ejes del visor.
     final hx = math.sin(rad), hy = math.cos(rad);
     final z = level + PlanLight.heightOf(el);
-    final double dx, dy, dz;
-    if (PlanLight.isOverhead(el)) {
-      final tilt = PlanLight.tiltOf(el) * math.pi / 180;
-      dx = math.sin(tilt) * hx;
-      dy = math.sin(tilt) * hy;
-      dz = -math.cos(tilt);
-    } else {
-      final len = math.sqrt(1 + 0.15 * 0.15);
-      dx = hx / len;
-      dy = hy / len;
-      dz = -0.15 / len;
-    }
+    // Paneo (el giro en planta) e inclinación desde la horizontal (F6.21.5),
+    // igual para cualquier montaje.
+    final tilt = PlanLight.elevationOf(el) * math.pi / 180;
+    final dx = math.cos(tilt) * hx;
+    final dy = math.cos(tilt) * hy;
+    final dz = math.sin(tilt);
     // Apunta al suelo si llega; si no, a lo que alcanza el haz.
     final reach = (beam?.reach ?? 300) * mpu;
     final t = dz < -0.02 ? math.min((z - level) / -dz, reach) : reach;
