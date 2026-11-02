@@ -1,5 +1,7 @@
 # IRIS DP en iPad — SideStore (gratis)
 
+> **Obsoleta (2026-11-02).** iPad e iPhone se instalan y se actualizan desde el Mac con Xcode: `scripts/setup_ipad_install.sh` (una vez) y `scripts/install_ipad.sh`, que pone el último `main` con el CI en verde. Ver `docs/release.md`.
+
 Guía paso a paso para instalar y actualizar IRIS DP en iPad sin pagar Apple Developer.
 
 ---

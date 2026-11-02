@@ -1,5 +1,7 @@
 # Release IRIS DP — macOS + Windows + iPad
 
+> **iPad e iPhone ya no se instalan desde el release.** Los instala el Mac con Xcode: la tarea programada (`scripts/setup_ipad_install.sh`) ejecuta `scripts/install_ipad.sh --auto` y pone en los dispositivos emparejados el último `main` con el CI en verde. Para que les llegue algo basta con mergearlo a `main` (el CI compila iOS en el trabajo `build-ios`). La etiqueta `v*` sirve para el Mac y Windows; el `.ipa` sin firma del release queda solo como respaldo.
+
 ## Publicación automática (recomendado)
 
 Tag `v*` en GitHub dispara [`.github/workflows/release.yml`](../.github/workflows/release.yml):

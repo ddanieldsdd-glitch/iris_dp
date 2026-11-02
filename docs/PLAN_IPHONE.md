@@ -17,9 +17,13 @@ pantallas de menos de 600 pt.
 - **Tamaño de referencia**: 390 × 844 pt (iPhone 14/15/16). Se comprueba
   también 375 (SE/mini) y 430 (Pro Max), y el iPhone en horizontal
   (844 × 390: ancho «medio», alto muy justo).
-- **Distribución**: la misma que el iPad, SideStore con el .ipa sin firmar del
-  workflow de release (`docs/ipad_sidestore.md`). El proyecto iOS ya admite
-  iPhone (`TARGETED_DEVICE_FAMILY = "1,2"`).
+- **Distribución** (al día el 2026-11-02): la misma que el iPad, desde el Mac
+  con Xcode. La tarea programada (`scripts/setup_ipad_install.sh`, cada hora)
+  ejecuta `scripts/install_ipad.sh --auto` e instala en los iPad e iPhone
+  emparejados el último `main` con el CI en verde, firmado con el equipo
+  personal (7 días, se renueva solo). SideStore ya no se usa; lo de IP.6 que
+  habla de él queda superado. El proyecto iOS ya admite iPhone
+  (`TARGETED_DEVICE_FAMILY = "1,2"`).
 - **Capturar localizaciones** (Daniel, 2026-11-02): el iPhone hace las fotos
   de una localización con su posición en metros (ARKit, sin LiDAR) y avisa
   de lo que falta; el escaneo se hace en el PC con RealityScan. Lo lleva F6:

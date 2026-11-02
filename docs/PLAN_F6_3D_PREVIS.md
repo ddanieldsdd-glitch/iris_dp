@@ -942,7 +942,7 @@ Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el mot
   - `ios/Runner/IrisCapturePlugin.swift` (canal `iris/capture`) deja una carpeta `.iriscapture` con las fotos y `capture.json`, y la comparte en `.zip`.
   - En el PC, «Crear escaneo» → «Captura del iPhone»: `scan_capture.dart` escribe junto a cada foto el XMP de RealityScan (`xcr:PosePrior="initial"`, `Help\en-US\tools\xmpalign.htm`), y el escaneo sale en metros, nivelado y sin calibrar.
 - **Probado** con una captura sintética en la convención de ARKit (72 fotos con ruido de 1,5 cm y 1°) por el flujo entero con RealityScan 2.2: el escaneo mide 4,00 × 3,00 m y «Proponer paredes» da 3,98, 3,97, 2,99 y 2,97 m sin calibrar.
-- **Falta:** probarlo en el iPhone (el Swift no se ha podido compilar en Windows: lo compila el workflow del .ipa). Después: envío directo al PC por la red local y planta rápida en el iPhone con los planos de ARKit.
+- **Falta:** probarlo en el iPhone. El Swift ya compila (trabajo `build-ios` del CI, v1.4.0) y el Mac lo instala con Xcode (`install_ipad.sh`). Después: envío directo al PC por la red local y planta rápida en el iPhone con los planos de ARKit.
 - **Descartado: LingBot-Map** (Robbyant, 2026). Tampoco da metros (el paper dice que la escala monocular es ambigua y la fija con los primeros fotogramas), solo da poses, profundidad y puntos (sin malla ni textura) y es Linux con CUDA. Lo que aporta, reconstruir en tiempo real, no hace falta para localizar.
 
 ## F6.21 · Ensayos de luz fieles en IRIS y en Unreal
