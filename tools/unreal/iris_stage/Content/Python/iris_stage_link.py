@@ -656,10 +656,17 @@ def _scan_meshes(file, folders, root=None):
     if found:
         return found
     source = None
-    for folder in folders or []:
-        candidate = os.path.join(folder, os.path.basename(file))
-        if os.path.isfile(candidate):
-            source = candidate
+    # La malla con todo el detalle (F6.20 E5), si IRIS la ha dejado en este
+    # PC; si no, la misma que usa IRIS.
+    stem = os.path.splitext(os.path.basename(file))[0]
+    names = [stem + "_ue.glb", os.path.basename(file)]
+    for name in names:
+        for folder in folders or []:
+            candidate = os.path.join(folder, name)
+            if os.path.isfile(candidate):
+                source = candidate
+                break
+        if source is not None:
             break
     if source is None:
         unreal.log_warning("[IRIS Stage] El escaneo %s no está en este PC." % file)

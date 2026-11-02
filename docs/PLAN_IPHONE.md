@@ -20,6 +20,10 @@ pantallas de menos de 600 pt.
 - **Distribución**: la misma que el iPad, SideStore con el .ipa sin firmar del
   workflow de release (`docs/ipad_sidestore.md`). El proyecto iOS ya admite
   iPhone (`TARGETED_DEVICE_FAMILY = "1,2"`).
+- **Capturar localizaciones** (Daniel, 2026-11-02): el iPhone hace las fotos
+  de una localización con su posición en metros (ARKit, sin LiDAR) y avisa
+  de lo que falta; el escaneo se hace en el PC con RealityScan. Lo lleva F6:
+  F6.20 E6 en `docs/PLAN_F6_3D_PREVIS.md` (`ios/Runner/IrisCapturePlugin.swift`).
 - Lo que no toca este plan: 3D/Unreal (`lib/features/unreal_link`,
   `iris_stage`, `rig/`, `viewer.js`; lo lleva F6, regla 5 «Móvil: ver y
   recorrer el set, calidad ligera») y `lib/core/sync` (sesión de Windows).

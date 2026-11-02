@@ -46,6 +46,17 @@ Necesitas un escaneo real. En RealityScan (o Polycam) en el iPhone, exporta en *
 - [ ] **En otro equipo.** Abre el mismo proyecto en el Mac o el iPad, después de sincronizar: el escaneo aparece sin volver a importarlo (puede tardar lo que tarde en bajar).
 - [ ] **Un escaneo de antes.** Si tenías uno importado antes de hoy, ábrelo una vez en el PC: a partir de ahí también viaja.
 
+### 3b · Captura guiada con el iPhone (rama `plan/f6-20-e-escaneo`)
+
+- [ ] **Capturar.** En el iPhone: Planta → 3D → «Capturar localización con el iPhone». Recorre la sala despacio, a dos alturas.
+  - Las fotos se hacen solas y el contador sube.
+  - Comprueba que avisa: gira deprisa («Más despacio»), apunta a una pared lisa («Acércate») y apaga la luz («Poca luz»).
+  - El anillo se pone verde por donde ya has pasado.
+- [ ] **Pasarla al PC.** «Terminar» abre la hoja de compartir con el `.zip`: mándalo por iCloud Drive, OneDrive o Google Drive.
+- [ ] **Escaneo.** En el PC: 3D → «Crear escaneo desde fotos o vídeo» → «Captura del iPhone» → el `.zip` → «Crear escaneo». Al terminar dice «En metros reales».
+- [ ] **Medida.** Mide una pared con un metro y con «Medir» en el 3D, sin calibrar: debe coincidir con un margen de unos 2 cm por metro. Anota las dos medidas.
+- [ ] **Paredes.** «Proponer paredes» a 1 m: deben caer sobre las paredes reales.
+
 ## 4 · Escaneo y luces en Unreal (PR #60)
 
 En el PC, con Unreal 5.5. Sigue también `docs/PRUEBA_IRIS_STAGE.md`.

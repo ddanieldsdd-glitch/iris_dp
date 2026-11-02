@@ -1265,6 +1265,8 @@
       return new THREE.OBJLoader().parse(new TextDecoder().decode(buffer));
     }
     if (format === 'ply') {
+      const splat = splatPoints(buffer);
+      if (splat) return splat;
       const geo = new THREE.PLYLoader().parse(buffer);
       geo.computeBoundingBox();
       // Sin caras (una nube de puntos o un splat): puntos con su color.
@@ -1276,6 +1278,58 @@
     }
     return await new Promise((resolve, reject) =>
       new THREE.GLTFLoader().parse(buffer, '', (g) => resolve(g.scene), reject));
+  }
+
+  // Un PLY de gaussian splats (Postshot, Scaniverse, Polycam…) como nube de
+  // puntos con su color de verdad (F6.20 E5). El PLYLoader no conoce sus
+  // campos: el color va en f_dc_* (armónicos de orden 0) y la opacidad sin
+  // sigmoide. Es una capa visual: no recibe la luz de los focos. `null` si
+  // no es un splat.
+  function splatPoints(buffer) {
+    const head = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 16384)));
+    const end = head.indexOf('end_header\n');
+    if (end < 0 || !/format binary_little_endian/.test(head) || !/property float f_dc_0/.test(head)) return null;
+    const sizes = { char: 1, uchar: 1, int8: 1, uint8: 1, short: 2, ushort: 2, int16: 2, uint16: 2,
+      int: 4, uint: 4, int32: 4, uint32: 4, float: 4, float32: 4, double: 8, float64: 8 };
+    let count = 0, inVertex = false, stride = 0;
+    const props = {};
+    for (const line of head.slice(0, end).split('\n')) {
+      const w = line.trim().split(/\s+/);
+      if (w[0] === 'element') {
+        inVertex = w[1] === 'vertex';
+        if (inVertex) count = parseInt(w[2], 10);
+        else if (count) break;
+      } else if (w[0] === 'property' && inVertex) {
+        if (w[1] === 'list' || !(w[1] in sizes)) return null;
+        props[w[2]] = { at: stride, type: w[1] };
+        stride += sizes[w[1]];
+      }
+    }
+    for (const k of ['x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2']) {
+      if (!props[k] || props[k].type.indexOf('float') !== 0) return null;
+    }
+    const view = new DataView(buffer, head.slice(0, end).length + 'end_header\n'.length);
+    // Más de 2 millones de puntos no van fluidos en el iPad: se saltan.
+    const step = Math.max(1, Math.ceil(count / 2000000));
+    const pos = [], col = [];
+    const SH0 = 0.28209479177387814;
+    const f = (i, k) => view.getFloat32(i * stride + props[k].at, true);
+    for (let i = 0; i < count; i += step) {
+      if ((i + 1) * stride > view.byteLength) break;
+      if (props.opacity && 1 / (1 + Math.exp(-f(i, 'opacity'))) < 0.2) continue;
+      pos.push(f(i, 'x'), f(i, 'y'), f(i, 'z'));
+      for (const k of ['f_dc_0', 'f_dc_1', 'f_dc_2']) {
+        // El color del splat es sRGB; la escena trabaja en lineal.
+        col.push(Math.pow(Math.min(1, Math.max(0, 0.5 + SH0 * f(i, k))), 2.2));
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.computeBoundingBox();
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.015, vertexColors: true }));
+    pts.userData.splat = true;
+    return pts;
   }
 
   // El escaneo recibe la luz de los focos y da sombra.
@@ -1467,9 +1521,51 @@
     });
   }
 
+  // Corte horizontal del escaneo a `h` metros del suelo (F6.20 E4): los
+  // tramos donde sus triángulos cruzan ese plano, en metros de la planta
+  // ([x1, y1, x2, y2, …]), para proponer paredes.
+  function scanSlice(id, h) {
+    const w = scanWrappers[id];
+    if (!w || !w.children.length) return null;
+    w.updateWorldMatrix(true, true);
+    const out = [];
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    const cut = (p, q) => {
+      const t = (h - p.y) / (q.y - p.y);
+      return [p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t];
+    };
+    w.traverse((o) => {
+      if (!o.isMesh || !o.geometry) return;
+      const pos = o.geometry.attributes.position;
+      if (!pos) return;
+      const index = o.geometry.index;
+      const n = index ? index.count : pos.count;
+      for (let i = 0; i + 2 < n; i += 3) {
+        const ia = index ? index.getX(i) : i;
+        const ib = index ? index.getX(i + 1) : i + 1;
+        const ic = index ? index.getX(i + 2) : i + 2;
+        a.fromBufferAttribute(pos, ia).applyMatrix4(o.matrixWorld);
+        b.fromBufferAttribute(pos, ib).applyMatrix4(o.matrixWorld);
+        c.fromBufferAttribute(pos, ic).applyMatrix4(o.matrixWorld);
+        const pts = [];
+        for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+          if ((p.y - h) * (q.y - h) < 0) pts.push(cut(p, q));
+        }
+        if (pts.length === 2) {
+          out.push(
+            Math.round(pts[0][0] * 1000) / 1000, Math.round(pts[0][1] * 1000) / 1000,
+            Math.round(pts[1][0] * 1000) / 1000, Math.round(pts[1][1] * 1000) / 1000,
+          );
+        }
+      }
+    });
+    return JSON.stringify(out);
+  }
+
   window.iris = {
     load,
     scanTop,
+    scanSlice,
     // Un escaneo que acaba de llegar a este equipo: se olvida lo cargado (o
     // el fallo) y se vuelve a pedir con la escena de antes.
     rescan: (file) => {

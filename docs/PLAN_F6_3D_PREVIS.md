@@ -553,7 +553,7 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 **F6.12.2 Recortar y limpiar** · Mac
 - **Qué:** caja de recorte y borrador del escaneo, guardados con el escaneo.
 
-**F6.12.3 Del escaneo a la planta** · Mac · **en curso** (`plan/f6-12-escaneos-rodaje`: cenital a escala como fondo de la planta; falta proponer paredes)
+**F6.12.3 Del escaneo a la planta** · Mac · **hecho** (cenital a escala como fondo de la planta; paredes propuestas con F6.20 E4)
 - **Qué:** vista cenital y corte a 1 m como fondo de la planta para calcar, y propuesta de paredes detectadas.
 
 **F6.12.4 Luz sobre el escaneo** · Mac · **en curso** (`plan/f6-12-escaneos-rodaje`: con un escaneo, cuatro focos dan sombra y el escaneo la recibe; sin malla simplificada todavía)
@@ -897,17 +897,17 @@ Plan aprobado por Daniel el 2026-10-27. Un PR por fase, en ramas que salen de `p
 | B5 | Biblioteca de Unreal (`UnrealLibrary`): lo usado y lo encontrado, con miniatura, origen y medidas; favoritos; búsqueda sin Unreal; «Buscar en Unreal» y «Hacer las miniaturas que faltan»; «Poner en la planta» crea el elemento del tipo que dice el nombre (o un actor si es un personaje) con medidas y asset. Viaja con `user_settings`. En IRIS Stage y en la barra de la planta | en curso (PR 6) |
 | C1–C4 | IRIS Stage como lista de seis pasos, tutorial y guía | en curso (`plan/pulido-rodaje`): la guía de seis pasos con su estado y botón (`unreal_stage_steps.dart`) y quitar de la biblioteca con constancia. Falta la miniatura del esquema de luz con colores y nombres |
 | D1–D4 | Buscar en Fab y Quixel desde IRIS, recogida automática, tejidos y packs de partida | en curso (`plan/f6-20-d-fab-quixel`): D1 «Buscar en Fab» y «Megascans» abren la búsqueda en el navegador (Fab no tiene API pública); D2 `FindFabAssets` recoge lo bajado a `/Game/Fab` y `/Game/Megascans` al abrir la biblioteca, al volver a IRIS y con «Recoger de Fab»; D4 «Packs de partida» (búsquedas para vestir un set). Falta D3: tejidos y superficies de Fab en paredes y suelo |
-| E1–E5 | RealityScan/RealityCapture sin interfaz: de vídeo a malla, ortofoto y paredes propuestas, con ida y vuelta | en curso: el escaneo exportado (GLB/OBJ) se importa, viaja por la nube, da la cenital de fondo, recibe sombras y llega a Unreal (`scans` en IRIS Stage, importado a `/Game/IRIS/Scans`). Falta la captura sin interfaz y las paredes propuestas |
+| E1–E6 | RealityScan/RealityCapture sin interfaz: de vídeo a malla, ortofoto y paredes propuestas, con ida y vuelta; y captura guiada en el iPhone | en curso (detalle abajo): E1, E2 y E4 hechos y probados con RealityScan 2.2; E6, la captura del iPhone en metros, hecha en el PC y sin probar en el iPhone. Faltan la ortofoto, las dianas (E3) y probar E5 en Unreal |
 
 ### F6.20 E · Localización desde fotos o vídeo (detalle)
 
 Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el motor principal y da una **malla**, que es la que recibe la luz de los focos, da sombra, tiene medidas y sirve a Lumen y a las colisiones. Los **gaussian splats** (Postshot, Scaniverse, Polycam) quedan como capa visual opcional: se ven mejor, pero llevan la luz del escaneo incrustada y no reaccionan a los focos. Para el rodaje del 13 de noviembre no se toca código: vale el flujo manual (GLB con texturas, «Importar escaneo»).
 
-**E1 Entrada de fotos o vídeo** · PC · pendiente
+**E1 Entrada de fotos o vídeo** · PC · **hecho** (`plan/f6-20-e-escaneo`: `scan_builder.dart`, botón «Crear escaneo desde fotos o vídeo» en el 3D. Con ffmpeg se descartan los fotogramas movidos; sin él, el vídeo lo trocea RealityScan con `-importVideo`. RealityScan se encuentra por los manifiestos del Epic Games Launcher, en cualquier disco, o se elige a mano)
 - **Qué:** «Nueva localización desde fotos o vídeo» en IRIS Stage. Admite una carpeta de fotos o un vídeo.
 - **Cómo:** del vídeo se sacan 2–3 fotogramas por segundo con ffmpeg y se descartan los movidos con una medida de nitidez (varianza del laplaciano). Se avisa si hay pocas fotos o poco solape.
 
-**E2 RealityScan sin interfaz** · PC · pendiente
+**E2 RealityScan sin interfaz** · PC · **hecho, probado con RealityScan 2.2** (`plan/f6-20-e-escaneo`, 2026-11-02, 72 fotos sintéticas de una habitación: 107 s). Comandos comprobados con su ayuda (`Help\en-US\appbasics\allcommands.htm`). Sin diálogos (`-silent`), sale si falla y apunta el progreso (`-writeProgress`, que el diálogo enseña con la fase y lo que queda). Dos GLB con la textura dentro (`realityScanExportXml`, `embedTextures="1"` en JPG): 8K para Unreal y 4K para IRIS (13 MB en la prueba). El suelo queda a 0 (`-setGroundPlaneFromReconstructionRegion`) y IRIS pasa el GLB de Z arriba a Y arriba (`scan_glb.dart`). Falta la ortofoto de RealityScan
 - **Qué:** IRIS lanza RealityScan por línea de comandos (alinear, malla, simplificar, texturizar, exportar) con progreso y cancelación, sin abrir su ventana.
 - **Salidas:**
   - malla alta para Unreal: FBX o GLB con Nanite y texturas de 8K, importada a `/Game/IRIS/Scans`;
@@ -915,13 +915,13 @@ Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el mot
   - ortofoto cenital a escala conocida (píxeles por metro), que sustituye a la cenital calculada como fondo de la planta.
 - **Ojo:** comprobar los nombres de los comandos (`-addFolder`, `-align`, `-calculateNormalModel`, `-calculateTexture`, `-exportModel`, ortoproyección) con la referencia de la versión instalada.
 
-**E3 Escala y orientación** · todos · pendiente
+**E3 Escala y orientación** · todos · **en parte** (con la captura del iPhone, E6, sale en metros sola. Para fotos o vídeo de otra cámara: la escala con una medida ya existe, `PlanScan.calibrate`, y el suelo y la vertical salen de RealityScan; sin dianas ni GPS el escaneo sale a una escala cualquiera, unas 4,6 veces en la prueba. Faltan las dianas para cámaras de cine: `-detectMarkers` y `-defineDistance`)
 - **Qué:** sin una medida real el escaneo no sirve para la planta. La escala se fija con dianas impresas de RealityScan a una distancia conocida o, si no hay, metiendo a mano una medida entre dos puntos. El norte y las coordenadas salen de F6.12.6.
 
-**E4 Paredes propuestas** · todos · pendiente (es la parte que falta de F6.12.3)
+**E4 Paredes propuestas** · todos · **hecho** (probado con el corte de una malla real de RealityScan: la habitación de 4 × 3 da sus cuatro paredes) (`plan/f6-20-e-escaneo`: «Proponer paredes» en el 3D con un escaneo seleccionado; `iris.scanSlice` corta la malla, `scan_walls.dart` saca las paredes, une las dos caras de una pared y parte en las puertas; altura del corte ajustable)
 - **Qué:** IRIS corta la malla ligera a 1 m de altura, detecta tramos rectos y los propone como paredes de la planta, que se aceptan o se descartan una a una.
 
-**E5 Ida y vuelta y splats** · todos · pendiente
+**E5 Ida y vuelta y splats** · todos · **en parte, sin probar en Unreal** (`plan/f6-20-e-escaneo`: la malla alta se guarda como `<escaneo>_ue.glb` en la carpeta local de escaneos, sin viajar por la nube, y Unreal la prefiere al importar; los PLY de gaussian splats se ven como nube de puntos con su color. Los splats de verdad esperan al visor moderno con Spark de F6.12.1, porque el visor usa three r147)
 - **Qué:** el resultado entra solo en el proyecto, viaja por la nube y llega a Unreal como hoy `scans`. Opcional: un splat del mismo material como capa visual, en el visor (F6.12.1, Spark) y en Unreal con un plugin de splats.
 
 **Protocolo de captura** (va también a la guía de IRIS Stage):
@@ -931,6 +931,19 @@ Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el mot
 - Dos dianas o una medida conocida en cada sala.
 - Interior grande: unas 200–600 fotos. Exterior: dron o mástil para la cenital.
 - El iPhone con LiDAR (RealityScan móvil, Polycam, Scaniverse) sirve para salir del paso con buena escala; la calidad para Unreal sale del PC.
+- Sitios oscuros (bares, neones): luces de trabajo encendidas y exposición bloqueada. Con solo neón de color, la textura cambia de una foto a otra y RealityScan alinea mal.
+
+**E6 Captura guiada en el iPhone** · iPhone, iPad · **hecho en el PC, sin probar en el iPhone** (`plan/f6-20-e-escaneo`, pedido por Daniel el 2026-11-02 tras la prueba de La Rouge desde vídeo: poco detalle y escala cualquiera)
+- **Qué:** desde IRIS en el iPhone, «Capturar localización con el iPhone» en el 3D. Se recorre el sitio y las fotos se hacen solas, cada 15 cm o 12°. La app avisa de lo que falta:
+  - un anillo de 360° con las direcciones ya fotografiadas desde ahí;
+  - un minimapa con el recorrido, los puntos vistos y las paredes detectadas;
+  - avisos de «Más despacio», «Poca luz», «Seguimiento perdido», «Acércate» y «Sube y baja el móvil».
+- **Cómo:** ARKit con seguimiento visual-inercial, que funciona sin LiDAR (el iPhone 16 de Daniel no lo tiene), da la posición de cada foto en metros y con la gravedad.
+  - `ios/Runner/IrisCapturePlugin.swift` (canal `iris/capture`) deja una carpeta `.iriscapture` con las fotos y `capture.json`, y la comparte en `.zip`.
+  - En el PC, «Crear escaneo» → «Captura del iPhone»: `scan_capture.dart` escribe junto a cada foto el XMP de RealityScan (`xcr:PosePrior="initial"`, `Help\en-US\tools\xmpalign.htm`), y el escaneo sale en metros, nivelado y sin calibrar.
+- **Probado** con una captura sintética en la convención de ARKit (72 fotos con ruido de 1,5 cm y 1°) por el flujo entero con RealityScan 2.2: el escaneo mide 4,00 × 3,00 m y «Proponer paredes» da 3,98, 3,97, 2,99 y 2,97 m sin calibrar.
+- **Falta:** probarlo en el iPhone (el Swift no se ha podido compilar en Windows: lo compila el workflow del .ipa). Después: envío directo al PC por la red local y planta rápida en el iPhone con los planos de ARKit.
+- **Descartado: LingBot-Map** (Robbyant, 2026). Tampoco da metros (el paper dice que la escala monocular es ambigua y la fija con los primeros fotogramas), solo da poses, profundidad y puntos (sin malla ni textura) y es Linux con CUDA. Lo que aporta, reconstruir en tiempo real, no hace falta para localizar.
 
 ## F6.21 · Ensayos de luz fieles en IRIS y en Unreal
 
