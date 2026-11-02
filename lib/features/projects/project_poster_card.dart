@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_layout.dart';
 import 'project_card_stats.dart';
 
 /// Tarjeta de proyecto: la portada a sangre, el anillo de preparación arriba
@@ -75,6 +76,9 @@ class _ProjectPosterCardState extends State<ProjectPosterCard> {
         ? Color(project.cardColor!)
         : palette.accent;
     final stateColor = syncColor(palette, widget.syncState);
+    // En el iPhone la columna del nombre es estrecha: a 30 partía las
+    // palabras por la mitad y el icono quedaba debajo del texto.
+    final compact = AppLayout.isCompact(context);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
@@ -115,13 +119,16 @@ class _ProjectPosterCardState extends State<ProjectPosterCard> {
                       ? Image.file(File(coverPath), fit: BoxFit.cover)
                       : ColoredBox(
                           color: palette.surfaceOverlay,
-                          child: Center(
+                          child: Align(
+                            alignment: compact
+                                ? const Alignment(0, -0.82)
+                                : Alignment.center,
                             child: Icon(
                               IconData(
                                 project.iconCode,
                                 fontFamily: 'MaterialIcons',
                               ),
-                              size: 96,
+                              size: compact ? 44 : 96,
                               color: palette.textTertiary,
                             ),
                           ),
@@ -176,15 +183,15 @@ class _ProjectPosterCardState extends State<ProjectPosterCard> {
                             const SizedBox(height: 10),
                             Text(
                               project.name,
-                              maxLines: 2,
+                              maxLines: compact ? 3 : 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 30,
+                                fontSize: compact ? 22 : 30,
                                 fontWeight: FontWeight.w700,
                                 height: 1.05,
                                 letterSpacing: -0.5,
-                                shadows: [
+                                shadows: const [
                                   Shadow(color: Colors.black54, blurRadius: 12),
                                 ],
                               ),

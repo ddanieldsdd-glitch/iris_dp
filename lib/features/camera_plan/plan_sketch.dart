@@ -625,21 +625,39 @@ class PlanSketchStrip extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(title, style: AppTypography.label(palette)),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: onNewElements,
-                icon: const Icon(Icons.wb_incandescent_outlined, size: 15),
-                label: const Text('Boceto con elementos'),
-              ),
-              TextButton.icon(
-                onPressed: onNewFreehand,
-                icon: const Icon(Icons.draw_outlined, size: 15),
-                label: const Text('Boceto a mano'),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final buttons = [
+                TextButton.icon(
+                  onPressed: onNewElements,
+                  icon: const Icon(Icons.wb_incandescent_outlined, size: 15),
+                  label: const Text('Boceto con elementos'),
+                ),
+                TextButton.icon(
+                  onPressed: onNewFreehand,
+                  icon: const Icon(Icons.draw_outlined, size: 15),
+                  label: const Text('Boceto a mano'),
+                ),
+              ];
+              // En el iPhone título y botones no caben en una fila: los
+              // botones bajan a la siguiente.
+              if (constraints.maxWidth < 520) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTypography.label(palette)),
+                    Wrap(children: buttons),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Text(title, style: AppTypography.label(palette)),
+                  const Spacer(),
+                  ...buttons,
+                ],
+              );
+            },
           ),
           if (sketches.isEmpty)
             Text(
