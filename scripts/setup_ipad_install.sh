@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deja lista la instalación automática de IRIS DP en el iPad:
+# Deja lista la instalación automática de IRIS DP en el iPad y el iPhone:
 #   1. guarda el equipo de firma (Personal Team de Xcode),
 #   2. copia install_ipad.sh a un sitio fijo (no cambia al cambiar de rama),
 #   3. programa una tarea de macOS que cada hora mira si toca renovar.
