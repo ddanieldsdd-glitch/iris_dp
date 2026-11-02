@@ -72,19 +72,19 @@ class UnrealStageLauncher extends ChangeNotifier {
   static Future<void> _detachedStart(String editor, List<String> args) =>
       Process.start(editor, args, mode: ProcessStartMode.detached);
 
-  /// Si ya hay un Unreal abierto ([running]: sus líneas de comando), qué
-  /// decir mientras se le espera; `null` si no hay ninguno y hay que abrirlo.
+  /// Si ya hay un Unreal abriendo este proyecto ([running]: las líneas de
+  /// comando de los editores abiertos), qué decir mientras se le espera;
+  /// `null` si no lo hay y hay que abrirlo (aunque haya otro proyecto
+  /// abierto: ese no es el nuestro).
   @visibleForTesting
   static String? alreadyOpening(List<String> running, String uproject) {
-    if (running.isEmpty) return null;
     final file = uproject.split(RegExp(r'[/\\]')).last.toLowerCase();
-    final ours = running.any((c) => c.toLowerCase().contains(file));
-    return ours
-        ? 'Unreal ya se está abriendo con este proyecto: esperando a que '
-              'termine…'
-        : 'Ya hay un Unreal abierto con otro proyecto: esperando a que '
-              'responda. Si no es el de este proyecto, ciérralo y vuelve a '
-              'pulsar «Abrir en Unreal».';
+    // El nombre entero, tras una barra o una comilla: «Rodaje.uproject» no
+    // es «PruebaRodaje.uproject».
+    final ours = RegExp('(^|[/\\\\"\' ])${RegExp.escape(file)}');
+    if (!running.any((c) => ours.hasMatch(c.toLowerCase()))) return null;
+    return 'Unreal ya se está abriendo con este proyecto: esperando a que '
+        'termine…';
   }
 
   static final instance = UnrealStageLauncher();

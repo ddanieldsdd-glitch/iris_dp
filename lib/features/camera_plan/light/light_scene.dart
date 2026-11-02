@@ -701,9 +701,7 @@ class LightScene {
     final LightBlocker blocker;
     if (el.lightType == LightType.diffusionFrame) {
       final cloth = diffusionOf(el);
-      final gel = _filters(el)
-          .where((m) => m.kind == ModifierKind.correction)
-          .fold(0.0, (t, m) => t + m.miredShift);
+      final gel = _gelMired(el);
       blocker = LightBlocker(
         a,
         b,
@@ -910,6 +908,11 @@ class LightScene {
       ?LightModifier.byId(id?.toString()),
   ];
 
+  /// El tinte de las gelatinas que lleva un marco, en mireds (F6.22.1).
+  static double _gelMired(PlanElement el) => _filters(el)
+      .where((m) => m.kind == ModifierKind.correction)
+      .fold(0.0, (t, m) => t + m.miredShift);
+
   /// Tela de un marco de difusión (½ grid cloth si no se ha elegido).
   static LightModifier diffusionOf(PlanElement el) =>
       _filters(el).where((m) => m.kind == ModifierKind.diffusion).firstOrNull ??
@@ -1050,9 +1053,7 @@ class LightScene {
               // un marco con gelatina además la tiñe (F6.22.1).
               final cloth = diffusionOf(el);
               final span = PlanGrip.span(el, metersPerUnit);
-              final gel = _filters(el)
-                  .where((m) => m.kind == ModifierKind.correction)
-                  .fold(0.0, (t, m) => t + m.miredShift);
+              final gel = _gelMired(el);
               blockers.add(
                 LightBlocker(
                   a,

@@ -941,8 +941,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _scene = scene;
       _linkedSet = linkedSet;
       _linkedSite = linkedSite;
-      _environment = FloorPlanRepository.environmentOf(
-        linkedSet?.floorPlanJson ?? linkedSite?.floorPlanJson,
+      _environment = FloorPlanRepository.environmentOfSet(
+        linkedSet?.floorPlanJson,
+        linkedSite?.floorPlanJson,
       );
       _sceneColor = sceneColor;
       _navTargets = navTargets;

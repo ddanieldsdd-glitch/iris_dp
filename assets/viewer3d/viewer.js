@@ -1081,7 +1081,7 @@
       if (lit >= maxLights + 6) break;
       lit++;
       const col = cctColor(s.cct || 5600);
-      const p = V(s.pos[0] + s.dir[0] * 0.05, s.pos[1] + s.dir[1] * 0.05, s.pos[2]);
+      const p = V(s.pos[0] + s.dir[0] * 0.05, s.pos[1] + s.dir[1] * 0.05, s.pos[2] + s.dir[2] * 0.05);
       const half = clamp((s.beamDeg || 120) / 2, 20, 85) * Math.PI / 180;
       const sl = physical
         ? new THREE.SpotLight(col, (s.cd || 0) * k, 0, half, 1, 2)

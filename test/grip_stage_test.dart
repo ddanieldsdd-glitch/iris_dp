@@ -196,4 +196,29 @@ void main() {
     // Un rebote suelto no tiene formatos.
     expect(PlanGrip.formatsFor(grip(LightType.bounce)), isEmpty);
   });
+
+  test('un rebote sin medidas es cuadrado desde el suelo, igual en 3D', () {
+    final bounce = grip(LightType.bounce);
+    final side = PlanGrip.widthM(bounce, mpu);
+    final s = PlanGrip.span(bounce, mpu);
+    expect((s.bottom, s.top), (0.0, side));
+    final panel =
+        (PlanScene3d.build([bounce], metersPerUnit: mpu)['grip'] as List)
+                .single
+            as Map;
+    expect((panel['top'] as num) - (panel['bottom'] as num), closeTo(side, 0.01));
+  });
+
+  test('la luz de un palio horizontal sale por debajo de su bloque', () {
+    final light = UnrealStagePayload.softLight({
+      'id': 'G#luz1',
+      'pos': [0.0, 0.0, 3.0],
+      'dir': [0.0, 0.0, -1.0],
+      'cd': 100.0,
+      'widthM': 4.0,
+      'heightM': 4.0,
+    })!;
+    // 5 cm por debajo del centro de la tela, fuera del bloque de 3 cm.
+    expect(light['loc'][2], closeTo(295, 0.01));
+  });
 }

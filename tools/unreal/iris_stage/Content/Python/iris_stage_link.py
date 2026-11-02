@@ -291,23 +291,27 @@ def _apply_camera(cam):
             comp.set_editor_property("focus_settings", fs)
         except Exception as exc:
             unreal.log_warning("[IRIS Stage] foco: %s" % exc)
-    if cam.get("iso") and cam.get("shutterS"):
-        pp = comp.get_editor_property("post_process_settings")
-        for name, value in [
-            ("auto_exposure_method", unreal.AutoExposureMethod.AEM_MANUAL),
-            ("auto_exposure_apply_physical_camera_exposure", True),
-            ("camera_iso", float(cam["iso"])),
-            ("camera_shutter_speed", 1.0 / max(float(cam["shutterS"]), 1e-4)),
-            ("depth_of_field_fstop", float(cam.get("tStop") or 2.8)),
-            ("auto_exposure_bias", -float(cam.get("nd") or 0)),
-        ]:
-            try:
-                pp.set_editor_property("override_" + name, True)
+    exposed = bool(cam.get("iso") and cam.get("shutterS"))
+    values = [
+        ("auto_exposure_method", exposed, unreal.AutoExposureMethod.AEM_MANUAL),
+        ("auto_exposure_apply_physical_camera_exposure", exposed, True),
+        ("camera_iso", exposed, float(cam.get("iso") or 800)),
+        ("camera_shutter_speed", exposed,
+         1.0 / max(float(cam.get("shutterS") or 1 / 48.0), 1e-4)),
+        ("auto_exposure_bias", exposed, -float(cam.get("nd") or 0)),
+        ("depth_of_field_fstop", bool(cam.get("tStop")), float(cam.get("tStop") or 2.8)),
+    ]
+    pp = comp.get_editor_property("post_process_settings")
+    for name, on, value in values:
+        try:
+            # Sin el dato, el override se apaga: manda el PostProcessVolume.
+            pp.set_editor_property("override_" + name, on)
+            if on:
                 pp.set_editor_property(name, value)
-            except Exception as exc:
-                unreal.log_warning("[IRIS Stage] cámara %s: %s" % (name, exc))
-        comp.set_editor_property("post_process_settings", pp)
-        _set(comp, "post_process_blend_weight", 1.0)
+        except Exception as exc:
+            unreal.log_warning("[IRIS Stage] cámara %s: %s" % (name, exc))
+    comp.set_editor_property("post_process_settings", pp)
+    _set(comp, "post_process_blend_weight", 1.0)
 
 
 def _apply_prop(p):

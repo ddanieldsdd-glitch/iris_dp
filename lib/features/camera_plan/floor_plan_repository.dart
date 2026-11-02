@@ -152,6 +152,15 @@ class FloorPlanRepository {
   static SetEnvironment environmentOf(String? planJson) =>
       SetEnvironment.fromJson(FloorPlanJson.decodeDocument(planJson).environment);
 
+  /// El entorno de un set: el de su planta o, si no lo tiene (se eligió
+  /// antes de haber set), el de su localización.
+  static SetEnvironment environmentOfSet(String? setJson, String? siteJson) {
+    final own = FloorPlanJson.decodeDocument(setJson).environment;
+    return SetEnvironment.fromJson(
+      own ?? FloorPlanJson.decodeDocument(siteJson).environment,
+    );
+  }
+
   /// Guarda el entorno en la planta del set [setId] o, sin set, en la de la
   /// localización [siteId], sin tocar lo demás.
   Future<void> saveEnvironment(

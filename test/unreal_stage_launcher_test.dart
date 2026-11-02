@@ -100,11 +100,18 @@ void main() {
       ], path),
       contains('este proyecto'),
     );
+    // Con otro proyecto abierto, se abre el nuestro.
     expect(
       UnrealStageLauncher.alreadyOpening(const [
         r'UnrealEditor.exe "D:\Otro\Otro.uproject"',
       ], path),
-      contains('otro proyecto'),
+      isNull,
+    );
+    expect(
+      UnrealStageLauncher.alreadyOpening(const [
+        r'UnrealEditor.exe "D:\Pruebas\PruebaRodaje.uproject"',
+      ], path),
+      isNull,
     );
   });
 }

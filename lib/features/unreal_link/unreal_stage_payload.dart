@@ -239,7 +239,11 @@ class UnrealStagePayload {
       'id': s['id'],
       'name': s['name'],
       'kind': 'rect',
-      'loc': loc([n(pos[0]) + dx * 0.05, n(pos[1]) + dy * 0.05, n(pos[2])]),
+      'loc': loc([
+        n(pos[0]) + dx * 0.05,
+        n(pos[1]) + dy * 0.05,
+        n(pos[2]) + dz * 0.05,
+      ]),
       'rot': rotToward(dx, dy, dz),
       'cd': _r(n(s['cd'] ?? 0)),
       'cct': _r(n(s['cct'] ?? 5600)),

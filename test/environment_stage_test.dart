@@ -115,4 +115,36 @@ void main() {
     expect(diff['sun'], isNotNull);
     expect(UnrealStagePayload.diff(out, out), isNull);
   });
+
+  test('el set sin entorno propio usa el de su localización', () {
+    final site = FloorPlanJson.encodeDocument(
+      FloorPlanDocument(
+        environment: const SetEnvironment(
+          kind: SetEnvironmentKind.exterior,
+        ).toJson(),
+      ),
+    );
+    final setPlan = FloorPlanJson.encodeDocument(
+      const FloorPlanDocument(elements: []),
+    );
+    expect(
+      FloorPlanRepository.environmentOfSet(setPlan, site).kind,
+      SetEnvironmentKind.exterior,
+    );
+    final ownStudio = FloorPlanJson.encodeDocument(
+      FloorPlanDocument(
+        environment: const SetEnvironment(
+          kind: SetEnvironmentKind.studio,
+        ).toJson(),
+      ),
+    );
+    expect(
+      FloorPlanRepository.environmentOfSet(ownStudio, site).kind,
+      SetEnvironmentKind.studio,
+    );
+    expect(
+      FloorPlanRepository.environmentOfSet(null, null).kind,
+      SetEnvironmentKind.interior,
+    );
+  });
 }

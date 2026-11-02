@@ -75,8 +75,8 @@ abstract final class PlanGrip {
 
   /// Altura del centro de la tela sobre su suelo.
   static double centreM(PlanElement el, double metersPerUnit) {
-    final s = span(el, metersPerUnit);
     if (el.props[centreKey] case final num c) return c.toDouble();
+    final s = span(el, metersPerUnit);
     return (s.bottom + s.top) / 2;
   }
 
@@ -132,7 +132,10 @@ abstract final class PlanGrip {
       final bottom = (PlanLight.subjectHeightM - h / 2).clamp(0.0, 50.0);
       return (bottom: bottom, top: bottom + h);
     }
-    // Negros, cortes y rebotes de antes: desde el suelo hasta 2,5 m.
+    // Un rebote de antes: cuadrado y apoyado en el suelo, como lo hace
+    // alumbrar el motor de luz.
+    if (el.lightType == LightType.bounce) return (bottom: 0.0, top: h);
+    // Negros y cortes de antes: desde el suelo hasta 2,5 m.
     return (bottom: 0.0, top: LightScene.wallHeightM);
   }
 
