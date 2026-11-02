@@ -38,6 +38,27 @@ jobs:
       - name: Test
         run: flutter test
 
+  # Compila iOS sin firmar: si el Swift propio (ios/Runner) no compila, el
+  # release ni siquiera publica el Mac, porque van en el mismo trabajo.
+  build-ios:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.8
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS (sin firmar)
+        run: flutter build ios --release --no-codesign --no-tree-shake-icons
+
   # Compila la app de Windows para que una rotura se vea en el PR y no meses
   # después (estuvo rota desde v1.0.18 sin que se notara). Deja el zip para
   # probarlo en el PC sin esperar a un release.

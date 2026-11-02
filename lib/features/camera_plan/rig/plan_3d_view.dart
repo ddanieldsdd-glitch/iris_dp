@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -15,7 +16,10 @@ import '../../../core/utils/export_file_saver.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
+import '../../../core/settings/app_prefs.dart';
 import '../light/exposure.dart';
+import '../plan_prefs.dart';
+import '../set_environment.dart';
 import '../light/plan_light.dart';
 import '../plan_cad_export.dart';
 import '../plan_piece_controls.dart';
@@ -31,7 +35,12 @@ import '../../unreal_link/unreal_stage_payload.dart';
 import '../../unreal_link/unreal_thumbs.dart';
 import '../../../core/sync/plan_scan_store.dart';
 import '../../../core/utils/media_storage.dart';
+import '../plan_segment.dart';
+import 'scan_builder_sheet.dart';
+import 'scan_capture_channel.dart';
 import 'scan_store.dart';
+import 'scan_walls.dart';
+import 'scan_walls_sheet.dart';
 import 'rig_report.dart';
 
 /// Capas del 3D que se pueden ocultar, con su nombre en el visor.
@@ -105,6 +114,9 @@ class Plan3dView extends StatefulWidget {
   final ExposureSettings? exposure;
   final double? stop;
 
+  /// Plató, interior o exterior (F6.21.1).
+  final SetEnvironment? environment;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -125,6 +137,7 @@ class Plan3dView extends StatefulWidget {
     this.onScanTop,
     this.exposure,
     this.stop,
+    this.environment,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -171,6 +184,9 @@ class _Plan3dViewState extends State<Plan3dView> {
   /// Cambios que llegan de Unreal (IRIS Stage Link).
   StreamSubscription<List<UnrealEdit>>? _fromUnreal;
 
+  /// iPhone o iPad con ARKit: captura guiada (F6.20 E6).
+  bool _canCapture = false;
+
   @override
   void initState() {
     super.initState();
@@ -181,6 +197,11 @@ class _Plan3dViewState extends State<Plan3dView> {
     );
     UnrealThumbs.instance.addListener(_onThumbs);
     unawaited(_shareScanFolders());
+    unawaited(
+      ScanCaptureChannel.isSupported().then((ok) {
+        if (ok && mounted) setState(() => _canCapture = true);
+      }),
+    );
     _schedule();
   }
 
@@ -268,6 +289,7 @@ class _Plan3dViewState extends State<Plan3dView> {
       metersPerUnit: widget.metersPerUnit,
       exposure: widget.exposure,
       stop: widget.stop,
+      environment: widget.environment,
       name: widget.name,
       ambient: widget.ambient,
     );
@@ -380,6 +402,12 @@ class _Plan3dViewState extends State<Plan3dView> {
           'ortho': _ortho,
           'names': _names,
           'show': _show,
+          'nav': AppPrefs.instance.get(
+                PlanPrefs.unrealNav,
+                projectId: widget.projectId,
+              )
+              ? 'unreal'
+              : 'orbit',
         });
         _push();
       case 'select':
@@ -507,7 +535,55 @@ class _Plan3dViewState extends State<Plan3dView> {
     );
     final path = picked?.files.single.path;
     if (path == null) return;
+    await _addScan(path, path.split(Platform.pathSeparator).last);
+  }
+
+  /// Crea un escaneo con RealityScan a partir de fotos o vídeo (F6.20 E) y
+  /// lo pone en la planta como uno importado.
+  Future<void> _buildScan() async {
+    if (widget.onAdd == null) return;
+    final result = await ScanBuilderSheet.show(context);
+    if (result == null) return;
+    await _addScan(
+      result.irisGlb,
+      result.folder.split(Platform.pathSeparator).last,
+      unrealPath: result.highGlb,
+    );
+    if (mounted) {
+      setState(
+        () => _status = result.metric
+            ? 'Escaneo en metros reales (captura del iPhone): no hace falta '
+                  'calibrarlo.'
+            : 'Escaneo puesto. Calíbralo con una medida antes de proponer '
+                  'paredes.',
+      );
+    }
+  }
+
+  /// Captura guiada con el iPhone (F6.20 E6). La reconstrucción se hace en
+  /// el PC con RealityScan: al terminar se comparte el .zip para pasarlo.
+  Future<void> _captureWithPhone() async {
+    final path = await ScanCaptureChannel.start(widget.name ?? 'Localización');
+    if (path == null || !mounted) return;
+    setState(
+      () => _status =
+          'Captura guardada. Pásala al PC y ábrela en «Crear escaneo» → '
+          '«Captura del iPhone».',
+    );
+    await Share.shareXFiles([
+      XFile(path),
+    ], subject: 'Captura de localización de IRIS');
+  }
+
+  /// [unrealPath]: la malla con todo el detalle, que Unreal usa en vez de
+  /// la de IRIS (F6.20 E5).
+  Future<void> _addScan(String path, String name, {String? unrealPath}) async {
+    final add = widget.onAdd;
+    if (add == null) return;
     final file = await ScanStore.import(path, projectId: widget.projectId);
+    if (unrealPath != null && await File(unrealPath).exists()) {
+      await ScanStore.saveUnrealVersion(file, unrealPath);
+    }
     final size = await File(path).length();
     if (mounted) {
       setState(
@@ -532,7 +608,7 @@ class _Plan3dViewState extends State<Plan3dView> {
       centre,
       file: file,
       format: file.split('.').last,
-      name: path.split(Platform.pathSeparator).last,
+      name: name,
     );
     await add(scan);
     if (!mounted) return;
@@ -553,6 +629,25 @@ class _Plan3dViewState extends State<Plan3dView> {
             label: const Text('Importar escaneo (GLB, OBJ, PLY)'),
             onPressed: _importScan,
           ),
+        if (widget.onAdd != null && ScanBuilderSheet.supported)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.photo_camera_back_outlined, size: 16),
+            label: const Text('Crear escaneo desde fotos o vídeo'),
+            onPressed: _buildScan,
+          ),
+        if (_canCapture) ...[
+          FilledButton.icon(
+            icon: const Icon(Icons.photo_camera_outlined, size: 16),
+            label: const Text('Capturar localización con el iPhone'),
+            onPressed: _captureWithPhone,
+          ),
+          Text(
+            'Recorre el sitio despacio: las fotos se hacen solas y la app '
+            'avisa de lo que falta. Luego manda el .zip al PC y ábrelo en '
+            '«Crear escaneo» → «Captura del iPhone»: sale en metros reales.',
+            style: caption,
+          ),
+        ],
         Text(
           'De RealityScan, Polycam o Luma AI: exporta en GLB (o OBJ) con '
           'texturas y, para que viaje a otros equipos, de menos de 50 MB '
@@ -670,7 +765,41 @@ class _Plan3dViewState extends State<Plan3dView> {
           style: caption,
         ),
       ],
+      if (widget.onAdd != null) ...[
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.border_outer, size: 16),
+          label: const Text('Proponer paredes'),
+          onPressed: () => _proposeWalls(el),
+        ),
+      ],
     ];
+  }
+
+  /// Corta el escaneo a una altura, propone paredes y añade a la planta las
+  /// que se acepten (F6.20 E4).
+  Future<void> _proposeWalls(PlanElement el) async {
+    final web = _web, add = widget.onAdd;
+    if (web == null || !_ready || add == null) return;
+    final id = PlanScene3d.idOf(el, widget.elements.indexOf(el));
+    final walls = await ScanWallsSheet.show(context, (h) async {
+      final raw = await web.evaluateJavascript(
+        source: 'iris.scanSlice(${jsonEncode(id)}, $h);',
+      );
+      final data = raw is String ? jsonDecode(raw) : null;
+      return data is List ? sliceSegments(data.cast<num>()) : null;
+    });
+    if (walls == null || walls.isEmpty) return;
+    final mpu = widget.metersPerUnit;
+    for (final w in walls) {
+      await add(PlanSegment.create(start: w.start / mpu, end: w.end / mpu));
+    }
+    if (mounted) {
+      setState(
+        () => _status =
+            '${walls.length} paredes añadidas a la planta desde el escaneo.',
+      );
+    }
   }
 
   /// Pide al visor la cenital del escaneo [el] y la pone de fondo.
@@ -1093,19 +1222,43 @@ class _Plan3dViewState extends State<Plan3dView> {
                 : AppTypography.mono(palette),
           ),
         header('Qué se ve'),
-        toggle('Nombres', _names, () => _toggle('names')),
-        toggle('Cubierta', _roof, () => _toggle('roof')),
-        toggle('Conos de luz', _cones, () => _toggle('cones')),
-        toggle(
-          _ev100 == null
-              ? 'Luz real (como la cámara)'
-              : 'Luz real · EV ${_ev100!.toStringAsFixed(1)}',
-          _realLight,
-          () => setState(() {
-            _realLight = !_realLight;
+        // Dos maneras de ver el set (F6.22.5): con la luz de los focos, como
+        // la cámara, o claro, para colocar.
+        SegmentedButton<bool>(
+          showSelectedIcon: false,
+          segments: [
+            ButtonSegment(
+              value: true,
+              icon: const Icon(Icons.lightbulb_outline, size: 16),
+              label: Text(
+                _ev100 == null ? 'Luz' : 'Luz · EV ${_ev100!.toStringAsFixed(1)}',
+              ),
+            ),
+            const ButtonSegment(
+              value: false,
+              icon: Icon(Icons.wb_sunny_outlined, size: 16),
+              label: Text('Claro'),
+            ),
+          ],
+          selected: {_realLight},
+          onSelectionChanged: (v) => setState(() {
+            _realLight = v.first;
             _schedule();
           }),
         ),
+        Text(
+          _realLight
+              ? 'Solo la luz de los focos (y el sol o el cielo si toca), a la '
+                    'exposición de la cámara.'
+              : 'Luz de trabajo pareja, sin sombras, con los nombres: para ver '
+                    'dónde va cada foco, marco y palio.',
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textTertiary),
+        ),
+        toggle('Nombres', _names, () => _toggle('names')),
+        toggle('Cubierta', _roof, () => _toggle('roof')),
+        toggle('Conos de luz', _cones, () => _toggle('cones')),
         toggle(
           _floorBusy ? 'Luz en el suelo (calculando…)' : 'Luz en el suelo',
           _floor,
@@ -1512,6 +1665,7 @@ class Plan3dScreen extends StatefulWidget {
   final ScanTopSink? onScanTop;
   final ExposureSettings? exposure;
   final double? stop;
+  final SetEnvironment? environment;
 
   const Plan3dScreen({
     super.key,
@@ -1530,6 +1684,7 @@ class Plan3dScreen extends StatefulWidget {
     this.onScanTop,
     this.exposure,
     this.stop,
+    this.environment,
   });
 
   static Future<void> show(
@@ -1549,6 +1704,7 @@ class Plan3dScreen extends StatefulWidget {
     ScanTopSink? onScanTop,
     ExposureSettings? exposure,
     double? stop,
+    SetEnvironment? environment,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -1567,6 +1723,7 @@ class Plan3dScreen extends StatefulWidget {
         onScanTop: onScanTop,
         exposure: exposure,
         stop: stop,
+        environment: environment,
       ),
     ),
   );
@@ -1614,6 +1771,7 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       onScanTop: widget.onScanTop,
       exposure: widget.exposure,
       stop: widget.stop,
+      environment: widget.environment,
     ),
   );
 }

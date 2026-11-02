@@ -90,6 +90,17 @@ class RoomSetting {
 }
 
 /// Ambiente de un esquema de luz: la luz que no ponemos nosotros.
+/// Qué niebla hay en el esquema de luz (F6.21.2).
+enum FogKind {
+  haze('Bruma', 'Ambiente parejo: los haces se ven'),
+  smoke('Humo', 'Más densa y cerca del suelo'),
+  exterior('Niebla exterior', 'Se nota con la distancia');
+
+  final String label;
+  final String hint;
+  const FogKind(this.label, this.hint);
+}
+
 class PlanAmbient {
   /// De día hay sol y cielo; de noche, solo un resto de luna.
   final bool day;
@@ -111,6 +122,12 @@ class PlanAmbient {
   /// partida.
   final List<RoomSetting> rooms;
 
+  /// Niebla o humo del esquema, de 0 (nada) a 100 % (F6.21.2).
+  final double fogPct;
+  final FogKind fogKind;
+
+  bool get hasFog => fogPct > 0;
+
   const PlanAmbient({
     this.day = false,
     this.sunOn = true,
@@ -120,6 +137,8 @@ class PlanAmbient {
     this.skyOn = true,
     this.wallBounce = true,
     this.rooms = const [],
+    this.fogPct = 0,
+    this.fogKind = FogKind.haze,
   });
 
   /// Luz de luna llena sobre el suelo, en lux.
@@ -152,6 +171,8 @@ class PlanAmbient {
     bool? skyOn,
     bool? wallBounce,
     List<RoomSetting>? rooms,
+    double? fogPct,
+    FogKind? fogKind,
   }) => PlanAmbient(
     day: day ?? this.day,
     sunOn: sunOn ?? this.sunOn,
@@ -161,6 +182,8 @@ class PlanAmbient {
     skyOn: skyOn ?? this.skyOn,
     wallBounce: wallBounce ?? this.wallBounce,
     rooms: rooms ?? this.rooms,
+    fogPct: fogPct ?? this.fogPct,
+    fogKind: fogKind ?? this.fogKind,
   );
 
   Map<String, dynamic> toJson() => {
@@ -172,6 +195,7 @@ class PlanAmbient {
     'skyOn': skyOn,
     'wallBounce': wallBounce,
     if (rooms.isNotEmpty) 'rooms': [for (final r in rooms) r.toJson()],
+    if (fogPct > 0) ...{'fogPct': fogPct, 'fogKind': fogKind.name},
   };
 
   static PlanAmbient fromJson(Object? raw) {
@@ -191,6 +215,11 @@ class PlanAmbient {
         for (final r in (raw['rooms'] as List? ?? const []))
           ?RoomSetting.fromJson(r),
       ],
+      fogPct: ((raw['fogPct'] as num?)?.toDouble() ?? 0).clamp(0.0, 100.0),
+      fogKind: FogKind.values.firstWhere(
+        (k) => k.name == raw['fogKind'],
+        orElse: () => FogKind.haze,
+      ),
     );
   }
 
@@ -204,6 +233,8 @@ class PlanAmbient {
       other.condition == condition &&
       other.skyOn == skyOn &&
       other.wallBounce == wallBounce &&
+      other.fogPct == fogPct &&
+      other.fogKind == fogKind &&
       other.rooms.length == rooms.length &&
       [
         for (var i = 0; i < rooms.length; i++) rooms[i] == other.rooms[i],
@@ -219,5 +250,7 @@ class PlanAmbient {
     skyOn,
     wallBounce,
     Object.hashAll(rooms),
+    fogPct,
+    fogKind,
   );
 }

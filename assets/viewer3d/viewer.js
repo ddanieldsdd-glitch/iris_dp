@@ -32,10 +32,14 @@
   renderer.autoClear = false;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Que pueda tener el foco: W A S D llegan al visor (F6.22.6).
+  renderer.domElement.tabIndex = 0;
+  renderer.domElement.style.outline = 'none';
   document.body.prepend(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#1a2229');
+  let baseBg = '#1a2229';
+  scene.background = new THREE.Color(baseBg);
   const camP = new THREE.PerspectiveCamera(45, 1, 0.05, 2000);
   const camO = new THREE.OrthographicCamera(-10, 10, 10, -10, -1000, 2000);
   let cam = camP;
@@ -62,6 +66,9 @@
   // etiquetas con el nombre de cada pieza.
   let palette = {};
   let showNames = false;
+  // Vista «Claro» (F6.22.5): luz de trabajo pareja, sin sombras ni luz de
+  // los focos, y con todos los nombres.
+  let clearView = false;
   // Miniaturas 3/4 de los assets de Unreal (F6.20 B4): clave → textura.
   const thumbTex = {};
   const labelsGroup = new THREE.Group();
@@ -166,9 +173,86 @@
     return rayAt(e).ray.intersectPlane(plane, p) ? p : null;
   }
 
+  // ── Navegar como Unreal (F6.22.6) ─────────────────────────────────────
+  // Con el botón derecho pulsado, el ratón mira y W A S D mueven (Q y E
+  // bajan y suben; la rueda cambia la velocidad). Al soltar, la órbita
+  // sigue desde donde se quedó.
+  let navMode = 'unreal';
+  let fly = null;
+  let flySpeed = 3;
+  const keys = new Set();
+  renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+  window.addEventListener('keydown', (e) => { if (fly) { keys.add(e.code); e.preventDefault(); } });
+  window.addEventListener('keyup', (e) => keys.delete(e.code));
+  window.addEventListener('blur', () => keys.clear());
+  renderer.domElement.addEventListener('wheel', (e) => {
+    if (!fly) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    flySpeed = Math.min(Math.max(flySpeed * (e.deltaY < 0 ? 1.25 : 0.8), 0.3), 40);
+  }, { capture: true, passive: false });
+
+  function startFly(e) {
+    const euler = new THREE.Euler().setFromQuaternion(cam.quaternion, 'YXZ');
+    fly = { yaw: euler.y, pitch: euler.x, last: performance.now(),
+      dist: Math.max(cam.position.distanceTo(controls.target), 2) };
+    controls.enabled = false;
+    renderer.domElement.setPointerCapture(e.pointerId);
+    renderer.domElement.focus();
+  }
+
+  function endFly() {
+    const dir = new THREE.Vector3();
+    cam.getWorldDirection(dir);
+    controls.target.copy(cam.position).add(dir.multiplyScalar(fly.dist));
+    fly = null;
+    keys.clear();
+    controls.enabled = true;
+    controls.update();
+  }
+
+  function stepFly(now) {
+    const dt = Math.min((now - fly.last) / 1000, 0.1);
+    fly.last = now;
+    const fwd = new THREE.Vector3();
+    cam.getWorldDirection(fwd);
+    const right = new THREE.Vector3().crossVectors(fwd, cam.up).normalize();
+    const move = new THREE.Vector3();
+    if (keys.has('KeyW')) move.add(fwd);
+    if (keys.has('KeyS')) move.sub(fwd);
+    if (keys.has('KeyD')) move.add(right);
+    if (keys.has('KeyA')) move.sub(right);
+    if (keys.has('KeyE')) move.y += 1;
+    if (keys.has('KeyQ')) move.y -= 1;
+    if (move.lengthSq() > 0) {
+      const fast = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 3 : 1;
+      cam.position.add(move.normalize().multiplyScalar(flySpeed * fast * dt));
+    }
+  }
+
+  renderer.domElement.addEventListener('pointermove', (e) => {
+    if (!fly) return;
+    e.stopImmediatePropagation();
+    fly.yaw -= e.movementX * 0.0035;
+    fly.pitch = Math.min(Math.max(fly.pitch - e.movementY * 0.0035, -1.5), 1.5);
+    cam.quaternion.setFromEuler(new THREE.Euler(fly.pitch, fly.yaw, 0, 'YXZ'));
+  }, true);
+
+  renderer.domElement.addEventListener('pointerup', (e) => {
+    if (fly && e.button === 2) {
+      e.stopImmediatePropagation();
+      endFly();
+    }
+  }, true);
+
   renderer.domElement.addEventListener('pointerdown', (e) => {
     const { w } = size();
     const x = e.clientX, y = e.clientY;
+    if (navMode === 'unreal' && e.button === 2 && cam === camP) {
+      e.stopImmediatePropagation();
+      startFly(e);
+      return;
+    }
     const cx = w - M - CUBE, cy = M;
     if (x >= cx && x <= cx + CUBE && y >= cy && y <= cy + CUBE) {
       e.stopImmediatePropagation();
@@ -652,7 +736,7 @@
   function updateLabels() {
     for (const l of labels) {
       const layerShown = l.userData.layer ? shown[l.userData.layer] !== false : true;
-      l.visible = layerShown && (showNames || l.userData.id === selectedId);
+      l.visible = layerShown && (showNames || clearView || l.userData.id === selectedId);
     }
   }
 
@@ -682,20 +766,48 @@
     // usa el fotómetro, así que un foco al 50 % se ve la mitad. Sin nada
     // encendido (o con «Luz de trabajo») se ve con la luz de siempre.
     const anyLit = (sc.fixtures || []).some((f) => f.on && f.source && f.source.cd > 0);
+    const env = (sc.environment && sc.environment.kind) || 'interior';
+    clearView = sc.lightMode === 'work';
     const physical = !!(sc.exposure && sc.exposure.scale > 0 && sc.lightMode !== 'work' &&
       (anyLit || sc.sun));
+    // Fondo según el entorno (F6.21.1): plató negro, exterior con cielo.
+    scene.background = new THREE.Color(
+      env === 'studio' ? '#050505'
+        : env === 'exterior' ? (sc.sun ? '#9cbfdf' : '#0b1020')
+        : baseBg);
     const k = physical ? sc.exposure.scale : 1;
     renderer.physicallyCorrectLights = physical;
     if (physical) {
       // Cielo de día (aprox. un cuarto del sol) o un poco de rebote de noche.
-      const skyLux = sc.sun ? (sc.sun.lux || 0) * 0.25 : 0.5;
-      root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, skyLux * k));
-      root.add(new THREE.AmbientLight(0xffffff, 0.2 * k));
+      // En un plató, solo los focos.
+      if (env !== 'studio') {
+        const skyLux = sc.sun ? (sc.sun.lux || 0) * 0.25 : 0.5;
+        root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, skyLux * k));
+        root.add(new THREE.AmbientLight(0xffffff, 0.2 * k));
+      }
+    } else if (clearView) {
+      // Luz de trabajo pareja: todo se ve, nada deslumbra.
+      root.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 1.0));
+      root.add(new THREE.AmbientLight(0xffffff, 0.45));
+      const work = new THREE.DirectionalLight(0xffffff, 0.35);
+      work.position.set(4, 10, 6);
+      root.add(work);
     } else {
       root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, sc.sun ? 0.6 : 0.38));
       root.add(new THREE.AmbientLight(0xffffff, 0.12));
     }
     post({ type: 'lightMode', physical, ev100: physical ? sc.exposure.ev100 : null });
+
+    // Niebla o humo (F6.21.2): espesa la escena y hace visibles los haces.
+    const fog = sc.fog && sc.fog.pct > 0 ? sc.fog : null;
+    const fogAmount = fog ? fog.pct / 100 : 0;
+    if (fog) {
+      const perM = { haze: 0.06, smoke: 0.14, exterior: 0.03 }[fog.kind] || 0.06;
+      const light = fog.day && env !== 'studio';
+      scene.fog = new THREE.FogExp2(light ? 0xc9ced6 : 0x24272d, perM * fogAmount);
+    } else {
+      scene.fog = null;
+    }
 
     // Lo que ocupa la escena, para el suelo y la cámara.
     const box = new THREE.Box3();
@@ -716,7 +828,13 @@
     const c = box.getCenter(new THREE.Vector3());
     const sz = box.getSize(new THREE.Vector3());
     const span = Math.max(sz.x, sz.z, 6);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(span + 30, span + 30), new THREE.MeshStandardMaterial({ color: 0x8a8378, roughness: 0.95 }));
+    // Suelo: gris neutro en plató, del terreno elegido fuera y, mucho más
+    // grande, hasta el horizonte.
+    const floorColor = env === 'studio' ? 0x767676
+      : env === 'exterior' ? ((sc.environment && sc.environment.groundRgb) || 0x4f6b35)
+      : 0x8a8378;
+    const floorSpan = env === 'exterior' ? span + 400 : span + 30;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(floorSpan, floorSpan), new THREE.MeshStandardMaterial({ color: floorColor, roughness: 0.95 }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(c.x, -0.01, c.z);
     root.add(floor);
@@ -782,7 +900,12 @@
     // Con un escaneo se ensaya la luz sobre la localización: los primeros
     // focos dan sombra (F6.12.4). Son caras, así que solo unos pocos.
     const hasScans = (sc.scans || []).length > 0;
-    const maxShadows = 4;
+    // Con grip (negros, marcos, palios) también: es lo que corta la luz.
+    const hasGrip = (sc.grip || []).length > 0;
+    const castShadows = hasScans || hasGrip;
+    // Con grip, más: si un foco no da sombra, su luz directa atravesaría
+    // el negro o la tela (F6.22.3).
+    const maxShadows = (sc.grip || []).length > 0 ? 8 : 4;
     let shadows = 0;
     fixtures.forEach((f, i) => {
       const col = cctColor(f.cct || 3200);
@@ -800,7 +923,7 @@
       body.name = (f.name || 'Foco') + ' · ' + f.id;
       body.userData.id = f.id; body.userData.movable = true; body.userData.dragY = p.y; body.userData.aim = a.clone(); picks.push(body);
       L.fixtures.add(body);
-      if (!f.on) return;
+      if (!f.on || clearView) return;
       if (i >= next && lit < maxLights) {
         next += step; lit++;
         const half = clamp((f.beamDeg || 60) / 2, 5, 80) * Math.PI / 180;
@@ -809,7 +932,7 @@
           : new THREE.SpotLight(col, 0.6 + (f.watts || 500) / 1600, 0, half, 0.45, 1);
         sl.position.copy(p);
         sl.target.position.copy(a);
-        if (hasScans && shadows < maxShadows) {
+        if (castShadows && shadows < maxShadows) {
           shadows++;
           sl.castShadow = true;
           sl.shadow.mapSize.set(1024, 1024);
@@ -825,7 +948,9 @@
       const half = clamp((f.beamDeg || 60) / 2, 4, 62) * Math.PI / 180;
       const cg = new THREE.ConeGeometry(t * Math.tan(half), t, 36, 1, true);
       cg.translate(0, -t / 2, 0);
-      const cone = new THREE.Mesh(cg, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: f.beamDeg > 80 ? 0.05 : 0.11, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      // Con niebla, el haz se ve más (hasta unas tres veces).
+      const beamOpacity = (f.beamDeg > 80 ? 0.05 : 0.11) * (1 + 2 * fogAmount);
+      const cone = new THREE.Mesh(cg, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: beamOpacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
       cone.position.copy(p);
       cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
       cone.visible = showCones;
@@ -848,8 +973,11 @@
     for (const q of sc.cameras || []) {
       const g = new THREE.Group();
       g.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.25, 0.35), dark));
-      g.position.copy(V(q.at[0], q.at[1], (q.z0 || 0) + 1.5));
-      g.lookAt(V(q.at[0] + q.dir[0], q.at[1] + q.dir[1], (q.z0 || 0) + 1.5));
+      // A su altura, con su paneo y su inclinación (F6.22.4).
+      const cz = (q.z0 || 0) + (q.z || 1.5);
+      const tilt = (q.tiltDeg || 0) * Math.PI / 180;
+      g.position.copy(V(q.at[0], q.at[1], cz));
+      g.lookAt(V(q.at[0] + q.dir[0] * Math.cos(tilt), q.at[1] + q.dir[1] * Math.cos(tilt), cz + Math.sin(tilt)));
       g.userData.id = q.id; g.userData.movable = true; g.userData.dragY = q.z0 || 0; picks.push(g);
       L.people.add(g);
     }
@@ -900,8 +1028,8 @@
     tag(sc.scans, null, (q) => V(q.at[0], q.at[1], (q.z0 || 0) + 0.5));
     updateLabels();
 
-    // El sol, con sombras de lo que tapa.
-    if (sc.sun) {
+    // El sol, con sombras de lo que tapa (en «Claro», no).
+    if (sc.sun && !clearView) {
       const d = sc.sun.dir;
       const sun = new THREE.DirectionalLight(
         cctColor(sc.sun.cct || 5400),
@@ -925,7 +1053,45 @@
       floor.castShadow = false;
     }
 
-    if (hasScans && !sc.sun) {
+    // Los paneles de grip (F6.22.2): a su tamaño, del color de su tela, y
+    // dan sombra (una tela tapa la luz directa; lo que deja pasar sale de
+    // ella como fuente blanda, abajo).
+    for (const g of sc.grip || []) {
+      const tilted = (g.tiltDeg || 0) >= 1;
+      const h = tilted ? Math.max(g.heightM || 1, 0.05) : Math.max((g.top || 2.5) - (g.bottom || 0), 0.05);
+      const mat = new THREE.MeshStandardMaterial({ color: g.rgb, roughness: 0.9,
+        transparent: g.opacity < 1, opacity: g.opacity, side: THREE.DoubleSide });
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(g.widthM || 1, h, 0.03), mat);
+      panel.castShadow = true;
+      panel.receiveShadow = true;
+      const grp = new THREE.Group();
+      panel.position.y = tilted ? (g.centreM || 1.5) : (g.bottom || 0) + h / 2;
+      // Inclinado hacia su cara delantera, sobre su ancho (F6.22.1).
+      if (tilted) panel.rotation.x = (g.tiltDeg || 0) * Math.PI / 180;
+      grp.add(panel);
+      grp.position.copy(V(g.at[0], g.at[1], g.z0 || 0));
+      grp.rotation.y = -(g.yawDeg || 0) * Math.PI / 180;
+      grp.name = (g.name || 'Grip') + ' · ' + g.id;
+      grp.userData.id = g.id; grp.userData.movable = true; grp.userData.dragY = g.z0 || 0;
+      picks.push(grp);
+      root.add(grp);
+    }
+    // La luz que sale de telas y rebotes, la del fotómetro.
+    for (const s of clearView ? [] : sc.soft || []) {
+      if (lit >= maxLights + 6) break;
+      lit++;
+      const col = cctColor(s.cct || 5600);
+      const p = V(s.pos[0] + s.dir[0] * 0.05, s.pos[1] + s.dir[1] * 0.05, s.pos[2] + s.dir[2] * 0.05);
+      const half = clamp((s.beamDeg || 120) / 2, 20, 85) * Math.PI / 180;
+      const sl = physical
+        ? new THREE.SpotLight(col, (s.cd || 0) * k, 0, half, 1, 2)
+        : new THREE.SpotLight(col, 0.5, 0, half, 1, 1);
+      sl.position.copy(p);
+      sl.target.position.copy(p.clone().add(V(s.dir[0], s.dir[1], s.dir[2]).multiplyScalar(3)));
+      root.add(sl, sl.target);
+    }
+
+    if (castShadows && !sc.sun) {
       root.traverse((o) => {
         if (!o.isMesh || (o.material && o.material.blending === THREE.AdditiveBlending)) return;
         o.castShadow = true;
@@ -997,7 +1163,8 @@
     const z = (q.z0 || 0) + (q.z || 1.5);
     const pos = V(q.at[0], q.at[1], z);
     cam.position.copy(pos);
-    controls.target.copy(V(q.at[0] + q.dir[0] * 5, q.at[1] + q.dir[1] * 5, z));
+    const tilt = (q.tiltDeg || 0) * Math.PI / 180;
+    controls.target.copy(V(q.at[0] + q.dir[0] * 5 * Math.cos(tilt), q.at[1] + q.dir[1] * 5 * Math.cos(tilt), z + 5 * Math.sin(tilt)));
     controls.update();
     anim = null;
     placeFrame();
@@ -1098,6 +1265,8 @@
       return new THREE.OBJLoader().parse(new TextDecoder().decode(buffer));
     }
     if (format === 'ply') {
+      const splat = splatPoints(buffer);
+      if (splat) return splat;
       const geo = new THREE.PLYLoader().parse(buffer);
       geo.computeBoundingBox();
       // Sin caras (una nube de puntos o un splat): puntos con su color.
@@ -1109,6 +1278,58 @@
     }
     return await new Promise((resolve, reject) =>
       new THREE.GLTFLoader().parse(buffer, '', (g) => resolve(g.scene), reject));
+  }
+
+  // Un PLY de gaussian splats (Postshot, Scaniverse, Polycam…) como nube de
+  // puntos con su color de verdad (F6.20 E5). El PLYLoader no conoce sus
+  // campos: el color va en f_dc_* (armónicos de orden 0) y la opacidad sin
+  // sigmoide. Es una capa visual: no recibe la luz de los focos. `null` si
+  // no es un splat.
+  function splatPoints(buffer) {
+    const head = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 16384)));
+    const end = head.indexOf('end_header\n');
+    if (end < 0 || !/format binary_little_endian/.test(head) || !/property float f_dc_0/.test(head)) return null;
+    const sizes = { char: 1, uchar: 1, int8: 1, uint8: 1, short: 2, ushort: 2, int16: 2, uint16: 2,
+      int: 4, uint: 4, int32: 4, uint32: 4, float: 4, float32: 4, double: 8, float64: 8 };
+    let count = 0, inVertex = false, stride = 0;
+    const props = {};
+    for (const line of head.slice(0, end).split('\n')) {
+      const w = line.trim().split(/\s+/);
+      if (w[0] === 'element') {
+        inVertex = w[1] === 'vertex';
+        if (inVertex) count = parseInt(w[2], 10);
+        else if (count) break;
+      } else if (w[0] === 'property' && inVertex) {
+        if (w[1] === 'list' || !(w[1] in sizes)) return null;
+        props[w[2]] = { at: stride, type: w[1] };
+        stride += sizes[w[1]];
+      }
+    }
+    for (const k of ['x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2']) {
+      if (!props[k] || props[k].type.indexOf('float') !== 0) return null;
+    }
+    const view = new DataView(buffer, head.slice(0, end).length + 'end_header\n'.length);
+    // Más de 2 millones de puntos no van fluidos en el iPad: se saltan.
+    const step = Math.max(1, Math.ceil(count / 2000000));
+    const pos = [], col = [];
+    const SH0 = 0.28209479177387814;
+    const f = (i, k) => view.getFloat32(i * stride + props[k].at, true);
+    for (let i = 0; i < count; i += step) {
+      if ((i + 1) * stride > view.byteLength) break;
+      if (props.opacity && 1 / (1 + Math.exp(-f(i, 'opacity'))) < 0.2) continue;
+      pos.push(f(i, 'x'), f(i, 'y'), f(i, 'z'));
+      for (const k of ['f_dc_0', 'f_dc_1', 'f_dc_2']) {
+        // El color del splat es sRGB; la escena trabaja en lineal.
+        col.push(Math.pow(Math.min(1, Math.max(0, 0.5 + SH0 * f(i, k))), 2.2));
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.computeBoundingBox();
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.015, vertexColors: true }));
+    pts.userData.splat = true;
+    return pts;
   }
 
   // El escaneo recibe la luz de los focos y da sombra.
@@ -1171,7 +1392,8 @@
   function loop(now) {
     requestAnimationFrame(loop);
     if (anim) anim(now || performance.now());
-    controls.update();
+    if (fly) stepFly(now || performance.now());
+    else controls.update();
     if (selectedBox) selectedBox.update();
     scaleLabels();
     const { w, h } = size();
@@ -1299,9 +1521,51 @@
     });
   }
 
+  // Corte horizontal del escaneo a `h` metros del suelo (F6.20 E4): los
+  // tramos donde sus triángulos cruzan ese plano, en metros de la planta
+  // ([x1, y1, x2, y2, …]), para proponer paredes.
+  function scanSlice(id, h) {
+    const w = scanWrappers[id];
+    if (!w || !w.children.length) return null;
+    w.updateWorldMatrix(true, true);
+    const out = [];
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    const cut = (p, q) => {
+      const t = (h - p.y) / (q.y - p.y);
+      return [p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t];
+    };
+    w.traverse((o) => {
+      if (!o.isMesh || !o.geometry) return;
+      const pos = o.geometry.attributes.position;
+      if (!pos) return;
+      const index = o.geometry.index;
+      const n = index ? index.count : pos.count;
+      for (let i = 0; i + 2 < n; i += 3) {
+        const ia = index ? index.getX(i) : i;
+        const ib = index ? index.getX(i + 1) : i + 1;
+        const ic = index ? index.getX(i + 2) : i + 2;
+        a.fromBufferAttribute(pos, ia).applyMatrix4(o.matrixWorld);
+        b.fromBufferAttribute(pos, ib).applyMatrix4(o.matrixWorld);
+        c.fromBufferAttribute(pos, ic).applyMatrix4(o.matrixWorld);
+        const pts = [];
+        for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+          if ((p.y - h) * (q.y - h) < 0) pts.push(cut(p, q));
+        }
+        if (pts.length === 2) {
+          out.push(
+            Math.round(pts[0][0] * 1000) / 1000, Math.round(pts[0][1] * 1000) / 1000,
+            Math.round(pts[1][0] * 1000) / 1000, Math.round(pts[1][1] * 1000) / 1000,
+          );
+        }
+      }
+    });
+    return JSON.stringify(out);
+  }
+
   window.iris = {
     load,
     scanTop,
+    scanSlice,
     // Un escaneo que acaba de llegar a este equipo: se olvida lo cargado (o
     // el fallo) y se vuelve a pedir con la escena de antes.
     rescan: (file) => {
@@ -1344,7 +1608,12 @@
       if ('cones' in o) { showCones = !!o.cones; cones.forEach((c) => (c.visible = showCones)); }
       if ('roof' in o) { showRoof = !!o.roof; roofs.forEach((r) => (r.visible = showRoof)); }
       if ('ortho' in o) setOrtho(!!o.ortho);
-      if (o.bg) scene.background = new THREE.Color(o.bg);
+      if (o.nav) navMode = o.nav === 'orbit' ? 'orbit' : 'unreal';
+      if (o.bg) {
+        baseBg = o.bg;
+        const env = lastScene && lastScene.environment && lastScene.environment.kind;
+        if (!env || env === 'interior') scene.background = new THREE.Color(o.bg);
+      }
       if ('names' in o) { showNames = !!o.names; updateLabels(); }
       if ('measure' in o) {
         measuring = !!o.measure;

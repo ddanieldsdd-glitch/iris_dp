@@ -66,6 +66,9 @@ class PlanPalette extends StatelessWidget {
   final List<(String, Color)> cast;
   final void Function(String name, Color color)? onAddCast;
   final ValueChanged<LightType> onAddLight;
+
+  /// Un palio (2×2 a 6×6, con tela de difusión o rebote).
+  final VoidCallback? onAddPalio;
   final ValueChanged<PropType> onAddProp;
   final VoidCallback onAddMeter;
 
@@ -96,6 +99,7 @@ class PlanPalette extends StatelessWidget {
     this.cast = const [],
     this.onAddCast,
     required this.onAddLight,
+    this.onAddPalio,
     required this.onAddProp,
     required this.onAddMeter,
     this.projectLights = const [],
@@ -216,6 +220,15 @@ class PlanPalette extends StatelessWidget {
                   icon: LightSymbolPreview(type: type, size: 20),
                   label: type.label,
                   onTap: () => onAddLight(type),
+                ),
+              // El palio, entre lo que difunde: lleva tela o rebote.
+              if (onAddPalio != null && types.contains(LightType.net))
+                _PaletteButton(
+                  icon: const Icon(Icons.crop_square, size: 18),
+                  label: 'Palio',
+                  tooltip: 'Palio de 2×2 a 6×6 con tela de difusión o rebote '
+                      '(Grid Cloth, seda, Cinebounce…)',
+                  onTap: onAddPalio!,
                 ),
             ]),
           ],

@@ -60,6 +60,7 @@ SKY_ID = "_sky"
 ATMOSPHERE_ID = "_atmosphere"
 FLOOR_ID = "_floor"
 POST_ID = "_post"
+FOG_ID = "_fog"
 STRUCTURE_ID = "_structure"
 WORLD_ROOT = "/Game/IRIS"
 STRUCTURE_ROOT = WORLD_ROOT + "/Estructura"
@@ -70,7 +71,7 @@ CUBE = "/Engine/BasicShapes/Cube.Cube"
 PLANE = "/Engine/BasicShapes/Plane.Plane"
 
 # Lo que no se borra al mandar IRIS la escena entera.
-_FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID, POST_ID, STRUCTURE_ID}
+_FIXED = {SUN_ID, SKY_ID, ATMOSPHERE_ID, FLOOR_ID, POST_ID, STRUCTURE_ID, FOG_ID}
 
 # Etiqueta con la ruta del asset que hace de una pieza (F6.20 B2): si el
 # asset cambia, el actor se rehace.
@@ -279,6 +280,38 @@ def _apply_camera(cam):
         filmback.sensor_height = sensor * 9 / 16
         comp.set_editor_property("filmback", filmback)
     _set(comp, "current_focal_length", float(cam.get("focalMm", 35)))
+    # Diafragma, foco y exposición de la cámara de rodaje (F6.22.4).
+    if cam.get("tStop"):
+        _set(comp, "current_aperture", float(cam["tStop"]))
+    if cam.get("focusCm"):
+        try:
+            fs = comp.get_editor_property("focus_settings")
+            fs.set_editor_property("focus_method", unreal.CameraFocusMethod.MANUAL)
+            fs.set_editor_property("manual_focus_distance", float(cam["focusCm"]))
+            comp.set_editor_property("focus_settings", fs)
+        except Exception as exc:
+            unreal.log_warning("[IRIS Stage] foco: %s" % exc)
+    exposed = bool(cam.get("iso") and cam.get("shutterS"))
+    values = [
+        ("auto_exposure_method", exposed, unreal.AutoExposureMethod.AEM_MANUAL),
+        ("auto_exposure_apply_physical_camera_exposure", exposed, True),
+        ("camera_iso", exposed, float(cam.get("iso") or 800)),
+        ("camera_shutter_speed", exposed,
+         1.0 / max(float(cam.get("shutterS") or 1 / 48.0), 1e-4)),
+        ("auto_exposure_bias", exposed, -float(cam.get("nd") or 0)),
+        ("depth_of_field_fstop", bool(cam.get("tStop")), float(cam.get("tStop") or 2.8)),
+    ]
+    pp = comp.get_editor_property("post_process_settings")
+    for name, on, value in values:
+        try:
+            # Sin el dato, el override se apaga: manda el PostProcessVolume.
+            pp.set_editor_property("override_" + name, on)
+            if on:
+                pp.set_editor_property(name, value)
+        except Exception as exc:
+            unreal.log_warning("[IRIS Stage] cámara %s: %s" % (name, exc))
+    comp.set_editor_property("post_process_settings", pp)
+    _set(comp, "post_process_blend_weight", 1.0)
 
 
 def _apply_prop(p):
@@ -307,6 +340,10 @@ def _apply_prop(p):
     now = actor.get_actor_scale3d()
     if max(abs(now.x - scale.x), abs(now.y - scale.y), abs(now.z - scale.z)) > 0.001:
         actor.set_actor_scale3d(scale)
+    # El grip (F6.22.2) lleva el color de su tela: negro, rebote o difusión.
+    if p.get("rgb") is not None:
+        rgb = int(p["rgb"])
+        comp.set_material(0, _ground_material("Grip_%06X" % rgb, rgb))
 
 
 def _slug(text):
@@ -619,10 +656,17 @@ def _scan_meshes(file, folders, root=None):
     if found:
         return found
     source = None
-    for folder in folders or []:
-        candidate = os.path.join(folder, os.path.basename(file))
-        if os.path.isfile(candidate):
-            source = candidate
+    # La malla con todo el detalle (F6.20 E5), si IRIS la ha dejado en este
+    # PC; si no, la misma que usa IRIS.
+    stem = os.path.splitext(os.path.basename(file))[0]
+    names = [stem + "_ue.glb", os.path.basename(file)]
+    for name in names:
+        for folder in folders or []:
+            candidate = os.path.join(folder, name)
+            if os.path.isfile(candidate):
+                source = candidate
+                break
+        if source is not None:
             break
     if source is None:
         unreal.log_warning("[IRIS Stage] El escaneo %s no está en este PC." % file)
@@ -674,6 +718,102 @@ def _apply_structure(s):
         uid = STRUCTURE_ID if i == 0 else "%s%s%d" % (STRUCTURE_ID, PART, i)
         _place_asset(uid, "IRIS_Estructura" if i == 0 else "IRIS_Estructura (%d)" % i,
                      path, origin, flat)
+
+
+GROUND_ROOT = WORLD_ROOT + "/Materiales"
+_BASIC_MAT = "/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"
+
+
+def _ground_material(name, rgb):
+    """Un material liso del color [rgb] (0xRRGGBB) para el suelo, creado
+    una vez como instancia del material básico de Unreal."""
+    path = "%s/Suelo_%s" % (GROUND_ROOT, name)
+    lib = unreal.EditorAssetLibrary
+    if lib.does_asset_exist(path):
+        return lib.load_asset(path)
+    tools = unreal.AssetToolsHelpers.get_asset_tools()
+    mic = tools.create_asset("Suelo_%s" % name, GROUND_ROOT,
+                             unreal.MaterialInstanceConstant,
+                             unreal.MaterialInstanceConstantFactoryNew())
+    mic.set_editor_property("parent", lib.load_asset(_BASIC_MAT))
+    color = unreal.LinearColor(((rgb >> 16) & 255) / 255.0, ((rgb >> 8) & 255) / 255.0,
+                               (rgb & 255) / 255.0, 1.0)
+    unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(
+        mic, "Color", color)
+    lib.save_loaded_asset(mic)
+    return mic
+
+
+def _apply_environment(e):
+    """Plató, interior o exterior (F6.21.1). En un plató solo alumbran los
+    focos: sin sol, cielo ni atmósfera, y el suelo gris neutro. Fuera, el
+    suelo del terreno, grande, con el cielo y el sol que mande IRIS."""
+    kind = e.get("kind", "interior")
+    floor = _find(FLOOR_ID)
+    if kind == "studio":
+        sun = _find(SUN_ID)
+        if sun is not None:
+            comp = sun.get_component_by_class(unreal.DirectionalLightComponent)
+            if comp is not None:
+                _set(comp, "intensity", 0.0)
+        sky = _find(SKY_ID)
+        if sky is not None:
+            comp = sky.get_component_by_class(unreal.SkyLightComponent)
+            if comp is not None:
+                _set(comp, "intensity", 0.0)
+        atmosphere = _find(ATMOSPHERE_ID)
+        if atmosphere is not None:
+            _actor_subsystem().destroy_actor(atmosphere)
+            _actors.pop(ATMOSPHERE_ID, None)
+    if floor is None:
+        return
+    comp = floor.static_mesh_component
+    if kind == "studio":
+        comp.set_material(0, _ground_material("Plato", 0x767676))
+        floor.set_actor_scale3d(unreal.Vector(100, 100, 1))
+    elif kind == "exterior":
+        comp.set_material(0, _ground_material(
+            str(e.get("ground", "grass")).capitalize(), int(e.get("groundRgb", 0x4f6b35))))
+        # Hasta el horizonte: 2 km.
+        floor.set_actor_scale3d(unreal.Vector(2000, 2000, 1))
+    else:
+        comp.set_material(0, _ground_material("Interior", 0x8a8378))
+        floor.set_actor_scale3d(unreal.Vector(100, 100, 1))
+
+
+# Por tipo de niebla: densidad a 100 %, caída con la altura (alta = pegada
+# al suelo) y cuánto apaga la niebla volumétrica.
+_FOG_KINDS = {
+    "haze": (0.08, 0.2, 2.0),
+    "smoke": (0.35, 1.5, 4.0),
+    "exterior": (0.04, 0.05, 1.0),
+}
+
+
+def _apply_fog(fog):
+    """Niebla o humo del esquema (F6.21.2): ExponentialHeightFog con niebla
+    volumétrica, que hace visibles los haces de los focos. Sin niebla, se
+    quita."""
+    actor = _find(FOG_ID)
+    pct = float((fog or {}).get("pct", 0)) / 100.0
+    if pct <= 0:
+        if actor is not None:
+            _actor_subsystem().destroy_actor(actor)
+            _actors.pop(FOG_ID, None)
+        return
+    density, falloff, extinction = _FOG_KINDS.get(fog.get("kind"), _FOG_KINDS["haze"])
+    if actor is None:
+        actor = _spawn(FOG_ID, unreal.ExponentialHeightFog, "IRIS_Niebla",
+                       unreal.Vector(0, 0, 0), unreal.Rotator())
+    comp = actor.get_component_by_class(unreal.ExponentialHeightFogComponent)
+    if comp is None:
+        return
+    _set(comp, "fog_density", density * pct)
+    _set(comp, "fog_height_falloff", falloff)
+    _set(comp, "volumetric_fog", True)
+    _set(comp, "volumetric_fog_extinction_scale", 1.0 + extinction * pct)
+    # Hacia delante: los haces brillan al mirar hacia el foco, como en set.
+    _set(comp, "volumetric_fog_scattering_distribution", 0.6)
 
 
 def _apply_exposure(e):
@@ -747,10 +887,15 @@ def _apply(data):
         _apply_asset(a)
     for s in scans:
         _apply_scan(s, data.get("scanFolders", []))
+    studio = (data.get("environment") or {}).get("kind") == "studio"
     if "sun" in data:
-        _apply_sun(data["sun"])
-    if "sky" in data:
+        _apply_sun(None if studio else data["sun"])
+    if "sky" in data and not studio:
         _apply_sky(data["sky"])
+    if data.get("environment"):
+        _apply_environment(data["environment"])
+    if "fog" in data:
+        _apply_fog(data["fog"])
     if data.get("exposure"):
         _apply_exposure(data["exposure"])
     if data.get("structure"):

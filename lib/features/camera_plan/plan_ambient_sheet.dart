@@ -134,6 +134,30 @@ class _PlanAmbientSheetState extends State<PlanAmbientSheet> {
               a.wallBounce,
               (v) => _set(a.copyWith(wallBounce: v)),
             ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              a.hasFog
+                  ? 'Niebla: ${a.fogPct.round()} % · ${a.fogKind.hint}'
+                  : 'Niebla: sin niebla',
+              style: AppTypography.caption(palette),
+            ),
+            Slider(
+              value: a.fogPct,
+              min: 0,
+              max: 100,
+              divisions: 20,
+              onChanged: (v) => _set(a.copyWith(fogPct: v.roundToDouble())),
+            ),
+            if (a.hasFog)
+              SegmentedButton<FogKind>(
+                showSelectedIcon: false,
+                segments: [
+                  for (final k in FogKind.values)
+                    ButtonSegment(value: k, label: Text(k.label)),
+                ],
+                selected: {a.fogKind},
+                onSelectionChanged: (v) => _set(a.copyWith(fogKind: v.first)),
+              ),
           ],
         ),
       ),

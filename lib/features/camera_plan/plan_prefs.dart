@@ -9,6 +9,10 @@ abstract final class PlanPrefs {
   static const exposureMap = PrefKey<bool>('plan.exposureMap', false);
   static const readings = PrefKey<bool>('plan.readings', true);
 
+  /// 3D como el visor de Unreal (F6.22.6): botón derecho pulsado para mirar
+  /// y W, A, S, D para moverse. Sin él, la órbita de antes.
+  static const unrealNav = PrefKey<bool>('plan.nav.unreal', true);
+
   static const iso = PrefKey<double>('plan.iso', 800);
   static const shutterDeg = PrefKey<double>('plan.shutterDeg', 180);
   static const fps = PrefKey<double>('plan.fps', 24);
@@ -24,6 +28,7 @@ abstract final class PlanPrefs {
     otherCameras,
     exposureMap,
     readings,
+    unrealNav,
     iso,
     shutterDeg,
     fps,

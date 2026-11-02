@@ -5,8 +5,10 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
+import 'light/plan_grip.dart';
 import 'light/light_scene.dart';
 import 'light/modifiers.dart';
+import 'camera_aim.dart';
 import 'light/plan_light.dart';
 import 'light/surfaces.dart';
 import 'plan_marks.dart';
@@ -611,17 +613,138 @@ class PlanPieceControls extends StatelessWidget {
       ]);
     } else if (_isGrip(el)) {
       final length = LightScene.lengthOf(el);
+      // Palio (2×2 a 6×6, tela o rebote) o marco (1×1, 2×1, solo difusión),
+      // con su medida (F6.22.1).
+      final palio = PlanGrip.isPalio(el);
+      final formats = PlanGrip.formatsFor(el);
+      if (formats.isNotEmpty) {
+        children.add(
+          choice<GripFormat>(
+            'Formato',
+            PlanGrip.formatOf(el),
+            [(null, 'A medida'), for (final f in formats) (f, f.label)],
+            (f) {
+              if (f == null) {
+                el.props.remove(PlanGrip.formatKey);
+              } else {
+                PlanGrip.applyFormat(el, f, metersPerUnit);
+                // Si aún se llama como su formato, el nombre sigue a la medida.
+                final name = el.customName;
+                if (palio &&
+                    (name == null || name.startsWith('Palio'))) {
+                  el.customName = f.label;
+                }
+              }
+            },
+          ),
+        );
+      }
+      if (palio) {
+        // Un solo selector: una tela de difusión o un rebote.
+        final cloth = el.lightType == LightType.bounce
+            ? 'b:${SurfaceMaterial.byId(el.props[LightScene.materialKey] as String?, kBounceMaterials).id}'
+            : 'd:${LightScene.diffusionOf(el).id}';
+        children.add(
+          choice<String>(
+            'Tela o rebote',
+            cloth,
+            [
+              for (final m in LightModifier.ofKind(ModifierKind.diffusion))
+                ('d:${m.id}', 'Difusión · ${m.name}'),
+              for (final m in kBounceMaterials) ('b:${m.id}', 'Rebote · ${m.name}'),
+            ],
+            (v) {
+              if (v == null) return;
+              final id = v.substring(2);
+              if (v.startsWith('b:')) {
+                el.lightType = LightType.bounce;
+                el.props[LightScene.materialKey] = id;
+                el.props.remove(PlanLight.modifiersKey);
+              } else {
+                el.lightType = LightType.diffusionFrame;
+                el.props[PlanLight.modifiersKey] = [id];
+                el.props.remove(LightScene.materialKey);
+              }
+              el.props[PlanGrip.kindKey] = PlanGrip.palioKind;
+            },
+          ),
+        );
+      }
       children.add(
         slider(
-          'Largo',
+          'Ancho',
           meters(length),
           current: length,
           min: 0.3 / metersPerUnit,
           max: 6 / metersPerUnit,
-          onChanged: (v) => el.props[LightScene.lenKey] = v,
+          onChanged: (v) {
+            el.props[LightScene.lenKey] = v;
+            el.props.remove(PlanGrip.formatKey);
+          },
         ),
       );
-      switch (el.lightType) {
+      final gripHeight = PlanGrip.heightM(el, metersPerUnit);
+      children.addAll([
+        slider(
+          'Alto',
+          '${gripHeight.toStringAsFixed(2)} m',
+          current: gripHeight,
+          min: 0.3,
+          max: 6,
+          onChanged: (v) {
+            el.props[PlanGrip.heightKey] = (v * 20).round() / 20;
+            el.props.remove(PlanGrip.formatKey);
+          },
+        ),
+        slider(
+          'Altura del centro',
+          '${PlanGrip.centreM(el, metersPerUnit).toStringAsFixed(2)} m',
+          current: PlanGrip.centreM(el, metersPerUnit),
+          min: 0.2,
+          max: 8,
+          onChanged: (v) => el.props[PlanGrip.centreKey] = (v * 20).round() / 20,
+        ),
+        slider(
+          'Paneo',
+          '${el.rotation.round()}°',
+          current: el.rotation,
+          min: 0,
+          max: 359,
+          onChanged: (v) => el.rotation = v.roundToDouble(),
+        ),
+        if (PlanGrip.canTilt(el)) ...[
+          slider(
+            'Inclinación',
+            switch (PlanGrip.tiltDeg(el).round()) {
+              0 => 'vertical',
+              90 => 'horizontal, sobre las cabezas',
+              final d => '$d°',
+            },
+            current: PlanGrip.tiltDeg(el),
+            min: 0,
+            max: 90,
+            onChanged: (v) {
+              final d = v.roundToDouble();
+              if (d < 1) {
+                el.props.remove(PlanGrip.tiltKey);
+              } else {
+                el.props[PlanGrip.tiltKey] = d;
+              }
+            },
+          ),
+          Text(
+            'Inclinada, el fotómetro, el 3D y Unreal la calculan en el '
+            'espacio: un palio horizontal tapa la luz que le cae de arriba '
+            '(también el sol) y la suelta hacia abajo.',
+            style: AppTypography.caption(
+              palette,
+            ).copyWith(color: palette.textTertiary),
+          ),
+        ],
+      ]);
+      switch (palio ? null : el.lightType) {
+        case null:
+          break;
         case LightType.bounce:
           final material = SurfaceMaterial.byId(
             el.props[LightScene.materialKey] as String?,
@@ -633,9 +756,11 @@ class PlanPieceControls extends StatelessWidget {
             ], (id) => el.props[LightScene.materialKey] = id),
           );
         case LightType.diffusionFrame:
-          children.add(
+          children.addAll([
             filter('Tela', ModifierKind.diffusion, allowNone: false),
-          );
+            // Un marco puede llevar además una gelatina (F6.22.1).
+            filter('Gelatina', ModifierKind.correction),
+          ]);
         case LightType.net:
           children.add(filter('Red', ModifierKind.scrim, allowNone: false));
         case LightType.gel:
@@ -667,6 +792,77 @@ class PlanPieceControls extends StatelessWidget {
             (pose) => el.props[PlanMarks.poseKey] = pose,
           ),
         );
+      }
+      if (el.type == ElementType.camera) {
+        final focus = CameraAim.ownFocusM(el);
+        children.addAll([
+          slider(
+            'Altura del objetivo',
+            '${CameraAim.heightM(el).toStringAsFixed(2)} m',
+            current: CameraAim.heightM(el),
+            min: 0.1,
+            max: 8,
+            onChanged: (v) =>
+                el.props[PlanLight.heightKey] = (v * 20).round() / 20,
+          ),
+          slider(
+            'Paneo',
+            '${el.rotation.round()}°',
+            current: el.rotation,
+            min: 0,
+            max: 359,
+            onChanged: (v) => el.rotation = v.roundToDouble(),
+          ),
+          slider(
+            'Inclinación',
+            switch (CameraAim.tiltDeg(el).round()) {
+              0 => 'horizontal',
+              final d when d < 0 => '$d° (picado)',
+              final d => '+$d° (contrapicado)',
+            },
+            current: CameraAim.tiltDeg(el),
+            min: -60,
+            max: 60,
+            onChanged: (v) {
+              final d = v.roundToDouble();
+              if (d == 0) {
+                el.props.remove(CameraAim.tiltKey);
+              } else {
+                el.props[CameraAim.tiltKey] = d;
+              }
+            },
+          ),
+          slider(
+            'Giro (holandés)',
+            '${CameraAim.rollDeg(el).round()}°',
+            current: CameraAim.rollDeg(el),
+            min: -45,
+            max: 45,
+            onChanged: (v) {
+              final d = v.roundToDouble();
+              if (d == 0) {
+                el.props.remove(CameraAim.rollKey);
+              } else {
+                el.props[CameraAim.rollKey] = d;
+              }
+            },
+          ),
+          slider(
+            'Foco',
+            focus == null ? 'al actor de delante' : '${focus.toStringAsFixed(2)} m',
+            current: focus ?? 0.2,
+            min: 0.2,
+            max: 30,
+            onChanged: (v) {
+              // Del todo a la izquierda, vuelve al actor de delante.
+              if (v <= 0.25) {
+                el.props.remove(CameraAim.focusKey);
+              } else {
+                el.props[CameraAim.focusKey] = (v * 20).round() / 20;
+              }
+            },
+          ),
+        ]);
       }
       children.add(
         toggle('Hace sombra', el.props[LightScene.noShadowKey] != true, (v) {

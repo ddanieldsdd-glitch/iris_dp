@@ -57,6 +57,8 @@ import 'light/plan_light.dart';
 import 'light_overrides.dart';
 import 'light_setup_actions.dart' show askPlanName;
 import 'plan_ambient_sheet.dart';
+import 'light/plan_grip.dart';
+import 'set_environment.dart';
 import 'plan_equipment.dart';
 import 'light/light_scene.dart';
 import 'light/meter.dart';
@@ -309,6 +311,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Sol, cielo y rebote de paredes del esquema de luz abierto.
   PlanAmbient _ambient = const PlanAmbient();
 
+  /// Plató, interior o exterior: el del set (o la localización) de esta
+  /// planta (F6.21.1).
+  SetEnvironment _environment = const SetEnvironment();
+
+  /// El ambiente con el que se mide: en un plató, sin sol ni cielo.
+  PlanAmbient get _effectiveAmbient => _environment.effective(_ambient);
+
   /// Cámaras de los otros planos que comparten este esquema de luz, y a
   /// qué plano lleva cada una.
   List<PlanElement> _otherCameras = const [];
@@ -470,6 +479,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Dónde está el cursor sobre la planta: ahí se pega lo copiado.
   Offset? _cursor;
   bool _middlePan = false;
+
+  /// Botón derecho (F6.22.6): arrastrar desplaza la vista; un clic sin
+  /// arrastrar abre el menú, al soltar.
+  Offset? _rightDown;
+  Offset? _rightDownCanvas;
+  bool _rightPanned = false;
   double _pinchScale = 1;
 
   /// Lo copiado, compartido entre plantas mientras dure la sesión.
@@ -926,6 +941,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _scene = scene;
       _linkedSet = linkedSet;
       _linkedSite = linkedSite;
+      _environment = FloorPlanRepository.environmentOfSet(
+        linkedSet?.floorPlanJson,
+        linkedSite?.floorPlanJson,
+      );
       _sceneColor = sceneColor;
       _navTargets = navTargets;
       _backgroundImage = bgImage;
@@ -1404,6 +1423,71 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (!mounted) return;
     setState(() => _gear = gear);
     await _addCatalogLight(light);
+  }
+
+  /// Plató, interior o exterior (y el suelo de fuera): se guarda en la
+  /// planta del set, o de la localización si no hay set (F6.21.1).
+  Future<void> _editEnvironment() async {
+    final setId = _linkedSet?.id;
+    final siteId = setId == null ? _linkedSite?.id : null;
+    if (setId == null && siteId == null) {
+      _showSnack('Esta planta no es de un set ni de una localización.');
+      return;
+    }
+    var next = _environment;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setInner) => AlertDialog(
+          title: Text(
+            'Entorno de ${_linkedSet?.locationName ?? _linkedSite?.name ?? 'la planta'}',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final kind in SetEnvironmentKind.values)
+                RadioListTile<SetEnvironmentKind>(
+                  value: kind,
+                  groupValue: next.kind,
+                  title: Text(kind.label),
+                  subtitle: Text(kind.hint),
+                  onChanged: (v) => setInner(() => next = next.copyWith(kind: v)),
+                ),
+              if (next.isExterior) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (final g in SetGround.values)
+                      ChoiceChip(
+                        label: Text(g.label),
+                        selected: next.ground == g,
+                        onSelected: (_) =>
+                            setInner(() => next = next.copyWith(ground: g)),
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await _repo.saveEnvironment(next, setId: setId, siteId: siteId);
+    if (!mounted) return;
+    setState(() => _environment = next);
   }
 
   /// Sol, cielo y rebote de paredes: se guardan con el esquema de luz.
@@ -2817,6 +2901,24 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     await _addElement(el);
   }
 
+  /// Un palio (F6.22.1): 4×4 con Grid Cloth de partida; la tela, el rebote,
+  /// la medida, la altura y la inclinación se cambian en su ficha.
+  Future<void> _addPalio() async {
+    final count = _elements.where((e) => e.type == ElementType.light).length;
+    final el = PlanElement(
+      id: 0,
+      type: ElementType.light,
+      position: Offset(300 + count * 40.0, 150),
+      lightType: LightType.diffusionFrame,
+      label: LightType.diffusionFrame.label,
+    );
+    el.props[PlanGrip.kindKey] = PlanGrip.palioKind;
+    el.props[PlanLight.modifiersKey] = ['grid-full'];
+    PlanGrip.applyFormat(el, GripFormat.palio4, _metersPerUnit);
+    el.customName = GripFormat.palio4.label;
+    await _addElement(el);
+  }
+
   /// Un fotómetro mide la luz del esquema: se guarda con él.
   Future<void> _addMeter() async {
     await _ensureLightSetup();
@@ -2892,7 +2994,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       onSelect: _selectFrom3d,
       onChanged: _changedFrom3d,
       onAdd: (el) => _addElement(el, keepPosition: true, select: false),
-      ambient: _lightSetup == null ? null : _ambient,
+      ambient: _lightSetup == null ? null : _effectiveAmbient,
+      environment: _environment,
       unrealWorld: _unrealWorld,
       onUnrealCapture: widget.shotId == null ? null : _saveUnrealCapture,
       onOpenUnreal: _openInUnreal,
@@ -4018,7 +4121,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   LightScene get _lightScene => _lightMap.scene(
     _visibleElements,
     metersPerUnit: _metersPerUnit,
-    ambient: _lightSetup == null ? null : _ambient,
+    ambient: _lightSetup == null ? null : _effectiveAmbient,
   );
 
   /// Guarda lo que se ha decidido de un recinto, con el esquema de luz.
@@ -4266,6 +4369,21 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               ),
               onPressed: _editAmbient,
             ),
+            if (_linkedSet != null || _linkedSite != null)
+              IconButton(
+                tooltip: 'Entorno: ${_environment.kind.label}',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  switch (_environment.kind) {
+                    SetEnvironmentKind.studio => Icons.videocam_outlined,
+                    SetEnvironmentKind.interior => Icons.house_outlined,
+                    SetEnvironmentKind.exterior => Icons.park_outlined,
+                  },
+                  size: 18,
+                  color: palette.textSecondary,
+                ),
+                onPressed: _editEnvironment,
+              ),
             if (_otherCameras.isNotEmpty)
               IconButton(
                 tooltip: _showOtherCameras
@@ -4832,6 +4950,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     ],
                     onAddCast: (name, color) => _addActor(color, name: name),
                     onAddLight: _addLight,
+                    onAddPalio: _addPalio,
                     onAddProp: _addProp,
                     onAddMeter: _addMeter,
                     projectLights: _gear.lights,
@@ -5020,10 +5139,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         kSecondaryMouseButton) {
                                                       _canvasFocus
                                                           .requestFocus();
-                                                      _showContextMenu(
-                                                        e.position,
-                                                        _cursor!,
-                                                      );
+                                                      _rightDown = e.position;
+                                                      _rightDownCanvas =
+                                                          _cursor;
+                                                      _rightPanned = false;
                                                     }
                                                   },
                                                   onPointerMove: (e) {
@@ -5032,12 +5151,48 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         () => _canvasOffset +=
                                                             e.delta,
                                                       );
+                                                    } else if (_rightDown !=
+                                                            null &&
+                                                        e.buttons ==
+                                                            kSecondaryMouseButton) {
+                                                      // Más de 4 px: es un
+                                                      // arrastre, no un clic.
+                                                      if (!_rightPanned &&
+                                                          (e.position -
+                                                                      _rightDown!)
+                                                                  .distance >
+                                                              4) {
+                                                        _rightPanned = true;
+                                                      }
+                                                      if (_rightPanned) {
+                                                        setState(
+                                                          () =>
+                                                              _canvasOffset +=
+                                                                  e.delta,
+                                                        );
+                                                      }
                                                     }
                                                   },
-                                                  onPointerUp: (_) =>
-                                                      _middlePan = false,
-                                                  onPointerCancel: (_) =>
-                                                      _middlePan = false,
+                                                  onPointerUp: (e) {
+                                                    _middlePan = false;
+                                                    final down = _rightDown;
+                                                    final at = _rightDownCanvas;
+                                                    _rightDown = null;
+                                                    if (down != null &&
+                                                        at != null &&
+                                                        !_rightPanned) {
+                                                      _showContextMenu(
+                                                        down,
+                                                        at,
+                                                      );
+                                                    }
+                                                    _rightPanned = false;
+                                                  },
+                                                  onPointerCancel: (_) {
+                                                    _middlePan = false;
+                                                    _rightDown = null;
+                                                    _rightPanned = false;
+                                                  },
                                                   // La rueda del ratón: zoom
                                                   // hacia el cursor.
                                                   onPointerSignal: (e) {
@@ -5137,7 +5292,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         ambient:
                                                             _lightSetup == null
                                                             ? null
-                                                            : _ambient,
+                                                            : _effectiveAmbient,
                                                         zones: _zoneDraws,
                                                         alsoSelected: _multi,
                                                         rotating: _isRotating,
@@ -5281,7 +5436,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   onSelect: _selectFrom3d,
                                   ambient: _lightSetup == null
                                       ? null
-                                      : _ambient,
+                                      : _effectiveAmbient,
+                                  environment: _environment,
                                   onChanged: _changedFrom3d,
                                   onExpand: _open3dScreen,
                                   onClose: _toggle3d,

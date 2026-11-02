@@ -109,15 +109,18 @@ class _HomeTutorialOverlayState extends State<HomeTutorialOverlay> {
             color: Colors.black.withValues(alpha: 0.45),
             dismissible: false,
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: _TourCard(
-              step: _activeSteps[_step],
-              stepIndex: _step,
-              totalSteps: _activeSteps.length,
-              onNext: _next,
-              onSkip: _dismiss,
-              isLast: _step == _activeSteps.length - 1,
+          // SafeArea: en el iPhone la barra de inicio tapaba los botones.
+          SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: _TourCard(
+                step: _activeSteps[_step],
+                stepIndex: _step,
+                totalSteps: _activeSteps.length,
+                onNext: _next,
+                onSkip: _dismiss,
+                isLast: _step == _activeSteps.length - 1,
+              ),
             ),
           ),
         ],

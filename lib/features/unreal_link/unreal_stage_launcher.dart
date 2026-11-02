@@ -39,7 +39,53 @@ class UnrealEngineInstall {
 ///
 /// Si Unreal ya está abierto, solo conecta.
 class UnrealStageLauncher extends ChangeNotifier {
-  UnrealStageLauncher({UnrealLink? link}) : link = link ?? UnrealLink.instance;
+  UnrealStageLauncher({
+    UnrealLink? link,
+    Future<List<String>> Function()? runningEditors,
+    Future<void> Function(String editor, List<String> args)? startEditor,
+  }) : link = link ?? UnrealLink.instance,
+       _runningEditors = runningEditors ?? _listRunningEditors,
+       _startEditor = startEditor ?? _detachedStart;
+
+  /// Las líneas de comando de los editores de Unreal abiertos en este PC.
+  final Future<List<String>> Function() _runningEditors;
+  final Future<void> Function(String editor, List<String> args) _startEditor;
+
+  static Future<List<String>> _listRunningEditors() async {
+    if (!Platform.isWindows) return const [];
+    try {
+      final r = await Process.run('powershell', [
+        '-NoProfile',
+        '-Command',
+        "Get-CimInstance Win32_Process -Filter \"Name like 'UnrealEditor%'\" "
+            '| ForEach-Object { \$_.CommandLine }',
+      ]);
+      return [
+        for (final line in '${r.stdout}'.split('\n'))
+          if (line.trim().isNotEmpty) line.trim(),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static Future<void> _detachedStart(String editor, List<String> args) =>
+      Process.start(editor, args, mode: ProcessStartMode.detached);
+
+  /// Si ya hay un Unreal abriendo este proyecto ([running]: las líneas de
+  /// comando de los editores abiertos), qué decir mientras se le espera;
+  /// `null` si no lo hay y hay que abrirlo (aunque haya otro proyecto
+  /// abierto: ese no es el nuestro).
+  @visibleForTesting
+  static String? alreadyOpening(List<String> running, String uproject) {
+    final file = uproject.split(RegExp(r'[/\\]')).last.toLowerCase();
+    // El nombre entero, tras una barra o una comilla: «Rodaje.uproject» no
+    // es «PruebaRodaje.uproject».
+    final ours = RegExp('(^|[/\\\\"\' ])${RegExp.escape(file)}');
+    if (!running.any((c) => ours.hasMatch(c.toLowerCase()))) return null;
+    return 'Unreal ya se está abriendo con este proyecto: esperando a que '
+        'termine…';
+  }
 
   static final instance = UnrealStageLauncher();
 
@@ -261,11 +307,19 @@ class UnrealStageLauncher extends ChangeNotifier {
       );
       await rememberProject(projectId, path);
 
-      _set(UnrealLaunchPhase.starting, 'Abriendo Unreal ${engine.version}…');
-      await Process.start(engine.editor, [
-        path,
-        ...UnrealProjectInstaller.launchFlags.split(' '),
-      ], mode: ProcessStartMode.detached);
+      // ¿Ya hay un Unreal abierto que aún no responde (la primera vez
+      // compila sombreadores varios minutos)? Se espera a ese: abrir otro
+      // solo duplica editores.
+      final already = alreadyOpening(await _runningEditors(), path);
+      if (already != null) {
+        _set(UnrealLaunchPhase.waiting, already);
+      } else {
+        _set(UnrealLaunchPhase.starting, 'Abriendo Unreal ${engine.version}…');
+        await _startEditor(engine.editor, [
+          path,
+          ...UnrealProjectInstaller.launchFlags.split(' '),
+        ]);
+      }
 
       final watch = Stopwatch()..start();
       while (watch.elapsed < maxWait) {
@@ -287,7 +341,8 @@ class UnrealStageLauncher extends ChangeNotifier {
           null,
           fail:
               'Unreal no ha terminado de abrirse. Si ves su ventana, espera a '
-              'que acabe y pulsa «Abrir en Unreal» otra vez.',
+              'que acabe y pulsa «Abrir en Unreal» otra vez: IRIS se conecta '
+              'a ese, no abre otro.',
         );
         return false;
       }

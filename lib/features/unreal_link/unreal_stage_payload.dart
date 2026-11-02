@@ -131,13 +131,25 @@ class UnrealStagePayload {
       'id': c['id'],
       'name': c['name'],
       'loc': loc([at[0], at[1], z]),
-      'rot': rotToward(
-        (dir[0] as num).toDouble(),
-        (dir[1] as num).toDouble(),
-        0,
-      ),
+      // Paneo de la planta, inclinación (pitch) y giro sobre su eje (roll).
+      'rot': [
+        _r(((c['tiltDeg'] ?? 0) as num).toDouble()),
+        rotToward(
+          (dir[0] as num).toDouble(),
+          (dir[1] as num).toDouble(),
+          0,
+        )[1],
+        _r(((c['rollDeg'] ?? 0) as num).toDouble()),
+      ],
       'focalMm': _r(sensor / (2 * math.tan(hfov / 2))),
       'sensorMm': _r(sensor),
+      // La exposición y el foco de la cámara de rodaje (F6.22.4).
+      if (c['tStop'] != null) 'tStop': _r((c['tStop'] as num).toDouble()),
+      if (c['iso'] != null) 'iso': (c['iso'] as num).toDouble(),
+      if (c['shutterS'] != null) 'shutterS': (c['shutterS'] as num).toDouble(),
+      if (c['nd'] != null) 'nd': (c['nd'] as num).toDouble(),
+      if (c['focusM'] != null)
+        'focusCm': _r((c['focusM'] as num).toDouble() * 100),
       'asset': ?c['asset'],
     };
   }
@@ -178,6 +190,68 @@ class UnrealStagePayload {
       'rot': rotToward(math.sin(rad), math.cos(rad), 0),
       'lengthCm': ?(a['lengthM'] == null ? null : _r((a['lengthM'] as num) * 100)),
       'asset': a['asset'],
+    };
+  }
+
+  /// Un panel de grip (F6.22.2): un bloque fino a su tamaño y altura, del
+  /// color de su tela, que tapa la luz que tiene detrás.
+  static Map<String, dynamic>? gripPanel(Map g) {
+    final at = g['at'] as List?;
+    if (at == null) return null;
+    final rad = ((g['yawDeg'] ?? 0) as num) * math.pi / 180;
+    final tilt = ((g['tiltDeg'] ?? 0) as num).toDouble();
+    var bottom = ((g['bottom'] ?? 0) as num).toDouble();
+    var top = ((g['top'] ?? 2.5) as num).toDouble();
+    if (tilt >= 1) {
+      // Inclinado: el bloque gira sobre su centro, a la altura del centro.
+      final h = ((g['heightM'] ?? (top - bottom)) as num).toDouble();
+      final c = ((g['centreM'] ?? (top + bottom) / 2) as num).toDouble();
+      bottom = c - h / 2;
+      top = c + h / 2;
+    }
+    final facing = rotToward(math.sin(rad), math.cos(rad), 0);
+    return {
+      'id': g['id'],
+      'name': g['name'],
+      'type': 'grip',
+      'loc': loc([at[0], at[1], ((g['z0'] ?? 0) as num) + bottom]),
+      // Se inclina hacia su cara delantera: cabecea sobre su ancho.
+      'rot': [_r(tilt), facing[1], 0.0],
+      // Fondo (el grosor), ancho y alto.
+      'sizeCm': [
+        3.0,
+        _r(((g['widthM'] ?? 1) as num) * 100),
+        _r((top - bottom) * 100),
+      ],
+      'rgb': g['rgb'],
+    };
+  }
+
+  /// La luz que sale de una tela o un rebote, como RectLight de su tamaño,
+  /// 5 cm por delante de la tela para que la tela no la tape.
+  static Map<String, dynamic>? softLight(Map s) {
+    final pos = s['pos'] as List?, dir = s['dir'] as List?;
+    if (pos == null || dir == null) return null;
+    double n(Object? v) => (v as num).toDouble();
+    final dx = n(dir[0]), dy = n(dir[1]), dz = n(dir[2]);
+    final w = _r(n(s['widthM'] ?? 1) * 100), h = _r(n(s['heightM'] ?? 1) * 100);
+    return {
+      'id': s['id'],
+      'name': s['name'],
+      'kind': 'rect',
+      'loc': loc([
+        n(pos[0]) + dx * 0.05,
+        n(pos[1]) + dy * 0.05,
+        n(pos[2]) + dz * 0.05,
+      ]),
+      'rot': rotToward(dx, dy, dz),
+      'cd': _r(n(s['cd'] ?? 0)),
+      'cct': _r(n(s['cct'] ?? 5600)),
+      'on': true,
+      'widthCm': w,
+      'heightCm': h,
+      'sizeCm': math.max(w, h),
+      'reachCm': 3000.0,
     };
   }
 
@@ -253,6 +327,8 @@ class UnrealStagePayload {
       'props': [
         for (final p in (scene['props'] as List? ?? const []).cast<Map>())
           ?prop(p),
+        for (final g in (scene['grip'] as List? ?? const []).cast<Map>())
+          ?gripPanel(g),
       ],
       'assets': [
         for (final a in (scene['assets'] as List? ?? const []).cast<Map>())
@@ -267,17 +343,26 @@ class UnrealStagePayload {
       'lights': [
         for (final f in (scene['fixtures'] as List? ?? const []).cast<Map>())
           ?light(f),
+        for (final s in (scene['soft'] as List? ?? const []).cast<Map>())
+          ?softLight(s),
       ],
       'cameras': [
         for (final c in (scene['cameras'] as List? ?? const []).cast<Map>())
           ?camera(c),
       ],
       'sun': sunNow,
+      'environment': ?scene['environment'],
+      // Niebla o humo (F6.21.2); sin ella, `null` la quita.
+      'fog': scene['fog'],
       // Exposición fija con la cámara de IRIS (F6.21.4): sin ella Unreal se
       // autoexpone y un foco al 50 % se ve casi como al 100 %.
       'exposure': ?exposure(scene['exposure'] as Map?),
-      // De día, cielo físico (SkyAtmosphere y SkyLight) con el sol.
-      'sky': sunNow == null ? null : {'scale': 1.0},
+      // De día, cielo físico (SkyAtmosphere y SkyLight) con el sol; en un
+      // plató, nunca (F6.21.1).
+      'sky': sunNow == null ||
+              (scene['environment'] as Map?)?['kind'] == 'studio'
+          ? null
+          : {'scale': 1.0},
     };
   }
 
@@ -318,12 +403,17 @@ class UnrealStagePayload {
         jsonEncode(before['sky']) != jsonEncode(now['sky']);
     final exposureChanged =
         jsonEncode(before['exposure']) != jsonEncode(now['exposure']);
+    final fogChanged = jsonEncode(before['fog']) != jsonEncode(now['fog']);
+    final environmentChanged =
+        jsonEncode(before['environment']) != jsonEncode(now['environment']);
     final structureChanged =
         jsonEncode(before['structure']) != jsonEncode(now['structure']);
     if (kinds.every((k) => (out[k] as List).isEmpty) &&
         remove.isEmpty &&
         !sunChanged &&
         !exposureChanged &&
+        !environmentChanged &&
+        !fogChanged &&
         !structureChanged) {
       return null;
     }
@@ -332,6 +422,12 @@ class UnrealStagePayload {
       if (remove.isNotEmpty) 'remove': remove,
       if (sunChanged) ...{'sun': now['sun'], 'sky': now['sky']},
       if (exposureChanged) 'exposure': now['exposure'],
+      if (fogChanged) 'fog': now['fog'],
+      if (environmentChanged) ...{
+        'environment': now['environment'],
+        'sun': now['sun'],
+        'sky': now['sky'],
+      },
       if (structureChanged) 'structure': now['structure'],
     };
   }

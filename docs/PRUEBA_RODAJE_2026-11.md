@@ -46,6 +46,17 @@ Necesitas un escaneo real. En RealityScan (o Polycam) en el iPhone, exporta en *
 - [ ] **En otro equipo.** Abre el mismo proyecto en el Mac o el iPad, después de sincronizar: el escaneo aparece sin volver a importarlo (puede tardar lo que tarde en bajar).
 - [ ] **Un escaneo de antes.** Si tenías uno importado antes de hoy, ábrelo una vez en el PC: a partir de ahí también viaja.
 
+### 3b · Captura guiada con el iPhone (rama `plan/f6-20-e-escaneo`)
+
+- [ ] **Capturar.** En el iPhone: Planta → 3D → «Capturar localización con el iPhone». Recorre la sala despacio, a dos alturas.
+  - Las fotos se hacen solas y el contador sube.
+  - Comprueba que avisa: gira deprisa («Más despacio»), apunta a una pared lisa («Acércate») y apaga la luz («Poca luz»).
+  - El anillo se pone verde por donde ya has pasado.
+- [ ] **Pasarla al PC.** «Terminar» abre la hoja de compartir con el `.zip`: mándalo por iCloud Drive, OneDrive o Google Drive.
+- [ ] **Escaneo.** En el PC: 3D → «Crear escaneo desde fotos o vídeo» → «Captura del iPhone» → el `.zip` → «Crear escaneo». Al terminar dice «En metros reales».
+- [ ] **Medida.** Mide una pared con un metro y con «Medir» en el 3D, sin calibrar: debe coincidir con un margen de unos 2 cm por metro. Anota las dos medidas.
+- [ ] **Paredes.** «Proponer paredes» a 1 m: deben caer sobre las paredes reales.
+
 ## 4 · Escaneo y luces en Unreal (PR #60)
 
 En el PC, con Unreal 5.5. Sigue también `docs/PRUEBA_IRIS_STAGE.md`.
@@ -159,6 +170,103 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
 - [ ] **La luz.** Un foco fuera de la ventana entra por el hueco y las paredes dan sombra (Render RTX).
 - [ ] **La mesa en Unreal.** Llega como un bloque de 160 × 90 × 80, girado como en la planta.
 - [ ] **Anota** si alguna pieza de la estructura sale en otro sitio o con otro giro: sería el importador de glTF de Unreal, y se corrige con ese dato.
+
+## 13 · Plató, interior o exterior (F6.21.1)
+
+- [ ] **El botón.** En la planta de un set, junto al sol y la luna de la barra, hay un botón **Entorno** (cámara, casa o árbol). Elige **Plató**.
+- [ ] **El fotómetro en plató.** Con un esquema de día, la lectura ya no incluye el sol ni el cielo: solo los focos. En «Qué aporta cada fuente» no sale el sol.
+- [ ] **El 3D en plató.** Fondo negro y suelo gris; con «Luz real», solo alumbran los focos.
+- [ ] **Exterior.** Cambia a **Exterior · Asfalto**: el 3D tiene fondo de cielo (de día) y un suelo gris oscuro grande, con el sol del esquema.
+- [ ] **Se guarda.** Cierra y abre la planta: sigue con su entorno. En otro equipo, tras sincronizar, también.
+- [ ] **Unreal.** Con IRIS Stage (tras «Abrir en Unreal» y reiniciar Unreal):
+  - **Plató:** sin sol, cielo ni atmósfera, y el suelo gris;
+  - **Exterior:** el suelo del terreno hasta el horizonte, con cielo y sol;
+  - **Interior:** como antes.
+
+## 14 · Niebla y humo (F6.21.2)
+
+- [ ] **El control.** En una planta con esquema de luz, abre el botón del sol o la luna (Ambiente). Abajo sale **Niebla**, de 0 a 100 %, y al subirla, el tipo: **Bruma**, **Humo** o **Niebla exterior**.
+- [ ] **En el 3D.** Sube la bruma al 40 %: la escena se espesa y los conos de los focos se ven más. Al 0 % vuelve a estar limpia.
+- [ ] **Humo y exterior.** El humo es más denso; la niebla exterior se nota sobre todo a lo lejos.
+- [ ] **Se guarda con el esquema.** Otro esquema de luz del mismo set puede llevar otra niebla.
+- [ ] **Unreal.** Con IRIS Stage (tras «Abrir en Unreal» y reiniciar Unreal):
+  - aparece **IRIS_Niebla**, y los haces de los focos se ven en el aire (Render RTX);
+  - subir o bajar la niebla en IRIS cambia Unreal al momento;
+  - a 0 % desaparece.
+
+## 15 · Navegar como en Unreal (F6.22.6)
+
+- [ ] **Planta 2D.** Arrastra con el botón derecho: la planta se desplaza y no sale ningún menú. Un clic derecho sin arrastrar abre el menú de siempre (copiar, pegar…).
+- [ ] **3D.**
+  - Haz clic una vez dentro del 3D. Con el **botón derecho pulsado**, mueve el ratón para mirar y usa **W A S D** para moverte; **Q** y **E** bajan y suben.
+  - La rueda, con el derecho pulsado, cambia la velocidad, y **Mayúsculas** corre.
+  - Al soltar, la vista se queda donde estás y se puede girar como antes.
+- [ ] **El ajuste.** En **Ajustes → Plantas**, apaga **«3D como Unreal»** y vuelve a abrir el 3D: el botón derecho vuelve a desplazar como antes.
+- [ ] **Anota** si las teclas no responden. En Windows, el 3D necesita tener el foco: haz clic dentro antes.
+
+## 16 · Marcos, palios y difusión (F6.22.1–22.2)
+
+> **Corregido tras la primera prueba (2026-10-31):**
+> - el palio de rebote salía con un foco dentro; ahora el grip va solo como panel;
+> - **Palio** y **Marco de difusión** van aparte:
+>   - el **Palio** está en la paleta, en «Grip · Difunde y filtra». Mide 2×2 a 6×6 y lleva **Tela o rebote** (Grid Cloth, seda… o Cinebounce, Ultrabounce, griffolyn);
+>   - el **Marco de difusión** mide 1×1 o 2×1 y solo difumina, con gelatina opcional;
+> - IRIS Stage Link no cargaba en Unreal, por un fallo del script.
+
+- [ ] **Formato.** Pon un **Marco de difusión** en la planta. En su ficha, en **Formato**, elige **Marco 2×1**: mide 2 m de ancho y 1 de alto. Cambia a **Palio 4×4**.
+- [ ] **Medidas.** **Alto** y **Altura del centro** suben y bajan la tela. En el alzado se ve a su altura.
+- [ ] **Telas.** **Tela:** Grid Cloth, ½ o ¼, sedas. En un marco (no en un palio) sale también **Gelatina**: un CTO tiñe la luz que sale.
+- [ ] **Rebote como palio.** Un **Rebote** con Formato **Palio 3×3** y Material **Cinebounce**.
+- [ ] **Fotómetro.** Un foco detrás de la tela, apuntando a un actor. Cambia de ¼ Grid Cloth a Grid Cloth full: la lectura del actor baja. En «Qué aporta cada fuente» sale la tela.
+- [ ] **El 3D.**
+  - La tela se ve como un panel blanco translúcido a su tamaño y el negro como uno negro.
+  - El negro da **sombra** en el actor y el suelo.
+  - Con «Luz real», la luz que sale de la tela ilumina al actor, más baja con más difusión.
+- [ ] **Unreal.**
+  - Los paneles llegan a su tamaño, altura y giro, negros, blancos o del color de la tela.
+  - Delante de cada tela hay una **RectLight** de su tamaño con la luz que deja pasar.
+  - Al cambiar la tela en IRIS, cambia su intensidad en Unreal.
+- [ ] **Paneo e inclinación.** En la ficha del palio, **Paneo** lo gira y **Inclinación** lo tumba. A 90° queda **horizontal, sobre las cabezas**.
+- [ ] **Palio al sol.**
+  - Un exterior de día con sol alto, un actor y un **Palio 4×4** a 90° con el centro a 3 m sobre él.
+  - Con **Grid Cloth full**, la lectura del actor baja y el sol directo desaparece de «Qué aporta cada fuente»: sale la luz de la tela.
+  - Con un **negro** (Negro con Inclinación 90°), la lectura baja mucho más.
+- [ ] **Palio inclinado ante un foco.** Inclínalo 45°: la luz de la tela sale hacia abajo y hacia delante, y cambia con el ángulo.
+- [ ] **3D y Unreal.** El palio se ve tumbado, a su altura y con su giro, en el 3D y en Unreal. Su luz cae hacia abajo (RectLight mirando al suelo).
+- [ ] **Anota** si en Unreal se inclina hacia el lado contrario que en IRIS: sería el signo del giro, y se corrige con ese dato.
+
+## 17 · La exposición del actor con grip (F6.22.3)
+
+- [ ] **Tela entre el foco y el actor.** Un fresnel a 3 m de un actor y un marco de difusión de 2×2 a mitad de camino. La lectura del actor ahora **baja**:
+  - ¼ Grid Cloth: más o menos 1 stop;
+  - ½ Grid Cloth: más o menos 1,5 stops;
+  - Grid Cloth full: más o menos 2,5 stops.
+
+  Antes la ¼ podía dar más luz que sin tela.
+- [ ] **Negro.** Un negro en el mismo sitio: la lectura cae casi del todo.
+- [ ] **Rebote de lado.** Detrás del actor y a un lado, de cara al foco: la lectura del actor sube un poco.
+- [ ] **En el 3D («Luz real»).** La cara del actor se oscurece al poner la tela o el negro, y más con Grid Cloth full que con ¼.
+- [ ] **Anota** cualquier lectura que no te cuadre con lo que verías en el set, con las medidas y la distancia: es el dato para afinar el motor.
+
+## 18 · La cámara en Unreal (F6.22.4)
+
+- [ ] **Ficha de la cámara.** Selecciona una cámara: salen **Altura del objetivo**, **Paneo**, **Inclinación**, **Giro (holandés)** y **Foco**. Ponla a 1,20 m, −10°, foco 2,5 m.
+- [ ] **En el 3D.** La cámara se ve a esa altura y mirando un poco hacia abajo. «Ver por la cámara» mira igual.
+- [ ] **En Unreal** (tras «Abrir en Unreal» y reiniciar Unreal):
+  - la CineCamera de IRIS está a 1,20 m, inclinada −10° y con 5° de giro si se lo pones;
+  - tiene el 35 mm a T2.8, el foco manual a 250 cm, y el ISO y el obturador en su posproceso.
+- [ ] **Profundidad de campo.** «Ver por la cámara» en Unreal: cambia el diafragma de trabajo en IRIS (T1.4, T8) y la profundidad de campo cambia.
+- [ ] **De vuelta.** Inclina la cámara en Unreal: en la ficha de IRIS cambia la inclinación.
+- [ ] **Foco automático.** Sin foco propio (deslizador del todo a la izquierda), enfoca al actor que tiene delante.
+
+## 19 · Luz o Claro en el 3D (F6.22.5)
+
+- [ ] **El selector.** En el panel del 3D, en «Qué se ve», hay un selector **Luz · EV n | Claro**.
+- [ ] **Luz.** El set se ve solo con la luz de los focos, las telas y los rebotes, a la exposición de la cámara: lo que no alumbra ningún foco queda oscuro.
+- [ ] **Claro.**
+  - Todo se ve con una luz pareja, sin sombras, y salen los **nombres** de cada foco, marco, palio y actor.
+  - Los conos siguen visibles para ver hacia dónde apunta cada foco.
+- [ ] **Al cambiar,** el 3D pasa de una a otra al momento; en Unreal no cambia nada.
 
 ## 8 · Pendiente (no está en estas ramas)
 

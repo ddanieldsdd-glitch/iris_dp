@@ -49,6 +49,15 @@ class CameraPlanSettingsSection extends StatelessWidget {
               scope: scope,
               title: 'Lecturas bajo cada actor',
             ),
+            PrefSwitchRow(
+              pref: PlanPrefs.unrealNav,
+              scope: scope,
+              title: '3D como Unreal',
+              subtitle:
+                  'Botón derecho pulsado: mirar con el ratón y moverse con '
+                  'W A S D (Q y E, bajar y subir; la rueda, la velocidad). '
+                  'Apagado: girar alrededor como antes',
+            ),
           ],
         ),
         const SizedBox(height: AppSpacing.lg),

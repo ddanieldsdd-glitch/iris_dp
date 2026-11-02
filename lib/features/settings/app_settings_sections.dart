@@ -107,7 +107,16 @@ List<SettingsSectionSpec> appSettingsSections() => [
         'Cómo se abre la planta y con qué valores empiezan las cámaras y los '
         'esquemas de luz.',
     prefKeys: PlanPrefs.all,
-    keywords: const ['imán', 'exposición', 'iso', 'luz', 'ambiente'],
+    keywords: const [
+      'imán',
+      'exposición',
+      'iso',
+      'luz',
+      'ambiente',
+      'navegación',
+      'wasd',
+      'unreal',
+    ],
     builder: (context, scope) => CameraPlanSettingsSection(scope: scope),
   ),
   SettingsSectionSpec(

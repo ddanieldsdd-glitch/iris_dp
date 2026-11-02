@@ -553,7 +553,7 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 **F6.12.2 Recortar y limpiar** · Mac
 - **Qué:** caja de recorte y borrador del escaneo, guardados con el escaneo.
 
-**F6.12.3 Del escaneo a la planta** · Mac · **en curso** (`plan/f6-12-escaneos-rodaje`: cenital a escala como fondo de la planta; falta proponer paredes)
+**F6.12.3 Del escaneo a la planta** · Mac · **hecho** (cenital a escala como fondo de la planta; paredes propuestas con F6.20 E4)
 - **Qué:** vista cenital y corte a 1 m como fondo de la planta para calcar, y propuesta de paredes detectadas.
 
 **F6.12.4 Luz sobre el escaneo** · Mac · **en curso** (`plan/f6-12-escaneos-rodaje`: con un escaneo, cuatro focos dan sombra y el escaneo la recibe; sin malla simplificada todavía)
@@ -897,7 +897,53 @@ Plan aprobado por Daniel el 2026-10-27. Un PR por fase, en ramas que salen de `p
 | B5 | Biblioteca de Unreal (`UnrealLibrary`): lo usado y lo encontrado, con miniatura, origen y medidas; favoritos; búsqueda sin Unreal; «Buscar en Unreal» y «Hacer las miniaturas que faltan»; «Poner en la planta» crea el elemento del tipo que dice el nombre (o un actor si es un personaje) con medidas y asset. Viaja con `user_settings`. En IRIS Stage y en la barra de la planta | en curso (PR 6) |
 | C1–C4 | IRIS Stage como lista de seis pasos, tutorial y guía | en curso (`plan/pulido-rodaje`): la guía de seis pasos con su estado y botón (`unreal_stage_steps.dart`) y quitar de la biblioteca con constancia. Falta la miniatura del esquema de luz con colores y nombres |
 | D1–D4 | Buscar en Fab y Quixel desde IRIS, recogida automática, tejidos y packs de partida | en curso (`plan/f6-20-d-fab-quixel`): D1 «Buscar en Fab» y «Megascans» abren la búsqueda en el navegador (Fab no tiene API pública); D2 `FindFabAssets` recoge lo bajado a `/Game/Fab` y `/Game/Megascans` al abrir la biblioteca, al volver a IRIS y con «Recoger de Fab»; D4 «Packs de partida» (búsquedas para vestir un set). Falta D3: tejidos y superficies de Fab en paredes y suelo |
-| E1–E5 | RealityScan/RealityCapture sin interfaz: de vídeo a malla, ortofoto y paredes propuestas, con ida y vuelta | en curso: el escaneo exportado (GLB/OBJ) se importa, viaja por la nube, da la cenital de fondo, recibe sombras y llega a Unreal (`scans` en IRIS Stage, importado a `/Game/IRIS/Scans`). Falta la captura sin interfaz y las paredes propuestas |
+| E1–E6 | RealityScan/RealityCapture sin interfaz: de vídeo a malla, ortofoto y paredes propuestas, con ida y vuelta; y captura guiada en el iPhone | en curso (detalle abajo): E1, E2 y E4 hechos y probados con RealityScan 2.2; E6, la captura del iPhone en metros, hecha en el PC y sin probar en el iPhone. Faltan la ortofoto, las dianas (E3) y probar E5 en Unreal |
+
+### F6.20 E · Localización desde fotos o vídeo (detalle)
+
+Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el motor principal y da una **malla**, que es la que recibe la luz de los focos, da sombra, tiene medidas y sirve a Lumen y a las colisiones. Los **gaussian splats** (Postshot, Scaniverse, Polycam) quedan como capa visual opcional: se ven mejor, pero llevan la luz del escaneo incrustada y no reaccionan a los focos. Para el rodaje del 13 de noviembre no se toca código: vale el flujo manual (GLB con texturas, «Importar escaneo»).
+
+**E1 Entrada de fotos o vídeo** · PC · **hecho** (`plan/f6-20-e-escaneo`: `scan_builder.dart`, botón «Crear escaneo desde fotos o vídeo» en el 3D. Con ffmpeg se descartan los fotogramas movidos; sin él, el vídeo lo trocea RealityScan con `-importVideo`. RealityScan se encuentra por los manifiestos del Epic Games Launcher, en cualquier disco, o se elige a mano)
+- **Qué:** «Nueva localización desde fotos o vídeo» en IRIS Stage. Admite una carpeta de fotos o un vídeo.
+- **Cómo:** del vídeo se sacan 2–3 fotogramas por segundo con ffmpeg y se descartan los movidos con una medida de nitidez (varianza del laplaciano). Se avisa si hay pocas fotos o poco solape.
+
+**E2 RealityScan sin interfaz** · PC · **hecho, probado con RealityScan 2.2** (`plan/f6-20-e-escaneo`, 2026-11-02, 72 fotos sintéticas de una habitación: 107 s). Comandos comprobados con su ayuda (`Help\en-US\appbasics\allcommands.htm`). Sin diálogos (`-silent`), sale si falla y apunta el progreso (`-writeProgress`, que el diálogo enseña con la fase y lo que queda). Dos GLB con la textura dentro (`realityScanExportXml`, `embedTextures="1"` en JPG): 8K para Unreal y 4K para IRIS (13 MB en la prueba). El suelo queda a 0 (`-setGroundPlaneFromReconstructionRegion`) y IRIS pasa el GLB de Z arriba a Y arriba (`scan_glb.dart`). Falta la ortofoto de RealityScan
+- **Qué:** IRIS lanza RealityScan por línea de comandos (alinear, malla, simplificar, texturizar, exportar) con progreso y cancelación, sin abrir su ventana.
+- **Salidas:**
+  - malla alta para Unreal: FBX o GLB con Nanite y texturas de 8K, importada a `/Game/IRIS/Scans`;
+  - malla ligera para IRIS: GLB de 300–500 mil triángulos con texturas de 4K, por debajo de los 50 MB de `PlanScanStore`;
+  - ortofoto cenital a escala conocida (píxeles por metro), que sustituye a la cenital calculada como fondo de la planta.
+- **Ojo:** comprobar los nombres de los comandos (`-addFolder`, `-align`, `-calculateNormalModel`, `-calculateTexture`, `-exportModel`, ortoproyección) con la referencia de la versión instalada.
+
+**E3 Escala y orientación** · todos · **en parte** (con la captura del iPhone, E6, sale en metros sola. Para fotos o vídeo de otra cámara: la escala con una medida ya existe, `PlanScan.calibrate`, y el suelo y la vertical salen de RealityScan; sin dianas ni GPS el escaneo sale a una escala cualquiera, unas 4,6 veces en la prueba. Faltan las dianas para cámaras de cine: `-detectMarkers` y `-defineDistance`)
+- **Qué:** sin una medida real el escaneo no sirve para la planta. La escala se fija con dianas impresas de RealityScan a una distancia conocida o, si no hay, metiendo a mano una medida entre dos puntos. El norte y las coordenadas salen de F6.12.6.
+
+**E4 Paredes propuestas** · todos · **hecho** (probado con el corte de una malla real de RealityScan: la habitación de 4 × 3 da sus cuatro paredes) (`plan/f6-20-e-escaneo`: «Proponer paredes» en el 3D con un escaneo seleccionado; `iris.scanSlice` corta la malla, `scan_walls.dart` saca las paredes, une las dos caras de una pared y parte en las puertas; altura del corte ajustable)
+- **Qué:** IRIS corta la malla ligera a 1 m de altura, detecta tramos rectos y los propone como paredes de la planta, que se aceptan o se descartan una a una.
+
+**E5 Ida y vuelta y splats** · todos · **en parte, sin probar en Unreal** (`plan/f6-20-e-escaneo`: la malla alta se guarda como `<escaneo>_ue.glb` en la carpeta local de escaneos, sin viajar por la nube, y Unreal la prefiere al importar; los PLY de gaussian splats se ven como nube de puntos con su color. Los splats de verdad esperan al visor moderno con Spark de F6.12.1, porque el visor usa three r147)
+- **Qué:** el resultado entra solo en el proyecto, viaja por la nube y llega a Unreal como hoy `scans`. Opcional: un splat del mismo material como capa visual, en el visor (F6.12.1, Spark) y en Unreal con un plugin de splats.
+
+**Protocolo de captura** (va también a la guía de IRIS Stage):
+- Mejor fotos que vídeo: exposición, balance de blancos y foco en manual. Si es vídeo: 4K, obturación de 1/250 o más rápida, movimiento lento y sin estabilización digital.
+- Luz plana (día nublado, o interior con todo encendido y sin sol directo), para que la textura salga casi sin sombras y no compita con los focos del ensayo.
+- Solape del 70–80 %: anillos a dos o tres alturas, más tomas a las esquinas y al techo. Cristales, espejos y paredes lisas fallan: taparlos o poner cinta de carrocero.
+- Dos dianas o una medida conocida en cada sala.
+- Interior grande: unas 200–600 fotos. Exterior: dron o mástil para la cenital.
+- El iPhone con LiDAR (RealityScan móvil, Polycam, Scaniverse) sirve para salir del paso con buena escala; la calidad para Unreal sale del PC.
+- Sitios oscuros (bares, neones): luces de trabajo encendidas y exposición bloqueada. Con solo neón de color, la textura cambia de una foto a otra y RealityScan alinea mal.
+
+**E6 Captura guiada en el iPhone** · iPhone, iPad · **hecho en el PC, sin probar en el iPhone** (`plan/f6-20-e-escaneo`, pedido por Daniel el 2026-11-02 tras la prueba de La Rouge desde vídeo: poco detalle y escala cualquiera)
+- **Qué:** desde IRIS en el iPhone, «Capturar localización con el iPhone» en el 3D. Se recorre el sitio y las fotos se hacen solas, cada 15 cm o 12°. La app avisa de lo que falta:
+  - un anillo de 360° con las direcciones ya fotografiadas desde ahí;
+  - un minimapa con el recorrido, los puntos vistos y las paredes detectadas;
+  - avisos de «Más despacio», «Poca luz», «Seguimiento perdido», «Acércate» y «Sube y baja el móvil».
+- **Cómo:** ARKit con seguimiento visual-inercial, que funciona sin LiDAR (el iPhone 16 de Daniel no lo tiene), da la posición de cada foto en metros y con la gravedad.
+  - `ios/Runner/IrisCapturePlugin.swift` (canal `iris/capture`) deja una carpeta `.iriscapture` con las fotos y `capture.json`, y la comparte en `.zip`.
+  - En el PC, «Crear escaneo» → «Captura del iPhone»: `scan_capture.dart` escribe junto a cada foto el XMP de RealityScan (`xcr:PosePrior="initial"`, `Help\en-US\tools\xmpalign.htm`), y el escaneo sale en metros, nivelado y sin calibrar.
+- **Probado** con una captura sintética en la convención de ARKit (72 fotos con ruido de 1,5 cm y 1°) por el flujo entero con RealityScan 2.2: el escaneo mide 4,00 × 3,00 m y «Proponer paredes» da 3,98, 3,97, 2,99 y 2,97 m sin calibrar.
+- **Falta:** probarlo en el iPhone (el Swift no se ha podido compilar en Windows: lo compila el workflow del .ipa). Después: envío directo al PC por la red local y planta rápida en el iPhone con los planos de ARKit.
+- **Descartado: LingBot-Map** (Robbyant, 2026). Tampoco da metros (el paper dice que la escala monocular es ambigua y la fija con los primeros fotogramas), solo da poses, profundidad y puntos (sin malla ni textura) y es Linux con CUDA. Lo que aporta, reconstruir en tiempo real, no hace falta para localizar.
 
 ## F6.21 · Ensayos de luz fieles en IRIS y en Unreal
 
@@ -925,6 +971,20 @@ Pedido por Daniel el 2026-10-31. Objetivo: que un esquema de luz ensayado en IRI
 
 ### F6.21.1 · Tipo de entorno al crear el set · todos
 
+**Estado:** en curso (`plan/f6-21-1-entorno`).
+- **Hecho:**
+  - **Plató, Interior o Exterior** (con suelo de hierba, tierra, asfalto u hormigón), elegido con el botón «Entorno» de la barra de la planta;
+  - se guarda en la planta del set (o de la localización) y viaja con ella; sin elegir, es Interior, lo de siempre;
+  - **en plató:**
+    - el fotómetro no cuenta ni el sol ni el cielo, aunque el esquema sea de día;
+    - el 3D va con fondo negro y suelo gris, sin cielo;
+    - Unreal apaga el sol y el cielo, quita la atmósfera y pone el suelo gris;
+  - **en exterior:** fondo de cielo, el suelo del terreno hasta el horizonte (2 km en Unreal) y el sol y el cielo del esquema.
+- **Falta:**
+  - elegirlo al crear el set en Localizaciones;
+  - nubes volumétricas;
+  - el ciclorama de plató (F6.18).
+
 - **Qué:**
   - al crear un set (o en su ficha), y en el diálogo «Abrir en Unreal», se elige **Plató** o **Exterior (naturaleza)**;
   - después se puede cambiar; se guarda en el set (`props` de la planta del set) y viaja con el proyecto.
@@ -939,6 +999,15 @@ Pedido por Daniel el 2026-10-31. Objetivo: que un esquema de luz ensayado en IRI
 - **Hecho cuando:** crear un set de plató y otro de exterior y abrir los dos en Unreal da dos niveles distintos, y la lectura del fotómetro en plató solo depende de los focos.
 
 ### F6.21.2 · Niebla y humo, con cantidad · todos (cierra F6.9.1 y F6.9.1b)
+
+**Estado:** en curso (`plan/f6-21-2-niebla`).
+- **Hecho:**
+  - en el ambiente del esquema de luz: **Niebla** de 0 a 100 %, de tipo Bruma, Humo o Niebla exterior, que viaja con el esquema;
+  - en el 3D, niebla (FogExp2, clara de día y oscura de noche o en plató), y los haces de los focos se ven más cuanto más niebla;
+  - en Unreal, ExponentialHeightFog con niebla volumétrica, más densa y pegada al suelo en el humo y por distancia en la exterior, que se quita al ponerla a 0.
+- **Falta:**
+  - el humo localizado (volúmenes por zona, F6.9.1c);
+  - la pérdida de luz por la bruma en el fotómetro.
 
 - **Qué:**
   - en el esquema de luz, un control **«Niebla»** de 0 a 100 %, más el tipo:
@@ -1064,6 +1133,20 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 
 ### F6.22.1 · Marcos y palios, distintos · todos
 
+**Estado:** en curso (`plan/f6-22-1-palios`).
+- **Hecho:**
+  - en la ficha del marco de difusión y del rebote, **Formato**: Marco 1×1 o 2×1 (solo difusión), o Palio 2×2, 3×3, 4×4 o 6×6;
+  - **Ancho**, **Alto** y **Altura del centro** para todo el grip;
+  - el marco admite además una **gelatina**, que tiñe lo que sale;
+  - sin medidas propias, el grip mide como antes.
+- **Hecho después:**
+  - **Paneo** e **Inclinación** (de 0°, vertical, a 90°, horizontal sobre las cabezas) en marcos, palios, rebotes y negros;
+  - inclinados, el motor de luz los calcula como paneles en 3D (intersección exacta del rayo con la tela): tapan la luz que les cae, también la del sol, y la sueltan por la otra cara según el ángulo con que les llega; si sale hacia abajo, cae como un aparato colgado;
+  - el 3D y Unreal los inclinan igual.
+- **Falta:**
+  - el dibujo de su sombra en la planta 2D (los haces de la planta aún no la recortan, aunque el fotómetro y el mapa de exposición sí);
+  - entradas «Marco» y «Palio» propias en la paleta.
+
 - **Marco:**
   - 1×1 o 2×1 m, de madera;
   - lleva una **gelatina** (corrección o color) o una **tela de difusión** dentro.
@@ -1076,6 +1159,16 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 - **Hecho cuando:** se pone un palio de 4×4 con Grid Cloth sobre dos actores, se cambia a seda, y la ficha, la planta y el fotómetro cambian.
 
 ### F6.22.2 · La difusión y el corte, iguales en la planta, el 3D y Unreal · todos
+
+**Estado:** en curso (`plan/f6-22-1-palios`).
+- **Hecho:**
+  - negros, cortes, rebotes, marcos, palios, redes y gelatinas llegan al 3D y a Unreal como **paneles a su tamaño y altura**, del color de su tela, y **dan sombra**;
+  - la luz que sale de cada tela y cada rebote es la que calcula el motor de luz, la del fotómetro;
+  - esa luz va al 3D como fuente blanda y a Unreal como **RectLight** de su tamaño, 5 cm por delante de la tela;
+  - más difusión da menos luz y más abierta.
+- **Falta:**
+  - la tela translúcida en Unreal: hoy es opaca y tapa toda la luz directa, que es lo correcto para la difusión pero no se transparenta;
+  - la luz directa sobrante en el 3D de IRIS cuando el foco no está entre los cuatro que dan sombra.
 
 - **Planta 2D:** como hoy, que ya está bien según Daniel.
 - **3D de IRIS:**
@@ -1097,6 +1190,26 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 
 ### F6.22.3 · La exposición del personaje refleja el grip · todos
 
+**Estado:** hecho, falta probarlo en IRIS (`plan/f6-22-3-exposicion-actor`). Las pruebas con un actor real (`test/actor_grip_exposure_test.dart`) encontraron un fallo del motor:
+- **El fallo:** una tela grande cerca del foco daba **más** luz que sin tela, porque recogía la luz del centro multiplicada por toda su superficie y la volvía a soltar como un foco nuevo, más cerca del actor.
+- **Arreglado:**
+  - la tela recoge la media de lo que le llega en 3 × 3 puntos, con su distancia, su ángulo con el haz y su ángulo de incidencia;
+  - una difusión ligera solo alumbra al actor desde la parte central, la que está en línea con el foco.
+- **Ahora**, con un fresnel a 3 m y la tela a mitad de camino, la luz baja respecto a sin tela:
+
+  | Tela | Stops |
+  |---|---|
+  | ¼ Grid Cloth | −1 |
+  | ½ Grid Cloth | −1,5 |
+  | Grid Cloth full | −2,5 |
+  | Seda China | −1 |
+
+- **También comprobado:**
+  - el negro corta la luz del actor;
+  - un rebote de lado le suma luz;
+  - un palio horizontal le baja el sol.
+- **En el 3D**, con grip dan sombra hasta 8 focos.
+
 - **Qué:**
   - con un palio o un marco de difusión entre el foco y un actor, la lectura del fotómetro en ese actor baja lo que quita la tela;
   - la cara en el 3D («Luz real») también baja;
@@ -1107,6 +1220,19 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 - **Hecho cuando:** la lectura del actor de la prueba de F6.22.1 baja al poner la tela, sube al quitarla y coincide con lo que se ve en el 3D.
 
 ### F6.22.4 · La cámara de IRIS en Unreal, con todos sus parámetros · todos
+
+**Estado:** hecho, falta probarlo con Unreal (`plan/f6-22-4-camara-unreal`).
+- **En la ficha de la cámara:** Altura del objetivo, Paneo, Inclinación (picado o contrapicado), Giro (plano holandés) y Foco. Sin foco propio, enfoca al actor que tiene delante (dentro de 30°) o a 3 m.
+- **En Unreal, la CineCamera llega con:**
+  - altura, paneo, inclinación y giro;
+  - focal y sensor;
+  - diafragma T (`current_aperture`, con su profundidad de campo);
+  - foco manual a esa distancia;
+  - ISO, obturador y ND en su propio posproceso, con exposición manual y cámara física.
+- **Ver por la cámara:** en Unreal enseña lo que vería la cámara de rodaje.
+- **Desde Unreal:** inclinarla o girarla vuelve a la ficha de IRIS.
+- **3D de IRIS:** la cámara y «Ver por la cámara» con su altura e inclinación.
+- **Falta:** el giro holandés en el 3D de IRIS; en Unreal sí está.
 
 - **Qué:**
   - la cámara llega a Unreal (CineCameraActor) con:
@@ -1122,11 +1248,26 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 
 ### F6.22.5 · Dos maneras de ver el 3D · todos
 
+**Estado:** hecho, falta probarlo en el PC (`plan/f6-22-5-vistas-3d`).
+- En «Qué se ve», un selector **Luz · EV n / Claro** sustituye al interruptor «Luz real».
+- **Luz:** solo la luz de los focos, las telas y los rebotes, y el sol o el cielo si toca, a la exposición de la cámara.
+- **Claro:**
+  - luz de trabajo pareja (cielo, ambiente y una luz suave desde arriba), sin luz de los focos, sin sol ni sombras;
+  - con los nombres de todo y los conos visibles, para colocar.
+
 - **Luz:** el set iluminado solo por los focos (y el sol o el cielo si toca), con la exposición de la cámara (F6.21.4). Es lo que se ensaya.
 - **Claro:** luz de trabajo uniforme, con los focos, los marcos y los palios bien visibles, sus haces en línea y sus nombres, para colocar y ver dónde va cada cosa.
 - Un botón en la barra del 3D para pasar de una a otra. Sustituye al interruptor «Luz real».
 
 ### F6.22.6 · Navegar como en Unreal · todos
+
+**Estado:** hecho, falta probarlo en el PC (`plan/f6-22-6-navegacion`).
+- **Planta 2D:** arrastrar con el botón derecho desplaza la vista, y un clic sin arrastrar abre el menú al soltar.
+- **3D:**
+  - con «3D como Unreal» (encendido por defecto), botón derecho pulsado más W, A, S, D (Q y E, la rueda para la velocidad y Mayúsculas para ir más rápido);
+  - al soltar, la órbita sigue desde ahí;
+  - apagado en Ajustes → Plantas, se navega en órbita como antes;
+  - el cambio de ajuste vale al volver a abrir el 3D.
 
 - **Planta 2D:**
   - el clic izquierdo, tal cual: seleccionar, mover, dibujar;
@@ -1146,9 +1287,77 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 4. **F6.22.4.**
 5. **F6.22.5.**
 
+## F6.23 · Fab, MetaHumans y materiales: los personajes y el set de verdad
+
+Pedido por Daniel el 2026-11-02: guiar al usuario para usar MetaHumans y personajes o materiales de Fab en lugar de los maniquíes de la planta, con tutorial, sacando partido al contenido gratis, y lo mismo dentro de IRIS Stage.
+
+### Lo que hay hoy (revisado el 2026-11-02)
+
+- Cualquier elemento puede llevar un asset de Unreal (`UnrealAssetRef` en `props['unreal']`); los actores con asset van en `assets` del payload y Unreal los coloca con `_place_asset`.
+- `UnrealLibrary.elementFor`: un MetaHuman de la biblioteca da un actor.
+- `FindAssets` / `FindFabAssets` (en `iris_stage_link.py`) buscan en el proyecto de Unreal y distinguen Fab, Megascans, MetaHumans y proyecto (`_source_of`).
+- La biblioteca de IRIS (`unreal_library_screen.dart`) tiene «Buscar en Fab» (abre Fab en el navegador), «Recoger de Fab» y «Packs de partida».
+- **Límite:** Fab no tiene API pública. IRIS no puede listar lo comprado y sin descargar. Lo descargado en el proyecto sí lo ve; para lo demás, abre la biblioteca de Fab en el navegador.
+
+### F6.23.1 · Reparto: un doble para cada personaje · PC
+
+- En la ficha del actor, **Doble en Unreal**: Maniquí IRIS (por defecto), un MetaHuman o un personaje de Fab, elegido de la biblioteca con su miniatura.
+- Se guarda en `props['unreal']`.
+- Unreal lo pone en la posición, el giro y la altura del actor, con la escala de la estatura que tenga en IRIS.
+- En el 3D de IRIS sigue el maniquí, con el nombre del doble.
+- **Aplicar a todo el proyecto:** el mismo personaje lleva el mismo doble en todos los sets.
+- **Hecho cuando:** en el proyecto de prueba se asigna un MetaHuman a un actor, se manda a Unreal y aparece en el sitio del maniquí, mirando hacia donde mira el actor.
+
+### F6.23.2 · «Lo que tengo»: el inventario del usuario · PC
+
+- IRIS Stage recorre el Asset Registry del proyecto (`/Game/Fab`, `/Game/Megascans`, `/Game/MetaHumans` y el resto).
+- Lo devuelve agrupado (Personajes, Atrezo, Superficies, Plantas) con miniaturas.
+- Se investiga la caché local de Fab y la del Launcher, para enseñar packs descargados que aún no están en el proyecto. Si no es fiable, se deja fuera.
+- **Abrir mi biblioteca de Fab:** en el navegador, para lo comprado y sin descargar.
+
+### F6.23.3 · Gratis primero · todos
+
+- «Packs de partida» crece:
+  - Megascans y MetaHumans de muestra;
+  - packs gratis permanentes útiles para cine: interiores, calle, naturaleza;
+  - un enlace al contenido gratis del mes de Fab.
+- Cada pack lleva la etiqueta «Gratis» y para qué sirve en un set.
+- La lista vive en un JSON del repo y se revisa cada mes, porque las ofertas de Fab cambian.
+
+### F6.23.4 · Materiales en suelo y paredes · PC (antes F6.20 D3)
+
+- En la ficha de una pared o del suelo, **Material de Unreal**, elegido de las superficies de la biblioteca.
+- Unreal aplica el material.
+- El 3D de IRIS usa el color medio de su miniatura, para que la reflectancia y el rebote de luz se parezcan.
+
+### F6.23.5 · Tutorial en IRIS: «Personajes y materiales de Fab» · todos
+
+- Pasos que se marcan solos al cumplirse:
+  1. Fab activado en Unreal;
+  2. un MetaHuman o un personaje en el proyecto;
+  3. asignarlo a un actor;
+  4. «Enviar a Unreal» y verlo en su sitio.
+- Se abre desde la pantalla de Unreal y desde la ficha del actor.
+- Reutiliza `unreal_tutorial_screen.dart` y `unreal_stage_steps.dart`.
+
+### F6.23.6 · Lo mismo dentro de IRIS Stage · PC
+
+- Un menú **IRIS** en la barra del editor de Unreal (ToolMenus, desde Python) con:
+  - la misma guía, paso a paso;
+  - la lista de personajes del set con su doble;
+  - **Asignar el seleccionado:** el MetaHuman elegido en el Content Browser se pone a un personaje y vuelve a IRIS por `UnrealReturn`.
+
+### Orden
+
+1. **F6.23.1 y F6.23.5:** lo que más se ve, los actores como personas en Unreal. F6.23.1 puede estar antes del rodaje.
+2. **F6.23.2.**
+3. **F6.23.3.**
+4. **F6.23.6.**
+5. **F6.23.4.**
+
 ## Orden propuesto y dependencias
 
-0. **F6.21** (ensayos de luz fieles, pedido el 2026-10-31) y después **F6.22** (grip, cámara y navegación): van antes que el resto, cada uno en su orden.
+0. **F6.21** (ensayos de luz fieles, pedido el 2026-10-31), después **F6.22** (grip, cámara y navegación) y después **F6.23** (Fab, MetaHumans y materiales): van antes que el resto, cada uno en su orden.
 1. **F6.0** (con 0.1b WebGPU), **F6.13.1–13.2** (IRIS Stage como contenedor) y **F6.16.1** (paquete versionado desde el principio, para que cada pieza nueva nazca exportable).
 2. **F6.1:** paridad (1.5b, 1.9b, 1.6, 1.7, 1.1, 1.2), **F6.2.8–2.10** (caseta) y **F6.18.1–18.2** (plató y tomas).
 3. **F6.4** y **F6.8** (cámara y pilotar, con 8.3b) y **F6.10.1–10.2** (capturas). Es lo que sustituye a Cine Tracer para componer.

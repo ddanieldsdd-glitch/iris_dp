@@ -79,7 +79,7 @@ List<StageStep> stageSteps({
           ? 'En Unreal: $worldPath. Lo que cambias en la planta se ve allí al '
                 'momento, y al revés.'
           : 'Abre una planta de cámara y luz con el 3D: sus luces, cámaras, '
-                'sol y escaneos pasan a Unreal.',
+                'grip, sol, entorno, niebla y escaneos pasan a Unreal.',
       state: after(sent, connected),
     ),
     StageStep(
