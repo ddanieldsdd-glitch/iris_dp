@@ -903,11 +903,11 @@ Plan aprobado por Daniel el 2026-10-27. Un PR por fase, en ramas que salen de `p
 
 Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el motor principal y da una **malla**, que es la que recibe la luz de los focos, da sombra, tiene medidas y sirve a Lumen y a las colisiones. Los **gaussian splats** (Postshot, Scaniverse, Polycam) quedan como capa visual opcional: se ven mejor, pero llevan la luz del escaneo incrustada y no reaccionan a los focos. Para el rodaje del 13 de noviembre no se toca código: vale el flujo manual (GLB con texturas, «Importar escaneo»).
 
-**E1 Entrada de fotos o vídeo** · PC · pendiente
+**E1 Entrada de fotos o vídeo** · PC · **hecho, sin probar con RealityScan** (`plan/f6-20-e-escaneo`: `scan_builder.dart`, botón «Crear escaneo desde fotos o vídeo» en el 3D; los fotogramas movidos se descartan solo en vídeo)
 - **Qué:** «Nueva localización desde fotos o vídeo» en IRIS Stage. Admite una carpeta de fotos o un vídeo.
 - **Cómo:** del vídeo se sacan 2–3 fotogramas por segundo con ffmpeg y se descartan los movidos con una medida de nitidez (varianza del laplaciano). Se avisa si hay pocas fotos o poco solape.
 
-**E2 RealityScan sin interfaz** · PC · pendiente
+**E2 RealityScan sin interfaz** · PC · **hecho, sin probar con RealityScan** (`plan/f6-20-e-escaneo`: dos GLB en `DocumentosIRIS Escaneos`; el de IRIS se pone en la planta. Falta la ortofoto de RealityScan y mandar a Unreal la malla alta, que va con E5)
 - **Qué:** IRIS lanza RealityScan por línea de comandos (alinear, malla, simplificar, texturizar, exportar) con progreso y cancelación, sin abrir su ventana.
 - **Salidas:**
   - malla alta para Unreal: FBX o GLB con Nanite y texturas de 8K, importada a `/Game/IRIS/Scans`;
@@ -915,7 +915,7 @@ Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el mot
   - ortofoto cenital a escala conocida (píxeles por metro), que sustituye a la cenital calculada como fondo de la planta.
 - **Ojo:** comprobar los nombres de los comandos (`-addFolder`, `-align`, `-calculateNormalModel`, `-calculateTexture`, `-exportModel`, ortoproyección) con la referencia de la versión instalada.
 
-**E3 Escala y orientación** · todos · pendiente
+**E3 Escala y orientación** · todos · **en parte** (la escala con una medida ya existe: `PlanScan.calibrate`; faltan las dianas)
 - **Qué:** sin una medida real el escaneo no sirve para la planta. La escala se fija con dianas impresas de RealityScan a una distancia conocida o, si no hay, metiendo a mano una medida entre dos puntos. El norte y las coordenadas salen de F6.12.6.
 
 **E4 Paredes propuestas** · todos · pendiente (es la parte que falta de F6.12.3)

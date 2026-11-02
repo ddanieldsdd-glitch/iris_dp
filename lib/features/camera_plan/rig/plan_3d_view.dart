@@ -31,6 +31,7 @@ import '../../unreal_link/unreal_stage_payload.dart';
 import '../../unreal_link/unreal_thumbs.dart';
 import '../../../core/sync/plan_scan_store.dart';
 import '../../../core/utils/media_storage.dart';
+import 'scan_builder_sheet.dart';
 import 'scan_store.dart';
 import 'rig_report.dart';
 
@@ -507,6 +508,24 @@ class _Plan3dViewState extends State<Plan3dView> {
     );
     final path = picked?.files.single.path;
     if (path == null) return;
+    await _addScan(path, path.split(Platform.pathSeparator).last);
+  }
+
+  /// Crea un escaneo con RealityScan a partir de fotos o vídeo (F6.20 E) y
+  /// lo pone en la planta como uno importado.
+  Future<void> _buildScan() async {
+    if (widget.onAdd == null) return;
+    final result = await ScanBuilderSheet.show(context);
+    if (result == null) return;
+    await _addScan(
+      result.irisGlb,
+      result.folder.split(Platform.pathSeparator).last,
+    );
+  }
+
+  Future<void> _addScan(String path, String name) async {
+    final add = widget.onAdd;
+    if (add == null) return;
     final file = await ScanStore.import(path, projectId: widget.projectId);
     final size = await File(path).length();
     if (mounted) {
@@ -532,7 +551,7 @@ class _Plan3dViewState extends State<Plan3dView> {
       centre,
       file: file,
       format: file.split('.').last,
-      name: path.split(Platform.pathSeparator).last,
+      name: name,
     );
     await add(scan);
     if (!mounted) return;
@@ -552,6 +571,12 @@ class _Plan3dViewState extends State<Plan3dView> {
             icon: const Icon(Icons.view_in_ar, size: 16),
             label: const Text('Importar escaneo (GLB, OBJ, PLY)'),
             onPressed: _importScan,
+          ),
+        if (widget.onAdd != null && ScanBuilderSheet.supported)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.photo_camera_back_outlined, size: 16),
+            label: const Text('Crear escaneo desde fotos o vídeo'),
+            onPressed: _buildScan,
           ),
         Text(
           'De RealityScan, Polycam o Luma AI: exporta en GLB (o OBJ) con '
