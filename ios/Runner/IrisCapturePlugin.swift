@@ -193,7 +193,9 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
       let dt = Float(frame.timestamp - last.time)
       if dt > 0 {
         let a = simd_quatf(t), b = simd_quatf(last.transform)
-        angularSpeed = 0.7 * angularSpeed + 0.3 * ((a * b.inverse).angle / dt)
+        let turned: Float = (a * b.inverse).angle
+        let speed: Float = turned / dt
+        angularSpeed = 0.7 * angularSpeed + 0.3 * speed
       }
     }
     lastPose = (frame.timestamp, t)
@@ -270,8 +272,7 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     var out = [Bool](repeating: false, count: 12)
     for s in shots where simd_distance(s.position, position) < 1 {
       let a = atan2(s.forward.x, -s.forward.z)
-      let i = Int(((a + 2 * .pi).truncatingRemainder(dividingBy: 2 * .pi)) / (2 * .pi) * 12) % 12
-      out[i] = true
+      out[CoverageRingView.sector(of: a, count: out.count)] = true
     }
     return out
   }
@@ -517,11 +518,22 @@ final class CoverageRingView: UIView {
     setNeedsDisplay()
   }
 
+  /// El sector (de [count]) en el que cae el ángulo [angle], en radianes.
+  /// Por pasos y con tipos: en una sola expresión el compilador de Swift
+  /// no termina de deducirlos.
+  static func sector(of angle: Float, count: Int) -> Int {
+    let turn: Float = 2 * Float.pi
+    var a: Float = angle.truncatingRemainder(dividingBy: turn)
+    if a < 0 { a += turn }
+    let index = Int(a / turn * Float(count))
+    return min(max(index, 0), count - 1)
+  }
+
   /// Hacia qué lado girar para el hueco más cercano: −1 izquierda, 1
   /// derecha, `nil` si no hay hueco.
   static func missingSide(covered: [Bool], heading: Float) -> Int? {
     let n = covered.count
-    let here = Int(((heading + 2 * .pi).truncatingRemainder(dividingBy: 2 * .pi)) / (2 * .pi) * Float(n)) % n
+    let here = sector(of: heading, count: n)
     for step in 1...(n / 2) {
       if !covered[(here + step) % n] { return 1 }
       if !covered[(here - step + n) % n] { return -1 }
@@ -535,10 +547,12 @@ final class CoverageRingView: UIView {
     let centre = CGPoint(x: rect.midX, y: rect.midY)
     let radius = min(rect.width, rect.height) / 2 - 8
     ctx.setLineWidth(10)
+    let step: CGFloat = 2 * CGFloat.pi / CGFloat(n)
+    let facing = CGFloat(heading)
     for i in 0..<n {
       // Ángulo del sector respecto a donde miras; arriba = adelante.
-      let start = CGFloat(Float(i) / Float(n) * 2 * .pi - heading) - .pi / 2
-      let end = start + 2 * .pi / CGFloat(n) - 0.04
+      let start: CGFloat = CGFloat(i) * step - facing - CGFloat.pi / 2
+      let end: CGFloat = start + step - 0.04
       ctx.setStrokeColor(
         (covered[i] ? UIColor.systemGreen : UIColor.white.withAlphaComponent(0.25)).cgColor)
       ctx.addArc(center: centre, radius: radius, startAngle: start, endAngle: end, clockwise: false)
