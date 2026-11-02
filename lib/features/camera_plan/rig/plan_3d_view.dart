@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -33,6 +34,7 @@ import '../../../core/sync/plan_scan_store.dart';
 import '../../../core/utils/media_storage.dart';
 import '../plan_segment.dart';
 import 'scan_builder_sheet.dart';
+import 'scan_capture_channel.dart';
 import 'scan_store.dart';
 import 'scan_walls.dart';
 import 'scan_walls_sheet.dart';
@@ -175,6 +177,9 @@ class _Plan3dViewState extends State<Plan3dView> {
   /// Cambios que llegan de Unreal (IRIS Stage Link).
   StreamSubscription<List<UnrealEdit>>? _fromUnreal;
 
+  /// iPhone o iPad con ARKit: captura guiada (F6.20 E6).
+  bool _canCapture = false;
+
   @override
   void initState() {
     super.initState();
@@ -185,6 +190,11 @@ class _Plan3dViewState extends State<Plan3dView> {
     );
     UnrealThumbs.instance.addListener(_onThumbs);
     unawaited(_shareScanFolders());
+    unawaited(
+      ScanCaptureChannel.isSupported().then((ok) {
+        if (ok && mounted) setState(() => _canCapture = true);
+      }),
+    );
     _schedule();
   }
 
@@ -525,6 +535,30 @@ class _Plan3dViewState extends State<Plan3dView> {
       result.folder.split(Platform.pathSeparator).last,
       unrealPath: result.highGlb,
     );
+    if (mounted) {
+      setState(
+        () => _status = result.metric
+            ? 'Escaneo en metros reales (captura del iPhone): no hace falta '
+                  'calibrarlo.'
+            : 'Escaneo puesto. Calíbralo con una medida antes de proponer '
+                  'paredes.',
+      );
+    }
+  }
+
+  /// Captura guiada con el iPhone (F6.20 E6). La reconstrucción se hace en
+  /// el PC con RealityScan: al terminar se comparte el .zip para pasarlo.
+  Future<void> _captureWithPhone() async {
+    final path = await ScanCaptureChannel.start(widget.name ?? 'Localización');
+    if (path == null || !mounted) return;
+    setState(
+      () => _status =
+          'Captura guardada. Pásala al PC y ábrela en «Crear escaneo» → '
+          '«Captura del iPhone».',
+    );
+    await Share.shareXFiles([
+      XFile(path),
+    ], subject: 'Captura de localización de IRIS');
   }
 
   /// [unrealPath]: la malla con todo el detalle, que Unreal usa en vez de
@@ -587,6 +621,19 @@ class _Plan3dViewState extends State<Plan3dView> {
             label: const Text('Crear escaneo desde fotos o vídeo'),
             onPressed: _buildScan,
           ),
+        if (_canCapture) ...[
+          FilledButton.icon(
+            icon: const Icon(Icons.photo_camera_outlined, size: 16),
+            label: const Text('Capturar localización con el iPhone'),
+            onPressed: _captureWithPhone,
+          ),
+          Text(
+            'Recorre el sitio despacio: las fotos se hacen solas y la app '
+            'avisa de lo que falta. Luego manda el .zip al PC y ábrelo en '
+            '«Crear escaneo» → «Captura del iPhone»: sale en metros reales.',
+            style: caption,
+          ),
+        ],
         Text(
           'De RealityScan, Polycam o Luma AI: exporta en GLB (o OBJ) con '
           'texturas y, para que viaje a otros equipos, de menos de 50 MB '

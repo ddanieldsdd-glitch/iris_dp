@@ -4,11 +4,13 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/settings/app_prefs.dart';
+import 'scan_capture.dart';
 import 'scan_glb.dart';
 
 /// RealityScan (o RealityCapture, su nombre anterior) instalado en este PC.
@@ -368,12 +370,17 @@ class ScanBuildResult {
   final int images;
   final int discarded;
 
+  /// En metros reales: venía de una captura guiada del iPhone, con la
+  /// posición de ARKit en cada foto (F6.20 E6). Si no, hay que calibrarlo.
+  final bool metric;
+
   const ScanBuildResult({
     required this.irisGlb,
     required this.highGlb,
     required this.folder,
     required this.images,
     required this.discarded,
+    this.metric = false,
   });
 }
 
@@ -406,13 +413,48 @@ class ScanBuildJob {
   /// Para pruebas; si no, `Documentos\IRIS Escaneos`.
   final String? outputRoot;
 
+  /// Saca un .zip de captura en [outDir], aplanado: el `capture.json` y las
+  /// fotos quedan juntos aunque el zip los meta en una carpeta. Solo
+  /// nombres sueltos: nada se escribe fuera de [outDir].
+  static void extractCapture(String zipPath, String outDir) {
+    final archive = ZipDecoder().decodeBytes(File(zipPath).readAsBytesSync());
+    Directory(outDir).createSync(recursive: true);
+    for (final entry in archive.files) {
+      if (!entry.isFile) continue;
+      final name = p.basename(entry.name.replaceAll(r'\', '/'));
+      if (name.isEmpty || name.startsWith('.') || name.contains('..')) continue;
+      File(p.join(outDir, name)).writeAsBytesSync(entry.content as List<int>);
+    }
+  }
+
+  // Lo pesado va a otro isolate. Desde funciones estáticas, para que el
+  // cierre no arrastre el trabajo (con su proceso abierto, que no se puede
+  // mandar a otro isolate).
+  static Future<void> _inIsolate(
+    void Function(String, String) work,
+    String a,
+    String b,
+  ) => Isolate.run(() => work(a, b));
+
+  static Future<double> _sharpnessOf(String path) => Isolate.run(() {
+    final image = img.decodeImage(File(path).readAsBytesSync());
+    return image == null ? 0.0 : sharpness(image);
+  });
+
+  static Future<void> _upright(String path) => Isolate.run(() {
+    final fixed = glbZUpToYUp(File(path).readAsBytesSync());
+    if (fixed != null) File(path).writeAsBytesSync(fixed);
+  });
+
   /// Pocas fotos: RealityScan alinea mal por debajo de esto.
   static const minImages = 20;
 
   Process? _process;
   bool _cancelled = false;
 
-  bool get isVideo => FileSystemEntity.isFileSync(source);
+  bool get isZip => source.toLowerCase().endsWith('.zip');
+
+  bool get isVideo => !isZip && FileSystemEntity.isFileSync(source);
 
   void cancel() {
     _cancelled = true;
@@ -444,6 +486,22 @@ class ScanBuildJob {
 
       var imagesDir = source;
       var discarded = 0;
+      // Captura del iPhone en .zip: se descomprime aquí.
+      if (isZip) {
+        yield const ScanBuildProgress(
+          ScanBuildStage.frames,
+          'Abriendo la captura del iPhone…',
+        );
+        imagesDir = p.join(folder.path, 'captura');
+        final out = imagesDir;
+        await _inIsolate(extractCapture, source, out);
+      }
+      // Con las posiciones de ARKit, cada foto lleva su XMP: RealityScan
+      // la coloca en metros y con la vertical de la gravedad.
+      var metric = false;
+      if (CapturePackage.isCapture(imagesDir)) {
+        metric = (CapturePackage.read(imagesDir)?.writeSidecars() ?? 0) > 0;
+      }
       // Sin ffmpeg, el vídeo lo trocea RealityScan (sin descartar movidos).
       String? rsVideo;
       final ff = ffmpeg;
@@ -491,10 +549,7 @@ class ScanBuildJob {
             );
           }
           final path = files[i];
-          scores[path] = await Isolate.run(() {
-            final image = img.decodeImage(File(path).readAsBytesSync());
-            return image == null ? 0.0 : sharpness(image);
-          });
+          scores[path] = await _sharpnessOf(path);
         }
         final keep = keepSharp(scores).toSet();
         for (final f in files) {
@@ -594,10 +649,7 @@ class ScanBuildJob {
       );
       for (final path in [irisGlb, highGlb]) {
         if (!File(path).existsSync()) continue;
-        await Isolate.run(() {
-          final fixed = glbZUpToYUp(File(path).readAsBytesSync());
-          if (fixed != null) File(path).writeAsBytesSync(fixed);
-        });
+        await _upright(path);
       }
       final result = ScanBuildResult(
         irisGlb: irisGlb,
@@ -611,6 +663,7 @@ class ScanBuildJob {
                 .where((f) => isScanPhoto(f.path))
                 .length,
         discarded: discarded,
+        metric: metric,
       );
       yield ScanBuildProgress(
         ScanBuildStage.done,

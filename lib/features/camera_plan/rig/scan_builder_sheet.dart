@@ -62,7 +62,13 @@ class _ScanBuilderSheetState extends State<ScanBuilderSheet> {
     setState(() {
       _source = path;
       if (_name.text.isEmpty) {
-        _name.text = p.basenameWithoutExtension(path);
+        _name.text = p
+            .basename(path)
+            .replaceAll(
+              RegExp(r'(\.iriscapture)?(\.zip)?$', caseSensitive: false),
+              '',
+            )
+            .replaceAll(RegExp(r'\.[a-z0-9]+$', caseSensitive: false), '');
       }
     });
   }
@@ -87,6 +93,16 @@ class _ScanBuilderSheetState extends State<ScanBuilderSheet> {
     if (name != 'realityscan.exe' && name != 'realitycapture.exe') return;
     await RealityScanInstall.remember(path);
     setState(() => _realityScan = RealityScanInstall(path));
+  }
+
+  /// Una captura guiada del iPhone (F6.20 E6): el .zip que comparte la app.
+  Future<void> _pickCapture() async {
+    final picked = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Captura del iPhone (.zip)',
+      type: FileType.custom,
+      allowedExtensions: const ['zip'],
+    );
+    _setSource(picked?.files.single.path);
   }
 
   Future<void> _pickVideo() async {
@@ -199,12 +215,23 @@ class _ScanBuilderSheetState extends State<ScanBuilderSheet> {
                   label: const Text('Vídeo'),
                   onPressed: _pickVideo,
                 ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.phone_iphone, size: 16),
+                  label: const Text('Captura del iPhone'),
+                  onPressed: _pickCapture,
+                ),
               ],
             ),
             if (_source case final source?) ...[
               const SizedBox(height: AppSpacing.sm),
               Text(source, style: AppTypography.mono(palette)),
-              if (FileSystemEntity.isFileSync(source) && _ffmpeg == null)
+              if (source.toLowerCase().endsWith('.zip'))
+                Text(
+                  'Captura guiada del iPhone: sale en metros reales, sin '
+                  'calibrar.',
+                  style: caption,
+                )
+              else if (FileSystemEntity.isFileSync(source) && _ffmpeg == null)
                 Text(
                   'Sin ffmpeg, RealityScan saca los fotogramas pero no se '
                   'descartan los movidos. Para eso: «winget install ffmpeg» '
@@ -240,6 +267,7 @@ class _ScanBuilderSheetState extends State<ScanBuilderSheet> {
               Text(
                 '${result.images} imágenes'
                 '${result.discarded > 0 ? ', ${result.discarded} movidas descartadas' : ''}. '
+                '${result.metric ? 'En metros reales. ' : 'Calíbralo con una medida antes de proponer paredes. '}'
                 'La malla para Unreal está en ${result.folder}.',
                 style: caption,
               ),

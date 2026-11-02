@@ -17,5 +17,8 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "IrisClipboardPlugin") {
       IrisClipboardPlugin.register(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "IrisCapturePlugin") {
+      IrisCapturePlugin.register(with: registrar)
+    }
   }
 }

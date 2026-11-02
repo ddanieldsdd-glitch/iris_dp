@@ -28,6 +28,8 @@
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>IRIS DP usa la cámara para capturar localizaciones en 3D.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>IRIS DP usa tus fotos como referencias para planos, biblias y moodboards.</string>
 	<key>UIApplicationSceneManifest</key>
