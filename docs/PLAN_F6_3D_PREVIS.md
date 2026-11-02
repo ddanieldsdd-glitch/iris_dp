@@ -921,7 +921,7 @@ Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el mot
 **E4 Paredes propuestas** · todos · **hecho, sin probar con un escaneo real** (`plan/f6-20-e-escaneo`: «Proponer paredes» en el 3D con un escaneo seleccionado; `iris.scanSlice` corta la malla, `scan_walls.dart` saca las paredes, une las dos caras de una pared y parte en las puertas; altura del corte ajustable)
 - **Qué:** IRIS corta la malla ligera a 1 m de altura, detecta tramos rectos y los propone como paredes de la planta, que se aceptan o se descartan una a una.
 
-**E5 Ida y vuelta y splats** · todos · pendiente
+**E5 Ida y vuelta y splats** · todos · **en parte, sin probar en Unreal** (`plan/f6-20-e-escaneo`: la malla alta se guarda como `<escaneo>_ue.glb` en la carpeta local de escaneos, sin viajar por la nube, y Unreal la prefiere al importar; los PLY de gaussian splats se ven como nube de puntos con su color. Los splats de verdad esperan al visor moderno con Spark de F6.12.1, porque el visor usa three r147)
 - **Qué:** el resultado entra solo en el proyecto, viaja por la nube y llega a Unreal como hoy `scans`. Opcional: un splat del mismo material como capa visual, en el visor (F6.12.1, Spark) y en Unreal con un plugin de splats.
 
 **Protocolo de captura** (va también a la guía de IRIS Stage):

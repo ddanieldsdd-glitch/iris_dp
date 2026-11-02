@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
 import 'package:iris_dp/features/camera_plan/rig/scan_builder.dart';
+import 'package:iris_dp/features/camera_plan/rig/scan_store.dart';
 
 void main() {
   late Directory tmp;
@@ -163,5 +164,10 @@ void main() {
     final events = await job.run().toList();
     expect(events.single.stage, ScanBuildStage.error);
     expect(events.single.message, contains('Solo hay 5'));
+  });
+
+  test('la malla para Unreal se llama como el escaneo con _ue', () {
+    expect(ScanStore.unrealName('m1abc.glb'), 'm1abc_ue.glb');
+    expect(ScanStore.unrealName('m1abc.obj'), 'm1abc_ue.glb');
   });
 }

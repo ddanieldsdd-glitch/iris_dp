@@ -46,6 +46,18 @@ class ScanStore {
     return name;
   }
 
+  /// Nombre de la versión con todo el detalle para Unreal del escaneo
+  /// [file] (F6.20 E5). Unreal la prefiere si está en este PC.
+  static String unrealName(String file) =>
+      '${p.basenameWithoutExtension(file)}_ue.glb';
+
+  /// Guarda la malla alta para Unreal junto a los escaneos de este PC. No
+  /// viaja por la nube: pesa demasiado y solo la usa el Unreal de aquí.
+  static Future<void> saveUnrealVersion(String file, String sourcePath) async {
+    if (!_safe(file)) return;
+    await File(sourcePath).copy(p.join((await dir()).path, unrealName(file)));
+  }
+
   /// Solo un nombre, nunca una ruta: no se lee nada fuera de las carpetas.
   static bool _safe(String file) =>
       !(file.contains('/') || file.contains(r'\') || file.contains('..'));

@@ -523,13 +523,19 @@ class _Plan3dViewState extends State<Plan3dView> {
     await _addScan(
       result.irisGlb,
       result.folder.split(Platform.pathSeparator).last,
+      unrealPath: result.highGlb,
     );
   }
 
-  Future<void> _addScan(String path, String name) async {
+  /// [unrealPath]: la malla con todo el detalle, que Unreal usa en vez de
+  /// la de IRIS (F6.20 E5).
+  Future<void> _addScan(String path, String name, {String? unrealPath}) async {
     final add = widget.onAdd;
     if (add == null) return;
     final file = await ScanStore.import(path, projectId: widget.projectId);
+    if (unrealPath != null && await File(unrealPath).exists()) {
+      await ScanStore.saveUnrealVersion(file, unrealPath);
+    }
     final size = await File(path).length();
     if (mounted) {
       setState(
