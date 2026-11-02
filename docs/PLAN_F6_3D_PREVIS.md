@@ -899,6 +899,39 @@ Plan aprobado por Daniel el 2026-10-27. Un PR por fase, en ramas que salen de `p
 | D1–D4 | Buscar en Fab y Quixel desde IRIS, recogida automática, tejidos y packs de partida | en curso (`plan/f6-20-d-fab-quixel`): D1 «Buscar en Fab» y «Megascans» abren la búsqueda en el navegador (Fab no tiene API pública); D2 `FindFabAssets` recoge lo bajado a `/Game/Fab` y `/Game/Megascans` al abrir la biblioteca, al volver a IRIS y con «Recoger de Fab»; D4 «Packs de partida» (búsquedas para vestir un set). Falta D3: tejidos y superficies de Fab en paredes y suelo |
 | E1–E5 | RealityScan/RealityCapture sin interfaz: de vídeo a malla, ortofoto y paredes propuestas, con ida y vuelta | en curso: el escaneo exportado (GLB/OBJ) se importa, viaja por la nube, da la cenital de fondo, recibe sombras y llega a Unreal (`scans` en IRIS Stage, importado a `/Game/IRIS/Scans`). Falta la captura sin interfaz y las paredes propuestas |
 
+### F6.20 E · Localización desde fotos o vídeo (detalle)
+
+Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el motor principal y da una **malla**, que es la que recibe la luz de los focos, da sombra, tiene medidas y sirve a Lumen y a las colisiones. Los **gaussian splats** (Postshot, Scaniverse, Polycam) quedan como capa visual opcional: se ven mejor, pero llevan la luz del escaneo incrustada y no reaccionan a los focos. Para el rodaje del 13 de noviembre no se toca código: vale el flujo manual (GLB con texturas, «Importar escaneo»).
+
+**E1 Entrada de fotos o vídeo** · PC · pendiente
+- **Qué:** «Nueva localización desde fotos o vídeo» en IRIS Stage. Admite una carpeta de fotos o un vídeo.
+- **Cómo:** del vídeo se sacan 2–3 fotogramas por segundo con ffmpeg y se descartan los movidos con una medida de nitidez (varianza del laplaciano). Se avisa si hay pocas fotos o poco solape.
+
+**E2 RealityScan sin interfaz** · PC · pendiente
+- **Qué:** IRIS lanza RealityScan por línea de comandos (alinear, malla, simplificar, texturizar, exportar) con progreso y cancelación, sin abrir su ventana.
+- **Salidas:**
+  - malla alta para Unreal: FBX o GLB con Nanite y texturas de 8K, importada a `/Game/IRIS/Scans`;
+  - malla ligera para IRIS: GLB de 300–500 mil triángulos con texturas de 4K, por debajo de los 50 MB de `PlanScanStore`;
+  - ortofoto cenital a escala conocida (píxeles por metro), que sustituye a la cenital calculada como fondo de la planta.
+- **Ojo:** comprobar los nombres de los comandos (`-addFolder`, `-align`, `-calculateNormalModel`, `-calculateTexture`, `-exportModel`, ortoproyección) con la referencia de la versión instalada.
+
+**E3 Escala y orientación** · todos · pendiente
+- **Qué:** sin una medida real el escaneo no sirve para la planta. La escala se fija con dianas impresas de RealityScan a una distancia conocida o, si no hay, metiendo a mano una medida entre dos puntos. El norte y las coordenadas salen de F6.12.6.
+
+**E4 Paredes propuestas** · todos · pendiente (es la parte que falta de F6.12.3)
+- **Qué:** IRIS corta la malla ligera a 1 m de altura, detecta tramos rectos y los propone como paredes de la planta, que se aceptan o se descartan una a una.
+
+**E5 Ida y vuelta y splats** · todos · pendiente
+- **Qué:** el resultado entra solo en el proyecto, viaja por la nube y llega a Unreal como hoy `scans`. Opcional: un splat del mismo material como capa visual, en el visor (F6.12.1, Spark) y en Unreal con un plugin de splats.
+
+**Protocolo de captura** (va también a la guía de IRIS Stage):
+- Mejor fotos que vídeo: exposición, balance de blancos y foco en manual. Si es vídeo: 4K, obturación de 1/250 o más rápida, movimiento lento y sin estabilización digital.
+- Luz plana (día nublado, o interior con todo encendido y sin sol directo), para que la textura salga casi sin sombras y no compita con los focos del ensayo.
+- Solape del 70–80 %: anillos a dos o tres alturas, más tomas a las esquinas y al techo. Cristales, espejos y paredes lisas fallan: taparlos o poner cinta de carrocero.
+- Dos dianas o una medida conocida en cada sala.
+- Interior grande: unas 200–600 fotos. Exterior: dron o mástil para la cenital.
+- El iPhone con LiDAR (RealityScan móvil, Polycam, Scaniverse) sirve para salir del paso con buena escala; la calidad para Unreal sale del PC.
+
 ## F6.21 · Ensayos de luz fieles en IRIS y en Unreal
 
 Pedido por Daniel el 2026-10-31. Objetivo: que un esquema de luz ensayado en IRIS se vea y se mida igual en Unreal, con el set, la luz y la atmósfera a escala, para que el ensayo sirva de verdad en el rodaje.
