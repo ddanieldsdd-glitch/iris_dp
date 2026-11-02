@@ -1241,9 +1241,77 @@ Pedido por Daniel el 2026-10-31, tras probar F6.21. Va después de F6.21.1 y F6.
 4. **F6.22.4.**
 5. **F6.22.5.**
 
+## F6.23 · Fab, MetaHumans y materiales: los personajes y el set de verdad
+
+Pedido por Daniel el 2026-11-02: guiar al usuario para usar MetaHumans y personajes o materiales de Fab en lugar de los maniquíes de la planta, con tutorial, sacando partido al contenido gratis, y lo mismo dentro de IRIS Stage.
+
+### Lo que hay hoy (revisado el 2026-11-02)
+
+- Cualquier elemento puede llevar un asset de Unreal (`UnrealAssetRef` en `props['unreal']`); los actores con asset van en `assets` del payload y Unreal los coloca con `_place_asset`.
+- `UnrealLibrary.elementFor`: un MetaHuman de la biblioteca da un actor.
+- `FindAssets` / `FindFabAssets` (en `iris_stage_link.py`) buscan en el proyecto de Unreal y distinguen Fab, Megascans, MetaHumans y proyecto (`_source_of`).
+- La biblioteca de IRIS (`unreal_library_screen.dart`) tiene «Buscar en Fab» (abre Fab en el navegador), «Recoger de Fab» y «Packs de partida».
+- **Límite:** Fab no tiene API pública. IRIS no puede listar lo comprado y sin descargar. Lo descargado en el proyecto sí lo ve; para lo demás, abre la biblioteca de Fab en el navegador.
+
+### F6.23.1 · Reparto: un doble para cada personaje · PC
+
+- En la ficha del actor, **Doble en Unreal**: Maniquí IRIS (por defecto), un MetaHuman o un personaje de Fab, elegido de la biblioteca con su miniatura.
+- Se guarda en `props['unreal']`.
+- Unreal lo pone en la posición, el giro y la altura del actor, con la escala de la estatura que tenga en IRIS.
+- En el 3D de IRIS sigue el maniquí, con el nombre del doble.
+- **Aplicar a todo el proyecto:** el mismo personaje lleva el mismo doble en todos los sets.
+- **Hecho cuando:** en el proyecto de prueba se asigna un MetaHuman a un actor, se manda a Unreal y aparece en el sitio del maniquí, mirando hacia donde mira el actor.
+
+### F6.23.2 · «Lo que tengo»: el inventario del usuario · PC
+
+- IRIS Stage recorre el Asset Registry del proyecto (`/Game/Fab`, `/Game/Megascans`, `/Game/MetaHumans` y el resto).
+- Lo devuelve agrupado (Personajes, Atrezo, Superficies, Plantas) con miniaturas.
+- Se investiga la caché local de Fab y la del Launcher, para enseñar packs descargados que aún no están en el proyecto. Si no es fiable, se deja fuera.
+- **Abrir mi biblioteca de Fab:** en el navegador, para lo comprado y sin descargar.
+
+### F6.23.3 · Gratis primero · todos
+
+- «Packs de partida» crece:
+  - Megascans y MetaHumans de muestra;
+  - packs gratis permanentes útiles para cine: interiores, calle, naturaleza;
+  - un enlace al contenido gratis del mes de Fab.
+- Cada pack lleva la etiqueta «Gratis» y para qué sirve en un set.
+- La lista vive en un JSON del repo y se revisa cada mes, porque las ofertas de Fab cambian.
+
+### F6.23.4 · Materiales en suelo y paredes · PC (antes F6.20 D3)
+
+- En la ficha de una pared o del suelo, **Material de Unreal**, elegido de las superficies de la biblioteca.
+- Unreal aplica el material.
+- El 3D de IRIS usa el color medio de su miniatura, para que la reflectancia y el rebote de luz se parezcan.
+
+### F6.23.5 · Tutorial en IRIS: «Personajes y materiales de Fab» · todos
+
+- Pasos que se marcan solos al cumplirse:
+  1. Fab activado en Unreal;
+  2. un MetaHuman o un personaje en el proyecto;
+  3. asignarlo a un actor;
+  4. «Enviar a Unreal» y verlo en su sitio.
+- Se abre desde la pantalla de Unreal y desde la ficha del actor.
+- Reutiliza `unreal_tutorial_screen.dart` y `unreal_stage_steps.dart`.
+
+### F6.23.6 · Lo mismo dentro de IRIS Stage · PC
+
+- Un menú **IRIS** en la barra del editor de Unreal (ToolMenus, desde Python) con:
+  - la misma guía, paso a paso;
+  - la lista de personajes del set con su doble;
+  - **Asignar el seleccionado:** el MetaHuman elegido en el Content Browser se pone a un personaje y vuelve a IRIS por `UnrealReturn`.
+
+### Orden
+
+1. **F6.23.1 y F6.23.5:** lo que más se ve, los actores como personas en Unreal. F6.23.1 puede estar antes del rodaje.
+2. **F6.23.2.**
+3. **F6.23.3.**
+4. **F6.23.6.**
+5. **F6.23.4.**
+
 ## Orden propuesto y dependencias
 
-0. **F6.21** (ensayos de luz fieles, pedido el 2026-10-31) y después **F6.22** (grip, cámara y navegación): van antes que el resto, cada uno en su orden.
+0. **F6.21** (ensayos de luz fieles, pedido el 2026-10-31), después **F6.22** (grip, cámara y navegación) y después **F6.23** (Fab, MetaHumans y materiales): van antes que el resto, cada uno en su orden.
 1. **F6.0** (con 0.1b WebGPU), **F6.13.1–13.2** (IRIS Stage como contenedor) y **F6.16.1** (paquete versionado desde el principio, para que cada pieza nueva nazca exportable).
 2. **F6.1:** paridad (1.5b, 1.9b, 1.6, 1.7, 1.1, 1.2), **F6.2.8–2.10** (caseta) y **F6.18.1–18.2** (plató y tomas).
 3. **F6.4** y **F6.8** (cámara y pilotar, con 8.3b) y **F6.10.1–10.2** (capturas). Es lo que sustituye a Cine Tracer para componer.

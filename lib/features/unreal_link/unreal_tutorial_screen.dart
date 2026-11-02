@@ -273,6 +273,17 @@ class _UnrealTutorialScreenState extends State<UnrealTutorialScreen> {
           'cámara» de un plano.',
       'En la planta de un plano: Render RTX → Capturar con RTX guarda la '
           'imagen en su storyboard.',
+      'El entorno del set (plató, interior o exterior, con su suelo) y la '
+          'niebla o el humo del esquema de luz también pasan a Unreal.',
+      'Marcos, palios, negros y rebotes salen a su tamaño, altura e '
+          'inclinación: cortan la luz, y la que deja pasar una tela sale de '
+          'ella como luz blanda.',
+      'La cámara del plano llega con su óptica, altura, paneo, inclinación, '
+          'foco, ISO, T-stop, obturador y ND, y Unreal expone como el '
+          'fotómetro de IRIS.',
+      'En el 3D de IRIS: botón derecho y W A S D para moverte como en '
+          'Unreal (o la órbita de siempre, en Ajustes → Plantas de cámara). '
+          '«Luz» enseña el set como lo ve la cámara; «Claro», para colocar.',
       'Atrezzo con modelos de Fab o Megascans: añádelos en Unreal (Window → '
           'Fab) y, en el 3D de IRIS, selecciona la pieza → Elegir asset de '
           'Unreal.',
@@ -292,8 +303,13 @@ class _UnrealTutorialScreenState extends State<UnrealTutorialScreen> {
           'permite a Unreal en el cortafuegos la primera vez que lo pregunte.',
       '«El nivel abierto tiene cambios sin guardar»: guarda tu nivel en '
           'Unreal; IRIS no cierra lo tuyo.',
-      'La imagen se ve muy oscura o quemada: es la exposición automática de '
-          'Unreal con luz real; prueba la escena de día o con más luces.',
+      '«Unreal responde, pero no tiene IRIS Stage Link»: pulsa «Abrir en '
+          'Unreal» (pone al día el plugin), cierra Unreal y vuelve a pulsarlo.',
+      'Si ya hay un Unreal abriendo este proyecto, IRIS lo espera y no abre '
+          'otro.',
+      'La imagen se ve muy oscura o quemada: Unreal expone con la cámara de '
+          'IRIS (ISO, T-stop, obturador y ND). Revisa la exposición en la '
+          'planta: lo que mide el fotómetro es lo que se ve.',
     ],
   );
 }
