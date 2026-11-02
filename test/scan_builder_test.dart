@@ -18,7 +18,11 @@ void main() {
       final d = Directory(p.join(tmp.path, 'RealityCapture'))..createSync();
       File(p.join(d.path, 'AppProxy.exe')).writeAsStringSync('');
       expect(
-        RealityScanInstall.find(roots: [tmp.path], launcherFile: 'nada'),
+        RealityScanInstall.find(
+          roots: [tmp.path],
+          launcherFile: 'nada',
+          manifestsDir: 'nada',
+        ),
         isNull,
       );
     });
@@ -34,8 +38,32 @@ void main() {
       final found = RealityScanInstall.find(
         roots: [tmp.path],
         launcherFile: 'nada',
+        manifestsDir: 'nada',
       );
       expect(found?.name, 'RealityScan');
+    });
+
+    test('lee los manifiestos del Epic Games Launcher', () {
+      final d = Directory(p.join(tmp.path, 'D', 'RealityScan_2.2'))
+        ..createSync(recursive: true);
+      File(p.join(d.path, 'RealityScan.exe')).writeAsStringSync('');
+      final manifests = Directory(p.join(tmp.path, 'Manifests'))..createSync();
+      File(p.join(manifests.path, 'abc.item')).writeAsStringSync(
+        jsonEncode({
+          'DisplayName': 'RealityScan 2.2',
+          'InstallLocation': d.path,
+          'LaunchExecutable': 'RealityScan.exe',
+        }),
+      );
+      File(p.join(manifests.path, 'roto.item')).writeAsStringSync('{');
+      expect(
+        RealityScanInstall.find(
+          roots: const [],
+          launcherFile: 'nada',
+          manifestsDir: manifests.path,
+        )?.exe,
+        p.join(d.path, 'RealityScan.exe'),
+      );
     });
 
     test('lee la lista del Epic Games Launcher', () {
@@ -51,7 +79,11 @@ void main() {
           }),
         );
       expect(
-        RealityScanInstall.find(roots: const [], launcherFile: list.path)?.exe,
+        RealityScanInstall.find(
+          roots: const [],
+          launcherFile: list.path,
+          manifestsDir: 'nada',
+        )?.exe,
         p.join(d.path, 'RealityScan.exe'),
       );
     });
@@ -75,10 +107,8 @@ void main() {
     );
     expect(args.first, '-headless');
     expect(args.last, '-quit');
-    expect(args.sublist(args.indexOf('-addFolder'), 4), [
-      '-addFolder',
-      'fotos',
-    ]);
+    final at = args.indexOf('-addFolder');
+    expect(args.sublist(at, at + 2), ['-addFolder', 'fotos']);
     final exports = [
       for (var i = 0; i < args.length; i++)
         if (args[i] == '-exportSelectedModel') args[i + 1],
@@ -137,17 +167,72 @@ void main() {
     );
   });
 
-  test('vídeo sin ffmpeg: avisa y no lanza nada', () async {
-    final video = File(p.join(tmp.path, 'v.mp4'))..writeAsStringSync('');
-    final job = ScanBuildJob(
-      source: video.path,
-      name: 'prueba',
-      realityScan: const RealityScanInstall('no-existe.exe'),
-      outputRoot: tmp.path,
+  test('vídeo sin ffmpeg: lo trocea RealityScan con -importVideo', () {
+    final args = realityScanArgs(
+      imagesDir: 'fotogramas',
+      highGlb: 'unreal.glb',
+      irisGlb: 'iris.glb',
+      projectFile: 'escaneo.rsproj',
+      video: 'v.mp4',
     );
-    final events = await job.run().toList();
-    expect(events.single.stage, ScanBuildStage.error);
-    expect(events.single.message, contains('ffmpeg'));
+    expect(args, isNot(contains('-addFolder')));
+    expect(
+      args.sublist(
+        args.indexOf('-importVideo'),
+        args.indexOf('-importVideo') + 4,
+      ),
+      ['-importVideo', 'v.mp4', 'fotogramas', '0.5'],
+    );
+  });
+
+  test('sin diálogos, sale si falla y apunta el progreso', () {
+    final args = realityScanArgs(
+      imagesDir: 'fotos',
+      highGlb: 'unreal.glb',
+      irisGlb: 'iris.glb',
+      projectFile: 'escaneo.rsproj',
+      progressFile: 'progreso.txt',
+      crashDir: 'errores',
+    );
+    expect(args.sublist(1, 3), ['-silent', 'errores']);
+    expect(args, containsAllInOrder(['-set', 'appQuitOnError=true']));
+    expect(
+      args,
+      containsAllInOrder(['-writeProgress', 'progreso.txt', '5', '-newScene']),
+    );
+    // 8K para Unreal antes del primer exporte, 4K para IRIS antes del segundo.
+    final tex = [
+      for (var i = 0; i < args.length; i++)
+        if (args[i].startsWith('unwrapMaxTexResolution=')) i,
+    ];
+    final exports = [
+      for (var i = 0; i < args.length; i++)
+        if (args[i] == '-exportSelectedModel') i,
+    ];
+    expect(args[tex[0]], 'unwrapMaxTexResolution=8192');
+    expect(args[tex[1]], 'unwrapMaxTexResolution=4096');
+    expect(
+      tex[0] < exports[0] && exports[0] < tex[1] && tex[1] < exports[1],
+      isTrue,
+    );
+  });
+
+  group('progreso de RealityScan', () {
+    test('lee la última línea', () {
+      final p = RealityScanProgress.lastOf(
+        '20561 0.00 0.04 404.08 #started\n'
+        '20561 0.45 0.10 0.22 #progress\n'
+        '7 0.30 12.0 125.0 #progress\n',
+      )!;
+      expect(p.stage, 'Texturizando');
+      expect(p.fraction, 0.3);
+      expect(p.remaining, 'quedan 2 min');
+    });
+
+    test('sin líneas válidas, nada', () {
+      expect(RealityScanProgress.lastOf(''), isNull);
+      expect(RealityScanProgress.lastOf('hola\n'), isNull);
+    });
   });
 
   test('pocas fotos: avisa antes de lanzar RealityScan', () async {

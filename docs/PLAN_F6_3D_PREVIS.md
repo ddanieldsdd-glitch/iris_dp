@@ -903,11 +903,11 @@ Plan aprobado por Daniel el 2026-10-27. Un PR por fase, en ramas que salen de `p
 
 Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el motor principal y da una **malla**, que es la que recibe la luz de los focos, da sombra, tiene medidas y sirve a Lumen y a las colisiones. Los **gaussian splats** (Postshot, Scaniverse, Polycam) quedan como capa visual opcional: se ven mejor, pero llevan la luz del escaneo incrustada y no reaccionan a los focos. Para el rodaje del 13 de noviembre no se toca código: vale el flujo manual (GLB con texturas, «Importar escaneo»).
 
-**E1 Entrada de fotos o vídeo** · PC · **hecho, sin probar con RealityScan** (`plan/f6-20-e-escaneo`: `scan_builder.dart`, botón «Crear escaneo desde fotos o vídeo» en el 3D; los fotogramas movidos se descartan solo en vídeo)
+**E1 Entrada de fotos o vídeo** · PC · **hecho** (`plan/f6-20-e-escaneo`: `scan_builder.dart`, botón «Crear escaneo desde fotos o vídeo» en el 3D. Con ffmpeg se descartan los fotogramas movidos; sin él, el vídeo lo trocea RealityScan con `-importVideo`. RealityScan se encuentra por los manifiestos del Epic Games Launcher, en cualquier disco, o se elige a mano)
 - **Qué:** «Nueva localización desde fotos o vídeo» en IRIS Stage. Admite una carpeta de fotos o un vídeo.
 - **Cómo:** del vídeo se sacan 2–3 fotogramas por segundo con ffmpeg y se descartan los movidos con una medida de nitidez (varianza del laplaciano). Se avisa si hay pocas fotos o poco solape.
 
-**E2 RealityScan sin interfaz** · PC · **hecho, sin probar con RealityScan** (`plan/f6-20-e-escaneo`: dos GLB en `DocumentosIRIS Escaneos`; el de IRIS se pone en la planta. Falta la ortofoto de RealityScan y mandar a Unreal la malla alta, que va con E5)
+**E2 RealityScan sin interfaz** · PC · **hecho, probado con RealityScan 2.2** (`plan/f6-20-e-escaneo`, 2026-11-02, 72 fotos sintéticas de una habitación: 107 s). Comandos comprobados con su ayuda (`Help\en-USppbasicsllcommands.htm`). Sin diálogos (`-silent`), sale si falla y apunta el progreso (`-writeProgress`, que el diálogo enseña con la fase y lo que queda). Dos GLB con la textura dentro (`realityScanExportXml`, `embedTextures="1"` en JPG): 8K para Unreal y 4K para IRIS (13 MB en la prueba). El suelo queda a 0 (`-setGroundPlaneFromReconstructionRegion`) y IRIS pasa el GLB de Z arriba a Y arriba (`scan_glb.dart`). Falta la ortofoto de RealityScan
 - **Qué:** IRIS lanza RealityScan por línea de comandos (alinear, malla, simplificar, texturizar, exportar) con progreso y cancelación, sin abrir su ventana.
 - **Salidas:**
   - malla alta para Unreal: FBX o GLB con Nanite y texturas de 8K, importada a `/Game/IRIS/Scans`;
@@ -915,10 +915,10 @@ Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el mot
   - ortofoto cenital a escala conocida (píxeles por metro), que sustituye a la cenital calculada como fondo de la planta.
 - **Ojo:** comprobar los nombres de los comandos (`-addFolder`, `-align`, `-calculateNormalModel`, `-calculateTexture`, `-exportModel`, ortoproyección) con la referencia de la versión instalada.
 
-**E3 Escala y orientación** · todos · **en parte** (la escala con una medida ya existe: `PlanScan.calibrate`; faltan las dianas)
+**E3 Escala y orientación** · todos · **en parte** (la escala con una medida ya existe: `PlanScan.calibrate`; el suelo y la vertical salen de RealityScan. Sin dianas ni GPS, el escaneo sale a una escala cualquiera, unas 4,6 veces en la prueba: hay que calibrarlo siempre. Faltan las dianas)
 - **Qué:** sin una medida real el escaneo no sirve para la planta. La escala se fija con dianas impresas de RealityScan a una distancia conocida o, si no hay, metiendo a mano una medida entre dos puntos. El norte y las coordenadas salen de F6.12.6.
 
-**E4 Paredes propuestas** · todos · **hecho, sin probar con un escaneo real** (`plan/f6-20-e-escaneo`: «Proponer paredes» en el 3D con un escaneo seleccionado; `iris.scanSlice` corta la malla, `scan_walls.dart` saca las paredes, une las dos caras de una pared y parte en las puertas; altura del corte ajustable)
+**E4 Paredes propuestas** · todos · **hecho** (probado con el corte de una malla real de RealityScan: la habitación de 4 × 3 da sus cuatro paredes) (`plan/f6-20-e-escaneo`: «Proponer paredes» en el 3D con un escaneo seleccionado; `iris.scanSlice` corta la malla, `scan_walls.dart` saca las paredes, une las dos caras de una pared y parte en las puertas; altura del corte ajustable)
 - **Qué:** IRIS corta la malla ligera a 1 m de altura, detecta tramos rectos y los propone como paredes de la planta, que se aceptan o se descartan una a una.
 
 **E5 Ida y vuelta y splats** · todos · **en parte, sin probar en Unreal** (`plan/f6-20-e-escaneo`: la malla alta se guarda como `<escaneo>_ue.glb` en la carpeta local de escaneos, sin viajar por la nube, y Unreal la prefiere al importar; los PLY de gaussian splats se ven como nube de puntos con su color. Los splats de verdad esperan al visor moderno con Spark de F6.12.1, porque el visor usa three r147)

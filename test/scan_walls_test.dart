@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -66,7 +65,7 @@ void main() {
 
   test('una habitación girada 30° también sale', () {
     final rnd = math.Random(3);
-    final rot = 30 * math.pi / 180;
+    const rot = 30 * math.pi / 180;
     Offset r(double x, double y) => Offset(
       x * math.cos(rot) - y * math.sin(rot),
       x * math.sin(rot) + y * math.cos(rot),

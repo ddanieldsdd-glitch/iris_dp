@@ -33,7 +33,7 @@ class ScanBuilderSheet extends StatefulWidget {
 }
 
 class _ScanBuilderSheetState extends State<ScanBuilderSheet> {
-  final _realityScan = RealityScanInstall.find();
+  RealityScanInstall? _realityScan = RealityScanInstall.located();
   final _ffmpeg = findFfmpeg();
   final _name = TextEditingController();
   String? _source;
@@ -72,6 +72,22 @@ class _ScanBuilderSheetState extends State<ScanBuilderSheet> {
       dialogTitle: 'Carpeta con las fotos de la localización',
     ),
   );
+
+  /// RealityScan instalado donde no se busca: se elige su .exe y se
+  /// recuerda.
+  Future<void> _pickRealityScan() async {
+    final picked = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Dónde está RealityScan.exe',
+      type: FileType.custom,
+      allowedExtensions: const ['exe'],
+    );
+    final path = picked?.files.single.path;
+    if (path == null) return;
+    final name = p.basename(path).toLowerCase();
+    if (name != 'realityscan.exe' && name != 'realitycapture.exe') return;
+    await RealityScanInstall.remember(path);
+    setState(() => _realityScan = RealityScanInstall(path));
+  }
 
   Future<void> _pickVideo() async {
     final picked = await FilePicker.platform.pickFiles(
@@ -154,12 +170,19 @@ class _ScanBuilderSheetState extends State<ScanBuilderSheet> {
           Text(
             rs == null
                 ? 'No encuentro RealityScan en este PC. Instálalo desde el '
-                      'Epic Games Launcher (es gratis) y vuelve a abrir esto.'
+                      'Epic Games Launcher (es gratis) o, si ya lo tienes, '
+                      'dime dónde está.'
                 : 'Con ${rs.name}, sin abrir su ventana. Salen dos mallas: '
                       'una ligera para la planta y el 3D, y otra con todo el '
                       'detalle para Unreal.',
             style: AppTypography.bodyMedium(palette),
           ),
+          if (rs == null && _job == null)
+            TextButton.icon(
+              icon: const Icon(Icons.search, size: 16),
+              label: const Text('Buscar RealityScan…'),
+              onPressed: _pickRealityScan,
+            ),
           const SizedBox(height: AppSpacing.md),
           if (_job == null) ...[
             Wrap(
@@ -183,7 +206,8 @@ class _ScanBuilderSheetState extends State<ScanBuilderSheet> {
               Text(source, style: AppTypography.mono(palette)),
               if (FileSystemEntity.isFileSync(source) && _ffmpeg == null)
                 Text(
-                  'Para un vídeo hace falta ffmpeg: «winget install ffmpeg» '
+                  'Sin ffmpeg, RealityScan saca los fotogramas pero no se '
+                  'descartan los movidos. Para eso: «winget install ffmpeg» '
                   'en una terminal y vuelve a abrir IRIS.',
                   style: caption.copyWith(color: palette.warning),
                 ),

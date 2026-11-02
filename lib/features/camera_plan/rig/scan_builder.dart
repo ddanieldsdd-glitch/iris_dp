@@ -8,6 +8,9 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/settings/app_prefs.dart';
+import 'scan_glb.dart';
+
 /// RealityScan (o RealityCapture, su nombre anterior) instalado en este PC.
 class RealityScanInstall {
   final String exe;
@@ -17,8 +20,28 @@ class RealityScanInstall {
 
   static const _exeNames = ['RealityScan.exe', 'RealityCapture.exe'];
 
-  /// Busca el ejecutable en las carpetas de la lista del Epic Games Launcher
-  /// y en las de por defecto. `AppProxy.exe` no vale: es solo el instalador.
+  /// El ejecutable elegido a mano, si RealityScan está donde no se busca.
+  static const pathKey = PrefKey<String>('scanBuilder.realityScan', '');
+
+  /// Lo elegido a mano, si sigue ahí; si no, lo que encuentre [find].
+  static RealityScanInstall? located() {
+    final saved = AppPrefs.instance.get(pathKey);
+    if (saved.isNotEmpty && File(saved).existsSync()) {
+      return RealityScanInstall(saved);
+    }
+    return find();
+  }
+
+  static Future<void> remember(String exe) =>
+      AppPrefs.instance.setIn(pathKey, const SettingsScope.global(), exe);
+
+  /// Busca el ejecutable:
+  /// - en los manifiestos del Epic Games Launcher (RealityScan 2 se apunta
+  ///   ahí, en el disco que se eligiera al instalarlo);
+  /// - en la lista de lo instalado del launcher;
+  /// - en las carpetas de por defecto.
+  ///
+  /// `AppProxy.exe` no vale: es solo el instalador.
   static RealityScanInstall? find({
     List<String> roots = const [
       r'C:\Program Files\Epic Games',
@@ -26,8 +49,20 @@ class RealityScanInstall {
     ],
     String launcherFile =
         r'C:\ProgramData\Epic\UnrealEngineLauncher\LauncherInstalled.dat',
+    String manifestsDir =
+        r'C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests',
   }) {
     final dirs = <String>{};
+    try {
+      for (final f in Directory(manifestsDir).listSync().whereType<File>()) {
+        if (!f.path.toLowerCase().endsWith('.item')) continue;
+        try {
+          final json = jsonDecode(f.readAsStringSync()) as Map;
+          final location = json['InstallLocation'] as String?;
+          if (location != null) dirs.add(location);
+        } catch (_) {}
+      }
+    } catch (_) {}
     try {
       final json = jsonDecode(File(launcherFile).readAsStringSync()) as Map;
       for (final item in (json['InstallationList'] as List? ?? const [])) {
@@ -109,41 +144,142 @@ bool isScanPhoto(String path) => scanPhotoFormats.contains(
 
 /// Los argumentos de RealityScan sin interfaz: alinear, malla, limpiar,
 /// texturizar, exportar la malla alta para Unreal, simplificar y exportar
-/// la de IRIS. Los dos GLB llevan las texturas dentro.
+/// la de IRIS. Los dos GLB llevan las texturas dentro: una de 8K para
+/// Unreal y una de 4K para IRIS.
 ///
-/// Los nombres de los comandos son los de la línea de comandos de
-/// RealityCapture 1.x, que RealityScan 2 mantiene.
+/// Comprobados con la ayuda de RealityScan 2.2 (`Help\en-US\appbasics\
+/// allcommands.htm`). Sin diálogos (`-silent`), sale si algo falla y apunta
+/// el progreso en [progressFile] cada 5 s.
+///
+/// Con [video] (cuando no hay ffmpeg), RealityScan saca él mismo un
+/// fotograma cada `1 / videoFps` segundos a [imagesDir], sin descartar los
+/// movidos.
 List<String> realityScanArgs({
   required String imagesDir,
   required String highGlb,
   required String irisGlb,
   required String projectFile,
+  String? exportXml,
+  String? progressFile,
+  String? crashDir,
+  String? video,
   ScanBuildSettings settings = const ScanBuildSettings(),
 }) => [
   '-headless',
+  if (crashDir != null) ...['-silent', crashDir],
+  '-set',
+  'appQuitOnError=true',
+  if (progressFile != null) ...['-writeProgress', progressFile, '5'],
   '-newScene',
-  '-addFolder',
-  imagesDir,
+  if (video != null) ...[
+    '-importVideo',
+    video,
+    imagesDir,
+    '${1 / settings.videoFps}',
+  ] else ...[
+    '-addFolder',
+    imagesDir,
+  ],
+  '-set',
+  'unwrapStyle=MaxTexturesCount',
+  '-set',
+  'unwrapMaximalTexCount=1',
   '-align',
   '-selectMaximalComponent',
   '-setReconstructionRegionAuto',
+  // El suelo en el plano de la rejilla: el escaneo sale con el suelo a 0.
+  '-setGroundPlaneFromReconstructionRegion',
   '-calculateNormalModel',
   '-selectMarginalTriangles',
   '-removeSelectedTriangles',
   '-simplify',
   '${settings.highTriangles}',
+  '-set',
+  'unwrapMaxTexResolution=8192',
   '-calculateTexture',
   '-exportSelectedModel',
   highGlb,
+  ?exportXml,
   '-simplify',
   '${settings.irisTriangles}',
+  '-set',
+  'unwrapMaxTexResolution=4096',
   '-calculateTexture',
   '-exportSelectedModel',
   irisGlb,
+  ?exportXml,
   '-save',
   projectFile,
   '-quit',
 ];
+
+/// Ajustes del exporte de RealityScan: GLB con la textura dentro, en JPG.
+/// Sin esto deja la textura en un PNG aparte, y a IRIS (que copia un solo
+/// archivo) le llegaría el escaneo sin color. Es el mismo formato que el
+/// `.rsInfo` que escribe RealityScan junto a cada exporte.
+const realityScanExportXml = r'''
+<ModelExport exportBinary="1" exportInfoFile="1" exportVertices="1" exportVertexColors="0"
+   exportVertexColorSpace="0" exportVertexNormals="0" exportTriangles="1"
+   exportTriangleStrips="0" meshColor="1 1 1" tileType="1" exportTextureAlpha="0"
+   exportToOneTexture="0" embedTextures="1" shrinkTextures="0" oneTextureMaxSide="8192"
+   oneTextureUsePow2TexSide="1" exportCoordinateSystemType="0" settingsAnchor="0 0 0"
+   settingsRotation="0 0 0" settingsScale="1 1 1" normalSpace="2" normalRange="0"
+   normalFlip="0 0 0" formatAndVersionUID="glb 000 " exportModelByParts="0"
+   exportRandomPartColor="0" exportCameras="0" exportCamerasAsModelPart="0"
+   exportMaterials="0" numberAsciiFormatting="5" authorComment="" exportedLayerCount="1"
+   classificationLayer="-1" moreDetails="">
+  <Header magic="5786949" version="6"/>
+  <Layer0 type="1" textureLayerIndex="0" textureWicContainerFormat="{19E4A5AA-5662-4FC5-A0C0-1758028E1057}"
+     textureWicPixelFormat="{6FDDC324-4E03-4BFE-B185-3D77768DC90F}" textureExtension="jpg"
+     mapQualityToColor="0"/>
+</ModelExport>
+''';
+
+/// Una línea del archivo de `-writeProgress`:
+/// `algId progreso duración estimación #evento`, con el progreso de 0 a 1 y
+/// los tiempos en segundos.
+class RealityScanProgress {
+  final int algId;
+  final double fraction;
+  final double remainingS;
+
+  const RealityScanProgress(this.algId, this.fraction, this.remainingS);
+
+  /// La última línea válida del archivo, o `null`.
+  static RealityScanProgress? lastOf(String text) {
+    for (final line in text.split('\n').reversed) {
+      final w = line.trim().split(RegExp(r'\s+'));
+      if (w.length < 4) continue;
+      final id = int.tryParse(w[0]);
+      final f = double.tryParse(w[1]), r = double.tryParse(w[3]);
+      if (id == null || f == null || r == null) continue;
+      return RealityScanProgress(id, f.clamp(0, 1).toDouble(), r);
+    }
+    return null;
+  }
+
+  /// En qué está, por su número de proceso (`tutorials\processids.htm`;
+  /// 65536 y 65537 no están ahí, pero son los de alinear en RealityScan 2.2).
+  String get stage => switch (algId) {
+    65536 || 65537 => 'Alineando las fotos',
+    8208 => 'Mapas de profundidad',
+    8240 || 8242 || 20561 || 20562 || 20560 => 'Creando la malla',
+    7 || 8 => 'Texturizando',
+    11 || 44 => 'Simplificando',
+    6 => 'Exportando',
+    20533 || 20534 => 'Guardando',
+    10 => 'Limpiando la malla',
+    _ => 'Procesando',
+  };
+
+  String get remaining {
+    final s = remainingS.round();
+    if (s <= 0) return '';
+    if (s < 60) return 'quedan $s s';
+    if (s < 3600) return 'quedan ${(s / 60).round()} min';
+    return 'quedan ${s ~/ 3600} h ${(s % 3600) ~/ 60} min';
+  }
+}
 
 /// Los argumentos de ffmpeg para sacar [fps] fotogramas por segundo, en JPG
 /// de calidad alta, a [outDir].
@@ -308,17 +444,14 @@ class ScanBuildJob {
 
       var imagesDir = source;
       var discarded = 0;
-      if (isVideo) {
-        final ff = ffmpeg;
-        if (ff == null) {
-          yield const ScanBuildProgress(
-            ScanBuildStage.error,
-            'Para usar un vídeo hace falta ffmpeg. Instálalo con '
-            '«winget install ffmpeg» y vuelve a abrir IRIS, o usa una '
-            'carpeta de fotos.',
-          );
-          return;
-        }
+      // Sin ffmpeg, el vídeo lo trocea RealityScan (sin descartar movidos).
+      String? rsVideo;
+      final ff = ffmpeg;
+      if (isVideo && ff == null) {
+        imagesDir = p.join(folder.path, 'fotogramas');
+        await Directory(imagesDir).create();
+        rsVideo = source;
+      } else if (isVideo && ff != null) {
         final frames = Directory(p.join(folder.path, 'fotogramas'));
         await frames.create();
         yield const ScanBuildProgress(
@@ -373,10 +506,14 @@ class ScanBuildJob {
         imagesDir = frames.path;
       }
 
-      final count = Directory(
-        imagesDir,
-      ).listSync().whereType<File>().where((f) => isScanPhoto(f.path)).length;
-      if (count < minImages) {
+      final count = rsVideo != null
+          ? null
+          : Directory(imagesDir)
+                .listSync()
+                .whereType<File>()
+                .where((f) => isScanPhoto(f.path))
+                .length;
+      if (count != null && count < minImages) {
         yield ScanBuildProgress(
           ScanBuildStage.error,
           'Solo hay $count imágenes útiles; hacen falta al menos $minImages '
@@ -387,11 +524,16 @@ class ScanBuildJob {
 
       final highGlb = p.join(folder.path, 'unreal.glb');
       final irisGlb = p.join(folder.path, 'iris.glb');
+      final intro = count == null
+          ? 'RealityScan está creando el escaneo con los fotogramas del vídeo.'
+          : 'RealityScan está creando el escaneo con $count imágenes.';
       yield ScanBuildProgress(
         ScanBuildStage.reconstructing,
-        'RealityScan está creando el escaneo con $count imágenes. Puede '
-        'tardar de 15 minutos a varias horas.',
+        '$intro Puede tardar de 15 minutos a varias horas.',
       );
+      final progressFile = File(p.join(folder.path, 'progreso.txt'));
+      final exportXml = File(p.join(folder.path, 'exporte.xml'));
+      await exportXml.writeAsString(realityScanExportXml);
       _process = await Process.start(
         realityScan.exe,
         realityScanArgs(
@@ -404,12 +546,37 @@ class ScanBuildJob {
                 ? 'escaneo.rcproj'
                 : 'escaneo.rsproj',
           ),
+          exportXml: exportXml.path,
+          progressFile: progressFile.path,
+          crashDir: p.join(folder.path, 'errores'),
+          video: rsVideo,
           settings: settings,
         ),
       );
       _process!.stdout.drain<void>();
       _process!.stderr.drain<void>();
-      final code = await _process!.exitCode;
+      int? code;
+      unawaited(_process!.exitCode.then((c) => code = c));
+      // Mientras trabaja, lo que apunta en el archivo de progreso.
+      while (code == null) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        if (_cancelled) return;
+        if (!progressFile.existsSync()) continue;
+        String text;
+        try {
+          text = progressFile.readAsStringSync();
+        } catch (_) {
+          continue;
+        }
+        final last = RealityScanProgress.lastOf(text);
+        if (last == null) continue;
+        yield ScanBuildProgress(
+          ScanBuildStage.reconstructing,
+          '$intro\n${last.stage}'
+          '${last.remaining.isEmpty ? '' : ' · ${last.remaining}'}',
+          fraction: last.fraction,
+        );
+      }
       if (_cancelled) return;
       if (!File(irisGlb).existsSync()) {
         yield ScanBuildProgress(
@@ -420,11 +587,29 @@ class ScanBuildJob {
         );
         return;
       }
+      // RealityScan da Z arriba; glTF, Y arriba.
+      yield const ScanBuildProgress(
+        ScanBuildStage.reconstructing,
+        'Poniendo el escaneo de pie…',
+      );
+      for (final path in [irisGlb, highGlb]) {
+        if (!File(path).existsSync()) continue;
+        await Isolate.run(() {
+          final fixed = glbZUpToYUp(File(path).readAsBytesSync());
+          if (fixed != null) File(path).writeAsBytesSync(fixed);
+        });
+      }
       final result = ScanBuildResult(
         irisGlb: irisGlb,
         highGlb: highGlb,
         folder: folder.path,
-        images: count,
+        images:
+            count ??
+            Directory(imagesDir)
+                .listSync()
+                .whereType<File>()
+                .where((f) => isScanPhoto(f.path))
+                .length,
         discarded: discarded,
       );
       yield ScanBuildProgress(
