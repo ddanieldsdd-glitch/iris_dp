@@ -1299,9 +1299,51 @@
     });
   }
 
+  // Corte horizontal del escaneo a `h` metros del suelo (F6.20 E4): los
+  // tramos donde sus triángulos cruzan ese plano, en metros de la planta
+  // ([x1, y1, x2, y2, …]), para proponer paredes.
+  function scanSlice(id, h) {
+    const w = scanWrappers[id];
+    if (!w || !w.children.length) return null;
+    w.updateWorldMatrix(true, true);
+    const out = [];
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    const cut = (p, q) => {
+      const t = (h - p.y) / (q.y - p.y);
+      return [p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t];
+    };
+    w.traverse((o) => {
+      if (!o.isMesh || !o.geometry) return;
+      const pos = o.geometry.attributes.position;
+      if (!pos) return;
+      const index = o.geometry.index;
+      const n = index ? index.count : pos.count;
+      for (let i = 0; i + 2 < n; i += 3) {
+        const ia = index ? index.getX(i) : i;
+        const ib = index ? index.getX(i + 1) : i + 1;
+        const ic = index ? index.getX(i + 2) : i + 2;
+        a.fromBufferAttribute(pos, ia).applyMatrix4(o.matrixWorld);
+        b.fromBufferAttribute(pos, ib).applyMatrix4(o.matrixWorld);
+        c.fromBufferAttribute(pos, ic).applyMatrix4(o.matrixWorld);
+        const pts = [];
+        for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+          if ((p.y - h) * (q.y - h) < 0) pts.push(cut(p, q));
+        }
+        if (pts.length === 2) {
+          out.push(
+            Math.round(pts[0][0] * 1000) / 1000, Math.round(pts[0][1] * 1000) / 1000,
+            Math.round(pts[1][0] * 1000) / 1000, Math.round(pts[1][1] * 1000) / 1000,
+          );
+        }
+      }
+    });
+    return JSON.stringify(out);
+  }
+
   window.iris = {
     load,
     scanTop,
+    scanSlice,
     // Un escaneo que acaba de llegar a este equipo: se olvida lo cargado (o
     // el fallo) y se vuelve a pedir con la escena de antes.
     rescan: (file) => {

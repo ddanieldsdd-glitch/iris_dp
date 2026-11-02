@@ -553,7 +553,7 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 **F6.12.2 Recortar y limpiar** · Mac
 - **Qué:** caja de recorte y borrador del escaneo, guardados con el escaneo.
 
-**F6.12.3 Del escaneo a la planta** · Mac · **en curso** (`plan/f6-12-escaneos-rodaje`: cenital a escala como fondo de la planta; falta proponer paredes)
+**F6.12.3 Del escaneo a la planta** · Mac · **hecho** (cenital a escala como fondo de la planta; paredes propuestas con F6.20 E4)
 - **Qué:** vista cenital y corte a 1 m como fondo de la planta para calcar, y propuesta de paredes detectadas.
 
 **F6.12.4 Luz sobre el escaneo** · Mac · **en curso** (`plan/f6-12-escaneos-rodaje`: con un escaneo, cuatro focos dan sombra y el escaneo la recibe; sin malla simplificada todavía)
@@ -918,7 +918,7 @@ Acordado con Daniel el 2026-11-02. **Decisión:** RealityScan en el PC es el mot
 **E3 Escala y orientación** · todos · **en parte** (la escala con una medida ya existe: `PlanScan.calibrate`; faltan las dianas)
 - **Qué:** sin una medida real el escaneo no sirve para la planta. La escala se fija con dianas impresas de RealityScan a una distancia conocida o, si no hay, metiendo a mano una medida entre dos puntos. El norte y las coordenadas salen de F6.12.6.
 
-**E4 Paredes propuestas** · todos · pendiente (es la parte que falta de F6.12.3)
+**E4 Paredes propuestas** · todos · **hecho, sin probar con un escaneo real** (`plan/f6-20-e-escaneo`: «Proponer paredes» en el 3D con un escaneo seleccionado; `iris.scanSlice` corta la malla, `scan_walls.dart` saca las paredes, une las dos caras de una pared y parte en las puertas; altura del corte ajustable)
 - **Qué:** IRIS corta la malla ligera a 1 m de altura, detecta tramos rectos y los propone como paredes de la planta, que se aceptan o se descartan una a una.
 
 **E5 Ida y vuelta y splats** · todos · pendiente

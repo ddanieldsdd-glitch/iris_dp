@@ -31,8 +31,11 @@ import '../../unreal_link/unreal_stage_payload.dart';
 import '../../unreal_link/unreal_thumbs.dart';
 import '../../../core/sync/plan_scan_store.dart';
 import '../../../core/utils/media_storage.dart';
+import '../plan_segment.dart';
 import 'scan_builder_sheet.dart';
 import 'scan_store.dart';
+import 'scan_walls.dart';
+import 'scan_walls_sheet.dart';
 import 'rig_report.dart';
 
 /// Capas del 3D que se pueden ocultar, con su nombre en el visor.
@@ -695,7 +698,41 @@ class _Plan3dViewState extends State<Plan3dView> {
           style: caption,
         ),
       ],
+      if (widget.onAdd != null) ...[
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.border_outer, size: 16),
+          label: const Text('Proponer paredes'),
+          onPressed: () => _proposeWalls(el),
+        ),
+      ],
     ];
+  }
+
+  /// Corta el escaneo a una altura, propone paredes y añade a la planta las
+  /// que se acepten (F6.20 E4).
+  Future<void> _proposeWalls(PlanElement el) async {
+    final web = _web, add = widget.onAdd;
+    if (web == null || !_ready || add == null) return;
+    final id = PlanScene3d.idOf(el, widget.elements.indexOf(el));
+    final walls = await ScanWallsSheet.show(context, (h) async {
+      final raw = await web.evaluateJavascript(
+        source: 'iris.scanSlice(${jsonEncode(id)}, $h);',
+      );
+      final data = raw is String ? jsonDecode(raw) : null;
+      return data is List ? sliceSegments(data.cast<num>()) : null;
+    });
+    if (walls == null || walls.isEmpty) return;
+    final mpu = widget.metersPerUnit;
+    for (final w in walls) {
+      await add(PlanSegment.create(start: w.start / mpu, end: w.end / mpu));
+    }
+    if (mounted) {
+      setState(
+        () => _status =
+            '${walls.length} paredes añadidas a la planta desde el escaneo.',
+      );
+    }
   }
 
   /// Pide al visor la cenital del escaneo [el] y la pone de fondo.
