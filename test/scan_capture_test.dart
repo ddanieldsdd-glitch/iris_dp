@@ -100,4 +100,69 @@ void main() {
     expect(File(p.join(dir.path, 'fuera.jpg')).existsSync(), isFalse);
     expect(CapturePackage.isCapture(out), isTrue);
   });
+
+  test('capture.json v2: planos de pared y toques pasan a pistas', () {
+    final pkg = CapturePackage.fromJson('/x', {
+      'version': 2,
+      'frames': [lookingX],
+      'planes': [
+        {
+          'id': 'A',
+          'alignment': 'vertical',
+          'classification': 'wall',
+          // Ancla en (2, 0, -3), sin giro: la cara va a lo largo de X.
+          'transform': [
+            1.0, 0.0, 0.0, 0.0, //
+            0.0, 1.0, 0.0, 0.0, //
+            0.0, 0.0, 1.0, 0.0, //
+            2.0, 0.0, -3.0, 1.0,
+          ],
+          'center': [0.5, 0.0, 0.0],
+          'extent': [3.0, 2.4],
+        },
+        {
+          'id': 'B',
+          'alignment': 'vertical',
+          'classification': 'door',
+          'transform': List<double>.filled(16, 0),
+          'center': [0.0, 0.0, 0.0],
+          'extent': [0.9, 2.0],
+        },
+      ],
+      'marks': [
+        {
+          'kind': 'corner',
+          'position': [0.0, 1.0, -3.0],
+        },
+        {
+          'kind': 'ceiling',
+          'position': [1.0, 2.55, -1.0],
+        },
+      ],
+      'points': [0, 0, 0, 1, 1, 1],
+    });
+    expect(pkg.version, 2);
+    expect(pkg.hasStructure, isTrue);
+    expect(pkg.points, hasLength(6));
+    final pts = pkg.hintPoints();
+    // Una pared (dos extremos) y dos toques.
+    expect(pts, hasLength(12));
+    expect(pts.sublist(0, 3), [1.0, 0.0, -3.0]);
+    expect(pts.sublist(3, 6), [4.0, 0.0, -3.0]);
+    // Sin mover: la planta es (x, z) del mundo.
+    final hints = pkg.hintsFrom(pts);
+    expect(hints.wallPlanes.single.$2, const Offset(4, -3));
+    expect(hints.corners.single, const Offset(0, -3));
+    expect(hints.ceilingY, 2.55);
+    expect(hints.floorY, isNull);
+  });
+
+  test('capture.json v1 se sigue leyendo, sin estructura', () {
+    final pkg = CapturePackage.fromJson('/x', {
+      'frames': [lookingX],
+    });
+    expect(pkg.version, 1);
+    expect(pkg.frames, hasLength(1));
+    expect(pkg.hasStructure, isFalse);
+  });
 }

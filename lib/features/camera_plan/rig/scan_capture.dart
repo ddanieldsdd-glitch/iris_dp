@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:path/path.dart' as p;
+
+import 'scan_structure.dart';
 
 /// Una foto de una captura guiada del iPhone (F6.20 E6): su archivo y dónde
 /// estaba la cámara según ARKit, en metros.
@@ -51,6 +54,84 @@ class CaptureFrame {
   List<double> column(int c) => transform.sublist(c * 4, c * 4 + 3);
 }
 
+/// Un plano que ARKit detectó durante la captura (ES.1, `capture.json` v2).
+class CapturePlane {
+  final String id;
+  final bool vertical;
+
+  /// wall, floor, ceiling, door, window, table, seat o none.
+  final String classification;
+
+  /// Del ancla al mundo, por columnas.
+  final List<double> transform;
+
+  /// Centro en el sistema del ancla y lados (x, z) del plano.
+  final List<double> center;
+  final List<double> extent;
+
+  const CapturePlane({
+    required this.id,
+    required this.vertical,
+    required this.classification,
+    required this.transform,
+    required this.center,
+    required this.extent,
+  });
+
+  static CapturePlane? fromJson(Map json) {
+    final t = json['transform'], c = json['center'], e = json['extent'];
+    if (t is! List || t.length != 16 || c is! List || c.length != 3) {
+      return null;
+    }
+    if (e is! List || e.length != 2) return null;
+    return CapturePlane(
+      id: json['id'] as String? ?? '',
+      vertical: json['alignment'] == 'vertical',
+      classification: json['classification'] as String? ?? 'none',
+      transform: [for (final v in t) (v as num).toDouble()],
+      center: [for (final v in c) (v as num).toDouble()],
+      extent: [for (final v in e) (v as num).toDouble()],
+    );
+  }
+
+  /// Un punto del sistema del ancla, en el mundo de ARKit.
+  List<double> toWorld(double x, double y, double z) => [
+    for (var r = 0; r < 3; r++)
+      transform[r] * x +
+          transform[4 + r] * y +
+          transform[8 + r] * z +
+          transform[12 + r],
+  ];
+
+  /// Los dos extremos de la cara, a lo ancho (x del ancla), en el mundo.
+  (List<double>, List<double>) faceEnds() {
+    final half = extent[0] / 2;
+    return (
+      toWorld(center[0] - half, center[1], center[2]),
+      toWorld(center[0] + half, center[1], center[2]),
+    );
+  }
+
+  /// Un plano de pared: vertical y no puerta, ventana ni mueble.
+  bool get isWall =>
+      vertical && (classification == 'wall' || classification == 'none');
+}
+
+/// Un toque de precisión en la captura: esquina, puerta, ventana, suelo o
+/// techo, en el mundo de ARKit.
+class CaptureMark {
+  final String kind;
+  final List<double> position;
+
+  const CaptureMark(this.kind, this.position);
+
+  static CaptureMark? fromJson(Map json) {
+    final pos = json['position'], kind = json['kind'];
+    if (pos is! List || pos.length != 3 || kind is! String) return null;
+    return CaptureMark(kind, [for (final v in pos) (v as num).toDouble()]);
+  }
+}
+
 /// Una captura guiada: la carpeta con las fotos y su `capture.json`.
 class CapturePackage {
   static const manifest = 'capture.json';
@@ -59,7 +140,23 @@ class CapturePackage {
   final List<CaptureFrame> frames;
   final String? device;
 
-  const CapturePackage(this.dir, this.frames, {this.device});
+  /// 1 sin estructura; 2 con [planes], [marks] y [points] (ES.1).
+  final int version;
+  final List<CapturePlane> planes;
+  final List<CaptureMark> marks;
+
+  /// Nube dispersa de ARKit: x, y, z seguidos.
+  final List<double> points;
+
+  const CapturePackage(
+    this.dir,
+    this.frames, {
+    this.device,
+    this.version = 1,
+    this.planes = const [],
+    this.marks = const [],
+    this.points = const [],
+  });
 
   static bool isCapture(String dir) => File(p.join(dir, manifest)).existsSync();
 
@@ -67,14 +164,73 @@ class CapturePackage {
     try {
       final json =
           jsonDecode(File(p.join(dir, manifest)).readAsStringSync()) as Map;
-      final frames = [
-        for (final f in (json['frames'] as List? ?? const []))
-          if (f is Map) ?CaptureFrame.fromJson(f),
-      ];
-      return CapturePackage(dir, frames, device: json['device'] as String?);
+      return fromJson(dir, json);
     } catch (_) {
       return null;
     }
+  }
+
+  static CapturePackage fromJson(String dir, Map json) {
+    List<T> list<T>(String key, T? Function(Map) parse) => [
+      for (final v in (json[key] as List? ?? const []))
+        if (v is Map) ?parse(v),
+    ];
+    final points = json['points'];
+    return CapturePackage(
+      dir,
+      list('frames', CaptureFrame.fromJson),
+      device: json['device'] as String?,
+      version: (json['version'] as num?)?.toInt() ?? 1,
+      planes: list('planes', CapturePlane.fromJson),
+      marks: list('marks', CaptureMark.fromJson),
+      points: points is List && points.length % 3 == 0
+          ? [for (final v in points) (v as num).toDouble()]
+          : const [],
+    );
+  }
+
+  bool get hasStructure => planes.isNotEmpty || marks.isNotEmpty;
+
+  /// Los puntos de la estructura en el mundo de ARKit (x, y, z seguidos),
+  /// para llevarlos a la planta con la colocación del escaneo
+  /// (`iris.scanToPlan`). [hintsFrom] los lee en el mismo orden.
+  List<double> hintPoints() => [
+    for (final pl in planes.where((pl) => pl.isWall)) ...[
+      ...pl.faceEnds().$1,
+      ...pl.faceEnds().$2,
+    ],
+    for (final m in marks) ...m.position,
+  ];
+
+  /// Las pistas para el solucionador, con [mapped] = [hintPoints] ya en la
+  /// planta (x, altura, y de la planta).
+  CaptureHints hintsFrom(List<double> mapped) {
+    Offset at(int i) => Offset(mapped[i * 3], mapped[i * 3 + 2]);
+    final walls = planes.where((pl) => pl.isWall).length;
+    if (mapped.length != (walls * 2 + marks.length) * 3) {
+      return const CaptureHints();
+    }
+    final corners = <Offset>[];
+    final floors = <double>[], ceilings = <double>[];
+    for (var i = 0; i < marks.length; i++) {
+      final k = walls * 2 + i;
+      switch (marks[i].kind) {
+        case 'corner':
+          corners.add(at(k));
+        case 'floor':
+          floors.add(mapped[k * 3 + 1]);
+        case 'ceiling':
+          ceilings.add(mapped[k * 3 + 1]);
+      }
+    }
+    double? mean(List<double> v) =>
+        v.isEmpty ? null : v.reduce((a, b) => a + b) / v.length;
+    return CaptureHints(
+      wallPlanes: [for (var i = 0; i < walls; i++) (at(i * 2), at(i * 2 + 1))],
+      corners: corners,
+      floorY: mean(floors),
+      ceilingY: mean(ceilings),
+    );
   }
 
   /// Escribe junto a cada foto su `.xmp` para RealityScan. Devuelve cuántas

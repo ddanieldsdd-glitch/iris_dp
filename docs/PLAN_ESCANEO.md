@@ -41,7 +41,7 @@ iPhone (ARKit)              PC (RealityScan)
 | Id | Qué | Estado |
 |----|-----|--------|
 | ES.1 | La captura del iPhone guarda la estructura (`capture.json` v2) | pendiente |
-| ES.2 | Solucionador de estructura | en curso |
+| ES.2 | Solucionador de estructura | hecho (pruebas sintéticas; falta la casa real) |
 | ES.3 | Revisión en la planta y «pegar al escaneo» | pendiente (antes, maqueta) |
 | ES.4 | Paredes limpias con la textura real proyectada | después |
 | ES.5 | Muebles sustituidos por modelos | después |

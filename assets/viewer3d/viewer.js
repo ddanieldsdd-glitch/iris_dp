@@ -1562,10 +1562,134 @@
     return JSON.stringify(out);
   }
 
+  // Recorre los triángulos de un escaneo en el mundo: fn(a, b, c).
+  function eachScanTriangle(w, fn) {
+    w.updateWorldMatrix(true, true);
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    w.traverse((o) => {
+      if (!o.isMesh || !o.geometry) return;
+      const pos = o.geometry.attributes.position;
+      if (!pos) return;
+      const index = o.geometry.index;
+      const n = index ? index.count : pos.count;
+      for (let i = 0; i + 2 < n; i += 3) {
+        a.fromBufferAttribute(pos, index ? index.getX(i) : i).applyMatrix4(o.matrixWorld);
+        b.fromBufferAttribute(pos, index ? index.getX(i + 1) : i + 1).applyMatrix4(o.matrixWorld);
+        c.fromBufferAttribute(pos, index ? index.getX(i + 2) : i + 2).applyMatrix4(o.matrixWorld);
+        fn(a, b, c);
+      }
+    });
+  }
+
+  // Mediciones del escaneo para el solucionador de estructura (ES.2), en una
+  // sola pasada: cortes horizontales cada `step` metros (10 cm) y, por alturas, el
+  // área de los triángulos horizontales que miran arriba (suelo, camas,
+  // mesas) y abajo (techo). En metros de la planta.
+  function scanProfile(id, step) {
+    const w = scanWrappers[id];
+    if (!w || !w.children.length) return null;
+    w.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(w);
+    if (box.isEmpty()) return null;
+    step = Math.max(0.05, step || 0.1);
+    const bin = 0.02;
+    const y0 = box.min.y;
+    const bins = Math.max(1, Math.ceil((box.max.y - y0) / bin) + 1);
+    const up = new Float64Array(bins), down = new Float64Array(bins);
+    const heights = [];
+    for (let h = y0 + step / 2; h < box.max.y; h += step) heights.push(h);
+    const slices = heights.map(() => []);
+    const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), nrm = new THREE.Vector3();
+    const r = (v) => Math.round(v * 1000) / 1000;
+    eachScanTriangle(w, (a, b, c) => {
+      e1.subVectors(b, a);
+      e2.subVectors(c, a);
+      nrm.crossVectors(e1, e2);
+      const len = nrm.length();
+      if (len > 0) {
+        const area = len / 2, ny = nrm.y / len;
+        // Horizontal a menos de ~25°.
+        if (Math.abs(ny) > 0.9) {
+          const k = Math.min(bins - 1, Math.max(0, Math.floor(((a.y + b.y + c.y) / 3 - y0) / bin)));
+          if (ny > 0) up[k] += area; else down[k] += area;
+        }
+      }
+      const lo = Math.min(a.y, b.y, c.y), hi = Math.max(a.y, b.y, c.y);
+      const k0 = Math.max(0, Math.ceil((lo - y0 - step / 2) / step));
+      for (let k = k0; k < heights.length && heights[k] < hi; k++) {
+        const h = heights[k];
+        const pts = [];
+        for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+          if ((p.y - h) * (q.y - h) < 0) {
+            const t = (h - p.y) / (q.y - p.y);
+            pts.push(p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t);
+          }
+        }
+        if (pts.length === 4) slices[k].push(r(pts[0]), r(pts[1]), r(pts[2]), r(pts[3]));
+      }
+    });
+    return JSON.stringify({
+      bin, y0, up: Array.from(up, r), down: Array.from(down, r),
+      heights: heights.map(r), slices,
+    });
+  }
+
+  // Rejilla cenital (ES.2): en cada celda de `cell` metros, la altura más
+  // alta del escaneo entre `fromY` y `toY` (−1 si no hay nada). Con ella el
+  // solucionador encuentra los muebles.
+  function scanGrid(id, fromY, toY, cell) {
+    const w = scanWrappers[id];
+    if (!w || !w.children.length) return null;
+    w.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(w);
+    if (box.isEmpty()) return null;
+    cell = Math.max(0.02, cell || 0.1);
+    const cols = Math.max(1, Math.ceil((box.max.x - box.min.x) / cell));
+    const rows = Math.max(1, Math.ceil((box.max.z - box.min.z) / cell));
+    if (cols * rows > 4e6) return null;
+    const top = new Float64Array(cols * rows).fill(-1e9);
+    const put = (x, y, z) => {
+      if (y <= fromY || y >= toY) return;
+      const i = Math.min(cols - 1, Math.floor((x - box.min.x) / cell));
+      const j = Math.min(rows - 1, Math.floor((z - box.min.z) / cell));
+      const k = j * cols + i;
+      if (y > top[k]) top[k] = y;
+    };
+    eachScanTriangle(w, (a, b, c) => {
+      put(a.x, a.y, a.z);
+      put(b.x, b.y, b.z);
+      put(c.x, c.y, c.z);
+      put((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3);
+    });
+    return JSON.stringify({
+      x0: box.min.x, y0: box.min.z, cell, cols, rows,
+      // Celda vacía: null.
+      top: Array.from(top, (v) => (v < -1e8 ? null : Math.round(v * 1000) / 1000)),
+    });
+  }
+
+  // Puntos del escaneo sin colocar (el mundo de ARKit de la captura, que es
+  // el del GLB) llevados a la planta con la colocación del escaneo (ES.2).
+  function scanToPlan(id, flat) {
+    const w = scanWrappers[id];
+    if (!w || !Array.isArray(flat)) return null;
+    w.updateWorldMatrix(true, true);
+    const v = new THREE.Vector3();
+    const out = [];
+    for (let i = 0; i + 2 < flat.length; i += 3) {
+      v.set(flat[i], flat[i + 1], flat[i + 2]).applyMatrix4(w.matrixWorld);
+      out.push(v.x, v.y, v.z);
+    }
+    return JSON.stringify(out);
+  }
+
   window.iris = {
     load,
+    scanToPlan,
     scanTop,
     scanSlice,
+    scanProfile,
+    scanGrid,
     // Un escaneo que acaba de llegar a este equipo: se olvida lo cargado (o
     // el fallo) y se vuelve a pedir con la escena de antes.
     rescan: (file) => {
