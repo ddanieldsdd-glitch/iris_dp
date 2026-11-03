@@ -12,7 +12,9 @@ import UIKit
 ///
 /// Deja una carpeta `<nombre>.iriscapture` con las fotos y `capture.json`
 /// (ver `lib/features/camera_plan/rig/scan_capture.dart`) y la devuelve
-/// comprimida en `.zip`.
+/// comprimida en `.zip`. Desde la v2 (ES.1, `docs/PLAN_ESCANEO.md`) el
+/// `capture.json` lleva además la estructura: los planos de ARKit, los
+/// toques de precisión y la nube de puntos dispersa.
 final class IrisCapturePlugin: NSObject, FlutterPlugin {
   static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(
@@ -96,6 +98,125 @@ private struct Shot {
   let json: [String: Any]
 }
 
+/// Qué se marca con un toque de precisión.
+enum MarkKind: String, CaseIterable {
+  case corner, door, window, floor, ceiling
+
+  var label: String {
+    switch self {
+    case .corner: return "Esquina"
+    case .door: return "Puerta"
+    case .window: return "Ventana"
+    case .floor: return "Suelo"
+    case .ceiling: return "Techo"
+    }
+  }
+
+  var hint: String {
+    switch self {
+    case .corner: return "Toca una esquina de la pared."
+    case .door: return "Toca los bordes y lo alto de la puerta."
+    case .window: return "Toca los bordes, el alféizar y lo alto de la ventana."
+    case .floor: return "Toca el suelo."
+    case .ceiling: return "Toca el techo."
+    }
+  }
+
+  var color: UIColor {
+    switch self {
+    case .corner: return .systemRed
+    case .door: return .systemPurple
+    case .window: return .systemTeal
+    case .floor: return .systemBrown
+    case .ceiling: return .white
+    }
+  }
+}
+
+/// Un toque de precisión: dónde cayó en el mundo y el plano que tocó.
+private struct Mark {
+  let kind: MarkKind
+  let position: simd_float3
+  let planeId: UUID?
+  let node: SCNNode
+
+  var json: [String: Any] {
+    var out: [String: Any] = [
+      "kind": kind.rawValue,
+      "position": [position.x, position.y, position.z].map(rounded),
+    ]
+    if let planeId { out["planeId"] = planeId.uuidString }
+    return out
+  }
+}
+
+/// Al milímetro: el JSON no necesita más.
+private func rounded(_ v: Float) -> Double { (Double(v) * 1000).rounded() / 1000 }
+
+/// Un plano de ARKit con el giro de `planeExtent` metido en la matriz: así el
+/// ancho va por la x del ancla y el fondo por la z, como pide `capture.json`.
+private struct PlaneShape {
+  let transform: simd_float4x4
+  let center: simd_float3
+  let width: Float
+  let depth: Float
+  private let back: simd_float4x4
+
+  init(_ plane: ARPlaneAnchor) {
+    let turn = simd_float4x4(
+      simd_quatf(angle: plane.planeExtent.rotationOnYAxis, axis: simd_float3(0, 1, 0)))
+    back = turn.inverse
+    transform = plane.transform * turn
+    center = simd_make_float3(back * simd_float4(plane.center, 1))
+    width = plane.planeExtent.width
+    depth = plane.planeExtent.height
+  }
+
+  /// Un punto del sistema del ancla al de este plano.
+  func local(_ v: simd_float3) -> simd_float3 { simd_make_float3(back * simd_float4(v, 1)) }
+
+  /// Los dos extremos del ancho, en el mundo: para una pared, su traza.
+  var ends: (simd_float3, simd_float3) {
+    let c = simd_make_float3(transform * simd_float4(center, 1))
+    let axis = simd_normalize(simd_make_float3(transform.columns.0))
+    return (c - axis * width / 2, c + axis * width / 2)
+  }
+
+  static func json(_ plane: ARPlaneAnchor) -> [String: Any] {
+    let shape = PlaneShape(plane)
+    let t = shape.transform
+    var out: [String: Any] = [
+      "id": plane.identifier.uuidString,
+      "alignment": plane.alignment == .vertical ? "vertical" : "horizontal",
+      "classification": classification(plane),
+      "transform": [t.columns.0, t.columns.1, t.columns.2, t.columns.3]
+        .flatMap { [$0.x, $0.y, $0.z, $0.w] }.map { Double($0) },
+      "center": [shape.center.x, shape.center.y, shape.center.z].map(rounded),
+      "extent": [shape.width, shape.depth].map(rounded),
+    ]
+    let boundary = plane.geometry.boundaryVertices.map { v -> [Double] in
+      let p = shape.local(v)
+      return [rounded(p.x), rounded(p.z)]
+    }
+    if boundary.count >= 3 { out["boundary"] = boundary }
+    return out
+  }
+
+  static func classification(_ plane: ARPlaneAnchor) -> String {
+    guard ARPlaneAnchor.isClassificationSupported else { return "none" }
+    switch plane.classification {
+    case .wall: return "wall"
+    case .floor: return "floor"
+    case .ceiling: return "ceiling"
+    case .door: return "door"
+    case .window: return "window"
+    case .table: return "table"
+    case .seat: return "seat"
+    default: return "none"
+    }
+  }
+}
+
 final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
   private let name: String
   private let onDone: (String?) -> Void
@@ -112,12 +233,23 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
   private var angularSpeed: Float = 0
   private var finished = false
 
-  /// Nube de puntos vista hasta ahora, por identificador de ARKit: crece
-  /// mientras se recorre el sitio (como Polycam sin LiDAR).
-  private var cloud: [UInt64: simd_float3] = [:]
+  /// Nube de puntos vista hasta ahora, un punto por celda de 2 cm (sin
+  /// duplicados): crece mientras se recorre el sitio (como Polycam sin
+  /// LiDAR) y va tal cual a `points` del `capture.json`.
+  private var cloud: [SIMD3<Int32>: simd_float3] = [:]
   private let cloudNode = SCNNode()
   private var lastCloudUpdate: TimeInterval = 0
-  private let maxCloud = 40000
+  private let maxCloud = 20000
+  private let cloudCell: Float = 0.02
+
+  /// Toques de precisión («Marcar»).
+  private var marks: [Mark] = []
+  private var marking = false
+  private var markKind: MarkKind = .corner
+  private let markButton = IrisCaptureViewController.button("Marcar", filled: false)
+  private let kindPicker = UISegmentedControl(items: MarkKind.allCases.map(\.label))
+  private let undoMark = IrisCaptureViewController.button("Deshacer", filled: false)
+  private lazy var markBar = UIStackView(arrangedSubviews: [kindPicker, undoMark])
 
   /// Minimapa pequeño en la esquina o grande, tocándolo.
   private var mapExpanded = false
@@ -174,11 +306,25 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     shoot.addTarget(self, action: #selector(shootTapped), for: .touchUpInside)
     let done = Self.button("Terminar", filled: true)
     done.addTarget(self, action: #selector(doneTapped), for: .touchUpInside)
-    let buttons = UIStackView(arrangedSubviews: [cancel, shoot, done])
-    buttons.spacing = 12
+    markButton.addTarget(self, action: #selector(markTapped), for: .touchUpInside)
+    let buttons = UIStackView(arrangedSubviews: [cancel, shoot, markButton, done])
+    buttons.spacing = 8
     buttons.distribution = .fillEqually
 
-    for v in [warning, counter, map, ring, buttons] as [UIView] {
+    kindPicker.selectedSegmentIndex = 0
+    kindPicker.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+    kindPicker.selectedSegmentTintColor = .white
+    kindPicker.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .normal)
+    kindPicker.setTitleTextAttributes([.foregroundColor: UIColor.black], for: .selected)
+    kindPicker.addTarget(self, action: #selector(kindChanged), for: .valueChanged)
+    undoMark.addTarget(self, action: #selector(undoTapped), for: .touchUpInside)
+    undoMark.setContentHuggingPriority(.required, for: .horizontal)
+    markBar.spacing = 8
+    markBar.isHidden = true
+    sceneView.addGestureRecognizer(
+      UITapGestureRecognizer(target: self, action: #selector(sceneTapped(_:))))
+
+    for v in [warning, counter, map, ring, buttons, markBar] as [UIView] {
       v.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(v)
     }
@@ -198,6 +344,10 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
       buttons.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
       buttons.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -12),
       buttons.heightAnchor.constraint(equalToConstant: 50),
+      markBar.topAnchor.constraint(equalTo: counter.bottomAnchor, constant: 8),
+      markBar.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 16),
+      markBar.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
+      markBar.heightAnchor.constraint(equalToConstant: 36),
     ])
     smallMap = [
       map.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
@@ -251,10 +401,10 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
   /// Guarda los puntos nuevos y, cada medio segundo, redibuja la nube en el
   /// espacio.
   private func grow(cloud frame: ARFrame) {
-    if let raw = frame.rawFeaturePoints {
-      for (id, point) in Swift.zip(raw.identifiers, raw.points)
-      where cloud[id] != nil || cloud.count < maxCloud {
-        cloud[id] = point
+    if let raw = frame.rawFeaturePoints, cloud.count < maxCloud {
+      for point in raw.points where cloud.count < maxCloud {
+        let cell = SIMD3<Int32>((point / cloudCell).rounded(.down))
+        if cloud[cell] == nil { cloud[cell] = point }
       }
     }
     guard frame.timestamp - lastCloudUpdate > 0.5, !cloud.isEmpty else { return }
@@ -284,6 +434,83 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     let node = SCNNode(geometry: box)
     node.simdTransform = transform
     sceneView.scene.rootNode.addChildNode(node)
+  }
+
+  // MARK: - Marcar
+
+  @objc private func markTapped() {
+    marking.toggle()
+    var c = marking ? UIButton.Configuration.filled() : UIButton.Configuration.gray()
+    c.title = marking ? "Listo" : "Marcar"
+    c.cornerStyle = .large
+    if marking { c.baseBackgroundColor = .systemRed }
+    markButton.configuration = c
+    markBar.isHidden = !marking
+    undoMark.isEnabled = !marks.isEmpty
+    ring.isHidden = marking
+  }
+
+  @objc private func kindChanged() {
+    markKind = MarkKind.allCases[max(0, kindPicker.selectedSegmentIndex)]
+  }
+
+  /// Un toque en la imagen, en modo «Marcar»: raycast sobre los planos ya
+  /// detectados y, si no hay, sobre uno estimado.
+  @objc private func sceneTapped(_ tap: UITapGestureRecognizer) {
+    guard marking, !mapExpanded else { return }
+    let at = tap.location(in: sceneView)
+    var hit: ARRaycastResult?
+    for target in [ARRaycastQuery.Target.existingPlaneGeometry, .estimatedPlane] {
+      guard let query = sceneView.raycastQuery(from: at, allowing: target, alignment: .any)
+      else { continue }
+      if let first = sceneView.session.raycast(query).first {
+        hit = first
+        break
+      }
+    }
+    guard let hit else {
+      UINotificationFeedbackGenerator().notificationOccurred(.warning)
+      show("No encuentro superficie ahí: mueve el móvil para que vea más.")
+      return
+    }
+    let position = simd_make_float3(hit.worldTransform.columns.3)
+    let node = Self.markNode(markKind)
+    node.simdPosition = position
+    sceneView.scene.rootNode.addChildNode(node)
+    marks.append(
+      Mark(
+        kind: markKind, position: position,
+        planeId: (hit.anchor as? ARPlaneAnchor)?.identifier, node: node))
+    undoMark.isEnabled = true
+    updateCounter()
+    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+  }
+
+  @objc private func undoTapped() {
+    guard let last = marks.popLast() else { return }
+    last.node.removeFromParentNode()
+    undoMark.isEnabled = !marks.isEmpty
+    updateCounter()
+  }
+
+  /// Una bolita del color del tipo, siempre visible, con un palito vertical
+  /// para que se vea bien dónde está.
+  private static func markNode(_ kind: MarkKind) -> SCNNode {
+    let material = SCNMaterial()
+    material.diffuse.contents = kind.color
+    material.lightingModel = .constant
+    material.readsFromDepthBuffer = false
+    let ball = SCNSphere(radius: 0.02)
+    ball.materials = [material]
+    let node = SCNNode(geometry: ball)
+    node.renderingOrder = 10
+    let stick = SCNCylinder(radius: 0.003, height: 0.12)
+    stick.materials = [material]
+    let stickNode = SCNNode(geometry: stick)
+    stickNode.position.y = kind == .ceiling ? -0.06 : 0.06
+    stickNode.renderingOrder = 10
+    node.addChildNode(stickNode)
+    return node
   }
 
   static func button(_ title: String, filled: Bool) -> UIButton {
@@ -317,21 +544,21 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
       shots: shots.map { ($0.position, $0.forward) },
       points: frame.timestamp == lastCloudUpdate ? Array(cloud.values) : nil,
       walls: frame.anchors.compactMap { anchor in
-        guard let plane = anchor as? ARPlaneAnchor, plane.alignment == .vertical else {
-          return nil
-        }
-        let half = plane.planeExtent.width / 2
-        let m = plane.transform
-        let centre = simd_make_float3(m * simd_float4(plane.center, 1))
-        let axis = simd_normalize(simd_make_float3(m.columns.0))
-        return (centre - axis * half, centre + axis * half)
-      }
+        // Las puertas y ventanas que clasifica ARKit no cierran el recinto.
+        guard let plane = anchor as? ARPlaneAnchor, plane.alignment == .vertical,
+          plane.planeExtent.width >= 0.3,
+          !["door", "window"].contains(PlaneShape.classification(plane))
+        else { return nil }
+        return PlaneShape(plane).ends
+      },
+      marks: marks.map { ($0.position, $0.kind) }
     )
     let covered = coveredSectors(near: position)
     ring.update(covered: covered, heading: atan2(forward.x, -forward.z))
+    updateCounter()
 
     let message = guidance(frame: frame, covered: covered, forward: forward)
-    show(message)
+    show(message ?? (marking ? markKind.hint : nil), ok: message == nil)
     if message == nil, shouldShoot(position: position, forward: forward, time: frame.timestamp) {
       shoot(session: session)
     }
@@ -491,16 +718,31 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
 
   // MARK: - Interfaz
 
-  private func show(_ text: String?) {
+  /// [ok]: verde aunque haya texto (las pistas del modo «Marcar»).
+  private func show(_ text: String?, ok: Bool? = nil) {
     let value = text ?? "Bien. Sigue recorriendo despacio."
     if warning.text != " \(value) " { warning.text = " \(value) " }
-    warning.backgroundColor = text == nil
+    warning.backgroundColor = (ok ?? (text == nil))
       ? UIColor.systemGreen.withAlphaComponent(0.55)
       : UIColor.systemOrange.withAlphaComponent(0.75)
   }
 
+  /// Fotos, paredes, lo que queda abierto y los toques.
   private func updateCounter() {
-    counter.text = shots.count == 1 ? "1 foto" : "\(shots.count) fotos"
+    var parts = [shots.count == 1 ? "1 foto" : "\(shots.count) fotos"]
+    let walls = map.wallCount
+    if walls > 0 {
+      parts.append(walls == 1 ? "1 pared" : "\(walls) paredes")
+      let open = map.openEnds.count
+      if map.closed {
+        parts.append("recinto cerrado")
+      } else if open > 0 {
+        parts.append(open == 1 ? "1 extremo abierto" : "\(open) extremos abiertos")
+      }
+    }
+    if !marks.isEmpty { parts.append(marks.count == 1 ? "1 marca" : "\(marks.count) marcas") }
+    let text = parts.joined(separator: " · ")
+    if counter.text != text { counter.text = text }
   }
 
   @objc private func cancelTapped() {
@@ -512,13 +754,20 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
       finish(path: nil)
       return
     }
+    // Los planos tal como los deja ARKit al final (ya fundidos y crecidos).
+    let planes = (sceneView.session.currentFrame?.anchors ?? [])
+      .compactMap { $0 as? ARPlaneAnchor }
+      .map(PlaneShape.json)
     sceneView.session.pause()
     show("Guardando…")
     let manifest: [String: Any] = [
-      "version": 1,
+      "version": 2,
       "device": Self.deviceModel(),
       "system": UIDevice.current.systemVersion,
       "frames": shots.map(\.json),
+      "planes": planes,
+      "marks": marks.map(\.json),
+      "points": cloud.values.flatMap { [rounded($0.x), rounded($0.y), rounded($0.z)] },
     ]
     DispatchQueue.global(qos: .userInitiated).async {
       var path: String? = folder.path
@@ -561,26 +810,135 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
 /// Minimapa cenital: lo fotografiado (abanicos verdes, lo que falta queda
 /// oscuro), la nube de puntos, las paredes detectadas y dónde estás. Pequeño
 /// sigue a la cámara (6 m); grande enseña todo el sitio con su cuadrícula.
+///
+/// Las paredes se unen por sus esquinas en una línea; donde queda abierta se
+/// avisa «falta pared», y cada pared lleva cuántas fotos la ven de frente.
 final class CaptureMapView: UIView {
+  /// Una pared en planta (x, z del mundo), ya unida a sus vecinas.
+  struct Wall {
+    var a: simd_float2
+    var b: simd_float2
+    /// Fotos que la ven de frente.
+    var coverage: Int
+  }
+
   private var position = simd_float3()
   private var forward = simd_float3(0, 0, -1)
   private var shots: [(simd_float3, simd_float3)] = []
   private var points: [simd_float3] = []
-  private var walls: [(simd_float3, simd_float3)] = []
+  private var walls: [Wall] = []
+  private var marks: [(simd_float3, MarkKind)] = []
+  /// Extremos sin unir: dónde y hacia dónde seguiría la pared.
+  private(set) var openEnds: [(point: simd_float2, direction: simd_float2)] = []
+  var wallCount: Int { walls.count }
+  /// Tres paredes o más unidas sin ningún extremo suelto.
+  var closed: Bool { walls.count >= 3 && openEnds.isEmpty }
   var expanded = false
+
+  /// Con menos fotos de frente que esto, la pared sale en naranja.
+  static let enoughCoverage = 4
 
   /// [points]: la nube entera cuando cambia; `nil`, la de antes.
   func update(
     position: simd_float3, forward: simd_float3,
     shots: [(simd_float3, simd_float3)], points: [simd_float3]?,
-    walls: [(simd_float3, simd_float3)]
+    walls: [(simd_float3, simd_float3)], marks: [(simd_float3, MarkKind)]
   ) {
     self.position = position
     self.forward = forward
     self.shots = shots
     if let points { self.points = points }
-    self.walls = walls
+    self.marks = marks
+    let flat = walls.map { (simd_float2($0.0.x, $0.0.z), simd_float2($0.1.x, $0.1.z)) }
+    let joined = Self.join(flat)
+    self.walls = zip(flat, joined.segments).map { raw, seg in
+      Wall(a: seg.0, b: seg.1, coverage: Self.coverage(raw.0, raw.1, shots: shots))
+    }
+    openEnds = joined.open
     setNeedsDisplay()
+  }
+
+  private static func cross(_ u: simd_float2, _ v: simd_float2) -> Float { u.x * v.y - u.y * v.x }
+
+  /// Une las paredes por sus esquinas: cada extremo se lleva al corte con otra
+  /// pared si queda a menos de 80 cm; si sigue en línea con otra pared
+  /// (dos planos de ARKit en la misma pared) cuenta como unido. Lo que no se
+  /// une queda abierto.
+  static func join(_ walls: [(simd_float2, simd_float2)]) -> (
+    segments: [(simd_float2, simd_float2)],
+    open: [(point: simd_float2, direction: simd_float2)]
+  ) {
+    let reach: Float = 0.8
+    let parallel: Float = sin(30 * .pi / 180)
+    var segments = walls
+    var open: [(point: simd_float2, direction: simd_float2)] = []
+    for i in walls.indices {
+      let (a, b) = walls[i]
+      let len = simd_length(b - a)
+      guard len > 0.01 else { continue }
+      let d = (b - a) / len
+      for end in 0..<2 {
+        let e = end == 0 ? a : b
+        var best: (distance: Float, point: simd_float2)?
+        var continued = false
+        for j in walls.indices where j != i {
+          let (c, f) = walls[j]
+          let lj = simd_length(f - c)
+          guard lj > 0.01 else { continue }
+          let dj = (f - c) / lj
+          let s = simd_dot(e - c, dj)
+          let denom = cross(d, dj)
+          if abs(denom) < parallel {
+            // En línea con la otra pared y tocándola: el mismo muro.
+            let off = abs(cross(e - c, dj))
+            if abs(denom) < 0.17, off < 0.15, s > -0.3, s < lj + 0.3 { continued = true }
+            continue
+          }
+          let t = cross(c - a, dj) / denom
+          let p = a + d * t
+          let along = simd_dot(p - c, dj)
+          guard along > -reach, along < lj + reach else { continue }
+          let distance = simd_distance(p, e)
+          if distance < reach, distance < (best?.distance ?? .infinity) {
+            best = (distance, p)
+          }
+        }
+        if let best {
+          if end == 0 { segments[i].0 = best.point } else { segments[i].1 = best.point }
+        } else if !continued {
+          open.append((e, end == 0 ? -d : d))
+        }
+      }
+    }
+    return (segments, open)
+  }
+
+  /// Fotos que ven la pared de frente: mirando a menos de 35° de su normal,
+  /// entre 30 cm y 8 m, y con el centro de la foto dentro de la pared.
+  static func coverage(
+    _ a: simd_float2, _ b: simd_float2, shots: [(simd_float3, simd_float3)]
+  ) -> Int {
+    let len = simd_length(b - a)
+    guard len > 0.01 else { return 0 }
+    let d = (b - a) / len
+    let n = simd_float2(-d.y, d.x)
+    let facing = cos(35 * Float.pi / 180)
+    var count = 0
+    for (p, f) in shots {
+      var look = simd_float2(f.x, f.z)
+      let flat = simd_length(look)
+      // Mirando casi al suelo o al techo no ve la pared de frente.
+      guard flat > 0.5 else { continue }
+      look /= flat
+      let toward = simd_dot(look, n)
+      guard abs(toward) > facing else { continue }
+      let from = simd_float2(p.x, p.z)
+      let t = simd_dot(a - from, n) / toward
+      guard t > 0.3, t < 8 else { continue }
+      let s = simd_dot(from + look * t - a, d)
+      if s > -0.2, s < len + 0.2 { count += 1 }
+    }
+    return count
   }
 
   override func draw(_ rect: CGRect) {
@@ -644,13 +1002,56 @@ final class CaptureMapView: UIView {
       let c = pt(p)
       ctx.fill(CGRect(x: c.x - dot / 2, y: c.y - dot / 2, width: dot, height: dot))
     }
-    ctx.setStrokeColor(UIColor.systemYellow.cgColor)
-    ctx.setLineWidth(2.5)
-    for (a, b) in walls {
-      ctx.move(to: pt(a))
-      ctx.addLine(to: pt(b))
+    // Paredes unidas: amarillas con cobertura, naranjas si les faltan fotos
+    // de frente; verdes todas si el recinto ya cierra.
+    func pt2(_ v: simd_float2) -> CGPoint { pt(simd_float3(v.x, 0, v.y)) }
+    let small: [NSAttributedString.Key: Any] = [
+      .font: UIFont.monospacedDigitSystemFont(ofSize: expanded ? 11 : 9, weight: .semibold),
+      .foregroundColor: UIColor.white,
+    ]
+    ctx.setLineWidth(expanded ? 3 : 2.5)
+    for w in walls {
+      let colour: UIColor =
+        closed ? .systemGreen
+        : w.coverage < Self.enoughCoverage ? .systemOrange : .systemYellow
+      ctx.setStrokeColor(colour.cgColor)
+      ctx.move(to: pt2(w.a))
+      ctx.addLine(to: pt2(w.b))
+      ctx.strokePath()
+      let mid = pt2((w.a + w.b) / 2)
+      ("\(w.coverage)" as NSString).draw(at: CGPoint(x: mid.x + 3, y: mid.y + 2), withAttributes: small)
     }
-    ctx.strokePath()
+    // Donde la línea queda abierta: un tramo rojo a trazos hacia donde
+    // seguiría la pared.
+    ctx.setStrokeColor(UIColor.systemRed.cgColor)
+    ctx.setFillColor(UIColor.systemRed.cgColor)
+    ctx.setLineWidth(2)
+    ctx.setLineDash(phase: 0, lengths: [4, 3])
+    for end in openEnds {
+      let p = pt2(end.point)
+      let q = pt2(end.point + end.direction * 0.8)
+      ctx.move(to: p)
+      ctx.addLine(to: q)
+      ctx.strokePath()
+      ctx.fillEllipse(in: CGRect(x: p.x - 3, y: p.y - 3, width: 6, height: 6))
+      ("falta pared" as NSString).draw(
+        at: CGPoint(x: q.x + 2, y: q.y - 6),
+        withAttributes: [
+          .font: UIFont.systemFont(ofSize: expanded ? 11 : 9, weight: .bold),
+          .foregroundColor: UIColor.systemRed,
+        ])
+    }
+    ctx.setLineDash(phase: 0, lengths: [])
+
+    // Toques de precisión.
+    for (p, kind) in marks {
+      let c = pt(p)
+      ctx.setFillColor(kind.color.cgColor)
+      ctx.fillEllipse(in: CGRect(x: c.x - 4, y: c.y - 4, width: 8, height: 8))
+      ctx.setStrokeColor(UIColor.black.cgColor)
+      ctx.setLineWidth(1)
+      ctx.strokeEllipse(in: CGRect(x: c.x - 4, y: c.y - 4, width: 8, height: 8))
+    }
     ctx.setStrokeColor(UIColor.systemGreen.withAlphaComponent(0.9).cgColor)
     ctx.setLineWidth(1)
     for (p, f) in shots {
@@ -667,7 +1068,10 @@ final class CaptureMapView: UIView {
     ctx.addLine(to: pt(position + forward * 0.6))
     ctx.strokePath()
 
-    let hint = expanded ? "Toca para cerrar · verde: ya fotografiado" : "Toca para ampliar"
+    let hint =
+      expanded
+      ? "Toca para cerrar · verde: ya fotografiado · número: fotos de frente a la pared"
+      : "Toca para ampliar"
     (hint as NSString).draw(
       at: CGPoint(x: 8, y: rect.height - 18),
       withAttributes: [
