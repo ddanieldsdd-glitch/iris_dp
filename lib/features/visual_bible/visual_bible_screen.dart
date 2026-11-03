@@ -12,6 +12,7 @@ import 'widgets/lighting_diagram/lighting_sketch_export.dart';
 import '../../core/templates/user_template_models.dart';
 import '../../core/templates/user_template_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/export_file_saver.dart';
@@ -40,6 +41,7 @@ import 'visual_bible_v2_screen.dart';
 import 'v2/bible_v2_policy.dart';
 import 'widgets/bible_overview_section.dart';
 import 'widgets/bible_screen_library_sheet.dart';
+import 'widgets/bible_compact_section_bar.dart';
 import 'widgets/bible_sidebar.dart';
 import 'widgets/bible_start_screen.dart';
 import 'widgets/bible_template_library_sheet.dart';
@@ -743,6 +745,45 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
     }
   }
 
+  /// Nombre de la pantalla activa para la barra compacta del iPhone.
+  String _sectionLabel(Map<String, BibleSectionDefinition> defsById) {
+    if (_activeSection == BibleSidebar.overviewSectionId) return 'Resumen';
+    return defsById[_activeSection]?.label ??
+        BibleSectionId.label(_activeSection);
+  }
+
+  /// Hoja casi a pantalla completa (iPhone): índice o ajustes de pantalla.
+  Future<void> _showCompactSheet(WidgetBuilder builder) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: context.palette.surface,
+      builder: (ctx) => FractionallySizedBox(
+        heightFactor: 0.85,
+        child: builder(ctx),
+      ),
+    );
+  }
+
+  void _showCompactLivePanel(int bibleId) {
+    if (bibleId <= 0) return;
+    _showCompactSheet(
+      (ctx) => BibleLiveCustomizePanel(
+        bibleId: bibleId,
+        projectId: widget.projectId,
+        sectionId: _activeSection,
+        width: MediaQuery.sizeOf(ctx).width,
+        initialTab: _livePanelTab,
+        onClose: () => Navigator.pop(ctx),
+        onOpenMasterConfig: () {
+          Navigator.pop(ctx);
+          _openMasterConfig(bibleId);
+        },
+      ),
+    );
+  }
+
   void _openMasterConfig(int bibleId) {
     if (bibleId <= 0) {
       AppSnackBar.show(
@@ -1131,12 +1172,12 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                                               ? 232.0
                                               : 280.0;
 
-                                          return Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
-                                            children: [
-                                              BibleSidebar(
-                                                width: sidebarWidth,
+                                          BibleSidebar sidebar({
+                                            required double width,
+                                            VoidCallback? beforeAction,
+                                            VoidCallback? onOpenSettings,
+                                          }) => BibleSidebar(
+                                                width: width,
                                                 activeSection: _activeSection,
                                                 data: _data,
                                                 project: _project,
@@ -1144,25 +1185,101 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                                                 definitions: defs,
                                                 contentSnapshot:
                                                     contentSnapshot,
-                                                onSectionSelected: (id) =>
-                                                    _onSectionSelected(
-                                                      id,
-                                                      bibleId,
-                                                    ),
-                                                onAddSection: () =>
-                                                    _openScreenLibrary(bibleId),
-                                                onOpenSettings: () =>
-                                                    _toggleLivePanel(),
+                                                onSectionSelected: (id) {
+                                                  beforeAction?.call();
+                                                  _onSectionSelected(
+                                                    id,
+                                                    bibleId,
+                                                  );
+                                                },
+                                                onAddSection: () {
+                                                  beforeAction?.call();
+                                                  _openScreenLibrary(bibleId);
+                                                },
+                                                onOpenSettings:
+                                                    onOpenSettings ??
+                                                    () => _toggleLivePanel(),
                                                 onRemoveSection: bibleId > 0
                                                     ? (def) =>
                                                           _removeSection(def)
                                                     : null,
                                                 onEditStructure: bibleId > 0
-                                                    ? () => _openMasterConfig(
-                                                        bibleId,
-                                                      )
+                                                    ? () {
+                                                        beforeAction?.call();
+                                                        _openMasterConfig(
+                                                          bibleId,
+                                                        );
+                                                      }
                                                     : null,
+                                              );
+
+                                          final content = Navigator(
+                                            key: ValueKey(
+                                              'bible_content_$_activeSection',
+                                            ),
+                                            onDidRemovePage: (_) {},
+                                            pages: [
+                                              MaterialPage<void>(
+                                                key: const ValueKey('section'),
+                                                child: _buildSection(
+                                                  bibleId,
+                                                  sectionDefsById,
+                                                  contentSnapshot,
+                                                ),
                                               ),
+                                            ],
+                                          );
+
+                                          // iPhone: el índice y los ajustes
+                                          // de pantalla salen en hojas; el
+                                          // contenido ocupa todo el ancho.
+                                          if (constraints.maxWidth <
+                                              AppLayout.compactBreakpoint) {
+                                            final label = _sectionLabel(
+                                              sectionDefsById,
+                                            );
+                                            return Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: [
+                                                BibleCompactSectionBar(
+                                                  label: label,
+                                                  onOpenSections: () =>
+                                                      _showCompactSheet(
+                                                        (sheetCtx) => sidebar(
+                                                          width:
+                                                              double.infinity,
+                                                          beforeAction: () =>
+                                                              Navigator.pop(
+                                                                sheetCtx,
+                                                              ),
+                                                          onOpenSettings: () {
+                                                            Navigator.pop(
+                                                              sheetCtx,
+                                                            );
+                                                            _showCompactLivePanel(
+                                                              bibleId,
+                                                            );
+                                                          },
+                                                        ),
+                                                      ),
+                                                  onOpenSettings: bibleId > 0
+                                                      ? () =>
+                                                            _showCompactLivePanel(
+                                                              bibleId,
+                                                            )
+                                                      : null,
+                                                ),
+                                                Expanded(child: content),
+                                              ],
+                                            );
+                                          }
+
+                                          return Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              sidebar(width: sidebarWidth),
                                               Expanded(
                                                 // Navegador propio del
                                                 // contenido: las fichas
@@ -1171,25 +1288,7 @@ class _VisualBibleScreenState extends ConsumerState<VisualBibleScreen> {
                                                 // laterales siguen a la vista.
                                                 // Cambiar de pantalla cierra
                                                 // la ficha abierta.
-                                                child: Navigator(
-                                                  key: ValueKey(
-                                                    'bible_content_'
-                                                    '$_activeSection',
-                                                  ),
-                                                  onDidRemovePage: (_) {},
-                                                  pages: [
-                                                    MaterialPage<void>(
-                                                      key: const ValueKey(
-                                                        'section',
-                                                      ),
-                                                      child: _buildSection(
-                                                        bibleId,
-                                                        sectionDefsById,
-                                                        contentSnapshot,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
+                                                child: content,
                                               ),
                                               if (_livePanelOpen && bibleId > 0) ...[
                                                 BibleLiveCustomizePanel(

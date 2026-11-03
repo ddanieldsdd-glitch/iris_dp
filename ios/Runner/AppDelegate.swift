@@ -20,5 +20,8 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "IrisCapturePlugin") {
       IrisCapturePlugin.register(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "IrisQuickLookPlugin") {
+      IrisQuickLookPlugin.register(with: registrar)
+    }
   }
 }

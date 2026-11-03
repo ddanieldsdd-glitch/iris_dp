@@ -808,117 +808,144 @@ class _SiteDetailPanelState extends ConsumerState<_SiteDetailPanel> {
     final site = widget.site;
     final siteColor = widget.colors.siteColor(site.id);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (widget.listHeader != null) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.lg,
-              0,
-            ),
-            child: widget.listHeader!,
-          ),
-        ],
+    final headers = <Widget>[
+      if (widget.listHeader != null) ...[
         Padding(
-          padding: EdgeInsets.fromLTRB(
+          padding: const EdgeInsets.fromLTRB(
             AppSpacing.lg,
-            widget.listHeader != null ? AppSpacing.lg : AppSpacing.lg,
+            AppSpacing.lg,
             AppSpacing.lg,
             0,
           ),
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: siteColor.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-              border: Border(left: BorderSide(color: siteColor, width: 5)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          InkWell(
-                            onTap: _editSiteColor,
-                            borderRadius: BorderRadius.circular(12),
-                            child: Tooltip(
-                              message: 'Cambiar color de la localización',
-                              child: Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: siteColor,
-                                  shape: BoxShape.circle,
-                                ),
+          child: widget.listHeader!,
+        ),
+      ],
+      Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          widget.listHeader != null ? AppSpacing.lg : AppSpacing.lg,
+          AppSpacing.lg,
+          0,
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: siteColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border(left: BorderSide(color: siteColor, width: 5)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        InkWell(
+                          onTap: _editSiteColor,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Tooltip(
+                            message: 'Cambiar color de la localización',
+                            child: Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: siteColor,
+                                shape: BoxShape.circle,
                               ),
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: Text(site.name,
-                                style: AppTypography.titleLarge(palette)
-                                    .copyWith(color: siteColor)),
-                          ),
-                        ],
-                      ),
-                      if (site.description != null &&
-                          site.description!.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(site.description!,
-                            style: AppTypography.bodyMedium(palette)),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(site.name,
+                              style: AppTypography.titleLarge(palette)
+                                  .copyWith(color: siteColor)),
+                        ),
                       ],
+                    ),
+                    if (site.description != null &&
+                        site.description!.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(site.description!,
+                          style: AppTypography.bodyMedium(palette)),
                     ],
-                  ),
+                  ],
                 ),
-                IconButton(
-                  tooltip: 'Editar',
-                  onPressed: widget.onEdit,
-                  icon: Icon(Icons.edit_outlined,
-                      color: palette.textSecondary, size: 20),
-                ),
-                IconButton(
-                  tooltip: 'Eliminar',
-                  onPressed: widget.onDelete,
-                  icon: Icon(Icons.delete_outline,
-                      color: palette.error, size: 20),
-                ),
-              ],
-            ),
+              ),
+              IconButton(
+                tooltip: 'Editar',
+                onPressed: widget.onEdit,
+                icon: Icon(Icons.edit_outlined,
+                    color: palette.textSecondary, size: 20),
+              ),
+              IconButton(
+                tooltip: 'Eliminar',
+                onPressed: widget.onDelete,
+                icon: Icon(Icons.delete_outline,
+                    color: palette.error, size: 20),
+              ),
+            ],
           ),
         ),
+      ),
+    ];
+    final body = <Widget>[
+      SitePlaceCard(site: site),
+      const SizedBox(height: AppSpacing.lg),
+      SiteSetsSection(
+        projectId: widget.projectId,
+        site: site,
+        colors: widget.colors,
+        expandedSetId: widget.expandedSetId,
+        onExpandedSetChanged: widget.onExpandedSetChanged,
+        onEditSet: widget.onEditSet,
+        onDeleteSet: widget.onDeleteSet,
+        onAddSet: widget.onAddSet,
+      ),
+      const SizedBox(height: AppSpacing.xxl),
+      SiteBaseSection(
+        projectId: widget.projectId,
+        site: site,
+        colors: widget.colors,
+      ),
+    ];
+
+    // iPhone: las cabeceras se desplazan con el resto; fijas ocupaban casi
+    // media pantalla y la galería apenas tenía sitio.
+    if (AppLayout.isCompact(context)) {
+      return SingleChildScrollView(
+        controller: _scrollController,
+        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ...headers,
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: body,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ...headers,
         Expanded(
           child: SingleChildScrollView(
             controller: _scrollController,
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SitePlaceCard(site: site),
-                const SizedBox(height: AppSpacing.lg),
-                SiteSetsSection(
-                  projectId: widget.projectId,
-                  site: site,
-                  colors: widget.colors,
-                  expandedSetId: widget.expandedSetId,
-                  onExpandedSetChanged: widget.onExpandedSetChanged,
-                  onEditSet: widget.onEditSet,
-                  onDeleteSet: widget.onDeleteSet,
-                  onAddSet: widget.onAddSet,
-                ),
-                const SizedBox(height: AppSpacing.xxl),
-                SiteBaseSection(
-                  projectId: widget.projectId,
-                  site: site,
-                  colors: widget.colors,
-                ),
-              ],
+              children: body,
             ),
           ),
         ),

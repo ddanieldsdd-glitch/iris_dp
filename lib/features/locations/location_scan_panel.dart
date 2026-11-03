@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
@@ -13,6 +14,7 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
 import '../camera_plan/camera_plan_editor.dart';
+import '../camera_plan/rig/scan_capture_channel.dart';
 import '../iris_stage/iris_stage_screen.dart';
 import 'cinetracer_export_service.dart';
 import 'location_scan_service.dart';
@@ -39,6 +41,7 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
   late LocationBasePlan _set;
   bool _busy = false;
   double _metersPerPixel = 0.01;
+  bool _canCapture = false;
 
   LocationScanService get _scanService =>
       LocationScanService(ref.read(databaseProvider));
@@ -54,7 +57,21 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
   void initState() {
     super.initState();
     _set = widget.set;
-    _metersPerPixel = _meta.metersPerPixel;
+    _metersPerPixel = _meta.metersPerPixel;    ScanCaptureChannel.isSupported().then((ok) {
+      if (ok && mounted) setState(() => _canCapture = true);
+    });
+  }
+
+  /// Captura guiada con el iPhone (F6.20 E6): el escaneo se reconstruye en
+  /// el PC con RealityScan, así que el .zip se comparte para pasarlo.
+  Future<void> _captureWithPhone() async {
+    final path = await ScanCaptureChannel.start(_set.locationName);
+    if (path == null || !mounted) return;
+    AppSnackBar.show(
+      context,
+      'Captura guardada. En el PC: «Crear escaneo» → «Captura del iPhone».',
+    );
+    await Share.shareXFiles([XFile(path)], subject: 'Captura de ${_set.locationName}');
   }
 
   Future<void> _refreshSet() async {
@@ -192,6 +209,12 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: [
+            if (_canCapture)
+              AppButton(
+                label: 'Capturar con el iPhone',
+                icon: Icons.photo_camera_outlined,
+                onTap: _busy ? null : _captureWithPhone,
+              ),
             AppButton(
               label: _busy ? '…' : 'Importar scan',
               icon: Icons.upload_file_outlined,

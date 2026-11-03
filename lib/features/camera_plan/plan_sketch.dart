@@ -625,39 +625,29 @@ class PlanSketchStrip extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final buttons = [
-                TextButton.icon(
-                  onPressed: onNewElements,
-                  icon: const Icon(Icons.wb_incandescent_outlined, size: 15),
-                  label: const Text('Boceto con elementos'),
-                ),
-                TextButton.icon(
-                  onPressed: onNewFreehand,
-                  icon: const Icon(Icons.draw_outlined, size: 15),
-                  label: const Text('Boceto a mano'),
-                ),
-              ];
-              // En el iPhone título y botones no caben en una fila: los
-              // botones bajan a la siguiente.
-              if (constraints.maxWidth < 520) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: AppTypography.label(palette)),
-                    Wrap(children: buttons),
-                  ],
-                );
-              }
-              return Row(
+          // Título y botones en una fila si caben; si no (iPhone, iPad con
+          // la columna de plantas abierta), los botones bajan a la siguiente.
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: AppSpacing.xs,
+            children: [
+              Text(title, style: AppTypography.label(palette)),
+              Wrap(
                 children: [
-                  Text(title, style: AppTypography.label(palette)),
-                  const Spacer(),
-                  ...buttons,
+                  TextButton.icon(
+                    onPressed: onNewElements,
+                    icon: const Icon(Icons.wb_incandescent_outlined, size: 15),
+                    label: const Text('Boceto con elementos'),
+                  ),
+                  TextButton.icon(
+                    onPressed: onNewFreehand,
+                    icon: const Icon(Icons.draw_outlined, size: 15),
+                    label: const Text('Boceto a mano'),
+                  ),
                 ],
-              );
-            },
+              ),
+            ],
           ),
           if (sketches.isEmpty)
             Text(

@@ -660,6 +660,9 @@ class _BranchPainter extends CustomPainter {
 }
 
 /// Bloque de una localización (o de plantas libres) en el mapa.
+/// Por debajo de este ancho, la cabecera del bloque pone las acciones debajo.
+const _narrowBlockWidth = 480.0;
+
 class _Block extends StatelessWidget {
   final Color color;
   final IconData icon;
@@ -688,10 +691,12 @@ class _Block extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border(left: BorderSide(color: color, width: 4)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // En el iPhone las acciones (set, plano maestro, menú) no caben al
+          // lado del nombre: bajan a su propia fila.
+          final narrow = constraints.maxWidth < _narrowBlockWidth;
+          final header = Row(
             children: [
               Icon(icon, size: 20, color: color),
               const SizedBox(width: AppSpacing.sm),
@@ -705,12 +710,25 @@ class _Block extends StatelessWidget {
                   ],
                 ),
               ),
-              ?action,
+              if (!narrow) ?action,
             ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          ...children,
-        ],
+          );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              header,
+              if (narrow && action != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: action,
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              ...children,
+            ],
+          );
+        },
       ),
     );
   }

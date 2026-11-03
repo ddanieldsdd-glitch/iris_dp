@@ -58,6 +58,7 @@ dependencies:
   desktop_drop: ^0.8.4
   flutter_inappwebview: ^6.1.5
   pdfrx: ^2.4.5
+  image_picker: ^1.2.4
 
 dev_dependencies:
   flutter_test:
