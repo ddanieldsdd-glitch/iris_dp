@@ -84,6 +84,7 @@ import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
 import 'plan_outliner.dart';
 import 'rig/plan_3d_view.dart';
+import '../scan_jobs/capture_store.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../unreal_link/unreal_asset_tile.dart';
 import '../unreal_link/unreal_library.dart';
@@ -3001,9 +3002,27 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       onOpenUnreal: _openInUnreal,
       projectId: widget.projectId,
       onScanTop: _addScanTop,
+      onCapture: _saveCapture,
       exposure: _exposure,
       stop: _targetStop,
     );
+  }
+
+  /// Captura del iPhone hecha desde el 3D: queda pendiente en el set (o la
+  /// localización) de esta planta y pasa sola al PC con RealityScan.
+  Future<String> _saveCapture(String path) async {
+    final setId = widget.setId ?? _linkedSet?.id;
+    final siteId = widget.siteId ?? _linkedSite?.id ?? _linkedSet?.siteId;
+    await CaptureStore.register(
+      ref.read(databaseProvider),
+      projectId: widget.projectId,
+      path: path,
+      name: _linkedSet?.locationName ?? _linkedSite?.name ?? _planName,
+      siteId: siteId,
+      setId: setId,
+    );
+    return 'Captura guardada. Pasa sola al PC cuando estéis en la misma '
+        'Wi‑Fi; el escaneo vuelve a esta planta.';
   }
 
   /// La cenital de un escaneo, de fondo y a escala en esta planta, como un
@@ -5448,6 +5467,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   onOpenUnreal: _openInUnreal,
                                   projectId: widget.projectId,
                                   onScanTop: _addScanTop,
+                                  onCapture: _saveCapture,
                                   exposure: _exposure,
                                   stop: _targetStop,
                                 ),

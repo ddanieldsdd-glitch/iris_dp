@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
@@ -16,6 +15,8 @@ import '../../core/widgets/app_card.dart';
 import '../camera_plan/camera_plan_editor.dart';
 import '../camera_plan/rig/scan_capture_channel.dart';
 import '../iris_stage/iris_stage_screen.dart';
+import '../scan_jobs/capture_store.dart';
+import '../scan_jobs/captures_list.dart';
 import 'cinetracer_export_service.dart';
 import 'location_scan_service.dart';
 import '../../core/widgets/app_snackbar.dart';
@@ -57,21 +58,31 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
   void initState() {
     super.initState();
     _set = widget.set;
-    _metersPerPixel = _meta.metersPerPixel;    ScanCaptureChannel.isSupported().then((ok) {
+    _metersPerPixel = _meta.metersPerPixel;
+    ScanCaptureChannel.isSupported().then((ok) {
       if (ok && mounted) setState(() => _canCapture = true);
     });
   }
 
-  /// Captura guiada con el iPhone (F6.20 E6): el escaneo se reconstruye en
-  /// el PC con RealityScan, así que el .zip se comparte para pasarlo.
+  /// Captura guiada con el iPhone (F6.20 E6). Queda pendiente en este set y
+  /// pasa sola al PC con RealityScan cuando coinciden en la misma Wi‑Fi.
   Future<void> _captureWithPhone() async {
     final path = await ScanCaptureChannel.start(_set.locationName);
     if (path == null || !mounted) return;
+    await CaptureStore.register(
+      ref.read(databaseProvider),
+      projectId: widget.projectId,
+      path: path,
+      name: _set.locationName,
+      siteId: _set.siteId,
+      setId: _set.id,
+    );
+    if (!mounted) return;
     AppSnackBar.show(
       context,
-      'Captura guardada. En el PC: «Crear escaneo» → «Captura del iPhone».',
+      'Captura guardada en «${_set.locationName}». Pasa sola al PC cuando '
+      'estéis en la misma Wi‑Fi.',
     );
-    await Share.shareXFiles([XFile(path)], subject: 'Captura de ${_set.locationName}');
   }
 
   Future<void> _refreshSet() async {
@@ -79,8 +90,9 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
     if (updated != null && mounted) {
       setState(() {
         _set = updated;
-        _metersPerPixel = LocationScanMetadata.fromJson(_set.scanMetadataJson)
-            .metersPerPixel;
+        _metersPerPixel = LocationScanMetadata.fromJson(
+          _set.scanMetadataJson,
+        ).metersPerPixel;
       });
     }
   }
@@ -174,7 +186,8 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
                 value: _hasScan
                     ? LocationScanSource.label(_set.scanSource)
                     : 'Sin importar',
-                detail: _set.scanPath?.split('/').last ??
+                detail:
+                    _set.scanPath?.split('/').last ??
                     _set.model3dPath?.split('/').last,
               ),
               if (meta.hasTopDown) ...[
@@ -182,7 +195,8 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
                 _StatusRow(
                   icon: Icons.grid_on_outlined,
                   label: 'Planta cenital',
-                  value: '${meta.widthMeters.toStringAsFixed(1)} × '
+                  value:
+                      '${meta.widthMeters.toStringAsFixed(1)} × '
                       '${meta.heightMeters.toStringAsFixed(1)} m',
                   detail: meta.topDownImagePath?.split('/').last,
                 ),
@@ -232,12 +246,13 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
                 label: 'Abrir 3D',
                 icon: Icons.open_in_new,
                 variant: AppButtonVariant.ghost,
-                onTap: () => LocationScanService.openFileExternally(
-                  _set.model3dPath!,
-                ),
+                onTap: () =>
+                    LocationScanService.openFileExternally(_set.model3dPath!),
               ),
           ],
         ),
+        const SizedBox(height: AppSpacing.md),
+        CapturesList(projectId: widget.projectId, setId: _set.id),
         const SizedBox(height: AppSpacing.md),
         Text('Escala real', style: AppTypography.label(palette)),
         Text(
@@ -254,11 +269,11 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
               : null,
           onChangeEnd: meta.hasTopDown
               ? (v) => _run(() async {
-                    await _scanService.enableTopDownInFloorPlan(
-                      set: _set,
-                      metersPerPixel: v,
-                    );
-                  })
+                  await _scanService.enableTopDownInFloorPlan(
+                    set: _set,
+                    metersPerPixel: v,
+                  );
+                })
               : null,
         ),
         if (meta.hasTopDown)
@@ -380,11 +395,7 @@ class _DestinationChip extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
 
-  const _DestinationChip({
-    required this.icon,
-    required this.label,
-    this.onTap,
-  });
+  const _DestinationChip({required this.icon, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {

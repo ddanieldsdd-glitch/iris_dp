@@ -92,8 +92,12 @@ abstract final class LocationScanSource {
   static const cineTracer = 'cinetracer';
   static const manual = 'manual';
 
+  /// Captura guiada del iPhone construida en el PC con RealityScan.
+  static const iphoneCapture = 'iphone_capture';
+
   static String label(String? source) => switch (source) {
         lumaAi => 'Luma AI',
+        iphoneCapture => 'Captura del iPhone',
         polycam => 'Polycam',
         cineTracer => 'Cine Tracer',
         manual => 'Manual',

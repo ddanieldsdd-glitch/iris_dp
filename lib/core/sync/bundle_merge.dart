@@ -64,6 +64,7 @@ abstract final class BundleMerge {
     'scenes',
     'shots',
     'shotReferences',
+    'locationCaptures',
   ];
 
   /// La clave propia de cada colección a la que otras apuntan.

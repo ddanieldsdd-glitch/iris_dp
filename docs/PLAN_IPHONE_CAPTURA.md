@@ -87,6 +87,31 @@ Propuesta original:
   localización y de sus sets, que se abren en el editor (compacto en el iPhone),
   y «Enlazar planta libre», que mueve una planta libre a esta localización.
 
+### IC.6 · Capturas que llegan solas al PC y vuelven como escaneo
+**Hecho (sin probar aún con un PC de verdad):**
+- **3D en el iPhone:** por debajo de 600 pt el visor ocupa todo el ancho; los
+  ajustes van en un panel inferior («Ajustes del 3D», botón de la barra) que se
+  abre solo al seleccionar algo. iPad y escritorio, igual que antes.
+- **La captura es una fila del proyecto** (`LocationCaptures`, esquema 59,
+  bundle 8, mezcla por uid): al terminar queda en su set (o localización) como
+  «En el iPhone»; el zip pasa a `Documentos/IRIS Capturas/<uid>.iriscapture.zip`
+  y se borra la carpeta suelta. Lista «Capturas del iPhone» en el panel de scan
+  del set con estado, progreso, compartir, reintentar y borrar.
+- **Red local:** el PC con RealityScan escucha en el puerto 47820 y lo anuncia
+  en la presencia del espacio de trabajo (IPs + clave). El iPhone, al abrir, al
+  volver y cada minuto, prueba esas IPs (2 s) y sube el zip en streaming con
+  SHA‑256; si se corta, se repite entero.
+- **Cola en el PC:** construye de una en una sin ventana con `ScanBuildJob`, el
+  GLB de IRIS va al set (`iphone_capture`), el de Unreal se queda en
+  `IRIS Escaneos`; indicador abajo a la izquierda y aviso de Windows
+  (PowerShell). Si IRIS se cierra a mitad, al abrir vuelve a empezar.
+- **Vuelta:** el estado viaja con el proyecto; el iPhone avisa «Escaneo
+  listo» y borra su zip.
+
+Pendiente: probarlo con el iPhone y el PC en la misma Wi‑Fi (Windows debe
+dejar pasar el puerto 47820 en su cortafuegos: lo pregunta la primera vez);
+ajuste «Construir al recibir / Preguntar» (hoy siempre construye).
+
 ### IC.5 (opcional) · «Enviar a IRIS» desde otras apps
 Share Extension para mandar fotos desde Fotos o Artemis sin abrir IRIS.
 

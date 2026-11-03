@@ -80,6 +80,6 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>IRIS se conecta con Unreal en tu PC de la red local para ver y mover las luces y la cámara en vivo.</string>
+	<string>IRIS se conecta con tu PC de la red local para enviarle las capturas de localización y para ver y mover las luces y la cámara de Unreal en vivo.</string>
 </dict>
 </plist>
