@@ -87,6 +87,7 @@ typedef WorkspaceScene = ({
     VisualBibleDocuments,
     PlanTrash,
     PlanImages,
+    LocationCaptures,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -578,6 +579,10 @@ class AppDatabase extends _$AppDatabase {
         // Encuadres y refuerzos de cada plano al exportarlo.
         await add(shots, shots.exportLayoutJson);
       }
+      if (from < 59) {
+        // Capturas del iPhone que viajan al PC para hacerse escaneo.
+        await m.createTable(locationCaptures);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -766,6 +771,9 @@ class AppDatabase extends _$AppDatabase {
           .write(const LightingSetupsCompanion(planSetupId: Value(null)));
       await (delete(lightSetups)..where((s) => s.projectId.equals(id))).go();
       await (delete(planImages)..where((i) => i.projectId.equals(id))).go();
+      await (delete(
+        locationCaptures,
+      )..where((c) => c.projectId.equals(id))).go();
       await (delete(planTrash)..where((t) => t.projectId.equals(id))).go();
       await (delete(
         projectEquipment,
@@ -892,6 +900,9 @@ class AppDatabase extends _$AppDatabase {
       await (delete(lightSetups)..where((s) => s.projectId.equals(id))).go();
       // La papelera se queda: es de este equipo y sabe volver sola.
       await (delete(planImages)..where((i) => i.projectId.equals(id))).go();
+      await (delete(
+        locationCaptures,
+      )..where((c) => c.projectId.equals(id))).go();
       await (delete(
         projectEquipment,
       )..where((e) => e.projectId.equals(id))).go();
@@ -2510,6 +2521,56 @@ class AppDatabase extends _$AppDatabase {
 
   Future<int> insertSiteImage(SiteImagesCompanion image) =>
       into(siteImages).insert(image);
+
+  // ── Capturas del iPhone ──
+
+  Stream<List<LocationCapture>> watchCapturesForProject(int projectId) =>
+      (select(locationCaptures)
+            ..where((c) => c.projectId.equals(projectId))
+            ..orderBy([(c) => OrderingTerm.desc(c.createdAt)]))
+          .watch();
+
+  /// Capturas en cualquier proyecto con estos estados (el envío y la cola
+  /// no miran un proyecto solo).
+  Future<List<LocationCapture>> getCapturesWithStatus(List<String> statuses) =>
+      (select(locationCaptures)
+            ..where((c) => c.status.isIn(statuses))
+            ..orderBy([(c) => OrderingTerm.asc(c.createdAt)]))
+          .get();
+
+  Future<LocationCapture?> getCaptureByUid(String uid) => (select(
+    locationCaptures,
+  )..where((c) => c.uid.equals(uid))).getSingleOrNull();
+
+  Future<int> insertCapture(LocationCapturesCompanion capture) async {
+    final id = await into(locationCaptures).insert(capture);
+    await touchProjectContent(capture.projectId.value);
+    return id;
+  }
+
+  /// Cambia estado, progreso o error. Por uid: al bajar la nube el proyecto
+  /// se reimporta y los ids cambian en mitad de un envío o una construcción.
+  /// [touch] marca el proyecto para sincronizar; el progreso fino no lo hace
+  /// (lo haría cada segundo).
+  Future<void> updateCapture(
+    String uid,
+    LocationCapturesCompanion changes, {
+    bool touch = true,
+  }) async {
+    final row = await getCaptureByUid(uid);
+    if (row == null) return;
+    await (update(locationCaptures)..where((c) => c.uid.equals(uid))).write(
+      changes.copyWith(updatedAt: Value(DateTime.now())),
+    );
+    if (touch) await touchProjectContent(row.projectId);
+  }
+
+  Future<void> deleteCapture(LocationCapture capture) async {
+    await (delete(
+      locationCaptures,
+    )..where((c) => c.id.equals(capture.id))).go();
+    await touchProjectContent(capture.projectId);
+  }
 
   Future<int> deleteSiteImage(int id) =>
       (delete(siteImages)..where((i) => i.id.equals(id))).go();
@@ -4736,7 +4797,7 @@ extension SceneLabel on Scene {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 58;
+const kSchemaVersion = 59;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

@@ -10,6 +10,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_layout.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/export_file_saver.dart';
@@ -66,6 +67,10 @@ const _layers = <(String, String)>[
 /// planta.
 typedef ScanTopSink = Future<void> Function(Uint8List png, Rect metres);
 
+/// Guarda una captura del iPhone en la planta (su set o localización) y
+/// devuelve el texto que se enseña.
+typedef CaptureSink = Future<String> Function(String path);
+
 class Plan3dView extends StatefulWidget {
   final List<PlanElement> elements;
   final double metersPerUnit;
@@ -110,6 +115,9 @@ class Plan3dView extends StatefulWidget {
   /// rectángulo dado en metros de la planta.
   final ScanTopSink? onScanTop;
 
+  /// Captura guiada del iPhone: sin él, el .zip solo se comparte.
+  final CaptureSink? onCapture;
+
   /// La cámara con la que se mide y su diafragma (F6.21.4).
   final ExposureSettings? exposure;
   final double? stop;
@@ -135,6 +143,7 @@ class Plan3dView extends StatefulWidget {
     this.onOpenUnreal,
     this.projectId,
     this.onScanTop,
+    this.onCapture,
     this.exposure,
     this.stop,
     this.environment,
@@ -148,6 +157,9 @@ class Plan3dView extends StatefulWidget {
 
 class _Plan3dViewState extends State<Plan3dView> {
   InAppWebViewController? _web;
+
+  /// iPhone a pantalla entera: panel de ajustes abierto sobre el visor.
+  bool _panelOpen = false;
   bool _ready = false;
   String? _sent;
   Map<String, dynamic>? _scene;
@@ -261,6 +273,8 @@ class _Plan3dViewState extends State<Plan3dView> {
     if (old.selected != widget.selected) {
       _selected = widget.selected;
       _pushSelection();
+      // En el iPhone, tocar una pieza abre sus ajustes.
+      if (widget.selected != null) _panelOpen = true;
     }
   }
 
@@ -402,7 +416,8 @@ class _Plan3dViewState extends State<Plan3dView> {
           'ortho': _ortho,
           'names': _names,
           'show': _show,
-          'nav': AppPrefs.instance.get(
+          'nav':
+              AppPrefs.instance.get(
                 PlanPrefs.unrealNav,
                 projectId: widget.projectId,
               )
@@ -438,9 +453,11 @@ class _Plan3dViewState extends State<Plan3dView> {
       case 'lightMode':
         final ev = message['ev100'];
         if (mounted) {
-          setState(() => _ev100 = message['physical'] == true && ev is num
-              ? ev.toDouble()
-              : null);
+          setState(
+            () => _ev100 = message['physical'] == true && ev is num
+                ? ev.toDouble()
+                : null,
+          );
         }
       case 'scanError':
         if (mounted) {
@@ -560,11 +577,29 @@ class _Plan3dViewState extends State<Plan3dView> {
     }
   }
 
-  /// Captura guiada con el iPhone (F6.20 E6). La reconstrucción se hace en
-  /// el PC con RealityScan: al terminar se comparte el .zip para pasarlo.
+  /// Captura guiada con el iPhone (F6.20 E6). Queda pendiente en la planta
+  /// y pasa sola al PC con RealityScan; sin planta, se comparte el .zip.
   Future<void> _captureWithPhone() async {
-    final path = await ScanCaptureChannel.start(widget.name ?? 'Localización');
-    if (path == null || !mounted) return;
+    // Se toma antes: si al terminar este visor ya no existe (la planta se
+    // rehízo al girar el móvil), la captura se guarda igual.
+    final save = widget.onCapture;
+    final name = widget.name ?? 'Localización';
+    final ultraWide = await ScanCaptureChannel.chooseLens(context);
+    if (ultraWide == null) return;
+    final path = await ScanCaptureChannel.start(name, ultraWide: ultraWide);
+    if (path == null) return;
+    if (save != null) {
+      String status;
+      try {
+        status = await save(path);
+      } catch (e) {
+        status = 'No se pudo guardar la captura ($e). Las fotos siguen en '
+            'el iPhone: recupéralas desde el panel de escaneo del set.';
+      }
+      if (mounted) setState(() => _status = status);
+      return;
+    }
+    if (!mounted) return;
     setState(
       () => _status =
           'Captura guardada. Pásala al PC y ábrela en «Crear escaneo» → '
@@ -813,9 +848,7 @@ class _Plan3dViewState extends State<Plan3dView> {
     final data = raw is String ? jsonDecode(raw) : null;
     if (data is! Map || data['png'] is! String) {
       if (mounted) {
-        setState(
-          () => _status = 'El escaneo aún no se ha cargado en el 3D.',
-        );
+        setState(() => _status = 'El escaneo aún no se ha cargado en el 3D.');
       }
       return;
     }
@@ -914,16 +947,54 @@ class _Plan3dViewState extends State<Plan3dView> {
       ],
     );
     if (widget.full) {
-      return Material(
-        color: palette.surface,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: viewer),
-            VerticalDivider(width: 1, color: palette.divider),
-            SizedBox(width: 300, child: _sidebar(palette)),
-          ],
-        ),
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth >= AppLayout.compactBreakpoint) {
+            return Material(
+              color: palette.surface,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: viewer),
+                  VerticalDivider(width: 1, color: palette.divider),
+                  SizedBox(width: 300, child: _sidebar(palette)),
+                ],
+              ),
+            );
+          }
+          // iPhone: el visor a todo el ancho y los ajustes en un panel
+          // inferior plegable, en el mismo árbol para que se redibuje.
+          return Material(
+            color: palette.surface,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _compactBar(
+                  palette,
+                  onSettings: () => setState(() => _panelOpen = !_panelOpen),
+                ),
+                Divider(height: 1, color: palette.divider),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, area) => Stack(
+                      children: [
+                        Positioned.fill(child: viewer),
+                        if (_panelOpen)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            height: area.maxHeight * 0.55,
+                            child: _bottomPanel(palette),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       );
     }
     return Material(
@@ -941,7 +1012,44 @@ class _Plan3dViewState extends State<Plan3dView> {
 
   // ── Panel junto a la planta: lo justo, sin desbordar ─────────────────────
 
-  Widget _compactBar(AppPalette palette) => Padding(
+  Widget _bottomPanel(AppPalette palette) => Material(
+    color: palette.surface,
+    elevation: 8,
+    shape: RoundedRectangleBorder(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      side: BorderSide(color: palette.divider),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _panelOpen = false),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.xs,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Ajustes del 3D',
+                    style: AppTypography.label(palette),
+                  ),
+                ),
+                Icon(Icons.expand_more, color: palette.textSecondary),
+              ],
+            ),
+          ),
+        ),
+        Divider(height: 1, color: palette.divider),
+        Expanded(child: _sidebar(palette)),
+      ],
+    ),
+  );
+
+  Widget _compactBar(AppPalette palette, {VoidCallback? onSettings}) => Padding(
     padding: const EdgeInsets.symmetric(
       horizontal: AppSpacing.xs,
       vertical: AppSpacing.xs,
@@ -1037,6 +1145,16 @@ class _Plan3dViewState extends State<Plan3dView> {
                   : palette.warning,
             ),
             onPressed: widget.onExpand,
+          ),
+        if (onSettings != null)
+          IconButton(
+            tooltip: 'Ajustes del 3D',
+            icon: Icon(
+              _panelOpen ? Icons.tune : Icons.tune_outlined,
+              size: 20,
+              color: _panelOpen ? palette.accent : palette.textSecondary,
+            ),
+            onPressed: onSettings,
           ),
         if (widget.onExpand != null)
           IconButton(
@@ -1231,7 +1349,9 @@ class _Plan3dViewState extends State<Plan3dView> {
               value: true,
               icon: const Icon(Icons.lightbulb_outline, size: 16),
               label: Text(
-                _ev100 == null ? 'Luz' : 'Luz · EV ${_ev100!.toStringAsFixed(1)}',
+                _ev100 == null
+                    ? 'Luz'
+                    : 'Luz · EV ${_ev100!.toStringAsFixed(1)}',
               ),
             ),
             const ButtonSegment(
@@ -1307,11 +1427,11 @@ class _Plan3dViewState extends State<Plan3dView> {
               onUpdate: _update,
             ),
           UnrealAssetTile(
-              element: _selected!,
-              link: UnrealLink.instance,
-              projectId: widget.projectId,
-              onChanged: _update,
-            ),
+            element: _selected!,
+            link: UnrealLink.instance,
+            projectId: widget.projectId,
+            onChanged: _update,
+          ),
         ],
         header('Escaneos'),
         ..._scanSection(palette),
@@ -1663,6 +1783,7 @@ class Plan3dScreen extends StatefulWidget {
   final Future<void> Function()? onOpenUnreal;
   final int? projectId;
   final ScanTopSink? onScanTop;
+  final CaptureSink? onCapture;
   final ExposureSettings? exposure;
   final double? stop;
   final SetEnvironment? environment;
@@ -1682,6 +1803,7 @@ class Plan3dScreen extends StatefulWidget {
     this.onOpenUnreal,
     this.projectId,
     this.onScanTop,
+    this.onCapture,
     this.exposure,
     this.stop,
     this.environment,
@@ -1702,6 +1824,7 @@ class Plan3dScreen extends StatefulWidget {
     Future<void> Function()? onOpenUnreal,
     int? projectId,
     ScanTopSink? onScanTop,
+    CaptureSink? onCapture,
     ExposureSettings? exposure,
     double? stop,
     SetEnvironment? environment,
@@ -1721,6 +1844,7 @@ class Plan3dScreen extends StatefulWidget {
         onOpenUnreal: onOpenUnreal,
         projectId: projectId,
         onScanTop: onScanTop,
+        onCapture: onCapture,
         exposure: exposure,
         stop: stop,
         environment: environment,
@@ -1769,6 +1893,7 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       onOpenUnreal: widget.onOpenUnreal,
       projectId: widget.projectId,
       onScanTop: widget.onScanTop,
+      onCapture: widget.onCapture,
       exposure: widget.exposure,
       stop: widget.stop,
       environment: widget.environment,

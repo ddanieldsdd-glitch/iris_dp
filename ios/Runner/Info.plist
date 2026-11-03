@@ -29,7 +29,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>IRIS DP usa la cámara para capturar localizaciones en 3D.</string>
+	<string>IRIS usa la cámara para capturar localizaciones en 3D y hacer fotos de localización y de referencia.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>IRIS DP usa tus fotos como referencias para planos, biblias y moodboards.</string>
 	<key>UIApplicationSceneManifest</key>
@@ -80,6 +80,6 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>IRIS se conecta con Unreal en tu PC de la red local para ver y mover las luces y la cámara en vivo.</string>
+	<string>IRIS se conecta con tu PC de la red local para enviarle las capturas de localización y para ver y mover las luces y la cámara de Unreal en vivo.</string>
 </dict>
 </plist>

@@ -12,6 +12,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/utils/photo_source_picker.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_format.dart';
 import '../../core/utils/shot_reference_import.dart';
@@ -24,6 +25,7 @@ import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
 import '../../shared/pdf_export/storyboard_pdf.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
+import '../artemis_import/artemis_import_screen.dart';
 import '../technical_script/technical_script_screen.dart';
 import 'storyboard_export_options_sheet.dart';
 import '../../core/utils/share_origin.dart';
@@ -178,6 +180,12 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
                 db: db,
               );
             },
+          ),
+          IconButton(
+            tooltip: 'Importar de Artemis',
+            icon: Icon(Icons.add_a_photo_outlined, color: palette.accent),
+            onPressed: () =>
+                importFromArtemis(context, projectId: widget.projectId),
           ),
           IconButton(
             tooltip: 'Exportar PDF',
@@ -926,6 +934,22 @@ class _StoryboardFrame extends ConsumerWidget {
   }) async {
     final db = ref.read(databaseProvider);
     try {
+      // En el iPhone y el iPad: cámara, fototeca o archivos.
+      if (PhotoSourcePicker.isMobile) {
+        final paths = await PhotoSourcePicker.pickImages(
+          context,
+          allowMultiple: false,
+          title: 'Referencia · Plano ${shot.number}',
+        );
+        if (paths.isEmpty) return;
+        await importShotReferenceImage(
+          db: db,
+          shot: shot,
+          sourcePath: paths.first,
+          source: source,
+        );
+        return;
+      }
       await pickAndImportShotReference(
         db: db,
         shot: shot,

@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/media_storage.dart';
+import '../../core/utils/photo_source_picker.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_card.dart';
@@ -20,6 +20,7 @@ import '../camera_plan/floor_plan_map_tile.dart';
 import '../camera_plan/floor_plan_repository.dart';
 import '../camera_plan/floor_plan_scope.dart';
 import 'location_scan_panel.dart';
+import 'location_site_plans.dart';
 import 'location_coming_soon.dart';
 import 'location_scene_board.dart';
 import 'location_set_gallery.dart';
@@ -39,23 +40,22 @@ class SiteBaseSection extends ConsumerWidget {
   });
 
   Future<void> _addImage(BuildContext context, WidgetRef ref) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: true,
+    final paths = await PhotoSourcePicker.pickImages(
+      context,
+      title: 'Galería · ${site.name}',
     );
-    if (result == null) return;
+    if (paths.isEmpty) return;
 
     final db = ref.read(databaseProvider);
     final existing = await db.watchImagesForSite(site.id).first;
     var sort = existing.length;
 
     try {
-      for (final file in result.files) {
-        if (file.path == null) continue;
+      for (final path in paths) {
         final stored = await MediaStorage.copySiteImage(
           projectId: projectId,
           siteId: site.id,
-          sourcePath: file.path!,
+          sourcePath: path,
         );
         await db.insertSiteImage(SiteImagesCompanion.insert(
           siteId: site.id,
@@ -172,6 +172,8 @@ class SiteBaseSection extends ConsumerWidget {
             );
           },
         ),
+        const SizedBox(height: AppSpacing.xl),
+        SitePlansSection(projectId: projectId, site: site),
         const SizedBox(height: AppSpacing.md),
         const LocationAdvancedComingSoon(),
       ],

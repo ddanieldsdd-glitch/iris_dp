@@ -160,16 +160,24 @@ abstract final class MoodboardHelpers {
     List<String> assignedSections = const [],
     String? linkedLocationName,
     int? linkedLocationBasePlanId,
+    // Ya elegidas (p. ej. con [PhotoSourcePicker]); si no, abre el selector.
+    List<String>? sourcePaths,
+    String source = MoodboardSource.manual,
   }) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: true,
-    );
-    if (result == null) return;
+    var paths = sourcePaths;
+    if (paths == null) {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: true,
+      );
+      if (result == null) return;
+      paths = [
+        for (final f in result.files)
+          if (f.path != null) f.path!,
+      ];
+    }
 
-    for (final file in result.files) {
-      final path = file.path;
-      if (path == null) continue;
+    for (final path in paths) {
       final ext = p.extension(path);
       final copied = await MediaStorage.copyFileIntoProject(
         projectId: projectId,
@@ -187,7 +195,7 @@ abstract final class MoodboardHelpers {
           bibleId: Value(bibleId),
           imagePath: copied,
           category: Value(derivedCategory),
-          source: const Value(MoodboardSource.manual),
+          source: Value(source),
           assignedSections: assignedSections.isEmpty
               ? const Value(null)
               : Value(jsonEncode(assignedSections)),

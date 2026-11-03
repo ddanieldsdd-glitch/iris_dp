@@ -111,7 +111,7 @@ class ProjectContentBundle {
   /// v6: `uid` permanente de escenas, planos e imágenes.
   /// v7: también de esquemas de luz, sets, localizaciones, evidencias,
   /// pruebas de cámara, PDF anotados y muestras ópticas (sus archivos viajan).
-  static const bundleVersion = 7;
+  static const bundleVersion = 8;
 
   static Future<Map<String, dynamic>> export(
     AppDatabase db,
@@ -533,6 +533,9 @@ class ProjectContentBundle {
     final planImageRows = await (db.select(
       db.planImages,
     )..where((i) => i.projectId.equals(projectId))).get();
+    final captureRows = await (db.select(
+      db.locationCaptures,
+    )..where((c) => c.projectId.equals(projectId))).get();
     final annotationDocuments = await (db.select(
       db.projectAnnotationDocuments,
     )..where((a) => a.projectId.equals(projectId))).get();
@@ -842,6 +845,24 @@ class ProjectContentBundle {
               )
               case final exported?)
             exported,
+      ],
+      'locationCaptures': [
+        for (final c in captureRows)
+          {
+            'uid': c.uid,
+            'siteKey': c.siteId != null ? siteKeyById[c.siteId!] : null,
+            'setKey': c.setId != null ? setKeyById[c.setId!] : null,
+            'name': c.name,
+            'photoCount': c.photoCount,
+            'bytes': c.bytes,
+            'status': c.status,
+            'progress': c.progress,
+            'originInstallId': c.originInstallId,
+            'builderInstallId': c.builderInstallId,
+            'error': c.error,
+            'createdAt': c.createdAt.toIso8601String(),
+            'updatedAt': c.updatedAt.toIso8601String(),
+          },
       ],
       'projectAnnotationDocuments': [
         for (final document in annotationDocuments)
@@ -2423,6 +2444,34 @@ class ProjectContentBundle {
               linkedShotId: Value(shotKeyToId[m['linkedShotKey']]),
               commentsJson: Value(m['commentsJson'] as String?),
               sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+            ),
+          );
+    }
+
+    for (final row in bundle['locationCaptures'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      await db
+          .into(db.locationCaptures)
+          .insert(
+            LocationCapturesCompanion.insert(
+              uid: bundleUid(m['uid']),
+              projectId: projectId,
+              siteId: Value(siteKeyToId[m['siteKey']]),
+              setId: Value(setKeyToId[m['setKey']]),
+              name: m['name'] as String? ?? 'Captura',
+              photoCount: Value(bundleIntOr(m['photoCount'], 0)),
+              bytes: Value(bundleIntOr(m['bytes'], 0)),
+              status: Value(m['status'] as String? ?? 'en_iphone'),
+              progress: Value((m['progress'] as num?)?.toDouble() ?? 0),
+              originInstallId: Value(m['originInstallId'] as String?),
+              builderInstallId: Value(m['builderInstallId'] as String?),
+              error: Value(m['error'] as String?),
+              createdAt: Value(
+                bundleDateTime(m['createdAt']) ?? DateTime.now(),
+              ),
+              updatedAt: Value(
+                bundleDateTime(m['updatedAt']) ?? DateTime.now(),
+              ),
             ),
           );
     }

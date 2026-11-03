@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/media_storage.dart';
+import '../../core/utils/photo_source_picker.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/app_snackbar.dart';
@@ -26,23 +26,22 @@ class SetReferenceGallerySection extends ConsumerWidget {
   });
 
   Future<void> _addImage(BuildContext context, WidgetRef ref) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: true,
+    final paths = await PhotoSourcePicker.pickImages(
+      context,
+      title: 'Galería del set',
     );
-    if (result == null) return;
+    if (paths.isEmpty) return;
 
     final db = ref.read(databaseProvider);
     final existing = await db.watchImagesForLocation(locationId).first;
     var sort = existing.length;
 
     try {
-      for (final file in result.files) {
-        if (file.path == null) continue;
+      for (final path in paths) {
         final stored = await MediaStorage.copyLocationImage(
           projectId: projectId,
           locationId: locationId,
-          sourcePath: file.path!,
+          sourcePath: path,
         );
         await db.insertLocationImage(LocationImagesCompanion.insert(
           locationId: locationId,

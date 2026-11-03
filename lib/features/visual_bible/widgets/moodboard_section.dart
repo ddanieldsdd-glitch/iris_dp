@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/clipboard_image_reader.dart';
+import '../../../core/utils/photo_source_picker.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../moodboard_image_aspect.dart';
 import '../moodboard_association.dart';
@@ -1019,12 +1020,16 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
   }
 
   Future<void> _addManual(BuildContext context) async {
+    final paths =
+        await PhotoSourcePicker.pickImages(context, title: 'Moodboard');
+    if (paths.isEmpty) return;
     final db = ref.read(databaseProvider);
     await MoodboardHelpers.addManualImages(
       db: db,
       projectId: widget.projectId,
       bibleId: widget.bibleId,
       category: _activeCategory,
+      sourcePaths: paths,
     );
   }
 
@@ -1614,8 +1619,9 @@ class _MoodboardEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    // Con scroll: en el iPhone el texto y los cuatro botones no caben.
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           mainAxisSize: MainAxisSize.min,

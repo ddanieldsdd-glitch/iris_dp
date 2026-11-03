@@ -30,6 +30,41 @@ abstract final class InstallId {
   }
 }
 
+/// Un equipo que construye escaneos (el PC con RealityScan) y sus
+/// direcciones en la red local.
+class ScanBuilderPeer {
+  final String installId;
+  final String? device;
+  final List<String> lanIps;
+  final int port;
+  final String token;
+
+  const ScanBuilderPeer({
+    required this.installId,
+    required this.lanIps,
+    required this.port,
+    required this.token,
+    this.device,
+  });
+
+  static ScanBuilderPeer? fromPayload(Map<String, dynamic> p) {
+    final installId = p['installId'];
+    final b = p['scanBuilder'];
+    if (installId is! String || b is! Map) return null;
+    final ips = b['lanIps'];
+    final port = b['port'];
+    final token = b['token'];
+    if (ips is! List || port is! int || token is! String) return null;
+    return ScanBuilderPeer(
+      installId: installId,
+      device: p['device'] as String?,
+      lanIps: [for (final ip in ips) if (ip is String) ip],
+      port: port,
+      token: token,
+    );
+  }
+}
+
 /// Otro equipo acaba de subir una versión de un proyecto.
 class SnapshotNotice {
   final String projectCloudId;
@@ -65,6 +100,10 @@ class RealtimeHub {
 
   bool _subscribed = false;
   Map<String, dynamic>? _editing;
+
+  /// Este equipo construye escaneos: dónde recibe las capturas en la red
+  /// local (ver `CaptureReceiver`).
+  Map<String, dynamic>? _scanBuilder;
   String? _installId;
 
   RealtimeChannel? _channel;
@@ -184,15 +223,41 @@ class RealtimeHub {
     await _track();
   }
 
+  /// Anuncia (o retira, con `null`) que este equipo construye escaneos y
+  /// cómo llegarle por la red local.
+  Future<void> setScanBuilder(Map<String, dynamic>? info) async {
+    _scanBuilder = info;
+    await _track();
+  }
+
+  /// Los otros equipos del espacio que construyen escaneos, ahora mismo.
+  List<ScanBuilderPeer> get scanBuilders {
+    final channel = _channel;
+    if (channel == null) return const [];
+    return [
+      for (final state in channel.presenceState())
+        if (state.key != _installId)
+          for (final presence in state.presences)
+            if (ScanBuilderPeer.fromPayload(presence.payload) case final peer?)
+              peer,
+    ];
+  }
+
   Future<void> _track() async {
     final channel = _channel;
     if (channel == null || !_subscribed) return;
     try {
       final editing = _editing;
-      if (editing == null) {
+      final builder = _scanBuilder;
+      if (editing == null && builder == null) {
         await channel.untrack();
       } else {
-        await channel.track(editing);
+        await channel.track({
+          'installId': await InstallId.get(),
+          'device': deviceLabel(),
+          ...?editing,
+          if (builder != null) 'scanBuilder': builder,
+        });
       }
     } catch (e) {
       debugPrint('Presencia no enviada: $e');

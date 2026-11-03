@@ -36818,6 +36818,844 @@ class PlanImagesCompanion extends UpdateCompanion<PlanImage> {
   }
 }
 
+class $LocationCapturesTable extends LocationCaptures
+    with TableInfo<$LocationCapturesTable, LocationCapture> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocationCapturesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _siteIdMeta = const VerificationMeta('siteId');
+  @override
+  late final GeneratedColumn<int> siteId = GeneratedColumn<int>(
+    'site_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _setIdMeta = const VerificationMeta('setId');
+  @override
+  late final GeneratedColumn<int> setId = GeneratedColumn<int>(
+    'set_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _photoCountMeta = const VerificationMeta(
+    'photoCount',
+  );
+  @override
+  late final GeneratedColumn<int> photoCount = GeneratedColumn<int>(
+    'photo_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _bytesMeta = const VerificationMeta('bytes');
+  @override
+  late final GeneratedColumn<int> bytes = GeneratedColumn<int>(
+    'bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('en_iphone'),
+  );
+  static const VerificationMeta _progressMeta = const VerificationMeta(
+    'progress',
+  );
+  @override
+  late final GeneratedColumn<double> progress = GeneratedColumn<double>(
+    'progress',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0.0),
+  );
+  static const VerificationMeta _originInstallIdMeta = const VerificationMeta(
+    'originInstallId',
+  );
+  @override
+  late final GeneratedColumn<String> originInstallId = GeneratedColumn<String>(
+    'origin_install_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _builderInstallIdMeta = const VerificationMeta(
+    'builderInstallId',
+  );
+  @override
+  late final GeneratedColumn<String> builderInstallId = GeneratedColumn<String>(
+    'builder_install_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _errorMeta = const VerificationMeta('error');
+  @override
+  late final GeneratedColumn<String> error = GeneratedColumn<String>(
+    'error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    uid,
+    projectId,
+    siteId,
+    setId,
+    name,
+    photoCount,
+    bytes,
+    status,
+    progress,
+    originInstallId,
+    builderInstallId,
+    error,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'location_captures';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LocationCapture> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('site_id')) {
+      context.handle(
+        _siteIdMeta,
+        siteId.isAcceptableOrUnknown(data['site_id']!, _siteIdMeta),
+      );
+    }
+    if (data.containsKey('set_id')) {
+      context.handle(
+        _setIdMeta,
+        setId.isAcceptableOrUnknown(data['set_id']!, _setIdMeta),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('photo_count')) {
+      context.handle(
+        _photoCountMeta,
+        photoCount.isAcceptableOrUnknown(data['photo_count']!, _photoCountMeta),
+      );
+    }
+    if (data.containsKey('bytes')) {
+      context.handle(
+        _bytesMeta,
+        bytes.isAcceptableOrUnknown(data['bytes']!, _bytesMeta),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('progress')) {
+      context.handle(
+        _progressMeta,
+        progress.isAcceptableOrUnknown(data['progress']!, _progressMeta),
+      );
+    }
+    if (data.containsKey('origin_install_id')) {
+      context.handle(
+        _originInstallIdMeta,
+        originInstallId.isAcceptableOrUnknown(
+          data['origin_install_id']!,
+          _originInstallIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('builder_install_id')) {
+      context.handle(
+        _builderInstallIdMeta,
+        builderInstallId.isAcceptableOrUnknown(
+          data['builder_install_id']!,
+          _builderInstallIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('error')) {
+      context.handle(
+        _errorMeta,
+        error.isAcceptableOrUnknown(data['error']!, _errorMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LocationCapture map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocationCapture(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      siteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}site_id'],
+      ),
+      setId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}set_id'],
+      ),
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      photoCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}photo_count'],
+      )!,
+      bytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bytes'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      progress: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}progress'],
+      )!,
+      originInstallId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}origin_install_id'],
+      ),
+      builderInstallId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}builder_install_id'],
+      ),
+      error: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LocationCapturesTable createAlias(String alias) {
+    return $LocationCapturesTable(attachedDatabase, alias);
+  }
+}
+
+class LocationCapture extends DataClass implements Insertable<LocationCapture> {
+  final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
+  final int projectId;
+  final int? siteId;
+  final int? setId;
+  final String name;
+  final int photoCount;
+  final int bytes;
+  final String status;
+  final double progress;
+  final String? originInstallId;
+  final String? builderInstallId;
+  final String? error;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const LocationCapture({
+    required this.id,
+    this.uid,
+    required this.projectId,
+    this.siteId,
+    this.setId,
+    required this.name,
+    required this.photoCount,
+    required this.bytes,
+    required this.status,
+    required this.progress,
+    this.originInstallId,
+    this.builderInstallId,
+    this.error,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
+    map['project_id'] = Variable<int>(projectId);
+    if (!nullToAbsent || siteId != null) {
+      map['site_id'] = Variable<int>(siteId);
+    }
+    if (!nullToAbsent || setId != null) {
+      map['set_id'] = Variable<int>(setId);
+    }
+    map['name'] = Variable<String>(name);
+    map['photo_count'] = Variable<int>(photoCount);
+    map['bytes'] = Variable<int>(bytes);
+    map['status'] = Variable<String>(status);
+    map['progress'] = Variable<double>(progress);
+    if (!nullToAbsent || originInstallId != null) {
+      map['origin_install_id'] = Variable<String>(originInstallId);
+    }
+    if (!nullToAbsent || builderInstallId != null) {
+      map['builder_install_id'] = Variable<String>(builderInstallId);
+    }
+    if (!nullToAbsent || error != null) {
+      map['error'] = Variable<String>(error);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  LocationCapturesCompanion toCompanion(bool nullToAbsent) {
+    return LocationCapturesCompanion(
+      id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
+      projectId: Value(projectId),
+      siteId: siteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(siteId),
+      setId: setId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(setId),
+      name: Value(name),
+      photoCount: Value(photoCount),
+      bytes: Value(bytes),
+      status: Value(status),
+      progress: Value(progress),
+      originInstallId: originInstallId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originInstallId),
+      builderInstallId: builderInstallId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(builderInstallId),
+      error: error == null && nullToAbsent
+          ? const Value.absent()
+          : Value(error),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory LocationCapture.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocationCapture(
+      id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      siteId: serializer.fromJson<int?>(json['siteId']),
+      setId: serializer.fromJson<int?>(json['setId']),
+      name: serializer.fromJson<String>(json['name']),
+      photoCount: serializer.fromJson<int>(json['photoCount']),
+      bytes: serializer.fromJson<int>(json['bytes']),
+      status: serializer.fromJson<String>(json['status']),
+      progress: serializer.fromJson<double>(json['progress']),
+      originInstallId: serializer.fromJson<String?>(json['originInstallId']),
+      builderInstallId: serializer.fromJson<String?>(json['builderInstallId']),
+      error: serializer.fromJson<String?>(json['error']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
+      'projectId': serializer.toJson<int>(projectId),
+      'siteId': serializer.toJson<int?>(siteId),
+      'setId': serializer.toJson<int?>(setId),
+      'name': serializer.toJson<String>(name),
+      'photoCount': serializer.toJson<int>(photoCount),
+      'bytes': serializer.toJson<int>(bytes),
+      'status': serializer.toJson<String>(status),
+      'progress': serializer.toJson<double>(progress),
+      'originInstallId': serializer.toJson<String?>(originInstallId),
+      'builderInstallId': serializer.toJson<String?>(builderInstallId),
+      'error': serializer.toJson<String?>(error),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  LocationCapture copyWith({
+    int? id,
+    Value<String?> uid = const Value.absent(),
+    int? projectId,
+    Value<int?> siteId = const Value.absent(),
+    Value<int?> setId = const Value.absent(),
+    String? name,
+    int? photoCount,
+    int? bytes,
+    String? status,
+    double? progress,
+    Value<String?> originInstallId = const Value.absent(),
+    Value<String?> builderInstallId = const Value.absent(),
+    Value<String?> error = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => LocationCapture(
+    id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
+    projectId: projectId ?? this.projectId,
+    siteId: siteId.present ? siteId.value : this.siteId,
+    setId: setId.present ? setId.value : this.setId,
+    name: name ?? this.name,
+    photoCount: photoCount ?? this.photoCount,
+    bytes: bytes ?? this.bytes,
+    status: status ?? this.status,
+    progress: progress ?? this.progress,
+    originInstallId: originInstallId.present
+        ? originInstallId.value
+        : this.originInstallId,
+    builderInstallId: builderInstallId.present
+        ? builderInstallId.value
+        : this.builderInstallId,
+    error: error.present ? error.value : this.error,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  LocationCapture copyWithCompanion(LocationCapturesCompanion data) {
+    return LocationCapture(
+      id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      siteId: data.siteId.present ? data.siteId.value : this.siteId,
+      setId: data.setId.present ? data.setId.value : this.setId,
+      name: data.name.present ? data.name.value : this.name,
+      photoCount: data.photoCount.present
+          ? data.photoCount.value
+          : this.photoCount,
+      bytes: data.bytes.present ? data.bytes.value : this.bytes,
+      status: data.status.present ? data.status.value : this.status,
+      progress: data.progress.present ? data.progress.value : this.progress,
+      originInstallId: data.originInstallId.present
+          ? data.originInstallId.value
+          : this.originInstallId,
+      builderInstallId: data.builderInstallId.present
+          ? data.builderInstallId.value
+          : this.builderInstallId,
+      error: data.error.present ? data.error.value : this.error,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocationCapture(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('siteId: $siteId, ')
+          ..write('setId: $setId, ')
+          ..write('name: $name, ')
+          ..write('photoCount: $photoCount, ')
+          ..write('bytes: $bytes, ')
+          ..write('status: $status, ')
+          ..write('progress: $progress, ')
+          ..write('originInstallId: $originInstallId, ')
+          ..write('builderInstallId: $builderInstallId, ')
+          ..write('error: $error, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    uid,
+    projectId,
+    siteId,
+    setId,
+    name,
+    photoCount,
+    bytes,
+    status,
+    progress,
+    originInstallId,
+    builderInstallId,
+    error,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocationCapture &&
+          other.id == this.id &&
+          other.uid == this.uid &&
+          other.projectId == this.projectId &&
+          other.siteId == this.siteId &&
+          other.setId == this.setId &&
+          other.name == this.name &&
+          other.photoCount == this.photoCount &&
+          other.bytes == this.bytes &&
+          other.status == this.status &&
+          other.progress == this.progress &&
+          other.originInstallId == this.originInstallId &&
+          other.builderInstallId == this.builderInstallId &&
+          other.error == this.error &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class LocationCapturesCompanion extends UpdateCompanion<LocationCapture> {
+  final Value<int> id;
+  final Value<String?> uid;
+  final Value<int> projectId;
+  final Value<int?> siteId;
+  final Value<int?> setId;
+  final Value<String> name;
+  final Value<int> photoCount;
+  final Value<int> bytes;
+  final Value<String> status;
+  final Value<double> progress;
+  final Value<String?> originInstallId;
+  final Value<String?> builderInstallId;
+  final Value<String?> error;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const LocationCapturesCompanion({
+    this.id = const Value.absent(),
+    this.uid = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.siteId = const Value.absent(),
+    this.setId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.photoCount = const Value.absent(),
+    this.bytes = const Value.absent(),
+    this.status = const Value.absent(),
+    this.progress = const Value.absent(),
+    this.originInstallId = const Value.absent(),
+    this.builderInstallId = const Value.absent(),
+    this.error = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  LocationCapturesCompanion.insert({
+    this.id = const Value.absent(),
+    this.uid = const Value.absent(),
+    required int projectId,
+    this.siteId = const Value.absent(),
+    this.setId = const Value.absent(),
+    required String name,
+    this.photoCount = const Value.absent(),
+    this.bytes = const Value.absent(),
+    this.status = const Value.absent(),
+    this.progress = const Value.absent(),
+    this.originInstallId = const Value.absent(),
+    this.builderInstallId = const Value.absent(),
+    this.error = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : projectId = Value(projectId),
+       name = Value(name);
+  static Insertable<LocationCapture> custom({
+    Expression<int>? id,
+    Expression<String>? uid,
+    Expression<int>? projectId,
+    Expression<int>? siteId,
+    Expression<int>? setId,
+    Expression<String>? name,
+    Expression<int>? photoCount,
+    Expression<int>? bytes,
+    Expression<String>? status,
+    Expression<double>? progress,
+    Expression<String>? originInstallId,
+    Expression<String>? builderInstallId,
+    Expression<String>? error,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
+      if (projectId != null) 'project_id': projectId,
+      if (siteId != null) 'site_id': siteId,
+      if (setId != null) 'set_id': setId,
+      if (name != null) 'name': name,
+      if (photoCount != null) 'photo_count': photoCount,
+      if (bytes != null) 'bytes': bytes,
+      if (status != null) 'status': status,
+      if (progress != null) 'progress': progress,
+      if (originInstallId != null) 'origin_install_id': originInstallId,
+      if (builderInstallId != null) 'builder_install_id': builderInstallId,
+      if (error != null) 'error': error,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  LocationCapturesCompanion copyWith({
+    Value<int>? id,
+    Value<String?>? uid,
+    Value<int>? projectId,
+    Value<int?>? siteId,
+    Value<int?>? setId,
+    Value<String>? name,
+    Value<int>? photoCount,
+    Value<int>? bytes,
+    Value<String>? status,
+    Value<double>? progress,
+    Value<String?>? originInstallId,
+    Value<String?>? builderInstallId,
+    Value<String?>? error,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+  }) {
+    return LocationCapturesCompanion(
+      id: id ?? this.id,
+      uid: uid ?? this.uid,
+      projectId: projectId ?? this.projectId,
+      siteId: siteId ?? this.siteId,
+      setId: setId ?? this.setId,
+      name: name ?? this.name,
+      photoCount: photoCount ?? this.photoCount,
+      bytes: bytes ?? this.bytes,
+      status: status ?? this.status,
+      progress: progress ?? this.progress,
+      originInstallId: originInstallId ?? this.originInstallId,
+      builderInstallId: builderInstallId ?? this.builderInstallId,
+      error: error ?? this.error,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (siteId.present) {
+      map['site_id'] = Variable<int>(siteId.value);
+    }
+    if (setId.present) {
+      map['set_id'] = Variable<int>(setId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (photoCount.present) {
+      map['photo_count'] = Variable<int>(photoCount.value);
+    }
+    if (bytes.present) {
+      map['bytes'] = Variable<int>(bytes.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (progress.present) {
+      map['progress'] = Variable<double>(progress.value);
+    }
+    if (originInstallId.present) {
+      map['origin_install_id'] = Variable<String>(originInstallId.value);
+    }
+    if (builderInstallId.present) {
+      map['builder_install_id'] = Variable<String>(builderInstallId.value);
+    }
+    if (error.present) {
+      map['error'] = Variable<String>(error.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocationCapturesCompanion(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('siteId: $siteId, ')
+          ..write('setId: $setId, ')
+          ..write('name: $name, ')
+          ..write('photoCount: $photoCount, ')
+          ..write('bytes: $bytes, ')
+          ..write('status: $status, ')
+          ..write('progress: $progress, ')
+          ..write('originInstallId: $originInstallId, ')
+          ..write('builderInstallId: $builderInstallId, ')
+          ..write('error: $error, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -36891,6 +37729,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $VisualBibleDocumentsTable(this);
   late final $PlanTrashTable planTrash = $PlanTrashTable(this);
   late final $PlanImagesTable planImages = $PlanImagesTable(this);
+  late final $LocationCapturesTable locationCaptures = $LocationCapturesTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -36940,6 +37781,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     visualBibleDocuments,
     planTrash,
     planImages,
+    locationCaptures,
   ];
 }
 
@@ -37682,6 +38524,29 @@ final class $$ProjectsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$LocationCapturesTable, List<LocationCapture>>
+  _locationCapturesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.locationCaptures,
+    aliasName: $_aliasNameGenerator(
+      db.projects.id,
+      db.locationCaptures.projectId,
+    ),
+  );
+
+  $$LocationCapturesTableProcessedTableManager get locationCapturesRefs {
+    final manager = $$LocationCapturesTableTableManager(
+      $_db,
+      $_db.locationCaptures,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _locationCapturesRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ProjectsTableFilterComposer
@@ -38289,6 +39154,31 @@ class $$ProjectsTableFilterComposer
           }) => $$PlanImagesTableFilterComposer(
             $db: $db,
             $table: $db.planImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> locationCapturesRefs(
+    Expression<bool> Function($$LocationCapturesTableFilterComposer f) f,
+  ) {
+    final $$LocationCapturesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.locationCaptures,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationCapturesTableFilterComposer(
+            $db: $db,
+            $table: $db.locationCaptures,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -39059,6 +39949,31 @@ class $$ProjectsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> locationCapturesRefs<T extends Object>(
+    Expression<T> Function($$LocationCapturesTableAnnotationComposer a) f,
+  ) {
+    final $$LocationCapturesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.locationCaptures,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationCapturesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.locationCaptures,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ProjectsTableTableManager
@@ -39094,6 +40009,7 @@ class $$ProjectsTableTableManager
             bool visualBibleDocumentsRefs,
             bool planTrashRefs,
             bool planImagesRefs,
+            bool locationCapturesRefs,
           })
         > {
   $$ProjectsTableTableManager(_$AppDatabase db, $ProjectsTable table)
@@ -39252,6 +40168,7 @@ class $$ProjectsTableTableManager
                 visualBibleDocumentsRefs = false,
                 planTrashRefs = false,
                 planImagesRefs = false,
+                locationCapturesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -39275,6 +40192,7 @@ class $$ProjectsTableTableManager
                     if (visualBibleDocumentsRefs) db.visualBibleDocuments,
                     if (planTrashRefs) db.planTrash,
                     if (planImagesRefs) db.planImages,
+                    if (locationCapturesRefs) db.locationCaptures,
                   ],
                   addJoins:
                       <
@@ -39688,6 +40606,27 @@ class $$ProjectsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (locationCapturesRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          LocationCapture
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._locationCapturesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).locationCapturesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -39728,6 +40667,7 @@ typedef $$ProjectsTableProcessedTableManager =
         bool visualBibleDocumentsRefs,
         bool planTrashRefs,
         bool planImagesRefs,
+        bool locationCapturesRefs,
       })
     >;
 typedef $$LocationSitesTableCreateCompanionBuilder =
@@ -67046,6 +67986,524 @@ typedef $$PlanImagesTableProcessedTableManager =
       PlanImage,
       PrefetchHooks Function({bool projectId})
     >;
+typedef $$LocationCapturesTableCreateCompanionBuilder =
+    LocationCapturesCompanion Function({
+      Value<int> id,
+      Value<String?> uid,
+      required int projectId,
+      Value<int?> siteId,
+      Value<int?> setId,
+      required String name,
+      Value<int> photoCount,
+      Value<int> bytes,
+      Value<String> status,
+      Value<double> progress,
+      Value<String?> originInstallId,
+      Value<String?> builderInstallId,
+      Value<String?> error,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+typedef $$LocationCapturesTableUpdateCompanionBuilder =
+    LocationCapturesCompanion Function({
+      Value<int> id,
+      Value<String?> uid,
+      Value<int> projectId,
+      Value<int?> siteId,
+      Value<int?> setId,
+      Value<String> name,
+      Value<int> photoCount,
+      Value<int> bytes,
+      Value<String> status,
+      Value<double> progress,
+      Value<String?> originInstallId,
+      Value<String?> builderInstallId,
+      Value<String?> error,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+
+final class $$LocationCapturesTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $LocationCapturesTable, LocationCapture> {
+  $$LocationCapturesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.locationCaptures.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$LocationCapturesTableFilterComposer
+    extends Composer<_$AppDatabase, $LocationCapturesTable> {
+  $$LocationCapturesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get siteId => $composableBuilder(
+    column: $table.siteId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get setId => $composableBuilder(
+    column: $table.setId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get photoCount => $composableBuilder(
+    column: $table.photoCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bytes => $composableBuilder(
+    column: $table.bytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get progress => $composableBuilder(
+    column: $table.progress,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originInstallId => $composableBuilder(
+    column: $table.originInstallId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get builderInstallId => $composableBuilder(
+    column: $table.builderInstallId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get error => $composableBuilder(
+    column: $table.error,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LocationCapturesTableOrderingComposer
+    extends Composer<_$AppDatabase, $LocationCapturesTable> {
+  $$LocationCapturesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get siteId => $composableBuilder(
+    column: $table.siteId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get setId => $composableBuilder(
+    column: $table.setId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get photoCount => $composableBuilder(
+    column: $table.photoCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bytes => $composableBuilder(
+    column: $table.bytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get progress => $composableBuilder(
+    column: $table.progress,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originInstallId => $composableBuilder(
+    column: $table.originInstallId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get builderInstallId => $composableBuilder(
+    column: $table.builderInstallId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get error => $composableBuilder(
+    column: $table.error,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LocationCapturesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LocationCapturesTable> {
+  $$LocationCapturesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
+
+  GeneratedColumn<int> get siteId =>
+      $composableBuilder(column: $table.siteId, builder: (column) => column);
+
+  GeneratedColumn<int> get setId =>
+      $composableBuilder(column: $table.setId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get photoCount => $composableBuilder(
+    column: $table.photoCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get bytes =>
+      $composableBuilder(column: $table.bytes, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<double> get progress =>
+      $composableBuilder(column: $table.progress, builder: (column) => column);
+
+  GeneratedColumn<String> get originInstallId => $composableBuilder(
+    column: $table.originInstallId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get builderInstallId => $composableBuilder(
+    column: $table.builderInstallId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get error =>
+      $composableBuilder(column: $table.error, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LocationCapturesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LocationCapturesTable,
+          LocationCapture,
+          $$LocationCapturesTableFilterComposer,
+          $$LocationCapturesTableOrderingComposer,
+          $$LocationCapturesTableAnnotationComposer,
+          $$LocationCapturesTableCreateCompanionBuilder,
+          $$LocationCapturesTableUpdateCompanionBuilder,
+          (LocationCapture, $$LocationCapturesTableReferences),
+          LocationCapture,
+          PrefetchHooks Function({bool projectId})
+        > {
+  $$LocationCapturesTableTableManager(
+    _$AppDatabase db,
+    $LocationCapturesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocationCapturesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocationCapturesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LocationCapturesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<int?> siteId = const Value.absent(),
+                Value<int?> setId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> photoCount = const Value.absent(),
+                Value<int> bytes = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<double> progress = const Value.absent(),
+                Value<String?> originInstallId = const Value.absent(),
+                Value<String?> builderInstallId = const Value.absent(),
+                Value<String?> error = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => LocationCapturesCompanion(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                siteId: siteId,
+                setId: setId,
+                name: name,
+                photoCount: photoCount,
+                bytes: bytes,
+                status: status,
+                progress: progress,
+                originInstallId: originInstallId,
+                builderInstallId: builderInstallId,
+                error: error,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
+                required int projectId,
+                Value<int?> siteId = const Value.absent(),
+                Value<int?> setId = const Value.absent(),
+                required String name,
+                Value<int> photoCount = const Value.absent(),
+                Value<int> bytes = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<double> progress = const Value.absent(),
+                Value<String?> originInstallId = const Value.absent(),
+                Value<String?> builderInstallId = const Value.absent(),
+                Value<String?> error = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => LocationCapturesCompanion.insert(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                siteId: siteId,
+                setId: setId,
+                name: name,
+                photoCount: photoCount,
+                bytes: bytes,
+                status: status,
+                progress: progress,
+                originInstallId: originInstallId,
+                builderInstallId: builderInstallId,
+                error: error,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$LocationCapturesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable:
+                                    $$LocationCapturesTableReferences
+                                        ._projectIdTable(db),
+                                referencedColumn:
+                                    $$LocationCapturesTableReferences
+                                        ._projectIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$LocationCapturesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LocationCapturesTable,
+      LocationCapture,
+      $$LocationCapturesTableFilterComposer,
+      $$LocationCapturesTableOrderingComposer,
+      $$LocationCapturesTableAnnotationComposer,
+      $$LocationCapturesTableCreateCompanionBuilder,
+      $$LocationCapturesTableUpdateCompanionBuilder,
+      (LocationCapture, $$LocationCapturesTableReferences),
+      LocationCapture,
+      PrefetchHooks Function({bool projectId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -67154,4 +68612,6 @@ class $AppDatabaseManager {
       $$PlanTrashTableTableManager(_db, _db.planTrash);
   $$PlanImagesTableTableManager get planImages =>
       $$PlanImagesTableTableManager(_db, _db.planImages);
+  $$LocationCapturesTableTableManager get locationCaptures =>
+      $$LocationCapturesTableTableManager(_db, _db.locationCaptures);
 }

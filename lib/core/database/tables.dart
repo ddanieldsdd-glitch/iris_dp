@@ -993,3 +993,30 @@ class PlanImages extends Table {
   TextColumn get commentsJson => text().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 }
+
+/// Captura guiada del iPhone (fotos + posiciones de ARKit) para hacer un
+/// escaneo en el PC con RealityScan. La fila viaja con el proyecto para que
+/// todos vean su estado; el zip no: vive en `Documents/IRIS Capturas/
+/// <uid>.iriscapture.zip` del iPhone y, al recibirla, del PC.
+class LocationCaptures extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  IntColumn get siteId => integer().nullable()();
+  IntColumn get setId => integer().nullable()();
+  TextColumn get name => text()();
+  IntColumn get photoCount => integer().withDefault(const Constant(0))();
+  IntColumn get bytes => integer().withDefault(const Constant(0))();
+  // en_iphone | enviando | en_pc | construyendo | listo | error
+  TextColumn get status => text().withDefault(const Constant('en_iphone'))();
+  // 0–1 del paso en curso (envío o construcción).
+  RealColumn get progress => real().withDefault(const Constant(0.0))();
+  // Instalación que la hizo y la que la construye (ver `InstallId`).
+  TextColumn get originInstallId => text().nullable()();
+  TextColumn get builderInstallId => text().nullable()();
+  TextColumn get error => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}

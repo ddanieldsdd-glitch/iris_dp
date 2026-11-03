@@ -13,7 +13,10 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
 import '../camera_plan/camera_plan_editor.dart';
+import '../camera_plan/rig/scan_capture_channel.dart';
 import '../iris_stage/iris_stage_screen.dart';
+import '../scan_jobs/capture_store.dart';
+import '../scan_jobs/captures_list.dart';
 import 'cinetracer_export_service.dart';
 import 'location_scan_service.dart';
 import '../../core/widgets/app_snackbar.dart';
@@ -39,6 +42,7 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
   late LocationBasePlan _set;
   bool _busy = false;
   double _metersPerPixel = 0.01;
+  bool _canCapture = false;
 
   LocationScanService get _scanService =>
       LocationScanService(ref.read(databaseProvider));
@@ -55,6 +59,52 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
     super.initState();
     _set = widget.set;
     _metersPerPixel = _meta.metersPerPixel;
+    ScanCaptureChannel.isSupported().then((ok) {
+      if (ok && mounted) setState(() => _canCapture = true);
+    });
+  }
+
+  /// Captura guiada con el iPhone (F6.20 E6). Queda pendiente en este set y
+  /// pasa sola al PC con RealityScan cuando coinciden en la misma Wi‑Fi.
+  Future<void> _captureWithPhone() async {
+    // Todo se toma antes de capturar: si el panel se rehace mientras tanto
+    // (al girar el móvil), la captura se guarda igual.
+    final db = ref.read(databaseProvider);
+    final set = _set;
+    final projectId = widget.projectId;
+    final ultraWide = await ScanCaptureChannel.chooseLens(context);
+    if (ultraWide == null) return;
+    final path = await ScanCaptureChannel.start(
+      set.locationName,
+      ultraWide: ultraWide,
+    );
+    if (path == null) return;
+    try {
+      await CaptureStore.register(
+        db,
+        projectId: projectId,
+        path: path,
+        name: set.locationName,
+        siteId: set.siteId,
+        setId: set.id,
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          'No se pudo guardar la captura ($e). Las fotos siguen en el '
+          'iPhone: aparecen abajo, en «Capturas sin asignar».',
+          isError: true,
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    AppSnackBar.show(
+      context,
+      'Captura guardada en «${_set.locationName}». Pasa sola al PC cuando '
+      'estéis en la misma Wi‑Fi.',
+    );
   }
 
   Future<void> _refreshSet() async {
@@ -62,8 +112,9 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
     if (updated != null && mounted) {
       setState(() {
         _set = updated;
-        _metersPerPixel = LocationScanMetadata.fromJson(_set.scanMetadataJson)
-            .metersPerPixel;
+        _metersPerPixel = LocationScanMetadata.fromJson(
+          _set.scanMetadataJson,
+        ).metersPerPixel;
       });
     }
   }
@@ -157,7 +208,8 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
                 value: _hasScan
                     ? LocationScanSource.label(_set.scanSource)
                     : 'Sin importar',
-                detail: _set.scanPath?.split('/').last ??
+                detail:
+                    _set.scanPath?.split('/').last ??
                     _set.model3dPath?.split('/').last,
               ),
               if (meta.hasTopDown) ...[
@@ -165,7 +217,8 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
                 _StatusRow(
                   icon: Icons.grid_on_outlined,
                   label: 'Planta cenital',
-                  value: '${meta.widthMeters.toStringAsFixed(1)} × '
+                  value:
+                      '${meta.widthMeters.toStringAsFixed(1)} × '
                       '${meta.heightMeters.toStringAsFixed(1)} m',
                   detail: meta.topDownImagePath?.split('/').last,
                 ),
@@ -192,6 +245,12 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: [
+            if (_canCapture)
+              AppButton(
+                label: 'Capturar con el iPhone',
+                icon: Icons.photo_camera_outlined,
+                onTap: _busy ? null : _captureWithPhone,
+              ),
             AppButton(
               label: _busy ? '…' : 'Importar scan',
               icon: Icons.upload_file_outlined,
@@ -209,11 +268,16 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
                 label: 'Abrir 3D',
                 icon: Icons.open_in_new,
                 variant: AppButtonVariant.ghost,
-                onTap: () => LocationScanService.openFileExternally(
-                  _set.model3dPath!,
-                ),
+                onTap: () =>
+                    LocationScanService.openFileExternally(_set.model3dPath!),
               ),
           ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        CapturesList(
+          projectId: widget.projectId,
+          setId: _set.id,
+          siteId: _set.siteId,
         ),
         const SizedBox(height: AppSpacing.md),
         Text('Escala real', style: AppTypography.label(palette)),
@@ -231,11 +295,11 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
               : null,
           onChangeEnd: meta.hasTopDown
               ? (v) => _run(() async {
-                    await _scanService.enableTopDownInFloorPlan(
-                      set: _set,
-                      metersPerPixel: v,
-                    );
-                  })
+                  await _scanService.enableTopDownInFloorPlan(
+                    set: _set,
+                    metersPerPixel: v,
+                  );
+                })
               : null,
         ),
         if (meta.hasTopDown)
@@ -357,11 +421,7 @@ class _DestinationChip extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
 
-  const _DestinationChip({
-    required this.icon,
-    required this.label,
-    this.onTap,
-  });
+  const _DestinationChip({required this.icon, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {

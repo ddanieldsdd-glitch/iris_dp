@@ -3,6 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' show Value;
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/utils/location_scan_metadata.dart';
@@ -202,7 +204,16 @@ class LocationScanService {
 
   static Future<void> openFileExternally(String path) async {
     if (!File(path).existsSync()) return;
-    if (Platform.isMacOS) {
+    if (Platform.isIOS) {
+      // Vista Rápida: un USDZ se ve en 3D y en AR. Si no lo sabe abrir, la
+      // hoja de compartir lo pasa a otra app.
+      final shown = await const MethodChannel('iris/quicklook')
+          .invokeMethod<bool>('preview', path)
+          .catchError((Object _) => false);
+      if (shown != true) {
+        await Share.shareXFiles([XFile(path)]);
+      }
+    } else if (Platform.isMacOS) {
       await Process.run('open', [path]);
     } else if (Platform.isWindows) {
       await Process.run('cmd', ['/c', 'start', '', path]);
