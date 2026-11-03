@@ -126,6 +126,12 @@ ajuste «Construir al recibir / Preguntar» (hoy siempre construye).
 - Al capturar se elige la cámara si el móvil tiene gran angular.
 - La captura se guarda aunque la planta se rehaga al girar el móvil; las que
   quedaron sueltas salen en «Capturas sin asignar» del panel de escaneo.
+- Aviso abajo en el iPhone, el Mac y el PC con las capturas sin escaneo de
+  todos los proyectos (toca para ver la lista con su estado); en el Mac y el
+  PC, aviso al llegar una captura nueva y al quedar listo el escaneo.
+
+Para usarlo, el Mac y el PC necesitan la versión de IRIS con esto (esquema 59):
+hasta que se publique, la del PC no recibe ni construye.
 
 ### IC.5 (opcional) · «Enviar a IRIS» desde otras apps
 Share Extension para mandar fotos desde Fotos o Artemis sin abrir IRIS.

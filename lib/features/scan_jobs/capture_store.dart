@@ -21,6 +21,17 @@ abstract final class CaptureStatus {
   static const done = 'listo';
   static const failed = 'error';
 
+  /// Para el aviso de abajo, en pocas palabras.
+  static String short(String status) => switch (status) {
+    onPhone => 'en el iPhone, esperando al PC',
+    sending => 'enviándose al PC',
+    onPc => 'en la cola del PC',
+    building => 'construyéndose en el PC',
+    done => 'escaneo listo',
+    failed => 'error al construir',
+    _ => status,
+  };
+
   static String label(String status) => switch (status) {
     onPhone => 'En el iPhone · se envía al coincidir con el PC',
     sending => 'Enviando al PC',
