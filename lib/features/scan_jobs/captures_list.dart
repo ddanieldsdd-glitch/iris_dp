@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/app_snackbar.dart';
 import 'capture_store.dart';
 
 /// Las capturas del iPhone de un set (o de una localización) con su estado:
@@ -36,9 +38,14 @@ class _CapturesListState extends ConsumerState<CapturesList> {
   StreamSubscription<List<LocationCapture>>? _sub;
   List<LocationCapture> _captures = const [];
 
+  /// Capturas sueltas de este iPhone (no llegaron a registrarse).
+  List<OrphanCapture> _orphans = const [];
+  bool _adopting = false;
+
   @override
   void initState() {
     super.initState();
+    unawaited(_loadOrphans());
     _sub = ref
         .read(databaseProvider)
         .watchCapturesForProject(widget.projectId)
@@ -62,11 +69,81 @@ class _CapturesListState extends ConsumerState<CapturesList> {
     super.dispose();
   }
 
+  Future<void> _loadOrphans() async {
+    if (!Platform.isIOS) return;
+    final found = await CaptureStore.orphans(ref.read(databaseProvider));
+    if (mounted) setState(() => _orphans = found);
+  }
+
+  Future<void> _adopt(OrphanCapture o) async {
+    if (_adopting) return;
+    setState(() => _adopting = true);
+    try {
+      await CaptureStore.register(
+        ref.read(databaseProvider),
+        projectId: widget.projectId,
+        path: o.path,
+        name: o.name,
+        setId: widget.setId,
+        siteId: widget.siteId,
+      );
+    } finally {
+      if (mounted) setState(() => _adopting = false);
+      await _loadOrphans();
+    }
+  }
+
+  Future<void> _deleteOrphan(OrphanCapture o) async {
+    final ok = await _confirm(
+      'Borrar «${o.name}»',
+      'Se borran sus fotos de este iPhone. No se puede deshacer.',
+    );
+    if (!ok) return;
+    await CaptureStore.deleteOrphan(o);
+    await _loadOrphans();
+  }
+
+  /// La hoja de compartir del iPad y del iPhone necesita un punto de origen.
+  Rect? _origin() {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
   Future<void> _share(LocationCapture c) async {
     final zip = await CaptureStore.zipFor(c.uid!);
-    if (!await zip.exists()) return;
-    await Share.shareXFiles([XFile(zip.path)], subject: 'Captura ${c.name}');
+    if (!await zip.exists()) {
+      if (mounted) {
+        AppSnackBar.show(context, 'El .zip de esta captura no está aquí.');
+      }
+      return;
+    }
+    await Share.shareXFiles(
+      [XFile(zip.path)],
+      subject: 'Captura ${c.name}',
+      sharePositionOrigin: _origin(),
+    );
   }
+
+  Future<bool> _confirm(String title, String body) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(title),
+          content: Text(body),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Borrar'),
+            ),
+          ],
+        ),
+      ) ==
+      true;
 
   Future<void> _retry(LocationCapture c) async {
     final zip = await CaptureStore.zipFor(c.uid!);
@@ -89,48 +166,96 @@ class _CapturesListState extends ConsumerState<CapturesList> {
   }
 
   Future<void> _delete(LocationCapture c) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Borrar «${c.name}»'),
-        content: const Text(
-          'Se borra la captura y sus fotos de este equipo. El escaneo ya '
-          'hecho, si lo hay, se queda en el set.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Borrar'),
-          ),
-        ],
-      ),
+    final ok = await _confirm(
+      'Borrar «${c.name}»',
+      'Se borra la captura y sus fotos de este equipo. El escaneo ya hecho, '
+          'si lo hay, se queda en el set.',
     );
-    if (ok != true) return;
+    if (!ok) return;
     await CaptureStore.deleteLocal(c.uid!);
     await ref.read(databaseProvider).deleteCapture(c);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_captures.isEmpty) return const SizedBox.shrink();
+    if (_captures.isEmpty && _orphans.isEmpty) return const SizedBox.shrink();
     final palette = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Capturas del iPhone', style: AppTypography.label(palette)),
-        const SizedBox(height: AppSpacing.sm),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [for (final c in _captures) _row(palette, c)],
+        if (_orphans.isNotEmpty) ...[
+          Text('Capturas sin asignar', style: AppTypography.label(palette)),
+          Text(
+            'Fotos de este iPhone que no llegaron a guardarse en ningún set.',
+            style: AppTypography.caption(palette),
           ),
-        ),
-        const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [for (final o in _orphans) _orphanRow(palette, o)],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (_captures.isNotEmpty) ...[
+          Text('Capturas del iPhone', style: AppTypography.label(palette)),
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [for (final c in _captures) _row(palette, c)],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
       ],
+    );
+  }
+
+  Widget _orphanRow(AppPalette palette, OrphanCapture o) {
+    final d = o.modified;
+    String two(int v) => v.toString().padLeft(2, '0');
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.xs,
+        AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.photo_library_outlined, color: palette.warning, size: 20),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  o.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyMedium(palette),
+                ),
+                Text(
+                  '${two(d.day)}/${two(d.month)} '
+                  '${two(d.hour)}:${two(d.minute)}',
+                  style: AppTypography.caption(palette),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: _adopting ? null : () => _adopt(o),
+            child: Text(_adopting ? 'Guardando…' : 'Añadir aquí'),
+          ),
+          IconButton(
+            tooltip: 'Borrar',
+            icon: const Icon(Icons.delete_outline, size: 20),
+            onPressed: _adopting ? null : () => _deleteOrphan(o),
+          ),
+        ],
+      ),
     );
   }
 

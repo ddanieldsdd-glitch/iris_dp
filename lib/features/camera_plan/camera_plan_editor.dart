@@ -3009,20 +3009,27 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   /// Captura del iPhone hecha desde el 3D: queda pendiente en el set (o la
-  /// localización) de esta planta y pasa sola al PC con RealityScan.
-  Future<String> _saveCapture(String path) async {
+  /// localización) de esta planta y pasa sola al PC con RealityScan. Todo se
+  /// toma ahora y no al terminar: la captura dura minutos y, entretanto, la
+  /// planta puede rehacerse (al girar el móvil) y este estado ya no existir.
+  CaptureSink get _saveCapture {
+    final db = ref.read(databaseProvider);
+    final projectId = widget.projectId;
     final setId = widget.setId ?? _linkedSet?.id;
     final siteId = widget.siteId ?? _linkedSite?.id ?? _linkedSet?.siteId;
-    await CaptureStore.register(
-      ref.read(databaseProvider),
-      projectId: widget.projectId,
-      path: path,
-      name: _linkedSet?.locationName ?? _linkedSite?.name ?? _planName,
-      siteId: siteId,
-      setId: setId,
-    );
-    return 'Captura guardada. Pasa sola al PC cuando estéis en la misma '
-        'Wi‑Fi; el escaneo vuelve a esta planta.';
+    final name = _linkedSet?.locationName ?? _linkedSite?.name ?? _planName;
+    return (path) async {
+      await CaptureStore.register(
+        db,
+        projectId: projectId,
+        path: path,
+        name: name,
+        siteId: siteId,
+        setId: setId,
+      );
+      return 'Captura guardada. Pasa sola al PC cuando estéis en la misma '
+          'Wi‑Fi; el escaneo vuelve a esta planta.';
+    };
   }
 
   /// La cenital de un escaneo, de fondo y a escala en esta planta, como un

@@ -580,14 +580,26 @@ class _Plan3dViewState extends State<Plan3dView> {
   /// Captura guiada con el iPhone (F6.20 E6). Queda pendiente en la planta
   /// y pasa sola al PC con RealityScan; sin planta, se comparte el .zip.
   Future<void> _captureWithPhone() async {
-    final path = await ScanCaptureChannel.start(widget.name ?? 'Localización');
-    if (path == null || !mounted) return;
+    // Se toma antes: si al terminar este visor ya no existe (la planta se
+    // rehízo al girar el móvil), la captura se guarda igual.
     final save = widget.onCapture;
+    final name = widget.name ?? 'Localización';
+    final ultraWide = await ScanCaptureChannel.chooseLens(context);
+    if (ultraWide == null) return;
+    final path = await ScanCaptureChannel.start(name, ultraWide: ultraWide);
+    if (path == null) return;
     if (save != null) {
-      final status = await save(path);
+      String status;
+      try {
+        status = await save(path);
+      } catch (e) {
+        status = 'No se pudo guardar la captura ($e). Las fotos siguen en '
+            'el iPhone: recupéralas desde el panel de escaneo del set.';
+      }
       if (mounted) setState(() => _status = status);
       return;
     }
+    if (!mounted) return;
     setState(
       () => _status =
           'Captura guardada. Pásala al PC y ábrela en «Crear escaneo» → '

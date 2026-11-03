@@ -67,16 +67,38 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
   /// Captura guiada con el iPhone (F6.20 E6). Queda pendiente en este set y
   /// pasa sola al PC con RealityScan cuando coinciden en la misma Wi‑Fi.
   Future<void> _captureWithPhone() async {
-    final path = await ScanCaptureChannel.start(_set.locationName);
-    if (path == null || !mounted) return;
-    await CaptureStore.register(
-      ref.read(databaseProvider),
-      projectId: widget.projectId,
-      path: path,
-      name: _set.locationName,
-      siteId: _set.siteId,
-      setId: _set.id,
+    // Todo se toma antes de capturar: si el panel se rehace mientras tanto
+    // (al girar el móvil), la captura se guarda igual.
+    final db = ref.read(databaseProvider);
+    final set = _set;
+    final projectId = widget.projectId;
+    final ultraWide = await ScanCaptureChannel.chooseLens(context);
+    if (ultraWide == null) return;
+    final path = await ScanCaptureChannel.start(
+      set.locationName,
+      ultraWide: ultraWide,
     );
+    if (path == null) return;
+    try {
+      await CaptureStore.register(
+        db,
+        projectId: projectId,
+        path: path,
+        name: set.locationName,
+        siteId: set.siteId,
+        setId: set.id,
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          'No se pudo guardar la captura ($e). Las fotos siguen en el '
+          'iPhone: aparecen abajo, en «Capturas sin asignar».',
+          isError: true,
+        );
+      }
+      return;
+    }
     if (!mounted) return;
     AppSnackBar.show(
       context,
@@ -252,7 +274,11 @@ class _LocationScanPanelState extends ConsumerState<LocationScanPanel> {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        CapturesList(projectId: widget.projectId, setId: _set.id),
+        CapturesList(
+          projectId: widget.projectId,
+          setId: _set.id,
+          siteId: _set.siteId,
+        ),
         const SizedBox(height: AppSpacing.md),
         Text('Escala real', style: AppTypography.label(palette)),
         Text(

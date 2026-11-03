@@ -141,9 +141,73 @@ abstract final class CaptureStore {
     }
   }
 
+  /// Capturas de este equipo que no son de ninguna fila: las que quedaron
+  /// sueltas si la app no llegó a registrarlas (se cerró, o la pantalla se
+  /// rehízo al terminar). Un zip, o la carpeta si no llegó a comprimirse.
+  static Future<List<OrphanCapture>> orphans(AppDatabase db) async {
+    final dir = await root();
+    final known = {
+      for (final c in await db.select(db.locationCaptures).get())
+        if (c.uid != null) '${c.uid}.iriscapture.zip',
+    };
+    final entries = dir.listSync();
+    final names = {for (final e in entries) p.basename(e.path)};
+    final out = <OrphanCapture>[];
+    for (final e in entries) {
+      final base = p.basename(e.path);
+      if (known.contains(base)) continue;
+      if (e is File && base.endsWith('.iriscapture.zip')) {
+        out.add(
+          OrphanCapture(e.path, _orphanName(base), e.statSync().modified),
+        );
+      } else if (e is Directory &&
+          base.endsWith('.iriscapture') &&
+          !names.contains('$base.zip')) {
+        out.add(
+          OrphanCapture(e.path, _orphanName(base), e.statSync().modified),
+        );
+      }
+    }
+    out.sort((a, b) => b.modified.compareTo(a.modified));
+    return out;
+  }
+
+  /// «HOSPITAL 2026-11-03T114624Z.iriscapture.zip» → «HOSPITAL».
+  static String _orphanName(String base) {
+    final bare = base
+        .replaceAll('.iriscapture.zip', '')
+        .replaceAll('.iriscapture', '');
+    final cut = bare.replaceFirst(RegExp(r' \d{4}-\d{2}-\d{2}T\d+Z$'), '');
+    return cut.isEmpty ? 'Captura' : cut;
+  }
+
+  /// Borra una captura suelta (y su carpeta, si la hay).
+  static Future<void> deleteOrphan(OrphanCapture o) async {
+    final paths = o.path.endsWith('.zip')
+        ? [o.path, o.path.substring(0, o.path.length - 4)]
+        : [o.path];
+    for (final path in paths) {
+      final type = FileSystemEntity.typeSync(path);
+      if (type == FileSystemEntityType.directory) {
+        await Directory(path).delete(recursive: true);
+      } else if (type == FileSystemEntityType.file) {
+        await File(path).delete();
+      }
+    }
+  }
+
   /// Borra el zip de este equipo (la fila sigue: es del proyecto).
   static Future<void> deleteLocal(String uid) async {
     final file = await zipFor(uid);
     if (await file.exists()) await file.delete();
   }
+}
+
+/// Una captura que está en este equipo pero sin fila del proyecto.
+class OrphanCapture {
+  final String path;
+  final String name;
+  final DateTime modified;
+
+  const OrphanCapture(this.path, this.name, this.modified);
 }

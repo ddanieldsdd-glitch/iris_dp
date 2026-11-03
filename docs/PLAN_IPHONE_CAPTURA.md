@@ -112,6 +112,21 @@ Pendiente: probarlo con el iPhone y el PC en la misma Wi‑Fi (Windows debe
 dejar pasar el puerto 47820 en su cortafuegos: lo pregunta la primera vez);
 ajuste «Construir al recibir / Preguntar» (hoy siempre construye).
 
+### IC.7 · Captura más tipo Polycam y gran angular
+**Hecho (sin probar en el iPhone):**
+- En AR, una marca verde quieta donde se hizo cada foto y una nube de puntos
+  que crece mientras se recorre el sitio (el iPhone 16 no tiene LiDAR: no hay
+  malla en vivo).
+- Minimapa de 170 pt que se abre a casi toda la pantalla tocándolo: todo lo
+  visto, cuadrícula de 1 m, paredes y lo ya fotografiado en verde.
+- Modo **gran angular 0,5x** (AVFoundation, sin ARKit: ARKit solo sigue con la
+  cámara normal): disparo automático al girar 10° o al andar, anillo de
+  direcciones con el giroscopio. Sin mapa ni metros; el PC lo construye sin
+  pose y se calibra con una medida.
+- Al capturar se elige la cámara si el móvil tiene gran angular.
+- La captura se guarda aunque la planta se rehaga al girar el móvil; las que
+  quedaron sueltas salen en «Capturas sin asignar» del panel de escaneo.
+
 ### IC.5 (opcional) · «Enviar a IRIS» desde otras apps
 Share Extension para mandar fotos desde Fotos o Artemis sin abrir IRIS.
 

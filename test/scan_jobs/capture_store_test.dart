@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
 import 'package:iris_dp/core/theme/app_theme.dart';
+import 'package:iris_dp/features/camera_plan/rig/scan_capture.dart';
 import 'package:iris_dp/features/scan_jobs/capture_store.dart';
 import 'package:iris_dp/features/scan_jobs/captures_list.dart';
 
@@ -40,7 +41,7 @@ void main() {
 
   /// La carpeta que deja el plugin: fotos y `capture.json`.
   Directory captureFolder(int photos) {
-    final dir = Directory('${docs.path}/IRIS Capturas/Pasillo 2026.iriscapture')
+    final dir = Directory('${docs.path}/IRIS Capturas/Pasillo 2026-11-03T114624Z.iriscapture')
       ..createSync(recursive: true);
     for (var i = 0; i < photos; i++) {
       File('${dir.path}/$i.jpg').writeAsBytesSync([i, 1, 2]);
@@ -96,6 +97,78 @@ void main() {
         .toSet();
     expect(names, containsAll(['0.jpg', '1.jpg', 'capture.json']));
     expect(folder.existsSync(), isFalse);
+  });
+
+  test('una captura que no llegó a registrarse aparece y se recupera',
+      () async {
+    // Lo que pasó en el iPhone: carpeta y zip del plugin, sin fila.
+    final folder = captureFolder(4);
+    final zip = '${folder.path}.zip';
+    final encoder = ZipFileEncoder()..create(zip);
+    await encoder.addDirectory(folder);
+    await encoder.close();
+    // Y otra ya registrada, que no cuenta.
+    final done = captureFolder(1).renameSync('${docs.path}/x.iriscapture');
+    await CaptureStore.register(
+      db,
+      projectId: projectId,
+      path: done.path,
+      name: 'Hecha',
+    );
+
+    final orphans = await CaptureStore.orphans(db);
+    expect(orphans, hasLength(1));
+    expect(orphans.single.name, 'Pasillo');
+    expect(orphans.single.path, zip);
+
+    final c = await CaptureStore.register(
+      db,
+      projectId: projectId,
+      path: orphans.single.path,
+      name: orphans.single.name,
+      setId: 3,
+    );
+    expect(c.photoCount, 4);
+    expect(await CaptureStore.orphans(db), isEmpty);
+  });
+
+  test('borrar una suelta quita zip y carpeta', () async {
+    final folder = captureFolder(2);
+    final zip = File('${folder.path}.zip')..writeAsBytesSync([1]);
+    final o = (await CaptureStore.orphans(db)).single;
+    await CaptureStore.deleteOrphan(o);
+    expect(zip.existsSync(), isFalse);
+    expect(folder.existsSync(), isFalse);
+  });
+
+  test('gran angular 0,5x: fotos sin pose, el PC no inventa escala', () async {
+    final folder = captureFolder(3);
+    File('${folder.path}/capture.json').writeAsStringSync(
+      jsonEncode({
+        'version': 1,
+        'lens': 'ultraWide',
+        'frames': [
+          for (var i = 0; i < 3; i++)
+            {
+              'file': '$i.jpg',
+              'width': 4032,
+              'height': 3024,
+              'attitude': [1, 0, 0, 0],
+            },
+        ],
+      }),
+    );
+    final package = CapturePackage.read(folder.path)!;
+    expect(package.frames, isEmpty);
+    expect(package.writeSidecars(), 0);
+
+    final c = await CaptureStore.register(
+      db,
+      projectId: projectId,
+      path: folder.path,
+      name: 'Baño',
+    );
+    expect(c.photoCount, 3);
   });
 
   testWidgets('iPhone 390: estados sin desbordes', (tester) async {

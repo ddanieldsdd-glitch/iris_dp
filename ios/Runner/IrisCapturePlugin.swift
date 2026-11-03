@@ -1,4 +1,6 @@
 import ARKit
+import AVFoundation
+import CoreMotion
 import CoreImage
 import Flutter
 import ImageIO
@@ -24,10 +26,23 @@ final class IrisCapturePlugin: NSObject, FlutterPlugin {
     switch call.method {
     case "isSupported":
       result(ARWorldTrackingConfiguration.isSupported)
+    case "lenses":
+      // «wide»: la normal (1x), con ARKit. «ultraWide»: la 0,5x, sin ARKit
+      // (ARKit solo sigue la posición con la normal).
+      var lenses: [String] = []
+      if ARWorldTrackingConfiguration.isSupported { lenses.append("wide") }
+      if AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back) != nil {
+        lenses.append("ultraWide")
+      }
+      result(lenses)
     case "start":
       let args = call.arguments as? [String: Any]
       let name = (args?["name"] as? String) ?? "Localización"
-      start(name: name, result: result)
+      if (args?["lens"] as? String) == "ultraWide" {
+        startWide(name: name, result: result)
+      } else {
+        start(name: name, result: result)
+      }
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -45,6 +60,24 @@ final class IrisCapturePlugin: NSObject, FlutterPlugin {
     }
     capture.modalPresentationStyle = .fullScreen
     root.present(capture, animated: true)
+  }
+
+  private func startWide(name: String, result: @escaping FlutterResult) {
+    guard let root = Self.topController() else {
+      result(nil)
+      return
+    }
+    AVCaptureDevice.requestAccess(for: .video) { granted in
+      DispatchQueue.main.async {
+        guard granted else {
+          result(nil)
+          return
+        }
+        let capture = IrisWideCaptureViewController(name: name) { path in result(path) }
+        capture.modalPresentationStyle = .fullScreen
+        root.present(capture, animated: true)
+      }
+    }
   }
 
   private static func topController() -> UIViewController? {
@@ -79,6 +112,18 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
   private var angularSpeed: Float = 0
   private var finished = false
 
+  /// Nube de puntos vista hasta ahora, por identificador de ARKit: crece
+  /// mientras se recorre el sitio (como Polycam sin LiDAR).
+  private var cloud: [UInt64: simd_float3] = [:]
+  private let cloudNode = SCNNode()
+  private var lastCloudUpdate: TimeInterval = 0
+  private let maxCloud = 40000
+
+  /// Minimapa pequeño en la esquina o grande, tocándolo.
+  private var mapExpanded = false
+  private var smallMap: [NSLayoutConstraint] = []
+  private var largeMap: [NSLayoutConstraint] = []
+
   /// Una foto nueva si no hay otra a menos de 15 cm y 12°.
   private let minMove: Float = 0.15
   private let minTurn: Float = 12 * .pi / 180
@@ -101,8 +146,8 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     sceneView.frame = view.bounds
     sceneView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     sceneView.session.delegate = self
-    sceneView.debugOptions = [.showFeaturePoints]
     sceneView.automaticallyUpdatesLighting = false
+    sceneView.scene.rootNode.addChildNode(cloudNode)
     view.addSubview(sceneView)
 
     warning.font = .systemFont(ofSize: 17, weight: .semibold)
@@ -119,7 +164,9 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     map.backgroundColor = UIColor.black.withAlphaComponent(0.55)
     map.layer.cornerRadius = 10
     map.clipsToBounds = true
+    map.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(mapTapped)))
     ring.backgroundColor = .clear
+    ring.isUserInteractionEnabled = false
 
     let cancel = Self.button("Cancelar", filled: false)
     cancel.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
@@ -147,15 +194,24 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
       ring.centerYAnchor.constraint(equalTo: g.centerYAnchor),
       ring.widthAnchor.constraint(equalToConstant: 180),
       ring.heightAnchor.constraint(equalToConstant: 180),
-      map.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
-      map.bottomAnchor.constraint(equalTo: buttons.topAnchor, constant: -12),
-      map.widthAnchor.constraint(equalToConstant: 150),
-      map.heightAnchor.constraint(equalToConstant: 150),
       buttons.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 16),
       buttons.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
       buttons.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -12),
       buttons.heightAnchor.constraint(equalToConstant: 50),
     ])
+    smallMap = [
+      map.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
+      map.bottomAnchor.constraint(equalTo: buttons.topAnchor, constant: -12),
+      map.widthAnchor.constraint(equalToConstant: 170),
+      map.heightAnchor.constraint(equalToConstant: 170),
+    ]
+    largeMap = [
+      map.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 16),
+      map.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
+      map.topAnchor.constraint(equalTo: counter.bottomAnchor, constant: 8),
+      map.bottomAnchor.constraint(equalTo: buttons.topAnchor, constant: -12),
+    ]
+    NSLayoutConstraint.activate(smallMap)
     show("Recorre el sitio despacio. Las fotos se hacen solas.")
     updateCounter()
   }
@@ -178,7 +234,59 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     sceneView.session.pause()
   }
 
-  private static func button(_ title: String, filled: Bool) -> UIButton {
+  /// El minimapa crece a casi toda la pantalla (y vuelve) al tocarlo.
+  @objc private func mapTapped() {
+    mapExpanded.toggle()
+    NSLayoutConstraint.deactivate(mapExpanded ? smallMap : largeMap)
+    NSLayoutConstraint.activate(mapExpanded ? largeMap : smallMap)
+    map.expanded = mapExpanded
+    UIView.animate(withDuration: 0.25) {
+      self.ring.alpha = self.mapExpanded ? 0 : 1
+      self.map.backgroundColor = UIColor.black.withAlphaComponent(self.mapExpanded ? 0.8 : 0.55)
+      self.view.layoutIfNeeded()
+    }
+    map.setNeedsDisplay()
+  }
+
+  /// Guarda los puntos nuevos y, cada medio segundo, redibuja la nube en el
+  /// espacio.
+  private func grow(cloud frame: ARFrame) {
+    if let raw = frame.rawFeaturePoints {
+      for (id, point) in Swift.zip(raw.identifiers, raw.points)
+      where cloud[id] != nil || cloud.count < maxCloud {
+        cloud[id] = point
+      }
+    }
+    guard frame.timestamp - lastCloudUpdate > 0.5, !cloud.isEmpty else { return }
+    lastCloudUpdate = frame.timestamp
+    let vertices = cloud.values.map { SCNVector3($0.x, $0.y, $0.z) }
+    let source = SCNGeometrySource(vertices: vertices)
+    let element = SCNGeometryElement(
+      indices: Array(0..<Int32(vertices.count)), primitiveType: .point)
+    element.pointSize = 4
+    element.minimumPointScreenSpaceRadius = 1.5
+    element.maximumPointScreenSpaceRadius = 3
+    let geometry = SCNGeometry(sources: [source], elements: [element])
+    let material = SCNMaterial()
+    material.diffuse.contents = UIColor.cyan.withAlphaComponent(0.85)
+    material.lightingModel = .constant
+    geometry.materials = [material]
+    cloudNode.geometry = geometry
+  }
+
+  /// Una marca verde, quieta en el espacio, donde se hizo cada foto.
+  private func addShotMarker(_ transform: simd_float4x4) {
+    let box = SCNBox(width: 0.08, height: 0.06, length: 0.012, chamferRadius: 0.006)
+    let material = SCNMaterial()
+    material.diffuse.contents = UIColor.systemGreen.withAlphaComponent(0.6)
+    material.lightingModel = .constant
+    box.materials = [material]
+    let node = SCNNode(geometry: box)
+    node.simdTransform = transform
+    sceneView.scene.rootNode.addChildNode(node)
+  }
+
+  static func button(_ title: String, filled: Bool) -> UIButton {
     var c = filled ? UIButton.Configuration.filled() : UIButton.Configuration.gray()
     c.title = title
     c.cornerStyle = .large
@@ -202,11 +310,12 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
 
     let position = simd_make_float3(t.columns.3)
     let forward = -simd_make_float3(t.columns.2)
+    grow(cloud: frame)
     map.update(
       position: position,
       forward: forward,
       shots: shots.map { ($0.position, $0.forward) },
-      points: frame.rawFeaturePoints?.points ?? [],
+      points: frame.timestamp == lastCloudUpdate ? Array(cloud.values) : nil,
       walls: frame.anchors.compactMap { anchor in
         guard let plane = anchor as? ARPlaneAnchor, plane.alignment == .vertical else {
           return nil
@@ -319,6 +428,7 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
         defer { self.busy = false }
         guard ok else { return }
         let t = camera.transform
+        self.addShotMarker(t)
         let k = camera.intrinsics
         let flat = [t.columns.0, t.columns.1, t.columns.2, t.columns.3]
           .flatMap { [Double($0.x), Double($0.y), Double($0.z), Double($0.w)] }
@@ -359,6 +469,12 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
 
   private func ensureFolder() -> URL? {
     if let folder { return folder }
+    folder = Self.newFolder(name: name)
+    return folder
+  }
+
+  /// `Documentos/IRIS Capturas/<nombre> <fecha>.iriscapture`.
+  static func newFolder(name: String) -> URL? {
     let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     let stamp = ISO8601DateFormatter().string(from: Date())
       .replacingOccurrences(of: ":", with: "")
@@ -370,7 +486,6 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     } catch {
       return nil
     }
-    folder = url
     return url
   }
 
@@ -417,7 +532,7 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
 
   /// Comprime la carpeta con el coordinador de archivos del sistema (sin
   /// librerías): da un .zip junto a la carpeta.
-  private static func zip(_ folder: URL) -> URL? {
+  static func zip(_ folder: URL) -> URL? {
     var out: URL?
     var error: NSError?
     NSFileCoordinator().coordinate(readingItemAt: folder, options: [.forUploading], error: &error) { tmp in
@@ -428,7 +543,7 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     return out
   }
 
-  private static func deviceModel() -> String {
+  static func deviceModel() -> String {
     var info = utsname()
     uname(&info)
     return withUnsafeBytes(of: &info.machine) { raw in
@@ -443,43 +558,91 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
   }
 }
 
-/// Minimapa cenital: recorrido, fotos con su dirección, puntos vistos y
-/// paredes detectadas (planos verticales).
+/// Minimapa cenital: lo fotografiado (abanicos verdes, lo que falta queda
+/// oscuro), la nube de puntos, las paredes detectadas y dónde estás. Pequeño
+/// sigue a la cámara (6 m); grande enseña todo el sitio con su cuadrícula.
 final class CaptureMapView: UIView {
   private var position = simd_float3()
   private var forward = simd_float3(0, 0, -1)
   private var shots: [(simd_float3, simd_float3)] = []
   private var points: [simd_float3] = []
   private var walls: [(simd_float3, simd_float3)] = []
+  var expanded = false
 
+  /// [points]: la nube entera cuando cambia; `nil`, la de antes.
   func update(
     position: simd_float3, forward: simd_float3,
-    shots: [(simd_float3, simd_float3)], points: [simd_float3],
+    shots: [(simd_float3, simd_float3)], points: [simd_float3]?,
     walls: [(simd_float3, simd_float3)]
   ) {
     self.position = position
     self.forward = forward
     self.shots = shots
-    // Se guardan como mucho 4000 puntos vistos.
-    self.points.append(contentsOf: points.prefix(60))
-    if self.points.count > 4000 { self.points.removeFirst(self.points.count - 4000) }
+    if let points { self.points = points }
     self.walls = walls
     setNeedsDisplay()
   }
 
   override func draw(_ rect: CGRect) {
     guard let ctx = UIGraphicsGetCurrentContext() else { return }
-    // Centrado en la cámara; 6 m de lado.
-    let scale = rect.width / 6
+    // Pequeño: centrado en la cámara, 6 m de lado. Grande: todo lo visto.
+    var centre = (x: position.x, z: position.z)
+    var span: Float = 6
+    if expanded {
+      var minX = position.x, maxX = position.x, minZ = position.z, maxZ = position.z
+      for v in points + shots.map(\.0) {
+        minX = min(minX, v.x); maxX = max(maxX, v.x)
+        minZ = min(minZ, v.z); maxZ = max(maxZ, v.z)
+      }
+      centre = ((minX + maxX) / 2, (minZ + maxZ) / 2)
+      let aspect = Float(rect.width / max(rect.height, 1))
+      span = max(4, max(maxX - minX, (maxZ - minZ) * aspect) * 1.15)
+    }
+    let scale = rect.width / CGFloat(span)
     func pt(_ v: simd_float3) -> CGPoint {
       CGPoint(
-        x: rect.midX + CGFloat(v.x - position.x) * scale,
-        y: rect.midY + CGFloat(v.z - position.z) * scale)
+        x: rect.midX + CGFloat(v.x - centre.x) * scale,
+        y: rect.midY + CGFloat(v.z - centre.z) * scale)
     }
-    ctx.setFillColor(UIColor.white.withAlphaComponent(0.35).cgColor)
+
+    // Cuadrícula de 1 m.
+    ctx.setStrokeColor(UIColor.white.withAlphaComponent(0.08).cgColor)
+    ctx.setLineWidth(1)
+    let half = span / 2 + 1
+    var gx = (centre.x - half).rounded(.down)
+    while gx <= centre.x + half {
+      let a = pt(simd_float3(gx, 0, centre.z - half)), b = pt(simd_float3(gx, 0, centre.z + half))
+      ctx.move(to: a); ctx.addLine(to: b)
+      gx += 1
+    }
+    var gz = (centre.z - half * 2).rounded(.down)
+    while gz <= centre.z + half * 2 {
+      let a = pt(simd_float3(centre.x - half, 0, gz)), b = pt(simd_float3(centre.x + half, 0, gz))
+      ctx.move(to: a); ctx.addLine(to: b)
+      gz += 1
+    }
+    ctx.strokePath()
+
+    // Lo que ya ve alguna foto: un abanico de 60° y 2 m por foto.
+    ctx.setFillColor(UIColor.systemGreen.withAlphaComponent(0.10).cgColor)
+    for (p, f) in shots {
+      let heading = atan2(f.z, f.x)
+      let reach: Float = 2
+      let spread: Float = .pi / 6
+      ctx.move(to: pt(p))
+      for k in 0...6 {
+        let a = heading - spread + spread * 2 * Float(k) / 6
+        ctx.addLine(to: pt(p + simd_float3(cos(a), 0, sin(a)) * reach))
+      }
+      ctx.closePath()
+    }
+    ctx.fillPath()
+
+    ctx.setFillColor(UIColor.cyan.withAlphaComponent(expanded ? 0.55 : 0.4).cgColor)
+    let dot: CGFloat = expanded ? 2 : 1.5
     for p in points {
       let c = pt(p)
-      ctx.fill(CGRect(x: c.x - 0.75, y: c.y - 0.75, width: 1.5, height: 1.5))
+      ctx.fill(CGRect(x: c.x - dot / 2, y: c.y - dot / 2, width: dot, height: dot))
     }
     ctx.setStrokeColor(UIColor.systemYellow.cgColor)
     ctx.setLineWidth(2.5)
@@ -488,7 +651,7 @@ final class CaptureMapView: UIView {
       ctx.addLine(to: pt(b))
     }
     ctx.strokePath()
-    ctx.setStrokeColor(UIColor.systemGreen.withAlphaComponent(0.8).cgColor)
+    ctx.setStrokeColor(UIColor.systemGreen.withAlphaComponent(0.9).cgColor)
     ctx.setLineWidth(1)
     for (p, f) in shots {
       ctx.move(to: pt(p))
@@ -497,12 +660,20 @@ final class CaptureMapView: UIView {
     ctx.strokePath()
     let me = pt(position)
     ctx.setFillColor(UIColor.systemBlue.cgColor)
-    ctx.fillEllipse(in: CGRect(x: me.x - 4, y: me.y - 4, width: 8, height: 8))
+    ctx.fillEllipse(in: CGRect(x: me.x - 5, y: me.y - 5, width: 10, height: 10))
     ctx.setStrokeColor(UIColor.systemBlue.cgColor)
     ctx.setLineWidth(2)
     ctx.move(to: me)
     ctx.addLine(to: pt(position + forward * 0.6))
     ctx.strokePath()
+
+    let hint = expanded ? "Toca para cerrar · verde: ya fotografiado" : "Toca para ampliar"
+    (hint as NSString).draw(
+      at: CGPoint(x: 8, y: rect.height - 18),
+      withAttributes: [
+        .font: UIFont.systemFont(ofSize: 11, weight: .medium),
+        .foregroundColor: UIColor.white.withAlphaComponent(0.7),
+      ])
   }
 }
 
@@ -558,5 +729,273 @@ final class CoverageRingView: UIView {
       ctx.addArc(center: centre, radius: radius, startAngle: start, endAngle: end, clockwise: false)
       ctx.strokePath()
     }
+  }
+}
+
+/// Captura con la gran angular (0,5x). ARKit solo sigue la posición con la
+/// cámara normal, así que aquí no hay mapa ni metros: las fotos salen solas
+/// al girar unos grados o al andar, con el giroscopio, y RealityScan las
+/// alinea sin pose (el escaneo se calibra después con una medida).
+final class IrisWideCaptureViewController: UIViewController, AVCapturePhotoCaptureDelegate {
+  private let name: String
+  private let onDone: (String?) -> Void
+  private let session = AVCaptureSession()
+  private let output = AVCapturePhotoOutput()
+  private let sessionQueue = DispatchQueue(label: "iris.capture.wide")
+  private let motion = CMMotionManager()
+  private var preview: AVCaptureVideoPreviewLayer?
+  private let warning = UILabel()
+  private let counter = UILabel()
+  private let ring = CoverageRingView()
+  private var folder: URL?
+  private var frames: [[String: Any]] = []
+  private var headings: [Float] = []
+  private var lastShot: (time: TimeInterval, attitude: CMAttitude)?
+  private var busy = false
+  private var finished = false
+
+  /// Una foto nueva al girar 10° desde la anterior, o cada 1,2 s si se anda.
+  private let minTurn: Double = 10 * .pi / 180
+  private let maxRotationRate: Double = 0.9
+
+  init(name: String, onDone: @escaping (String?) -> Void) {
+    self.name = name
+    self.onDone = onDone
+    super.init(nibName: nil, bundle: nil)
+  }
+
+  required init?(coder: NSCoder) { fatalError("no se usa") }
+
+  override var prefersStatusBarHidden: Bool { true }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    view.backgroundColor = .black
+    let layer = AVCaptureVideoPreviewLayer(session: session)
+    layer.videoGravity = .resizeAspect
+    view.layer.addSublayer(layer)
+    preview = layer
+
+    warning.font = .systemFont(ofSize: 17, weight: .semibold)
+    warning.textColor = .white
+    warning.numberOfLines = 0
+    warning.textAlignment = .center
+    warning.layer.cornerRadius = 10
+    warning.clipsToBounds = true
+    counter.font = .monospacedDigitSystemFont(ofSize: 15, weight: .medium)
+    counter.textColor = .white
+    ring.backgroundColor = .clear
+    ring.isUserInteractionEnabled = false
+
+    let cancel = IrisCaptureViewController.button("Cancelar", filled: false)
+    cancel.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+    let shoot = IrisCaptureViewController.button("Foto", filled: false)
+    shoot.addTarget(self, action: #selector(shootTapped), for: .touchUpInside)
+    let done = IrisCaptureViewController.button("Terminar", filled: true)
+    done.addTarget(self, action: #selector(doneTapped), for: .touchUpInside)
+    let buttons = UIStackView(arrangedSubviews: [cancel, shoot, done])
+    buttons.spacing = 12
+    buttons.distribution = .fillEqually
+
+    for v in [warning, counter, ring, buttons] as [UIView] {
+      v.translatesAutoresizingMaskIntoConstraints = false
+      view.addSubview(v)
+    }
+    let g = view.safeAreaLayoutGuide
+    NSLayoutConstraint.activate([
+      warning.topAnchor.constraint(equalTo: g.topAnchor, constant: 12),
+      warning.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 16),
+      warning.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
+      warning.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+      counter.topAnchor.constraint(equalTo: warning.bottomAnchor, constant: 8),
+      counter.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 16),
+      ring.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
+      ring.bottomAnchor.constraint(equalTo: buttons.topAnchor, constant: -12),
+      ring.widthAnchor.constraint(equalToConstant: 120),
+      ring.heightAnchor.constraint(equalToConstant: 120),
+      buttons.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 16),
+      buttons.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
+      buttons.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -12),
+      buttons.heightAnchor.constraint(equalToConstant: 50),
+    ])
+    show("Gran angular 0,5x. Gira y anda despacio: las fotos se hacen solas.", ok: true)
+    updateCounter()
+    configureSession()
+  }
+
+  override func viewDidLayoutSubviews() {
+    super.viewDidLayoutSubviews()
+    preview?.frame = view.bounds
+  }
+
+  override func viewWillAppear(_ animated: Bool) {
+    super.viewWillAppear(animated)
+    UIApplication.shared.isIdleTimerDisabled = true
+    sessionQueue.async { self.session.startRunning() }
+    motion.deviceMotionUpdateInterval = 1.0 / 30
+    motion.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: .main) { [weak self] m, _ in
+      if let m { self?.moved(m) }
+    }
+  }
+
+  override func viewWillDisappear(_ animated: Bool) {
+    super.viewWillDisappear(animated)
+    UIApplication.shared.isIdleTimerDisabled = false
+    motion.stopDeviceMotionUpdates()
+    sessionQueue.async { self.session.stopRunning() }
+  }
+
+  private func configureSession() {
+    sessionQueue.async {
+      self.session.beginConfiguration()
+      self.session.sessionPreset = .photo
+      guard
+        let device = AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back),
+        let input = try? AVCaptureDeviceInput(device: device),
+        self.session.canAddInput(input), self.session.canAddOutput(self.output)
+      else {
+        self.session.commitConfiguration()
+        DispatchQueue.main.async { self.show("No se pudo abrir la gran angular.", ok: false) }
+        return
+      }
+      self.session.addInput(input)
+      self.session.addOutput(self.output)
+      self.output.maxPhotoQualityPrioritization = .balanced
+      self.session.commitConfiguration()
+    }
+  }
+
+  // MARK: - Movimiento
+
+  private func moved(_ m: CMDeviceMotion) {
+    let r = m.rotationRate
+    let rate = sqrt(r.x * r.x + r.y * r.y + r.z * r.z)
+    let heading = Float(-m.attitude.yaw)
+    ring.update(covered: coveredSectors(), heading: heading)
+    if rate > maxRotationRate {
+      show("Más despacio: las fotos saldrían movidas.", ok: false)
+      return
+    }
+    show(nil, ok: true)
+    guard !busy else { return }
+    let now = m.timestamp
+    guard let last = lastShot else {
+      shoot(attitude: m.attitude, time: now)
+      return
+    }
+    if now - last.time < 0.5 { return }
+    let delta = m.attitude.copy() as! CMAttitude
+    delta.multiply(byInverseOf: last.attitude)
+    let q = delta.quaternion
+    let turned = 2 * acos(min(1, abs(q.w)))
+    let a = m.userAcceleration
+    let walking = sqrt(a.x * a.x + a.y * a.y + a.z * a.z) > 0.04
+    if turned > minTurn || (walking && now - last.time > 1.2) {
+      shoot(attitude: m.attitude, time: now)
+    }
+  }
+
+  private func coveredSectors() -> [Bool] {
+    var out = [Bool](repeating: false, count: 12)
+    for h in headings { out[CoverageRingView.sector(of: h, count: out.count)] = true }
+    return out
+  }
+
+  // MARK: - Fotos
+
+  @objc private func shootTapped() {
+    guard let m = motion.deviceMotion else { return }
+    shoot(attitude: m.attitude, time: m.timestamp)
+  }
+
+  private var pendingAttitude: CMAttitude?
+
+  private func shoot(attitude: CMAttitude, time: TimeInterval) {
+    guard !busy, session.isRunning else { return }
+    if folder == nil { folder = IrisCaptureViewController.newFolder(name: name) }
+    guard folder != nil else { return }
+    busy = true
+    lastShot = (time, attitude.copy() as! CMAttitude)
+    pendingAttitude = attitude.copy() as? CMAttitude
+    let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+    settings.photoQualityPrioritization = .balanced
+    output.capturePhoto(with: settings, delegate: self)
+  }
+
+  func photoOutput(
+    _ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto,
+    error: Error?
+  ) {
+    let data = photo.fileDataRepresentation()
+    let dims = photo.resolvedSettings.photoDimensions
+    DispatchQueue.main.async {
+      defer { self.busy = false }
+      guard error == nil, let data, let folder = self.folder else { return }
+      let file = String(format: "f_%05d.jpg", self.frames.count + 1)
+      guard (try? data.write(to: folder.appendingPathComponent(file))) != nil else { return }
+      var frame: [String: Any] = [
+        "file": file,
+        "width": Int(dims.width),
+        "height": Int(dims.height),
+        "t": Date().timeIntervalSince1970,
+      ]
+      if let a = self.pendingAttitude {
+        let q = a.quaternion
+        frame["attitude"] = [q.w, q.x, q.y, q.z]
+        self.headings.append(Float(-a.yaw))
+      }
+      self.frames.append(frame)
+      self.updateCounter()
+      UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+  }
+
+  // MARK: - Interfaz
+
+  private func show(_ text: String?, ok: Bool) {
+    let value = text ?? "Bien. Sigue girando y andando despacio."
+    if warning.text != " \(value) " { warning.text = " \(value) " }
+    warning.backgroundColor = ok
+      ? UIColor.systemGreen.withAlphaComponent(0.55)
+      : UIColor.systemOrange.withAlphaComponent(0.75)
+  }
+
+  private func updateCounter() {
+    counter.text = frames.count == 1 ? "1 foto · 0,5x" : "\(frames.count) fotos · 0,5x"
+  }
+
+  @objc private func cancelTapped() {
+    finish(path: nil)
+  }
+
+  @objc private func doneTapped() {
+    guard let folder, !frames.isEmpty else {
+      finish(path: nil)
+      return
+    }
+    motion.stopDeviceMotionUpdates()
+    sessionQueue.async { self.session.stopRunning() }
+    show("Guardando…", ok: true)
+    let manifest: [String: Any] = [
+      "version": 1,
+      "lens": "ultraWide",
+      "device": IrisCaptureViewController.deviceModel(),
+      "system": UIDevice.current.systemVersion,
+      "frames": frames,
+    ]
+    DispatchQueue.global(qos: .userInitiated).async {
+      var path: String? = folder.path
+      if let data = try? JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted]) {
+        try? data.write(to: folder.appendingPathComponent("capture.json"))
+        path = IrisCaptureViewController.zip(folder)?.path ?? folder.path
+      }
+      DispatchQueue.main.async { self.finish(path: path) }
+    }
+  }
+
+  private func finish(path: String?) {
+    guard !finished else { return }
+    finished = true
+    dismiss(animated: true) { self.onDone(path) }
   }
 }
