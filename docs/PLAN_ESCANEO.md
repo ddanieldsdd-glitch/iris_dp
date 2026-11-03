@@ -42,7 +42,7 @@ iPhone (ARKit)              PC (RealityScan)
 |----|-----|--------|
 | ES.1 | La captura del iPhone guarda la estructura (`capture.json` v2) | pendiente |
 | ES.2 | Solucionador de estructura | hecho (pruebas sintéticas; falta la casa real) |
-| ES.3 | Revisión en la planta y «pegar al escaneo» | pendiente (antes, maqueta) |
+| ES.3 | Revisión en la planta y «pegar al escaneo» | hecho, sin probar con un escaneo real (elegida la opción «A con la foto de B»: toda la casa en el lienzo y, al tocar algo dudoso, la foto real del sitio) |
 | ES.4 | Paredes limpias con la textura real proyectada | después |
 | ES.5 | Muebles sustituidos por modelos | después |
 | ES.6 | Unreal sin aberraciones | después |

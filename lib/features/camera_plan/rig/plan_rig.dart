@@ -132,6 +132,10 @@ class PlanScan {
   static const offsetKey = 'offsetZ';
   static const nameKey = 'name';
 
+  /// Carpeta de la captura del iPhone con la que se construyó, en este
+  /// equipo: sus fotos con pose se enseñan al revisar (ES.3).
+  static const captureKey = 'capture';
+
   static const formats = ['glb', 'gltf', 'obj', 'ply'];
 
   static bool isScan(PlanElement el) => RigTypeCodec.of(el) == RigType.scan;
@@ -154,6 +158,7 @@ class PlanScan {
       (el.props[scaleKey] as num?)?.toDouble() ?? 1;
   static double offsetZ(PlanElement el) =>
       (el.props[offsetKey] as num?)?.toDouble() ?? 0;
+  static String? capture(PlanElement el) => el.props[captureKey] as String?;
 
   /// Calibra la escala con una medida: lo que mide algo en el escaneo y lo
   /// que mide de verdad.

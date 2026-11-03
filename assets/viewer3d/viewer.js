@@ -1683,9 +1683,26 @@
     return JSON.stringify(out);
   }
 
+  // Lo contrario: puntos de la planta al mundo de la captura (ES.3, para
+  // buscar la foto que enseña cada propuesta).
+  function planToScan(id, flat) {
+    const w = scanWrappers[id];
+    if (!w || !Array.isArray(flat)) return null;
+    w.updateWorldMatrix(true, true);
+    const inv = new THREE.Matrix4().copy(w.matrixWorld).invert();
+    const v = new THREE.Vector3();
+    const out = [];
+    for (let i = 0; i + 2 < flat.length; i += 3) {
+      v.set(flat[i], flat[i + 1], flat[i + 2]).applyMatrix4(inv);
+      out.push(v.x, v.y, v.z);
+    }
+    return JSON.stringify(out);
+  }
+
   window.iris = {
     load,
     scanToPlan,
+    planToScan,
     scanTop,
     scanSlice,
     scanProfile,

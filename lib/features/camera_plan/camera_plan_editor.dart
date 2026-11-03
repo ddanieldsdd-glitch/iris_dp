@@ -3003,6 +3003,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       projectId: widget.projectId,
       onScanTop: _addScanTop,
       onCapture: _saveCapture,
+      onRoom: _saveRoom,
       exposure: _exposure,
       stop: _targetStop,
     );
@@ -5475,6 +5476,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   projectId: widget.projectId,
                                   onScanTop: _addScanTop,
                                   onCapture: _saveCapture,
+                                  onRoom: _saveRoom,
                                   exposure: _exposure,
                                   stop: _targetStop,
                                 ),

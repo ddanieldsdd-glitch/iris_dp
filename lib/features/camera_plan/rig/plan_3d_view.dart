@@ -40,8 +40,10 @@ import '../plan_segment.dart';
 import 'scan_builder_sheet.dart';
 import 'scan_capture_channel.dart';
 import 'scan_store.dart';
-import 'scan_walls.dart';
-import 'scan_walls_sheet.dart';
+import 'scan_capture.dart';
+import 'scan_review.dart';
+import 'scan_review_sheet.dart';
+import 'scan_structure.dart';
 import 'rig_report.dart';
 
 /// Capas del 3D que se pueden ocultar, con su nombre en el visor.
@@ -125,6 +127,10 @@ class Plan3dView extends StatefulWidget {
   /// Plató, interior o exterior (F6.21.1).
   final SetEnvironment? environment;
 
+  /// Guarda lo decidido de un recinto (la altura del techo que sale del
+  /// escaneo, ES.3).
+  final Future<void> Function(RoomSetting)? onRoom;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -147,6 +153,7 @@ class Plan3dView extends StatefulWidget {
     this.exposure,
     this.stop,
     this.environment,
+    this.onRoom,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -619,6 +626,10 @@ class _Plan3dViewState extends State<Plan3dView> {
     if (unrealPath != null && await File(unrealPath).exists()) {
       await ScanStore.saveUnrealVersion(file, unrealPath);
     }
+    // Construido desde una captura del iPhone: su carpeta queda al lado
+    // (`captura`), con las fotos que se enseñan al revisar.
+    final captureDir = '${File(path).parent.path}/captura';
+    final hasCapture = CapturePackage.isCapture(captureDir);
     final size = await File(path).length();
     if (mounted) {
       setState(
@@ -645,6 +656,7 @@ class _Plan3dViewState extends State<Plan3dView> {
       format: file.split('.').last,
       name: name,
     );
+    if (hasCapture) scan.props[PlanScan.captureKey] = captureDir;
     await add(scan);
     if (!mounted) return;
     setState(() => _selected = scan);
@@ -804,35 +816,192 @@ class _Plan3dViewState extends State<Plan3dView> {
         const SizedBox(height: AppSpacing.sm),
         OutlinedButton.icon(
           icon: const Icon(Icons.border_outer, size: 16),
-          label: const Text('Proponer paredes'),
-          onPressed: () => _proposeWalls(el),
+          label: const Text('Revisar el escaneo'),
+          onPressed: () => _reviewScan(el),
+        ),
+        Text(
+          'Paredes, puertas, ventanas, techo y muebles sacados del escaneo, '
+          'para aceptarlos o corregirlos. Calíbralo antes.',
+          style: caption,
+        ),
+      ],
+      if (widget.onChanged != null) ...[
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.straighten, size: 16),
+          label: const Text('Ajustar mis paredes al escaneo'),
+          onPressed: () => _snapWalls(el),
         ),
       ],
     ];
   }
 
-  /// Corta el escaneo a una altura, propone paredes y añade a la planta las
-  /// que se acepten (F6.20 E4).
-  Future<void> _proposeWalls(PlanElement el) async {
-    final web = _web, add = widget.onAdd;
-    if (web == null || !_ready || add == null) return;
+  /// Llama al visor con [source] y lee el JSON que devuelve.
+  Future<Object?> _ask(String source) async {
+    final raw = await _web?.evaluateJavascript(source: source);
+    return raw is String ? jsonDecode(raw) : null;
+  }
+
+  /// Lleva puntos (x, y, z seguidos) por `iris.scanToPlan` o
+  /// `iris.planToScan` del escaneo [id].
+  Future<List<double>?> _mapPoints(String fn, String id, List<double> pts) async {
+    final data = await _ask('iris.$fn(${jsonEncode(id)}, ${jsonEncode(pts)});');
+    return data is List ? [for (final v in data) (v as num).toDouble()] : null;
+  }
+
+  /// Mide el escaneo [el] y saca su estructura (ES.2), con la captura del
+  /// iPhone si se construyó en este equipo. Null si no está cargado.
+  Future<
+    ({
+      String id,
+      ScanProfile profile,
+      ScanStructure structure,
+      CapturePackage? capture,
+    })?
+  >
+  _measureScan(PlanElement el) async {
+    if (_web == null || !_ready) return null;
     final id = PlanScene3d.idOf(el, widget.elements.indexOf(el));
-    final walls = await ScanWallsSheet.show(context, (h) async {
-      final raw = await web.evaluateJavascript(
-        source: 'iris.scanSlice(${jsonEncode(id)}, $h);',
-      );
-      final data = raw is String ? jsonDecode(raw) : null;
-      return data is List ? sliceSegments(data.cast<num>()) : null;
-    });
-    if (walls == null || walls.isEmpty) return;
+    setState(() => _status = 'Midiendo el escaneo…');
+    final raw = await _ask('iris.scanProfile(${jsonEncode(id)}, 0.1);');
+    var profile = raw is Map ? ScanProfile.fromJson(raw) : null;
+    if (profile == null) {
+      if (mounted) {
+        setState(() => _status = 'El escaneo aún no se ha cargado en el 3D.');
+      }
+      return null;
+    }
+    final captureDir = PlanScan.capture(el);
+    final capture = captureDir == null ? null : CapturePackage.read(captureDir);
+    CaptureHints? hints;
+    if (capture != null && capture.hasStructure) {
+      final mapped = await _mapPoints('scanToPlan', id, capture.hintPoints());
+      if (mapped != null) hints = capture.hintsFrom(mapped);
+    }
+    // Primera pasada para el suelo y el techo; con ellos, la rejilla de los
+    // muebles.
+    final first = solveStructure(profile, capture: hints);
+    final grid = await _ask(
+      'iris.scanGrid(${jsonEncode(id)}, ${first.floorY + 0.05}, '
+      '${first.floorY + first.heightM - 0.15}, 0.1);',
+    );
+    profile = profile.withGrid(grid is Map ? ScanGrid.fromJson(grid) : null);
+    return (
+      id: id,
+      profile: profile,
+      structure: solveStructure(profile, capture: hints),
+      capture: capture,
+    );
+  }
+
+  /// «Pegar al escaneo» (ES.3): las paredes dibujadas a mano se ajustan a
+  /// la recta y el grosor de la pared del escaneo que tienen al lado.
+  Future<void> _snapWalls(PlanElement el) async {
+    final changed = widget.onChanged;
+    if (changed == null) return;
+    final m = await _measureScan(el);
+    if (m == null) return;
     final mpu = widget.metersPerUnit;
-    for (final w in walls) {
-      await add(PlanSegment.create(start: w.start / mpu, end: w.end / mpu));
+    var n = 0;
+    for (final w in widget.elements) {
+      if (!PlanSegment.isSegment(w) ||
+          PlanSegment.kind(w) != PlanSegment.kindWall ||
+          PlanSegment.curve(w) != 0 ||
+          w.props[kScanSourceKey] == kScanSourceValue) {
+        continue;
+      }
+      final snap = snapToScan(
+        PlanSegment.start(w) * mpu,
+        PlanSegment.end(w) * mpu,
+        m.structure,
+      );
+      if (snap == null) continue;
+      w.position = snap.start / mpu;
+      PlanSegment.setEnd(w, snap.end / mpu);
+      w.props[kScanThicknessKey] = (snap.thickness * 100).round() / 100;
+      await changed(w);
+      n++;
+    }
+    if (mounted) {
+      setState(
+        () => _status = n == 0
+            ? 'Ninguna pared tuya está junto a una pared del escaneo.'
+            : '$n paredes ajustadas al escaneo.',
+      );
+    }
+  }
+
+  /// Revisión del escaneo (ES.3): el solucionador saca paredes, huecos y
+  /// muebles; se revisan sobre el lienzo, con la foto del sitio en lo
+  /// dudoso, y lo aceptado entra en la planta.
+  Future<void> _reviewScan(PlanElement el) async {
+    final add = widget.onAdd;
+    if (add == null) return;
+    final m = await _measureScan(el);
+    if (m == null) return;
+    final (:id, :profile, :structure, :capture) = m;
+
+    final top = await _ask('iris.scanTop(${jsonEncode(id)}, 2048);');
+    double n(Object? v) => (v as num).toDouble();
+    final topOk = top is Map && top['png'] is String;
+
+    // El corte a 1 m, de fondo.
+    var cut = const <(Offset, Offset)>[];
+    var bestGap = double.infinity;
+    for (var k = 0; k < profile.heights.length; k++) {
+      final gap = (profile.heights[k] - structure.floorY - 1).abs();
+      if (gap < bestGap) {
+        bestGap = gap;
+        cut = profile.slices[k];
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _status = null);
+    final result = await ScanReviewSheet.show(
+      context,
+      structure: structure,
+      cut: cut,
+      topPng: topOk ? base64Decode(top['png'] as String) : null,
+      topRect: topOk
+          ? Rect.fromLTWH(n(top['x']), n(top['y']), n(top['w']), n(top['h']))
+          : null,
+      findPhoto: capture == null || capture.frames.isEmpty
+          ? null
+          : (item) async {
+              final world = await _mapPoints('planToScan', id, [
+                for (final p in reviewPoints(structure, item)) ...p,
+              ]);
+              if (world == null) return null;
+              final view = bestPhoto(capture.frames, [
+                for (var i = 0; i + 2 < world.length; i += 3)
+                  world.sublist(i, i + 3),
+              ]);
+              if (view == null) return null;
+              return (path: '${capture.dir}/${view.frame.file}', view: view);
+            },
+    );
+    if (result == null) return;
+    final mpu = widget.metersPerUnit;
+    final elements = reviewElements(structure, result.items, mpu);
+    for (final e in elements) {
+      await add(e);
+    }
+    final inside = interiorPoint(structure);
+    if (inside != null && widget.onRoom != null) {
+      await widget.onRoom!(
+        RoomSetting(
+          x: inside.dx / mpu,
+          y: inside.dy / mpu,
+          ceilingM: (result.heightM * 100).round() / 100,
+        ),
+      );
     }
     if (mounted) {
       setState(
         () => _status =
-            '${walls.length} paredes añadidas a la planta desde el escaneo.',
+            '${elements.length} elementos añadidos a la planta desde el '
+            'escaneo, con el techo a ${result.heightM.toStringAsFixed(2)} m.',
       );
     }
   }
@@ -1787,6 +1956,7 @@ class Plan3dScreen extends StatefulWidget {
   final ExposureSettings? exposure;
   final double? stop;
   final SetEnvironment? environment;
+  final Future<void> Function(RoomSetting)? onRoom;
 
   const Plan3dScreen({
     super.key,
@@ -1807,6 +1977,7 @@ class Plan3dScreen extends StatefulWidget {
     this.exposure,
     this.stop,
     this.environment,
+    this.onRoom,
   });
 
   static Future<void> show(
@@ -1828,6 +1999,7 @@ class Plan3dScreen extends StatefulWidget {
     ExposureSettings? exposure,
     double? stop,
     SetEnvironment? environment,
+    Future<void> Function(RoomSetting)? onRoom,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -1848,6 +2020,7 @@ class Plan3dScreen extends StatefulWidget {
         exposure: exposure,
         stop: stop,
         environment: environment,
+        onRoom: onRoom,
       ),
     ),
   );
@@ -1897,6 +2070,7 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       exposure: widget.exposure,
       stop: widget.stop,
       environment: widget.environment,
+      onRoom: widget.onRoom,
     ),
   );
 }
