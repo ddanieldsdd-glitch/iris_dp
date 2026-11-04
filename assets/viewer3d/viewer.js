@@ -613,6 +613,22 @@
     return body;
   }
 
+  // Calzada y aceras de una calle (CA.6): la acera sube lo que el bordillo.
+  const roadMat = new THREE.MeshStandardMaterial({ color: 0x34363b, roughness: 0.95, side: THREE.DoubleSide });
+  const walkMat = new THREE.MeshStandardMaterial({ color: 0x8f887c, roughness: 0.9, side: THREE.DoubleSide });
+  function addSurface(s) {
+    const shape = new THREE.Shape(s.outline.map((p) => new THREE.Vector2(p[0], p[1])));
+    const top = s.top || 0;
+    const geo = top > 0.01
+      ? new THREE.ExtrudeGeometry(shape, { depth: top, bevelEnabled: false })
+      : new THREE.ShapeGeometry(shape);
+    const m = new THREE.Mesh(geo, s.kind === 'road' ? roadMat : walkMat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = (s.z0 || 0) + (top > 0.01 ? 0 : 0.006);
+    m.receiveShadow = true;
+    L.walls.add(m);
+  }
+
   function addLeaves(o, z0, top) {
     if (!o.span) return;
     const a = [o.span[0], o.span[1]], b = [o.span[2], o.span[3]];
@@ -976,6 +992,7 @@
     const box = new THREE.Box3();
     const grow = (x, y, z) => box.expandByPoint(V(x, y, z || 0));
     (sc.halls || []).forEach((h) => h.outline.forEach((p) => grow(p[0], p[1], 0)));
+    (sc.surfaces || []).forEach((s) => s.outline.forEach((p) => grow(p[0], p[1], 0)));
     (sc.walls || []).forEach((w) => w.points.forEach((p, i) => grow(p[0], p[1], (w.z0 || 0) + w.tops[i])));
     (sc.trusses || []).forEach((t) => { grow(t.from[0], t.from[1], t.z); grow(t.to[0], t.to[1], t.z); });
     (sc.fixtures || []).forEach((f) => grow(f.pos[0], f.pos[1], f.pos[2]));
@@ -1010,6 +1027,7 @@
 
     (sc.halls || []).forEach(addHall);
     (sc.walls || []).forEach(addWall);
+    (sc.surfaces || []).forEach(addSurface);
     (sc.drapes || []).forEach(addDrape);
 
     for (const p of sc.pillars || []) {

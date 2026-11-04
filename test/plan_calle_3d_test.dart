@@ -6,6 +6,8 @@ import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
 import 'package:iris_dp/features/camera_plan/light/street_lamp.dart';
 import 'package:iris_dp/features/camera_plan/light/wall_mount.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
+import 'package:iris_dp/features/camera_plan/plan_street.dart';
+import 'package:iris_dp/features/camera_plan/street_controls.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
 
 /// 3D legible y calle con perfil (plan CA).
@@ -204,5 +206,82 @@ void main() {
     expect(LightWallMount.isOn(lamp), isFalse);
     final f = (scene([lamp])['fixtures'] as List).single as Map;
     expect(f['lampStyle'], 'pole');
+  });
+
+  /// Una calle de 30 m hacia +x con la plantilla del Raval.
+  PlanElement raval() {
+    final st = PlanSegment.create(
+      start: Offset.zero,
+      end: const Offset(3000, 0),
+      kind: PlanSegment.kindStreet,
+    )..props['uid'] = 'S';
+    kStreetPresets.first.$2.writeTo(st);
+    return st;
+  }
+
+  test('CA.6: la calle del Raval, a un nivel, con fachadas de 16 m', () {
+    final sc = scene([raval()]);
+    final surfaces = (sc['surfaces'] as List).cast<Map>();
+    expect(surfaces, hasLength(3));
+    // Plataforma única: todo a la misma cota.
+    for (final s in surfaces) {
+      expect(s['top'], 0);
+    }
+    final road = surfaces.firstWhere((s) => s['kind'] == 'road');
+    final ys = [for (final p in (road['outline'] as List).cast<List>()) p[1]];
+    // 3 m de calzada, centrada en el eje.
+    expect(ys.reduce((a, b) => a > b ? a : b), closeTo(1.5, 1e-6));
+    final walls = (sc['walls'] as List).cast<Map>();
+    expect(walls, hasLength(2));
+    for (final w in walls) {
+      expect((w['tops'] as List).first, 16);
+      expect(w['thick'], StreetProfile.facadeThicknessM);
+      // La cara de la fachada a 3,5 m del eje: 7 m entre fachadas.
+      final y = ((w['points'] as List).first as List)[1] as double;
+      expect(y.abs(), closeTo(3.5 + StreetProfile.facadeThicknessM / 2, 1e-6));
+    }
+  });
+
+  test('CA.6: con bordillo, las aceras suben', () {
+    final st = raval();
+    kStreetPresets[1].$2.writeTo(st);
+    final surfaces = (scene([st])['surfaces'] as List).cast<Map>();
+    expect(
+      surfaces.where((s) => s['kind'] == 'walk').map((s) => s['top']),
+      everyElement(0.15),
+    );
+  });
+
+  test('CA.6: las fachadas tapan la luz a su altura', () {
+    final light = LightScene.from([raval()], metersPerUnit: mpu);
+    final facades = light.blockers.where((b) => b.isWall).toList();
+    expect(facades, hasLength(2));
+    expect(facades.map((b) => b.heightM), everyElement(16));
+  });
+
+  test('CA.6: «Poner farolas» las pone en las fachadas, al tresbolillo', () {
+    final st = raval();
+    final lamps = StreetProfile.of(st).lamps(st, mpu);
+    // 30 m cada 15: 2 a la izquierda (7,5 y 22,5) y 1 a la derecha (15).
+    expect(lamps, hasLength(3));
+    for (final l in lamps) {
+      expect(StreetLamp.isOn(l), isTrue);
+      expect(LightWallMount.isOn(l), isTrue);
+      expect(PlanLight.heightOf(l), 4.5);
+      // Junto a la cara de la fachada (3,5 m), por dentro.
+      expect(l.position.dy.abs(), closeTo(345, 1e-6));
+    }
+    final left = lamps.where((l) => l.position.dy < 0).toList();
+    expect(left.map((l) => l.position.dx), [750, 2250]);
+    // Las de la izquierda (−y) miran hacia +y: 180°.
+    expect(left.first.rotation, closeTo(180, 1e-6));
+  });
+
+  test('CA.6: separar las fachadas en paredes', () {
+    final st = raval();
+    final walls = StreetControls.facadeWalls(st, mpu);
+    expect(walls, hasLength(2));
+    expect(PlanSegment.heightM(walls.first), 16);
+    expect(PlanSegment.thicknessM(walls.first), StreetProfile.facadeThicknessM);
   });
 }

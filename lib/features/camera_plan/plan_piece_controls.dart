@@ -14,6 +14,8 @@ import 'light/surfaces.dart';
 import 'plan_marks.dart';
 import 'plan_opening.dart';
 import 'plan_segment.dart';
+import 'plan_street.dart';
+import 'street_controls.dart';
 import 'rig/drape_controls.dart';
 import 'rig/plan_drape.dart';
 import 'rig/rig_controls.dart';
@@ -32,12 +34,16 @@ class PlanPieceControls extends StatelessWidget {
   /// Guarda el cambio.
   final VoidCallback onUpdate;
 
+  /// Añade piezas nuevas (las farolas o las fachadas de una calle).
+  final ValueChanged<List<PlanElement>>? onAddElements;
+
   const PlanPieceControls({
     super.key,
     required this.element,
     required this.metersPerUnit,
     required this.onPreview,
     required this.onUpdate,
+    this.onAddElements,
   });
 
   static bool _isTerrain(PlanElement el) =>
@@ -438,6 +444,16 @@ class PlanPieceControls extends StatelessWidget {
           metersPerUnit: metersPerUnit,
           onPreview: onPreview,
           onUpdate: onUpdate,
+        ),
+      );
+    } else if (StreetProfile.isStreet(el)) {
+      children.add(
+        StreetControls(
+          element: el,
+          metersPerUnit: metersPerUnit,
+          onPreview: onPreview,
+          onUpdate: onUpdate,
+          onAddElements: onAddElements,
         ),
       );
     } else if (PlanSegment.isSegment(el) &&

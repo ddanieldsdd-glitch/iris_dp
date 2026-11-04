@@ -25,6 +25,7 @@ import 'plan_opening.dart';
 import 'plan_sun_painter.dart';
 import 'plan_terrain_painter.dart';
 import 'plan_segment.dart';
+import 'plan_street.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
 import 'rig/rig_painter.dart';
@@ -1377,6 +1378,58 @@ class CameraPlanPainter extends CustomPainter {
     );
   }
 
+  /// La calle a su ancho real (CA.6): calzada, aceras, bordillo y
+  /// fachadas.
+  void _drawStreet(Canvas canvas, PlanElement el, Path axis) {
+    final mpu = metersPerUnit ?? defaultMetersPerUnit;
+    final profile = StreetProfile.of(el);
+    Path poly(List<Offset> pts) => Path()..addPolygon(pts, true);
+    for (final band in profile.bands(el, mpu)) {
+      canvas.drawPath(
+        poly(band.outline),
+        Paint()
+          ..color = band.kind == 'road'
+              ? const Color(0xFF3A3A44)
+              : (profile.singleLevel
+                    ? const Color(0xFF5E5A54)
+                    : const Color(0xFF8A847A)),
+      );
+    }
+    final edge = Paint()
+      ..color = profile.singleLevel
+          ? const Color(0x66FFFFFF)
+          : const Color(0xFFE8E4DC)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = profile.singleLevel ? 1 : 2.5;
+    for (final side in const [1.0, -1.0]) {
+      final walk = side > 0 ? profile.walkLeftM : profile.walkRightM;
+      if (walk <= 0) continue;
+      final line = StreetProfile.offsetLine(el, side * profile.roadM / 2, mpu);
+      canvas.drawPath(Path()..addPolygon(line, false), edge);
+    }
+    // Eje discontinuo en las calles de dos carriles.
+    if (!profile.singleLevel && profile.roadM >= 5) {
+      _drawDashedPath(
+        canvas,
+        axis,
+        Paint()
+          ..color = _CanvasColors.inkTertiary
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    }
+    for (final f in profile.facades(el, mpu)) {
+      canvas.drawPath(
+        Path()..addPolygon(f.line, false),
+        Paint()
+          ..color = _CanvasColors.ink
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = StreetProfile.facadeThicknessM / mpu
+          ..strokeCap = StrokeCap.square,
+      );
+    }
+  }
+
   void _drawSegment(
     Canvas canvas,
     PlanElement el, {
@@ -1387,22 +1440,7 @@ class CameraPlanPainter extends CustomPainter {
     if (body) {
       switch (PlanSegment.kind(el)) {
         case PlanSegment.kindStreet:
-          canvas.drawPath(
-            path,
-            Paint()
-              ..color = const Color(0xFF3A3A44)
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 64
-              ..strokeCap = StrokeCap.butt,
-          );
-          _drawDashedPath(
-            canvas,
-            path,
-            Paint()
-              ..color = _CanvasColors.inkTertiary
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 1.5,
-          );
+          _drawStreet(canvas, el, path);
         case PlanSegment.kindRelief:
           PlanTerrainPainter.slope(canvas, el, scale: scale);
         default:

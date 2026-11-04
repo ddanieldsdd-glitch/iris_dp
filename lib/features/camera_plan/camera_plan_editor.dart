@@ -5545,6 +5545,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   await _persistElement(el);
                                   if (hung.isNotEmpty) await _persistMany(hung);
                                 },
+                                onAddElements: (els) async {
+                                  for (final e in els) {
+                                    await _addElement(
+                                      e,
+                                      keepPosition: true,
+                                      select: false,
+                                    );
+                                  }
+                                },
                                 onDelete: _deleteSelected,
                                 onDuplicate: _duplicateSelection,
                                 selectionCount: _selection.length,
@@ -6200,6 +6209,8 @@ class _ElementPanel extends StatefulWidget {
   final VoidCallback? onAddPathPoint;
   final VoidCallback? onDeletePathPoint;
   final VoidCallback? onClearPath;
+  /// Añade piezas nuevas desde el panel (farolas, fachadas de una calle).
+  final ValueChanged<List<PlanElement>>? onAddElements;
   final VoidCallback onUpdate;
   final VoidCallback onDelete;
   final VoidCallback onDuplicate;
@@ -6240,6 +6251,7 @@ class _ElementPanel extends StatefulWidget {
     this.onAddPathPoint,
     this.onDeletePathPoint,
     this.onClearPath,
+    this.onAddElements,
     required this.onUpdate,
     required this.onDelete,
     required this.onDuplicate,
@@ -6847,6 +6859,7 @@ class _ElementPanelState extends State<_ElementPanel> {
                         metersPerUnit: widget.metersPerUnit,
                         onPreview: widget.onPreview,
                         onUpdate: widget.onUpdate,
+                        onAddElements: widget.onAddElements,
                       ),
                     if (widget.lengthLabel != null)
                       Text(

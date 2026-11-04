@@ -21,6 +21,7 @@ import '../light_beam.dart';
 import '../light_overrides.dart';
 import '../plan_opening.dart';
 import '../plan_segment.dart';
+import '../plan_street.dart';
 import '../light/street_lamp.dart';
 import 'plan_drape.dart';
 import 'plan_hall.dart';
@@ -103,6 +104,7 @@ class PlanScene3d {
     };
 
     final openings = elements.where(PlanOpening.isOpening).toList();
+    final surfaces = <Map<String, dynamic>>[];
     final loads = RigLoads.of(elements, mpu);
     final walls = <Map<String, dynamic>>[];
     final drapes = <Map<String, dynamic>>[];
@@ -131,6 +133,37 @@ class PlanScene3d {
       final uid = idOf(el, i);
       if (PlanDrape.isDrape(el)) {
         drapes.add(_drape(el, uid, mpu, level, xy));
+        continue;
+      }
+      // La calle con su perfil (CA.6): calzada, aceras y fachadas.
+      if (StreetProfile.isStreet(el)) {
+        final profile = StreetProfile.of(el);
+        for (final band in profile.bands(el, mpu)) {
+          surfaces.add({
+            'id': '$uid:${band.kind}${surfaces.length}',
+            'kind': band.kind,
+            'outline': [for (final p in band.outline) xy(p)],
+            'z0': level,
+            'top': _r(band.topM),
+          });
+        }
+        for (final f in profile.facades(el, mpu)) {
+          walls.add(
+            _wall(
+              el,
+              '$uid:${f.side}',
+              openings,
+              mpu,
+              level,
+              xy,
+              roofAt,
+              points: f.line,
+              heightM: f.heightM,
+              thickM: StreetProfile.facadeThicknessM,
+              name: 'Fachada ${f.side == 'left' ? 'izquierda' : 'derecha'}',
+            ),
+          );
+        }
         continue;
       }
       if (PlanSegment.isSegment(el)) {
@@ -260,6 +293,7 @@ class PlanScene3d {
     }
     out
       ..['walls'] = walls
+      ..['surfaces'] = surfaces
       ..['drapes'] = drapes
       ..['pillars'] = pillars
       ..['trusses'] = trusses
@@ -616,18 +650,24 @@ class PlanScene3d {
     double mpu,
     double level,
     List<double> Function(Offset) xy,
-    double? Function(String?, Offset) roofAt,
-  ) {
+    double? Function(String?, Offset) roofAt, {
+    // Para una fachada de calle (CA.6): su línea, su alto y su grosor.
+    List<Offset>? points,
+    double? heightM,
+    double? thickM,
+    String? name,
+  }) {
     final steps = PlanSegment.curve(el) == 0 ? 1 : 16;
-    final pts = [
-      for (var k = 0; k <= steps; k++) PlanSegment.pointAt(el, k / steps),
-    ];
+    final pts =
+        points ??
+        [for (var k = 0; k <= steps; k++) PlanSegment.pointAt(el, k / steps)];
     final cum = <double>[0];
     for (var k = 1; k < pts.length; k++) {
       cum.add(cum.last + (pts[k] - pts[k - 1]).distance);
     }
     final hallUid = PlanHall.hallUidOf(el);
-    final fixed = (el.props[PlanPillar.heightKey] as num?)?.toDouble();
+    final fixed =
+        heightM ?? (el.props[PlanPillar.heightKey] as num?)?.toDouble();
     final tops = [
       for (final p in pts) _r(roofAt(hallUid, p) ?? fixed ?? defaultWallM),
     ];
@@ -680,12 +720,12 @@ class PlanScene3d {
     holes.sort((a, b) => (a['from'] as double).compareTo(b['from'] as double));
     return {
       'id': id,
-      'name': el.displayLabel,
+      'name': name ?? el.displayLabel,
       'cat': PlanCategory.of(el).name,
       'points': [for (final p in pts) xy(p)],
       'z0': level,
       'tops': tops,
-      'thick': _r(PlanSegment.thicknessM(el)),
+      'thick': _r(thickM ?? PlanSegment.thicknessM(el)),
       'openings': holes,
     };
   }

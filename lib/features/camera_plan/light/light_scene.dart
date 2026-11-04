@@ -7,6 +7,7 @@ import '../camera_plan_element_model.dart';
 import '../plan_marks.dart';
 import '../plan_opening.dart';
 import '../plan_segment.dart';
+import '../plan_street.dart';
 import '../rig/plan_drape.dart';
 import '../rig/plan_rig.dart';
 import 'ambient.dart';
@@ -1204,6 +1205,23 @@ class LightScene {
           _addDrape(blockers, el, metersPerUnit);
           continue;
         }
+        // Las fachadas de una calle tapan y rebotan como paredes (CA.6).
+        if (StreetProfile.isStreet(el)) {
+          for (final f in StreetProfile.of(el).facades(el, metersPerUnit)) {
+            for (var i = 1; i < f.line.length; i++) {
+              blockers.add(
+                LightBlocker(
+                  f.line[i - 1],
+                  f.line[i],
+                  isWall: true,
+                  heightM: f.heightM,
+                  element: el,
+                ),
+              );
+            }
+          }
+          continue;
+        }
         if (PlanSegment.kind(el) != PlanSegment.kindWall) continue;
         // Una pared curva se trocea en tramos rectos.
         final pieces = PlanSegment.curve(el) == 0 ? 1 : 12;
@@ -1946,7 +1964,9 @@ class LightScene {
             centre: blocker.a + span * t,
             tangent: span / length,
             lengthUnits: length / panes,
-            heightM: PlanSegment.heightM(wall) ?? wallHeightM,
+            heightM:
+                PlanSegment.heightM(wall) ??
+                (StreetProfile.isStreet(wall) ? blocker.heightM : wallHeightM),
             keep: material.reflectance,
             mired: material.miredShift,
             beamDeg: material.beamDeg,
