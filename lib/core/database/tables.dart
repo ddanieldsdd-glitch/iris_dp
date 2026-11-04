@@ -169,6 +169,10 @@ class Shots extends Table {
   // (paneo: antes y después; secuencia: partes) y refuerzos
   // (schemaVersion 58). Nulo = lo decide la app.
   TextColumn get exportLayoutJson => text().nullable()();
+  // Imagen que representa al plano en las demás pantallas: 'storyboard' o
+  // 'reference' (schemaVersion 60). Nula = el storyboard y, sin él, la
+  // referencia.
+  TextColumn get coverImage => text().nullable()();
 }
 
 /// Documento de rodaje (Plani, jornada, referencia en set).

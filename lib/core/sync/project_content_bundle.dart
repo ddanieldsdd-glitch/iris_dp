@@ -719,6 +719,7 @@ class ProjectContentBundle {
           if (!shot.autoNumbering) 'autoNumbering': false,
           if (shot.exportLayoutJson != null)
             'exportLayoutJson': shot.exportLayoutJson,
+          if (shot.coverImage != null) 'coverImage': shot.coverImage,
           if (shot.cameraPlanImagePath != null)
             'cameraPlanImagePath': _sketchLinksOut(
               shot.cameraPlanImagePath!,
@@ -1826,6 +1827,7 @@ class ProjectContentBundle {
           ),
           cellStylesJson: Value(m['cellStylesJson'] as String?),
           exportLayoutJson: Value(m['exportLayoutJson'] as String?),
+          coverImage: Value(m['coverImage'] as String?),
           locationBasePlanId: Value(setKeyToId[m['shotSetKey']]),
           routeJson: Value(
             ShotRoute.encode([

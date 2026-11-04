@@ -186,6 +186,23 @@ String? referenceImageOf(Shot shot) =>
 String? storyboardImageOf(Shot shot) =>
     shot.storyboardImagePath ?? shot.referenceImagePath;
 
+/// Qué imagen representa al plano en las demás pantallas (tarjetas de la
+/// planta, tablero de escena…), tal como se guarda en `Shots.coverImage`.
+enum ShotCover { storyboard, reference }
+
+/// La elegida para el plano; sin elegir, el storyboard.
+ShotCover coverSourceOf(Shot shot) =>
+    shot.coverImage == ShotCover.reference.name
+    ? ShotCover.reference
+    : ShotCover.storyboard;
+
+/// Imagen que representa al plano: la elegida (storyboard o referencia) y,
+/// si esa no está, la otra. `null` si el plano no tiene ninguna.
+String? coverImageOf(Shot shot) => switch (coverSourceOf(shot)) {
+  ShotCover.storyboard => storyboardImageOf(shot),
+  ShotCover.reference => referenceImageOf(shot),
+};
+
 /// Guarda una imagen propia para el storyboard del plano, distinta de la de
 /// referencia.
 Future<String> importShotStoryboardImage({

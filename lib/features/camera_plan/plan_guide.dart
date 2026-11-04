@@ -434,9 +434,14 @@ Future<void> associateShotsToSet(
   Iterable<Shot> shots,
 ) async {
   final repo = FloorPlanRepository(db);
-  final setups = (await db.getLightSetupsForProject(
+  final setOwn = (await db.getLightSetupsForProject(
     set.projectId,
-  )).where((s) => s.locationBasePlanId == set.id).map((s) => s.id).toSet();
+  )).where((s) => s.locationBasePlanId == set.id).toList();
+  final setups = setOwn.map((s) => s.id).toSet();
+  // Con un solo esquema de luz en el set, el plano que llega sin luz lo
+  // toma: así su cámara se ve ya en la planta de luz del set.
+  final plans = setOwn.where((s) => s.kind == LightSetupKind.plan).toList();
+  final onlySetup = plans.length == 1 ? plans.single.id : null;
   final zone = SetZone.decode(set.sitePlacementJson);
   var placed = 0;
   for (final shot in shots) {
@@ -456,7 +461,7 @@ Future<void> associateShotsToSet(
       // Conserva su esquema solo si es de este set.
       lightSetupId: setups.contains(shot.lightSetupId)
           ? shot.lightSetupId
-          : null,
+          : onlySetup,
     );
     final elements = await repo.loadElements(
       scope: FloorPlanScope.shot,

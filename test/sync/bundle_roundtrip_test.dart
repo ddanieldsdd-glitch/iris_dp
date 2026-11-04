@@ -92,6 +92,7 @@ void main() {
             lightOverridesJson: const Value('{"off":[1]}'),
             storyboardImagePath: Value(sb),
             cellStylesJson: const Value('{"lens":"bold"}'),
+            coverImage: const Value('reference'),
           ),
         );
 
@@ -136,6 +137,7 @@ void main() {
       'auto_numbering',
       'camera_plan_image_path',
       'export_layout_json',
+      'cover_image',
     };
     for (final column in db.shots.$columns) {
       if (shotColumnsAsKeys.contains(column.name)) continue;

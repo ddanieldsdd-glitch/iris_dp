@@ -583,6 +583,10 @@ class AppDatabase extends _$AppDatabase {
         // Capturas del iPhone que viajan al PC para hacerse escaneo.
         await m.createTable(locationCaptures);
       }
+      if (from < 60) {
+        // Qué imagen representa a cada plano: storyboard o referencia.
+        await add(shots, shots.coverImage);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -2686,6 +2690,16 @@ class AppDatabase extends _$AppDatabase {
         .write(const LightingSetupsCompanion(planSetupId: Value(null)));
     await (delete(lightSetups)..where((s) => s.id.equals(id))).go();
     if (projectId != null) await touchProjectContent(projectId);
+  }
+
+  /// Qué imagen representa al plano: 'storyboard', 'reference' o nula (el
+  /// storyboard y, sin él, la referencia).
+  Future<void> setShotCoverImage(int shotId, String? cover) async {
+    await (update(shots)..where((s) => s.id.equals(shotId))).write(
+      ShotsCompanion(coverImage: Value(cover)),
+    );
+    final shot = await getShotById(shotId);
+    if (shot != null) await touchProjectContent(shot.projectId);
   }
 
   Future<void> assignLightSetupToShot(int shotId, int? setupId) async {
@@ -4797,7 +4811,7 @@ extension SceneLabel on Scene {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 59;
+const kSchemaVersion = 60;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

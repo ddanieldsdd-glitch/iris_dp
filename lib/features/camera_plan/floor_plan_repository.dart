@@ -5,6 +5,7 @@ import 'package:drift/drift.dart' show Value;
 
 import '../../core/database/app_database.dart';
 import 'camera_plan_constants.dart';
+import 'camera_links.dart';
 import 'camera_plan_element_model.dart';
 import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
@@ -125,9 +126,12 @@ class FloorPlanRepository {
         if (lightSetupId == null) return;
         final setup = await db.getLightSetupById(lightSetupId);
         if (setup == null) return;
+        final before = FloorPlanJson.decode(setup.planJson);
         await db.updateLightSetup(
           setup.copyWith(planJson: Value(_reencode(setup.planJson, elements))),
         );
+        // Las cámaras vinculadas a planos llevan con ellas sus copias.
+        await CameraLinks(db).followCameras(lightSetupId, before, elements);
       case FloorPlanScope.shot:
         if (shotId == null) return;
         await _replaceShotElements(shotId, elements);
@@ -474,6 +478,7 @@ class FloorPlanRepository {
     int? siteId,
     String? name,
     String? kind,
+    bool renewUids = false,
   }) async {
     final siblings = (await db.getLightSetupsForProject(source.projectId))
         .where(
@@ -494,7 +499,9 @@ class FloorPlanRepository {
         status: Value(source.status),
         origin: const Value('planta'),
         category: Value(source.category),
-        planJson: Value(source.planJson),
+        planJson: Value(
+          renewUids ? renewedPlanJson(source.planJson) : source.planJson,
+        ),
         sketchJson: Value(source.sketchJson),
         sketchImagePath: Value(source.sketchImagePath),
         sortOrder: Value(siblings.length),
@@ -506,6 +513,113 @@ class FloorPlanRepository {
       ),
     );
     return (await db.getLightSetupById(id))!;
+  }
+
+  /// La misma planta con identificadores nuevos en sus elementos: una copia
+  /// que ya no es la de partida (ni en el 3D ni en los ajustes de un plano).
+  /// Conserva escala, fondo, ambiente y entorno.
+  static String? renewedPlanJson(String? json) {
+    if (json == null || json.isEmpty) return json;
+    final doc = FloorPlanJson.decodeDocument(json);
+    final copies = doc.elements.map(LightOverrides.clone).toList();
+    LightOverrides.renewUids(copies);
+    return FloorPlanJson.encodeDocument(
+      FloorPlanDocument(
+        elements: copies,
+        metersPerUnit: doc.metersPerUnit,
+        underlay: doc.underlay,
+        ambient: doc.ambient,
+        environment: doc.environment,
+      ),
+    );
+  }
+
+  /// Esquemas de la luz general de una localización (sin set), de los que
+  /// se puede partir para la luz de uno de sus sets.
+  Future<List<LightSetup>> siteLightSetups(int projectId, int siteId) async =>
+      (await db.getLightSetupsForProject(projectId))
+          .where(
+            (s) =>
+                s.locationSiteId == siteId &&
+                s.locationBasePlanId == null &&
+                s.kind == LightSetupKind.plan,
+          )
+          .toList();
+
+  /// Esquema nuevo de un set que empieza con las luces de [source] (la luz
+  /// general de su localización u otro esquema) ya colocadas. Es una copia:
+  /// lo que cambie después en [source] no le llega.
+  Future<LightSetup> createLightSetupFrom(
+    LightSetup source, {
+    int? setId,
+    int? siteId,
+    String? name,
+  }) => copyLightSetup(
+    source,
+    setId: setId,
+    siteId: siteId,
+    name: name,
+    kind: LightSetupKind.plan,
+    renewUids: true,
+  );
+
+  /// Crea un set en [siteId]. Puede empezar desde otro set ([fromSet]: su
+  /// planta y su entorno) o desde la localización ([fromSite]: su entorno de
+  /// plató/interior/exterior) y, con [includeLights], con copias de los
+  /// esquemas de luz de ese set o de la luz general de la localización.
+  /// Las copias no siguen a su origen.
+  Future<LocationBasePlan> createSet({
+    required int projectId,
+    required String name,
+    int? siteId,
+    LocationBasePlan? fromSet,
+    bool fromSite = false,
+    bool includeLights = false,
+  }) async {
+    final siblings = (await db.getLocationsMapForProject(
+      projectId,
+    )).values.where((l) => l.siteId == siteId).toList();
+    String? planJson;
+    if (fromSet != null) {
+      planJson = renewedPlanJson(fromSet.floorPlanJson);
+    } else if (fromSite && siteId != null) {
+      final site = await db.getSiteById(siteId);
+      final env = FloorPlanJson.decodeDocument(site?.floorPlanJson).environment;
+      if (env != null) {
+        planJson = FloorPlanJson.encodeDocument(
+          FloorPlanDocument(environment: env),
+        );
+      }
+    }
+    final id = await db.insertLocation(
+      LocationBasePlansCompanion.insert(
+        projectId: projectId,
+        siteId: Value(siteId),
+        locationName: name,
+        floorPlanJson: Value(planJson),
+        sortOrder: Value(siblings.length),
+      ),
+    );
+    if (includeLights) {
+      final List<LightSetup> sources;
+      if (fromSet != null) {
+        sources = (await db.getLightSetupsForProject(projectId))
+            .where(
+              (s) =>
+                  s.locationBasePlanId == fromSet.id &&
+                  s.kind == LightSetupKind.plan,
+            )
+            .toList();
+      } else if (fromSite && siteId != null) {
+        sources = await siteLightSetups(projectId, siteId);
+      } else {
+        sources = const [];
+      }
+      for (final setup in sources) {
+        await createLightSetupFrom(setup, setId: id, name: setup.name);
+      }
+    }
+    return (await db.getLocationById(id))!;
   }
 
   /// Copia un set con su planta y sus esquemas de luz, en [siteId] (por

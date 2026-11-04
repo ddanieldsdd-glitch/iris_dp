@@ -13,6 +13,7 @@ import 'floor_plan_repository.dart';
 import 'plan_data.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
+import 'shot_cover.dart';
 import '../../shared/rich_text/script_markup.dart';
 
 /// Tarjeta de un plano: miniatura de lo que se ve en él y la etiqueta de su
@@ -55,15 +56,18 @@ class PlanShotCard extends ConsumerWidget {
               SizedBox(
                 height: 100,
                 width: double.infinity,
-                child: PlanThumbnail(
-                  elements: [
-                    ...data.lightOfShot(shot),
-                    ...data.ownOfShot(shot),
-                  ],
-                  inherited: data.baseOfShot(shot),
-                  focus: data.zoneOf(data.set(scene?.locationId)),
-                  emptyIcon: Icons.videocam_outlined,
-                ),
+                // La imagen del plano y, si no tiene, su planta.
+                child:
+                    shotCoverThumbnail(shot) ??
+                    PlanThumbnail(
+                      elements: [
+                        ...data.lightOfShot(shot),
+                        ...data.ownOfShot(shot),
+                      ],
+                      inherited: data.baseOfShot(shot),
+                      focus: data.zoneOf(data.set(scene?.locationId)),
+                      emptyIcon: Icons.videocam_outlined,
+                    ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),

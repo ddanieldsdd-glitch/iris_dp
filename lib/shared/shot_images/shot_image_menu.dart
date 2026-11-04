@@ -895,6 +895,13 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                       ],
                     ),
                   ],
+                  if (!_sketch && !_moodboard)
+                    _CoverChoice(
+                      shotId: widget.shot.id,
+                      target: _story
+                          ? ShotCover.storyboard
+                          : ShotCover.reference,
+                    ),
                   if (widget.footer != null && !_moodboard) ...[
                     const SizedBox(height: AppSpacing.md),
                     widget.footer!(context),
@@ -1203,6 +1210,60 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
           );
         },
       ),
+    );
+  }
+}
+
+/// Casilla «Representa al plano»: si el plano tiene storyboard y referencia,
+/// elige cuál de las dos sale en las demás pantallas.
+class _CoverChoice extends ConsumerWidget {
+  final int shotId;
+  final ShotCover target;
+
+  const _CoverChoice({required this.shotId, required this.target});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(databaseProvider);
+    final palette = context.palette;
+    return StreamBuilder<Shot?>(
+      stream: (db.select(
+        db.shots,
+      )..where((s) => s.id.equals(shotId))).watchSingleOrNull(),
+      builder: (context, snap) {
+        final shot = snap.data;
+        if (shot == null ||
+            shot.storyboardImagePath == null ||
+            shot.referenceImagePath == null ||
+            shot.storyboardImagePath == shot.referenceImagePath) {
+          return const SizedBox.shrink();
+        }
+        final other = target == ShotCover.storyboard
+            ? ShotCover.reference
+            : ShotCover.storyboard;
+        return Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.md),
+          child: CheckboxListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: coverSourceOf(shot) == target,
+            onChanged: (v) => db.setShotCoverImage(
+              shotId,
+              (v == true ? target : other).name,
+            ),
+            title: Text(
+              'Representa al plano',
+              style: AppTypography.bodyMedium(palette),
+            ),
+            subtitle: Text(
+              'Es la imagen que se ve del plano en la planta y en el '
+              'tablero de la escena',
+              style: AppTypography.caption(palette),
+            ),
+          ),
+        );
+      },
     );
   }
 }
