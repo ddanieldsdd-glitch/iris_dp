@@ -523,6 +523,64 @@
 
   // Puertas y ventanas con su marco y sus hojas (CA.2). Una puerta cerrada
   // tapa el hueco; abierta, la hoja gira sobre la bisagra.
+  // El cuerpo de cada aparato según su forma (CA.3). Mira hacia [aim]
+  // salvo el tubo, que va a lo largo de su eje.
+  function fixtureBody(f, col, aim) {
+    const body = new THREE.Group();
+    const glow = new THREE.MeshBasicMaterial({ color: f.on ? col : 0x333333 });
+    if (f.shape === 'tube') {
+      const len = f.lengthM || 1.2;
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, len, 12), glow);
+      const ax = f.axis || [0, 0, 1];
+      const dir = V(ax[0], ax[1], ax[2]).normalize();
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      tube.quaternion.copy(q);
+      body.add(tube);
+      // Los dos tapones de los extremos.
+      for (const s of [-1, 1]) {
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.05, 10), dark);
+        cap.quaternion.copy(q);
+        cap.position.copy(dir.clone().multiplyScalar(s * (len / 2 + 0.02)));
+        body.add(cap);
+      }
+      return body;
+    }
+    const inner = new THREE.Group();
+    if (f.shape === 'panel') {
+      const s = Math.max(0.3, Math.min((f.source && f.source.sizeM) || 0.6, 1.5));
+      inner.add(new THREE.Mesh(new THREE.BoxGeometry(s, s * 0.6, 0.06), dark));
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(s * 0.92, s * 0.55), glow);
+      face.position.z = 0.032;
+      inner.add(face);
+    } else if (f.shape === 'softbox') {
+      const s = Math.max(0.5, Math.min((f.source && f.source.sizeM) || 0.9, 2));
+      const box = new THREE.Mesh(new THREE.CylinderGeometry(s * 0.55, 0.12, s * 0.5, 4, 1, true), new THREE.MeshStandardMaterial({ color: 0x2a2a2a, side: THREE.DoubleSide }));
+      box.rotation.x = -Math.PI / 2;
+      box.rotation.y = Math.PI / 4;
+      box.position.z = -s * 0.25;
+      inner.add(box);
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(s * 0.76, s * 0.76), glow);
+      inner.add(face);
+    } else if (f.shape === 'practical') {
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 14, 10), glow);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.06, 10), dark);
+      cap.position.y = 0.08;
+      body.add(bulb, cap);
+      return body;
+    } else {
+      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 0.4, 14), dark);
+      can.rotation.x = Math.PI / 2;
+      inner.add(can);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.13, 18), glow);
+      lens.position.z = 0.205;
+      inner.add(lens);
+    }
+    body.add(inner);
+    // Se orienta hacia el punto al que apunta una vez colocado.
+    body.userData.lookAt = !!aim;
+    return body;
+  }
+
   function addLeaves(o, z0, top) {
     if (!o.span) return;
     const a = [o.span[0], o.span[1]], b = [o.span[2], o.span[3]];
@@ -985,15 +1043,9 @@
       const col = cctColor(f.cct || 3200);
       const p = V(f.pos[0], f.pos[1], f.pos[2]), a = V(f.aim[0], f.aim[1], f.aim[2]);
       const dir = new THREE.Vector3().subVectors(a, p).normalize();
-      const body = new THREE.Group();
+      const body = fixtureBody(f, col, a);
       body.position.copy(p);
-      body.lookAt(a);
-      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 0.4, 14), dark);
-      can.rotation.x = Math.PI / 2;
-      body.add(can);
-      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.13, 18), new THREE.MeshBasicMaterial({ color: f.on ? col : 0x333333 }));
-      lens.position.z = 0.205;
-      body.add(lens);
+      if (body.userData.lookAt) body.lookAt(a);
       body.name = (f.name || 'Foco') + ' · ' + f.id;
       body.userData.id = f.id; body.userData.movable = true; body.userData.dragY = p.y; body.userData.aim = a.clone(); picks.push(body);
       L.fixtures.add(body);
@@ -1001,6 +1053,16 @@
       if (i >= next && lit < maxLights) {
         next += step; lit++;
         const half = clamp((f.beamDeg || 60) / 2, 5, 80) * Math.PI / 180;
+        // Lo que alumbra a todo alrededor (un tubo, una bombilla) es una luz
+        // puntual, no un foco.
+        if ((f.beamDeg || 360) >= 180) {
+          const pl = physical
+            ? new THREE.PointLight(col, ((f.source && f.source.cd) || 0) * k, 0, 2)
+            : new THREE.PointLight(col, 0.4 + (f.watts || 100) / 2400, 12, 1);
+          pl.position.copy(p);
+          root.add(pl);
+          return;
+        }
         const sl = physical
           ? new THREE.SpotLight(col, ((f.source && f.source.cd) || 0) * k, 0, half, 0.45, 2)
           : new THREE.SpotLight(col, 0.6 + (f.watts || 500) / 1600, 0, half, 0.45, 1);
@@ -1018,6 +1080,7 @@
         root.add(sl.target);
       }
       if ((f.beamDeg || 360) >= 180) return;
+      if (f.shape === 'tube') return;
       const t = Math.min(p.distanceTo(a), 14);
       const half = clamp((f.beamDeg || 60) / 2, 4, 62) * Math.PI / 180;
       const cg = new THREE.ConeGeometry(t * Math.tan(half), t, 36, 1, true);

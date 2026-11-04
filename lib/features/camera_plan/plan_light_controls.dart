@@ -9,6 +9,7 @@ import 'light/modifiers.dart';
 import 'light/photometry.dart';
 import 'light/plan_light.dart';
 import 'light_beam.dart';
+import 'light/wall_mount.dart';
 
 /// Controles fotométricos de una luz: potencia, dato medido, difusión, red
 /// y gelatina, con la lectura de lo que da a tres distancias.
@@ -200,24 +201,51 @@ class _PlanLightControlsState extends State<PlanLightControls> {
         if (widget.parts.contains(LightControlPart.mount)) ...[
           const SizedBox(height: AppSpacing.sm),
           Text('Montaje', style: AppTypography.caption(palette)),
-          SegmentedButton<bool>(
+          SegmentedButton<String>(
             showSelectedIcon: false,
             style: const ButtonStyle(visualDensity: VisualDensity.compact),
             segments: const [
-              ButtonSegment(value: false, label: Text('Trípode')),
-              ButtonSegment(value: true, label: Text('Techo')),
+              ButtonSegment(value: '', label: Text('Trípode')),
+              ButtonSegment(
+                value: PlanLight.mountCeiling,
+                label: Text('Techo'),
+              ),
+              // Pegada a la pared más cercana (CA.3).
+              ButtonSegment(value: PlanLight.mountWall, label: Text('Pared')),
             ],
-            selected: {PlanLight.isOverhead(_el)},
+            selected: {_el.props[PlanLight.mountKey] as String? ?? ''},
             onSelectionChanged: (v) {
-              if (v.first) {
-                _el.props[PlanLight.mountKey] = PlanLight.mountCeiling;
-              } else {
+              if (v.first.isEmpty) {
                 _el.props.remove(PlanLight.mountKey);
+              } else {
+                _el.props[PlanLight.mountKey] = v.first;
+              }
+              if (v.first == PlanLight.mountWall) {
+                _el.props[PlanLight.heightKey] ??= LightWallMount.defaultHeightM;
               }
               setState(() {});
               widget.onUpdate();
             },
           ),
+          if (LightWallMount.isTube(_el)) ...[
+            const SizedBox(height: AppSpacing.xs),
+            SegmentedButton<bool>(
+              showSelectedIcon: false,
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              segments: const [
+                ButtonSegment(value: true, label: Text('Tubo tumbado')),
+                ButtonSegment(value: false, label: Text('Tubo de pie')),
+              ],
+              selected: {LightWallMount.tubeHorizontal(_el)},
+              onSelectionChanged: (v) {
+                _el.props[LightWallMount.tubeAxisKey] = v.first
+                    ? LightWallMount.axisHorizontal
+                    : LightWallMount.axisVertical;
+                setState(() {});
+                widget.onUpdate();
+              },
+            ),
+          ],
           // Altura, paneo e inclinación para cualquier montaje (F6.21.5).
           Row(
             children: [

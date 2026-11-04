@@ -96,6 +96,7 @@ import '../unreal_link/unreal_stage_payload.dart';
 import 'rig/rig_report.dart';
 import 'rig/plan_hall.dart';
 import '../../core/utils/platform_keys.dart';
+import 'light/wall_mount.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
   final int projectId;
@@ -4036,6 +4037,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               PlanOpening.snapToWall(el, _visibleElements)) {
             continue;
           }
+          // Y una luz de pared, a la suya (CA.3).
+          if (LightWallMount.isOn(el)) {
+            el.position += shift;
+            LightWallMount.snap(el, _visibleElements, _metersPerUnit);
+            continue;
+          }
           el.position += shift;
           el.pathPoints = [for (final p in el.pathPoints) p + shift];
         }
@@ -5508,6 +5515,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 onUpdate: () async {
                                   final el = _selected!;
                                   await _syncCameraSensor(el);
+                                  // Una luz de pared se pega a la pared.
+                                  if (LightWallMount.isOn(el)) {
+                                    LightWallMount.snap(
+                                      el,
+                                      _visibleElements,
+                                      _metersPerUnit,
+                                    );
+                                  }
                                   final hung = _settleRig([el]);
                                   if (mounted) setState(() {});
                                   await _persistElement(el);

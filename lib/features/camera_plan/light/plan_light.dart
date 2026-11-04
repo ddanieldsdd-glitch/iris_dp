@@ -43,6 +43,9 @@ class PlanLight {
   static const mountKey = 'mount';
   static const mountCeiling = 'ceiling';
 
+  /// «wall» si va pegada a la pared (CA.3): ver `LightWallMount`.
+  static const mountWall = 'wall';
+
   /// Altura a la que cuelga, en metros.
   static const heightKey = 'height';
   static const double defaultCeilingHeight = 3;

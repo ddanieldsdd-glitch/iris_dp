@@ -786,6 +786,11 @@ class LightScene {
     return (sum / 9 / centreLux).clamp(0.0, 1.0);
   }
 
+  /// Techo del recinto cubierto en que cae [point], si lo hay. El 3D lo usa
+  /// para colgar las luces a la misma altura que el motor de luz (CA.3).
+  static double? ceilingAt(List<SceneRoom> rooms, Offset point) =>
+      _ceilingAt(rooms, point);
+
   static double? _ceilingAt(List<SceneRoom> rooms, Offset point) {
     for (final room in rooms) {
       if (room.roofed && room.room.contains(point)) return room.ceilingM;

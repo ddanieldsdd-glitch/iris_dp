@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
+import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
+import 'package:iris_dp/features/camera_plan/light/wall_mount.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
 
@@ -75,5 +77,61 @@ void main() {
       // A 90°: la hoja sale de la pared, 45 cm.
       expect((l[3] as double).abs(), closeTo(0.45, 1e-6));
     }
+  });
+
+  PlanElement tube({Map<String, dynamic>? props}) => PlanElement(
+    id: 4,
+    type: ElementType.light,
+    position: const Offset(200, 60),
+    lightType: LightType.floSingle,
+    props: {'uid': 'T', 'intensity': 100, ...?props},
+  );
+
+  test('CA.3: un tubo pegado a la pared se queda a ras y tumbado', () {
+    final w = wall(Offset.zero, const Offset(400, 0));
+    final t = tube(props: {PlanLight.mountKey: PlanLight.mountWall});
+    expect(LightWallMount.snap(t, [w, t], mpu), isTrue);
+    // A 6 + 5 cm de la línea de la pared, por el lado en que estaba.
+    expect(t.position.dx, closeTo(200, 1e-6));
+    expect(t.position.dy, closeTo(11, 1e-6));
+    // Mira hacia fuera de la pared (+y en la planta = 180°).
+    expect(t.rotation, closeTo(180, 1e-6));
+    expect(t.props[PlanLight.heightKey], LightWallMount.defaultHeightM);
+
+    final f = (scene([w, t])['fixtures'] as List).single as Map;
+    expect(f['shape'], 'tube');
+    expect(f['mount'], 'wall');
+    expect(f['lengthM'], greaterThan(0.2));
+    final axis = (f['axis'] as List).cast<double>();
+    // Tumbado a lo largo de la pared (el eje x).
+    expect(axis[0].abs(), closeTo(1, 1e-6));
+    expect(axis[2], 0);
+    expect((f['pos'] as List)[2], closeTo(2.2, 1e-6));
+  });
+
+  test('CA.3: de pie si se pide, y lejos de toda pared no se pega', () {
+    final t = tube(
+      props: {LightWallMount.tubeAxisKey: LightWallMount.axisVertical},
+    );
+    final f = (scene([t])['fixtures'] as List).single as Map;
+    expect(f['axis'], [0.0, 0.0, 1.0]);
+    final far = tube()..position = const Offset(200, 900);
+    expect(
+      LightWallMount.snap(far, [wall(Offset.zero, const Offset(400, 0))], mpu),
+      isFalse,
+    );
+  });
+
+  test('CA.3: cada aparato con su forma', () {
+    PlanElement light(LightType t) => PlanElement(
+      id: 5,
+      type: ElementType.light,
+      position: Offset.zero,
+      lightType: t,
+    );
+    expect(PlanScene3d.shapeOf(light(LightType.lightPanel)), 'panel');
+    expect(PlanScene3d.shapeOf(light(LightType.softbox)), 'softbox');
+    expect(PlanScene3d.shapeOf(light(LightType.practical)), 'practical');
+    expect(PlanScene3d.shapeOf(light(LightType.fresnelLarge)), 'can');
   });
 }

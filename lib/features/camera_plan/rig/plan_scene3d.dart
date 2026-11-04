@@ -16,6 +16,7 @@ import '../light/plan_grip.dart';
 import '../camera_aim.dart';
 import '../light/meter.dart';
 import '../light/plan_light.dart';
+import '../light/wall_mount.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
 import '../plan_opening.dart';
@@ -113,6 +114,17 @@ class PlanScene3d {
     final cameras = <Map<String, dynamic>>[];
     final props = <Map<String, dynamic>>[];
 
+    // Techos de los recintos, solo si alguna luz cuelga sin altura propia.
+    List<SceneRoom>? rooms;
+    double? ceilingAt(Offset p) {
+      rooms ??= LightScene.from(
+        elements,
+        metersPerUnit: mpu,
+        ambient: ambient,
+      ).rooms;
+      return LightScene.ceilingAt(rooms!, p);
+    }
+
     for (final (i, el) in elements.indexed) {
       final level = PlanLevel.of(el);
       final uid = idOf(el, i);
@@ -185,7 +197,7 @@ class PlanScene3d {
       }
       switch (el.type) {
         case ElementType.light:
-          final f = _fixture(el, uid, mpu, level, xy);
+          final f = _fixture(el, uid, mpu, level, xy, ceilingAt);
           if (f != null) fixtures.add(f);
         case ElementType.prop when furniture.contains(el.propType):
           props.add({
@@ -711,12 +723,33 @@ class PlanScene3d {
     };
   }
 
+  /// Forma del aparato en el 3D (CA.3): tubo, panel, caja de luz,
+  /// práctica o el foco de siempre.
+  static String shapeOf(PlanElement el) => switch (el.lightType) {
+    LightType.floSingle => 'tube',
+    LightType.flo2Tubes ||
+    LightType.flo4Tubes ||
+    LightType.lightPanel ||
+    LightType.led1x1 => 'panel',
+    LightType.softbox || LightType.octagon || LightType.chimera => 'softbox',
+    LightType.practical => 'practical',
+    _ => 'can',
+  };
+
+  /// Largo de un tubo: el que se le ponga, el del catálogo o 1,2 m.
+  static double tubeLengthM(PlanElement el, PlanLight? light) {
+    final own = (el.props[PlanLight.sizeKey] as num?)?.toDouble();
+    final size = own ?? light?.source.sizeM;
+    return size == null || size < 0.2 ? 1.2 : size.clamp(0.2, 2.5).toDouble();
+  }
+
   static Map<String, dynamic>? _fixture(
     PlanElement el,
     String id,
     double mpu,
     double level,
     List<double> Function(Offset) xy,
+    double? Function(Offset) ceilingAt,
   ) {
     final type = el.lightType;
     if (type == null || type == LightType.sun) return null;
@@ -727,7 +760,15 @@ class PlanScene3d {
     final rad = el.rotation * math.pi / 180;
     // Hacia dónde mira en planta, con los ejes del visor.
     final hx = math.sin(rad), hy = math.cos(rad);
-    final z = level + PlanLight.heightOf(el);
+    // Colgada sin altura propia: al techo de su recinto, como en el motor
+    // de luz; con altura, sin atravesarlo.
+    var h = PlanLight.heightOf(el);
+    if (PlanLight.isOverhead(el) && TrussMagnet.trussUidOf(el) == null) {
+      if (ceilingAt(el.position) case final c?) {
+        h = el.props[PlanLight.heightKey] == null ? c : math.min(h, c);
+      }
+    }
+    final z = level + h;
     // Paneo (el giro en planta) e inclinación desde la horizontal (F6.21.5),
     // igual para cualquier montaje.
     final tilt = PlanLight.elevationOf(el) * math.pi / 180;
@@ -745,6 +786,16 @@ class PlanScene3d {
       'name': el.fullLabel,
       'cat': PlanCategory.of(el).name,
       'type': type.dbValue,
+      // La forma del aparato en 3D (CA.3).
+      'shape': shapeOf(el),
+      if (shapeOf(el) == 'tube') ...{
+        'lengthM': _r(tubeLengthM(el, light)),
+        // De pie, o tumbado a lo largo de la pared (de lado al paneo).
+        'axis': LightWallMount.tubeHorizontal(el)
+            ? [_r(hy), _r(-hx), 0.0]
+            : [0.0, 0.0, 1.0],
+      },
+      if (LightWallMount.isOn(el)) 'mount': PlanLight.mountWall,
       'pos': [p[0], p[1], _r(z)],
       'aim': [_r(p[0] + dx * t), _r(p[1] + dy * t), _r(z + dz * t)],
       'beamDeg': beam?.spread ?? 360,
