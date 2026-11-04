@@ -25,13 +25,14 @@ legible**, después la calle.
 
 | Id | Qué | Estado |
 |----|-----|--------|
-| CA.1 | Modo «Maqueta» en 3D (sustituye a «Claro»), paredes con grosor, línea de altura hasta el suelo | pendiente |
-| CA.2 | Puertas con hoja (cerrada = cerrada) y ventanas con marco y cristal | pendiente |
-| CA.3 | Cada foco con su forma (tubo, panel, fresnel, práctica, farola) y tubos pegados a la pared | pendiente |
-| CA.4 | Altura y grosor de pared editables; el motor de luz respeta la altura | pendiente |
+| CA.1 | Modo «Maqueta» en 3D (sustituye a «Claro»), paredes con grosor, línea de altura hasta el suelo | hecho |
+| CA.2 | Puertas con hoja (cerrada = cerrada) y ventanas con marco y cristal | hecho |
+| CA.3 | Cada foco con su forma (tubo, panel, fresnel, práctica, farola) y tubos pegados a la pared | hecho |
+| CA.4 | Altura y grosor de pared editables; el motor de luz respeta la altura | hecho |
 | CA.5 | Farola real: brazo en fachada o báculo, 4,5 m, kelvin editable | pendiente |
 | CA.6 | Calle con perfil: calzada, aceras, bordillo o plataforma única, fachadas y «Poner farolas» | pendiente |
 | CA.7 | Poyete / murete y cajas de hasta 30 m con medidas escritas | pendiente |
+| CA.8 | Barra de bar y estanterías con botellas de cristal (pedido el 2026-11-04) | pendiente |
 
 ### Medidas de referencia de la calle
 

@@ -17,6 +17,7 @@ import 'plan_segment.dart';
 import 'rig/drape_controls.dart';
 import 'rig/plan_drape.dart';
 import 'rig/rig_controls.dart';
+import 'rig/plan_scene3d.dart';
 
 /// Propiedades de lo que no es un aparato: puertas, ventanas, paredes,
 /// grip, personas y cámaras. Lo que aquí se cambia afecta a cómo se
@@ -445,7 +446,29 @@ class PlanPieceControls extends StatelessWidget {
         el.props[LightScene.materialKey] as String?,
         kWallMaterials,
       );
+      final wallH = PlanSegment.heightM(el) ?? PlanScene3d.defaultWallM;
+      final thick = PlanSegment.thicknessM(el);
       children.addAll([
+        // Alto y grueso de la pared (CA.4): el 3D, el motor de luz y
+        // Unreal la levantan así.
+        slider(
+          'Altura de la pared',
+          '${wallH.toStringAsFixed(1)} m',
+          current: wallH,
+          min: 0.5,
+          max: 30,
+          onChanged: (v) =>
+              el.props[PlanSegment.heightKey] = (v * 10).round() / 10,
+        ),
+        slider(
+          'Grosor',
+          '${(thick * 100).round()} cm',
+          current: thick,
+          min: 0.05,
+          max: 0.6,
+          onChanged: (v) =>
+              el.props[PlanSegment.thicknessKey] = (v * 100).round() / 100,
+        ),
         choice<String>(
           'Material de la pared',
           material.id,

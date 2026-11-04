@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
+import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
 import 'package:iris_dp/features/camera_plan/light/wall_mount.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
@@ -133,5 +134,25 @@ void main() {
     expect(PlanScene3d.shapeOf(light(LightType.softbox)), 'softbox');
     expect(PlanScene3d.shapeOf(light(LightType.practical)), 'practical');
     expect(PlanScene3d.shapeOf(light(LightType.fresnelLarge)), 'can');
+  });
+
+  test('CA.4: el alto de la pared vale para el 3D y para la luz', () {
+    final w = wall(
+      Offset.zero,
+      const Offset(400, 0),
+      props: {PlanSegment.heightKey: 6.0},
+    );
+    expect((firstWall(scene([w]))['tops'] as List).first, 6.0);
+    final light = LightScene.from([w], metersPerUnit: mpu);
+    final walls = light.blockers.where((b) => b.isWall).toList();
+    expect(walls, isNotEmpty);
+    for (final b in walls) {
+      expect(b.heightM, 6.0);
+    }
+    // Sin alto puesto, la de siempre.
+    final plain = LightScene.from([
+      wall(Offset.zero, const Offset(400, 0)),
+    ], metersPerUnit: mpu);
+    expect(plain.blockers.firstWhere((b) => b.isWall).heightM, 2.5);
   });
 }

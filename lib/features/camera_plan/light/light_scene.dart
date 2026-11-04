@@ -875,6 +875,10 @@ class LightScene {
   }
 
   static double _wallHeight(LightBlocker wall, List<SceneRoom> rooms) {
+    // Con su alto puesto a mano, manda ese.
+    if (wall.element case final el? when PlanSegment.heightM(el) != null) {
+      return wall.heightM;
+    }
     final span = wall.b - wall.a;
     final length = span.distance;
     if (length < 1e-6) return wall.heightM;
@@ -1374,6 +1378,9 @@ class LightScene {
       final length = (b - a).distance;
       if (length < 1) continue;
       final dir = (b - a) / length;
+      // El alto que se le haya puesto a la pared (CA.4); si no, el de
+      // siempre, que luego sube hasta el techo del recinto.
+      final ownHeight = PlanSegment.heightM(element);
 
       // Tramos de esta pared ocupados por huecos, en distancia desde `a`.
       final cuts = <(double, double, _Gap)>[];
@@ -1405,6 +1412,7 @@ class LightScene {
               a + dir * cursor,
               a + dir * from,
               isWall: true,
+              heightM: ownHeight ?? 2.5,
               element: element,
             ),
           );
@@ -1426,7 +1434,13 @@ class LightScene {
       }
       if (length > cursor + 0.5) {
         blockers.add(
-          LightBlocker(a + dir * cursor, b, isWall: true, element: element),
+          LightBlocker(
+            a + dir * cursor,
+            b,
+            isWall: true,
+            heightM: ownHeight ?? 2.5,
+            element: element,
+          ),
         );
       }
     }
@@ -1932,7 +1946,7 @@ class LightScene {
             centre: blocker.a + span * t,
             tangent: span / length,
             lengthUnits: length / panes,
-            heightM: wallHeightM,
+            heightM: PlanSegment.heightM(wall) ?? wallHeightM,
             keep: material.reflectance,
             mired: material.miredShift,
             beamDeg: material.beamDeg,
