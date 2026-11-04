@@ -100,15 +100,17 @@ private struct Shot {
 
 /// Qué se marca con un toque de precisión.
 enum MarkKind: String, CaseIterable {
-  case corner, door, window, floor, ceiling
+  case corner, door, window, storefront, floor, ceiling, light
 
   var label: String {
     switch self {
     case .corner: return "Esquina"
     case .door: return "Puerta"
     case .window: return "Ventana"
+    case .storefront: return "Cristal"
     case .floor: return "Suelo"
     case .ceiling: return "Techo"
+    case .light: return "Luz"
     }
   }
 
@@ -117,8 +119,10 @@ enum MarkKind: String, CaseIterable {
     case .corner: return "Toca una esquina de la pared."
     case .door: return "Toca los bordes y lo alto de la puerta."
     case .window: return "Toca los bordes, el alféizar y lo alto de la ventana."
+    case .storefront: return "Toca los bordes del escaparate o del cristal (el escaneo no los ve)."
     case .floor: return "Toca el suelo."
     case .ceiling: return "Toca el techo."
+    case .light: return "Elige el tipo y toca la luz (farola, fluorescente, rótulo…)."
     }
   }
 
@@ -127,15 +131,29 @@ enum MarkKind: String, CaseIterable {
     case .corner: return .systemRed
     case .door: return .systemPurple
     case .window: return .systemTeal
+    case .storefront: return .systemCyan
     case .floor: return .systemBrown
     case .ceiling: return .white
+    case .light: return .systemYellow
     }
   }
 }
 
+/// Tipos de luz práctica para las marcas `light`: lo que se ve en el botón
+/// y lo que va en `label`.
+let lightLabels: [(title: String, value: String)] = [
+  ("Farola", "farola"),
+  ("Fluorescente", "fluorescente"),
+  ("Neón/rótulo", "neón o rótulo"),
+  ("Bombilla", "bombilla"),
+  ("Foco", "foco"),
+]
+
 /// Un toque de precisión: dónde cayó en el mundo y el plano que tocó.
 private struct Mark {
   let kind: MarkKind
+  /// El tipo de luz, solo en las marcas `light`.
+  let label: String?
   let position: simd_float3
   let planeId: UUID?
   let node: SCNNode
@@ -145,6 +163,7 @@ private struct Mark {
       "kind": kind.rawValue,
       "position": [position.x, position.y, position.z].map(rounded),
     ]
+    if let label { out["label"] = label }
     if let planeId { out["planeId"] = planeId.uuidString }
     return out
   }
@@ -248,8 +267,25 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
   private var markKind: MarkKind = .corner
   private let markButton = IrisCaptureViewController.button("Marcar", filled: false)
   private let kindPicker = UISegmentedControl(items: MarkKind.allCases.map(\.label))
+  private let lightPicker = UISegmentedControl(items: lightLabels.map(\.title))
   private let undoMark = IrisCaptureViewController.button("Deshacer", filled: false)
-  private lazy var markBar = UIStackView(arrangedSubviews: [kindPicker, undoMark])
+  private lazy var kindRow = UIStackView(arrangedSubviews: [kindPicker, undoMark])
+  private lazy var markBar = UIStackView(arrangedSubviews: [kindRow, lightPicker])
+
+  /// «interior» o «exterior», elegido al empezar; sin elegir no se dispara.
+  private var setting: String?
+  /// La linterna trasera, que se puede encender con ARKit en marcha.
+  private let torch = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+  private let torchButton = UIButton(type: .system)
+  private var torchOn: Bool { torch?.torchMode == .on }
+  private var linearSpeed: Float = 0
+  /// La fx de las fotos (en alta resolución), para medir el desenfoque en
+  /// sus píxeles; hasta la primera foto, la del vídeo.
+  private var photoFx: Float?
+  /// Desenfoque máximo por foto: 4 px de giro o 5 mm de desplazamiento
+  /// durante la exposición.
+  private let maxBlurPixels: Float = 4
+  private let maxBlurMetres: Float = 0.005
 
   /// Minimapa pequeño en la esquina o grande, tocándolo.
   private var mapExpanded = false
@@ -311,20 +347,35 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     buttons.spacing = 8
     buttons.distribution = .fillEqually
 
-    kindPicker.selectedSegmentIndex = 0
-    kindPicker.backgroundColor = UIColor.black.withAlphaComponent(0.55)
-    kindPicker.selectedSegmentTintColor = .white
-    kindPicker.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .normal)
-    kindPicker.setTitleTextAttributes([.foregroundColor: UIColor.black], for: .selected)
+    for picker in [kindPicker, lightPicker] {
+      picker.selectedSegmentIndex = 0
+      picker.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+      picker.selectedSegmentTintColor = .white
+      let font = UIFont.systemFont(ofSize: 12, weight: .medium)
+      picker.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: font], for: .normal)
+      picker.setTitleTextAttributes([.foregroundColor: UIColor.black, .font: font], for: .selected)
+      picker.heightAnchor.constraint(equalToConstant: 34).isActive = true
+    }
+    kindPicker.apportionsSegmentWidthsByContent = true
     kindPicker.addTarget(self, action: #selector(kindChanged), for: .valueChanged)
+    lightPicker.isHidden = true
     undoMark.addTarget(self, action: #selector(undoTapped), for: .touchUpInside)
     undoMark.setContentHuggingPriority(.required, for: .horizontal)
-    markBar.spacing = 8
+    kindRow.spacing = 8
+    markBar.axis = .vertical
+    markBar.spacing = 6
     markBar.isHidden = true
     sceneView.addGestureRecognizer(
       UITapGestureRecognizer(target: self, action: #selector(sceneTapped(_:))))
 
-    for v in [warning, counter, map, ring, buttons, markBar] as [UIView] {
+    torchButton.tintColor = .white
+    torchButton.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+    torchButton.layer.cornerRadius = 18
+    torchButton.isHidden = !(torch?.hasTorch ?? false)
+    torchButton.addTarget(self, action: #selector(torchTapped), for: .touchUpInside)
+    updateTorchButton()
+
+    for v in [warning, counter, map, ring, buttons, markBar, torchButton] as [UIView] {
       v.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(v)
     }
@@ -347,7 +398,11 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
       markBar.topAnchor.constraint(equalTo: counter.bottomAnchor, constant: 8),
       markBar.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 16),
       markBar.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
-      markBar.heightAnchor.constraint(equalToConstant: 36),
+      torchButton.centerYAnchor.constraint(equalTo: counter.centerYAnchor),
+      torchButton.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
+      torchButton.widthAnchor.constraint(equalToConstant: 36),
+      torchButton.heightAnchor.constraint(equalToConstant: 36),
+      counter.trailingAnchor.constraint(lessThanOrEqualTo: torchButton.leadingAnchor, constant: -8),
     ])
     smallMap = [
       map.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
@@ -378,10 +433,62 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     sceneView.session.run(config, options: [.resetTracking, .removeExistingAnchors])
   }
 
+  override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    if setting == nil { askSetting() }
+  }
+
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
     UIApplication.shared.isIdleTimerDisabled = false
+    setTorch(false)
     sceneView.session.pause()
+  }
+
+  /// Interior o exterior: cambia lo que se avisa (la luz, subir y bajar).
+  private func askSetting() {
+    let sheet = UIAlertController(
+      title: "¿Dónde vas a escanear?",
+      message: "En exterior (calles, de noche) se avisa menos de la poca luz.",
+      preferredStyle: .alert)
+    for (title, value) in [("Interior", "interior"), ("Exterior", "exterior")] {
+      sheet.addAction(
+        UIAlertAction(title: title, style: .default) { [weak self] _ in
+          self?.setting = value
+          self?.updateCounter()
+        })
+    }
+    present(sheet, animated: true)
+  }
+
+  // MARK: - Linterna
+
+  @objc private func torchTapped() {
+    setTorch(!torchOn)
+  }
+
+  private func setTorch(_ on: Bool) {
+    guard let torch, torch.hasTorch, (torch.torchMode == .on) != on else { return }
+    do {
+      try torch.lockForConfiguration()
+      if on {
+        try torch.setTorchModeOn(level: AVCaptureDevice.maxAvailableTorchLevel)
+      } else {
+        torch.torchMode = .off
+      }
+      torch.unlockForConfiguration()
+    } catch {
+      show("No se pudo encender la linterna.")
+    }
+    updateTorchButton()
+  }
+
+  private func updateTorchButton() {
+    let on = torchOn
+    torchButton.setImage(UIImage(systemName: on ? "flashlight.on.fill" : "flashlight.off.fill"), for: .normal)
+    torchButton.backgroundColor =
+      on ? UIColor.systemYellow.withAlphaComponent(0.8) : UIColor.black.withAlphaComponent(0.55)
+    torchButton.tintColor = on ? .black : .white
   }
 
   /// El minimapa crece a casi toda la pantalla (y vuelve) al tocarlo.
@@ -452,35 +559,49 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
 
   @objc private func kindChanged() {
     markKind = MarkKind.allCases[max(0, kindPicker.selectedSegmentIndex)]
+    lightPicker.isHidden = markKind != .light
   }
 
   /// Un toque en la imagen, en modo «Marcar»: raycast sobre los planos ya
-  /// detectados y, si no hay, sobre uno estimado.
+  /// detectados y, si no hay, sobre uno estimado. Una luz puede estar en el
+  /// aire (una farola): plano estimado y, si no, a 3 m en la dirección del
+  /// toque.
   @objc private func sceneTapped(_ tap: UITapGestureRecognizer) {
     guard marking, !mapExpanded else { return }
     let at = tap.location(in: sceneView)
+    let targets: [ARRaycastQuery.Target] =
+      markKind == .light ? [.estimatedPlane] : [.existingPlaneGeometry, .estimatedPlane]
     var hit: ARRaycastResult?
-    for target in [ARRaycastQuery.Target.existingPlaneGeometry, .estimatedPlane] {
+    var ray: ARRaycastQuery?
+    for target in targets {
       guard let query = sceneView.raycastQuery(from: at, allowing: target, alignment: .any)
       else { continue }
+      ray = ray ?? query
       if let first = sceneView.session.raycast(query).first {
         hit = first
         break
       }
     }
-    guard let hit else {
+    let position: simd_float3
+    if let hit {
+      position = simd_make_float3(hit.worldTransform.columns.3)
+    } else if markKind == .light, let ray {
+      position = ray.origin + simd_normalize(ray.direction) * 3
+    } else {
       UINotificationFeedbackGenerator().notificationOccurred(.warning)
       show("No encuentro superficie ahí: mueve el móvil para que vea más.")
       return
     }
-    let position = simd_make_float3(hit.worldTransform.columns.3)
     let node = Self.markNode(markKind)
     node.simdPosition = position
     sceneView.scene.rootNode.addChildNode(node)
     marks.append(
       Mark(
-        kind: markKind, position: position,
-        planeId: (hit.anchor as? ARPlaneAnchor)?.identifier, node: node))
+        kind: markKind,
+        label: markKind == .light
+          ? lightLabels[max(0, lightPicker.selectedSegmentIndex)].value : nil,
+        position: position,
+        planeId: (hit?.anchor as? ARPlaneAnchor)?.identifier, node: node))
     undoMark.isEnabled = true
     updateCounter()
     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -531,6 +652,8 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
         let turned: Float = (a * b.inverse).angle
         let speed: Float = turned / dt
         angularSpeed = 0.7 * angularSpeed + 0.3 * speed
+        let moved = simd_distance(simd_make_float3(t.columns.3), simd_make_float3(last.transform.columns.3))
+        linearSpeed = 0.7 * linearSpeed + 0.3 * moved / dt
       }
     }
     lastPose = (frame.timestamp, t)
@@ -580,13 +703,23 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
       break
     }
     if angularSpeed > maxAngularSpeed { return "Más despacio: las fotos saldrían movidas." }
-    if let light = frame.lightEstimate, light.ambientIntensity < 250 {
-      return "Poca luz: enciende las luces de trabajo."
+    // Con poca luz la exposición se alarga: el desenfoque que daría la foto
+    // (giro en píxeles y desplazamiento en metros durante la exposición).
+    let exposure = Float(frame.camera.exposureDuration)
+    let fx = photoFx ?? frame.camera.intrinsics.columns.0.x
+    if angularSpeed * exposure * fx > maxBlurPixels || linearSpeed * exposure > maxBlurMetres {
+      return "Más despacio: hay poca luz."
+    }
+    let exterior = setting == "exterior"
+    if !torchOn, let light = frame.lightEstimate, light.ambientIntensity < (exterior ? 80 : 250) {
+      return exterior
+        ? "Muy poca luz: enciende la linterna o busca una zona con farolas."
+        : "Poca luz: enciende las luces de trabajo o la linterna."
     }
     if (frame.rawFeaturePoints?.points.count ?? 0) < 40 {
       return "Apunta a zonas con más detalle o acércate."
     }
-    if shots.count >= 20 {
+    if !exterior, shots.count >= 20 {
       let ys = shots.map(\.position.y)
       if (ys.max() ?? 0) - (ys.min() ?? 0) < 0.25 {
         return "Sube y baja el móvil: haz otra vuelta más alta o más baja."
@@ -614,7 +747,7 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
   }
 
   private func shouldShoot(position: simd_float3, forward: simd_float3, time: TimeInterval) -> Bool {
-    if busy || time - lastShotTime < 0.35 { return false }
+    if setting == nil || busy || time - lastShotTime < 0.35 { return false }
     for s in shots {
       let close = simd_distance(s.position, position) < minMove
       let turn = acos(max(-1, min(1, simd_dot(s.forward, forward))))
@@ -633,14 +766,19 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     guard !busy, let folder = ensureFolder() else { return }
     busy = true
     lastShotTime = session.currentFrame?.timestamp ?? lastShotTime
+    let torch = torchOn
+    let light = session.currentFrame?.lightEstimate
     session.captureHighResolutionFrame { [weak self] highRes, _ in
       // La respuesta no llega por fuerza en el hilo principal.
-      DispatchQueue.main.async { self?.store(highRes ?? session.currentFrame, in: folder) }
+      DispatchQueue.main.async {
+        self?.store(highRes ?? session.currentFrame, in: folder, torch: torch, light: light)
+      }
     }
   }
 
-  /// Guarda la foto (en segundo plano) y, si sale bien, su pose.
-  private func store(_ frame: ARFrame?, in folder: URL) {
+  /// Guarda la foto (en segundo plano) y, si sale bien, su pose, la luz y
+  /// la exposición. [light]: la estimación del vídeo si la foto no la trae.
+  private func store(_ frame: ARFrame?, in folder: URL, torch: Bool, light: ARLightEstimate?) {
     guard let frame, case .normal = frame.camera.trackingState else {
       busy = false
       return
@@ -649,6 +787,7 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
     let camera = frame.camera
     let buffer = frame.capturedImage
     let timestamp = frame.timestamp
+    let estimate = frame.lightEstimate ?? light
     DispatchQueue.global(qos: .userInitiated).async {
       let ok = Self.writeJpeg(buffer, to: folder.appendingPathComponent(file))
       DispatchQueue.main.async {
@@ -657,24 +796,37 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
         let t = camera.transform
         self.addShotMarker(t)
         let k = camera.intrinsics
+        self.photoFx = k.columns.0.x
         let flat = [t.columns.0, t.columns.1, t.columns.2, t.columns.3]
           .flatMap { [Double($0.x), Double($0.y), Double($0.z), Double($0.w)] }
+        var json: [String: Any] = [
+          "file": file,
+          "transform": flat,
+          // fx, fy, cx, cy: la matriz de ARKit va por columnas.
+          "intrinsics": [
+            Double(k.columns.0.x), Double(k.columns.1.y),
+            Double(k.columns.2.x), Double(k.columns.2.y),
+          ],
+          "width": Int(camera.imageResolution.width),
+          "height": Int(camera.imageResolution.height),
+          "t": timestamp,
+          "torch": torch,
+          "exposure": [
+            "duration": camera.exposureDuration,
+            "offset": Double(camera.exposureOffset),
+          ] as [String: Any],
+        ]
+        if let estimate {
+          json["light"] = [
+            "intensity": Double(estimate.ambientIntensity),
+            "kelvin": Double(estimate.ambientColorTemperature),
+          ]
+        }
         self.shots.append(
           Shot(
             position: simd_make_float3(t.columns.3),
             forward: -simd_make_float3(t.columns.2),
-            json: [
-              "file": file,
-              "transform": flat,
-              // fx, fy, cx, cy: la matriz de ARKit va por columnas.
-              "intrinsics": [
-                Double(k.columns.0.x), Double(k.columns.1.y),
-                Double(k.columns.2.x), Double(k.columns.2.y),
-              ],
-              "width": Int(camera.imageResolution.width),
-              "height": Int(camera.imageResolution.height),
-              "t": timestamp,
-            ]))
+            json: json))
         self.updateCounter()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
       }
@@ -730,6 +882,7 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
   /// Fotos, paredes, lo que queda abierto y los toques.
   private func updateCounter() {
     var parts = [shots.count == 1 ? "1 foto" : "\(shots.count) fotos"]
+    if let setting { parts.insert(setting == "exterior" ? "Exterior" : "Interior", at: 0) }
     let walls = map.wallCount
     if walls > 0 {
       parts.append(walls == 1 ? "1 pared" : "\(walls) paredes")
@@ -760,7 +913,7 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
       .map(PlaneShape.json)
     sceneView.session.pause()
     show("Guardando…")
-    let manifest: [String: Any] = [
+    var manifest: [String: Any] = [
       "version": 2,
       "device": Self.deviceModel(),
       "system": UIDevice.current.systemVersion,
@@ -769,6 +922,7 @@ final class IrisCaptureViewController: UIViewController, ARSessionDelegate {
       "marks": marks.map(\.json),
       "points": cloud.values.flatMap { [rounded($0.x), rounded($0.y), rounded($0.z)] },
     ]
+    if let setting { manifest["setting"] = setting }
     DispatchQueue.global(qos: .userInitiated).async {
       var path: String? = folder.path
       if let data = try? JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted]) {
