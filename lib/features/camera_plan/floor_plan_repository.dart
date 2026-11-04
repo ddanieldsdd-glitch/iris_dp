@@ -5,6 +5,7 @@ import 'package:drift/drift.dart' show Value;
 
 import '../../core/database/app_database.dart';
 import 'camera_plan_constants.dart';
+import 'camera_links.dart';
 import 'camera_plan_element_model.dart';
 import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
@@ -125,9 +126,12 @@ class FloorPlanRepository {
         if (lightSetupId == null) return;
         final setup = await db.getLightSetupById(lightSetupId);
         if (setup == null) return;
+        final before = FloorPlanJson.decode(setup.planJson);
         await db.updateLightSetup(
           setup.copyWith(planJson: Value(_reencode(setup.planJson, elements))),
         );
+        // Las cámaras vinculadas a planos llevan con ellas sus copias.
+        await CameraLinks(db).followCameras(lightSetupId, before, elements);
       case FloorPlanScope.shot:
         if (shotId == null) return;
         await _replaceShotElements(shotId, elements);

@@ -29,6 +29,8 @@ import '../../shared/annotations/annotation_document.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
 import 'camera_plan_grouping.dart';
 import '../equipment/widgets/light_quick_add_sheet.dart';
+import 'camera_links.dart';
+import 'camera_links_dialog.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
@@ -802,11 +804,27 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     // Las cámaras de los otros planos que comparten este esquema de luz.
     final otherCameras = <PlanElement>[];
     final otherCameraShot = <PlanElement, PlanTarget>{};
+    final unlitShots = <int>{};
+    final cameraLinks = <String, int>{};
+    final setupCameraUids = {
+      for (final el in setupLights)
+        if (el.type == ElementType.camera) ?LightOverrides.uidOf(el),
+    };
     if (lightSetup != null) {
       for (final other in allShots) {
-        if (other.lightSetupId != lightSetup.id || other.id == shot?.id) {
-          continue;
-        }
+        if (other.id == shot?.id) continue;
+        // Los planos del set que aún no tienen luz también enseñan su
+        // cámara: tocarla ofrece usar este esquema.
+        final otherScene = allScenes
+            .where((s) => s.id == other.sceneId)
+            .firstOrNull;
+        final unlit =
+            other.lightSetupId == null &&
+            lightSetup.locationBasePlanId != null &&
+            (other.locationBasePlanId ?? otherScene?.locationId) ==
+                lightSetup.locationBasePlanId;
+        if (other.lightSetupId != lightSetup.id && !unlit) continue;
+        if (unlit) unlitShots.add(other.id);
         final sceneNumber = allScenes
             .where((s) => s.id == other.sceneId)
             .map((s) => s.label)
@@ -816,9 +834,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             : '$sceneNumber·${other.number}';
         for (final row in await db.getCameraPlanElementsForShot(other.id)) {
           if (row.type != 'camera') continue;
+          final linkedTo = CameraLinks.setupCameraOf(PlanElement.fromDb(row));
+          if (linkedTo != null && setupCameraUids.contains(linkedTo)) {
+            // Copia de una cámara de este esquema: ya se ve la cámara.
+            cameraLinks[linkedTo] = (cameraLinks[linkedTo] ?? 0) + 1;
+            continue;
+          }
           final ghost = PlanElement.fromDb(row)
             ..id = --_tempId
-            ..props['shotTag'] = tag
+            ..props['shotTag'] = unlit ? '$tag · sin luz' : tag
             // Una cámara que no está en este plano no le hace sombra.
             ..props[LightScene.noShadowKey] = true;
           otherCameras.add(ghost);
@@ -903,7 +927,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _elements
         ..clear()
         ..addAll(elements);
-      _hiddenElements.clear();
+      _hiddenElements
+        ..clear()
+        // En un plano, la cámara del esquema de la que lleva copia no se
+        // pinta dos veces.
+        ..addAll(_linkedSetupCameras(elements));
       _uidsToSave = unsaved;
       _selected = null;
       _selectedPathIndex = null;
@@ -939,6 +967,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _otherCameraShot
         ..clear()
         ..addAll(otherCameraShot);
+      _unlitShots = unlitShots;
+      _cameraLinks = cameraLinks;
       _shot = shot;
       _scene = scene;
       _linkedSet = linkedSet;
@@ -1410,6 +1440,113 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
     await _saveLayer(PlanLayer.light);
     _commitHistory();
+  }
+
+  /// Planos del set sin esquema de luz cuyas cámaras se ven aquí.
+  Set<int> _unlitShots = const {};
+
+  /// Cámaras del esquema que el plano abierto ya lleva como suyas.
+  static List<PlanElement> _linkedSetupCameras(List<PlanElement> elements) {
+    final copies = {
+      for (final el in elements)
+        if (el.layer == PlanLayer.shot) ?CameraLinks.setupCameraOf(el),
+    };
+    if (copies.isEmpty) return const [];
+    return [
+      for (final el in elements)
+        if (el.layer == PlanLayer.light &&
+            el.type == ElementType.camera &&
+            copies.contains(LightOverrides.uidOf(el)))
+          el,
+    ];
+  }
+
+  /// Un plano del set aún sin luz: usar este esquema, o abrirlo.
+  Future<void> _offerSetupTo(PlanTarget target) async {
+    final setup = _lightSetup;
+    if (setup == null) return;
+    final palette = context.palette;
+    final use = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.surfaceElevated,
+        title: Text(target.label, style: AppTypography.titleMedium(palette)),
+        content: Text(
+          'Este plano del set aún no tiene luz.',
+          style: AppTypography.bodyMedium(palette),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Abrir el plano'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Usar «${setup.name}»'),
+          ),
+        ],
+      ),
+    );
+    if (use == null || !mounted) return;
+    if (!use) {
+      _openTarget(target);
+      return;
+    }
+    await ref
+        .read(databaseProvider)
+        .assignLightSetupToShot(target.id, setup.id);
+    await _load();
+  }
+
+  /// Planos vinculados a cada cámara del esquema, por su identificador.
+  Map<String, int> _cameraLinks = const {};
+
+  /// Una cámara de la planta de luz (sin plano abierto) se puede vincular.
+  bool _canLinkShots(PlanElement el) =>
+      _shot == null &&
+      _lightSetup != null &&
+      el.type == ElementType.camera &&
+      el.layer == PlanLayer.light;
+
+  /// Lista de los planos del set con casillas: la cámara pasa a ser la de
+  /// los marcados (una copia en cada uno, que la sigue) y estos usan este
+  /// esquema de luz.
+  Future<void> _linkCameraToShots(PlanElement camera) async {
+    final setup = _lightSetup;
+    if (setup == null) return;
+    if (LightOverrides.ensureUids([camera]).isNotEmpty) {
+      await _saveLayer(PlanLayer.light);
+    }
+    final uid = LightOverrides.uidOf(camera)!;
+    final links = CameraLinks(ref.read(databaseProvider));
+    final options = await links.linkableShots(setup, uid);
+    if (!mounted) return;
+    if (options.isEmpty) {
+      _showSnack(
+        'No hay planos en este set todavía: llévalos al set desde la guía '
+        'o el tablero de la escena.',
+      );
+      return;
+    }
+    final picked = await showDialog<Set<int>>(
+      context: context,
+      builder: (ctx) => LinkShotsDialog(
+        camera: camera.cameraLetter,
+        options: options,
+      ),
+    );
+    if (picked == null || !mounted) return;
+    await links.setLinks(setup, camera, picked, [
+      for (final o in options) o.shot,
+    ]);
+    if (!mounted) return;
+    _showSnack(
+      picked.isEmpty
+          ? 'Cámara ${camera.cameraLetter} sin planos.'
+          : 'Cámara ${camera.cameraLetter} vinculada a ${picked.length} '
+                'plano${picked.length == 1 ? '' : 's'}.',
+    );
+    await _load();
   }
 
   /// Añade a la planta un aparato del catálogo de Equipo, con sus datos.
@@ -4130,7 +4267,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         if ((ghost.position - canvasPos).distance < 28) {
           final target = _otherCameraShot[ghost];
           if (target != null) {
-            _openTarget(target);
+            if (_unlitShots.contains(target.id)) {
+              unawaited(_offerSetupTo(target));
+            } else {
+              _openTarget(target);
+            }
             return;
           }
         }
@@ -5532,6 +5673,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                     _selected!.layer == PlanLayer.light,
                                 onOverride: (own) =>
                                     _setShotOverride(_selected!, own),
+                                onLinkShots: _canLinkShots(_selected!)
+                                    ? () => _linkCameraToShots(_selected!)
+                                    : null,
+                                linkedShots:
+                                    _cameraLinks[LightOverrides.uidOf(
+                                      _selected!,
+                                    )] ??
+                                    0,
                                 reading:
                                     _selected!.type == ElementType.actor ||
                                         _selected!.propType == PropType.meter
@@ -6200,6 +6349,12 @@ class _ElementPanel extends StatefulWidget {
   final bool canOverride;
   final ValueChanged<bool>? onOverride;
 
+  /// En la planta de luz, una cámara se vincula a planos: abre la lista.
+  final VoidCallback? onLinkShots;
+
+  /// A cuántos planos está vinculada la cámara.
+  final int linkedShots;
+
   const _ElementPanel({
     required this.palette,
     required this.element,
@@ -6227,6 +6382,8 @@ class _ElementPanel extends StatefulWidget {
     this.gear = const ProjectGear(),
     this.canOverride = false,
     this.onOverride,
+    this.onLinkShots,
+    this.linkedShots = 0,
   });
 
   @override
@@ -6768,6 +6925,20 @@ class _ElementPanelState extends State<_ElementPanel> {
                           ),
                         ],
                       ),
+                    if (element.type == ElementType.camera &&
+                        widget.onLinkShots != null) ...[
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.link, size: 16),
+                        label: Text(
+                          widget.linkedShots == 0
+                              ? 'Vincular a planos…'
+                              : 'Vinculada a ${widget.linkedShots} '
+                                    'plano${widget.linkedShots == 1 ? '' : 's'}',
+                        ),
+                        onPressed: widget.onLinkShots,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
                     if (element.type == ElementType.camera)
                       PlanProjectCameraPicker(
                         gear: widget.gear,
