@@ -40,7 +40,7 @@ iPhone (ARKit)              PC (RealityScan)
 
 | Id | Qué | Estado |
 |----|-----|--------|
-| ES.1 | La captura del iPhone guarda la estructura (`capture.json` v2) | pendiente |
+| ES.1 | La captura del iPhone guarda la estructura (`capture.json` v2) | hecho (falta probar en el iPhone) |
 | ES.2 | Solucionador de estructura | hecho (pruebas sintéticas; falta la casa real) |
 | ES.3 | Revisión en la planta y «pegar al escaneo» | hecho, sin probar con un escaneo real (elegida la opción «A con la foto de B»: toda la casa en el lienzo y, al tocar algo dudoso, la foto real del sitio) |
 | ES.4 | Paredes limpias con la textura real proyectada | después |
@@ -85,6 +85,16 @@ en el mundo de ARKit (metros, Y arriba):
   "points": [x, y, z, x, y, z, …]   // nube dispersa, ≤ 20 000 puntos
 }
 ```
+
+Cómo lo escribe el iPhone (ES.1, hecho):
+
+- `transform` ya lleva dentro el giro de `planeExtent.rotationOnYAxis`, así
+  que `extent[0]` va siempre por la x de esa matriz y `extent[1]` por la z.
+- Los planos son los que tiene ARKit al pulsar «Terminar» (ya fundidos).
+- `points` sale de `rawFeaturePoints`, un punto por celda de 2 cm, hasta
+  20 000. Coordenadas redondeadas al milímetro.
+- `marks` sale del modo «Marcar»: raycast sobre `.existingPlaneGeometry` y,
+  si no da nada, sobre `.estimatedPlane` (entonces suele faltar `planeId`).
 
 En el lado de Dart lo lee `CapturePackage` (`rig/scan_capture.dart`), y la v1
 se sigue leyendo.
