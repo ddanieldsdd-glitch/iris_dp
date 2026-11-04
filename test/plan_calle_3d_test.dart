@@ -7,6 +7,7 @@ import 'package:iris_dp/features/camera_plan/light/street_lamp.dart';
 import 'package:iris_dp/features/camera_plan/light/wall_mount.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/plan_street.dart';
+import 'package:iris_dp/features/camera_plan/prop_box.dart';
 import 'package:iris_dp/features/camera_plan/street_controls.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
 
@@ -283,5 +284,50 @@ void main() {
     expect(walls, hasLength(2));
     expect(PlanSegment.heightM(walls.first), 16);
     expect(PlanSegment.thicknessM(walls.first), StreetProfile.facadeThicknessM);
+  });
+
+  PlanElement rect() => PlanElement(
+    id: 8,
+    type: ElementType.prop,
+    position: const Offset(100, 100),
+    label: PropType.rectangle.dbValue,
+    props: {'uid': 'R'},
+  );
+
+  test('CA.7: un poyete largo, de 12 m, a 1 m de alto', () {
+    final el = rect();
+    PropBox.apply(el, PropBox.ledge);
+    expect(el.customName, 'Poyete');
+    el.props[LightScene.widthKey] = 12.0;
+    final p = (scene([el])['props'] as List).single as Map;
+    expect(p['shape'], 'ledge');
+    expect(p['widthM'], 12);
+    expect(p['heightM'], 1);
+    // Y para la luz es una caja de su alto.
+    expect(LightScene.propHeightM(el), 1);
+  });
+
+  test('CA.8: barra de bar y estantería con botellas', () {
+    final bar = rect();
+    PropBox.apply(bar, PropBox.bar);
+    var p = (scene([bar])['props'] as List).single as Map;
+    expect(p['shape'], 'bar');
+    expect(p['heightM'], 1.1);
+    expect(p.containsKey('bottles'), isFalse);
+    bar.props[PropBox.bottlesKey] = true;
+    p = (scene([bar])['props'] as List).single as Map;
+    expect(p['bottles'], isTrue);
+
+    final shelf = rect();
+    PropBox.apply(shelf, PropBox.shelf);
+    expect(shelf.customName, 'Estantería con botellas');
+    p = (scene([shelf])['props'] as List).single as Map;
+    expect(p['shape'], 'shelf');
+    expect(p['bottles'], isTrue);
+    expect(p['depthM'], 0.3);
+    // Cambiar de forma cambia el nombre que puso la forma, no uno propio.
+    shelf.customName = 'Botellero del kebab';
+    PropBox.apply(shelf, PropBox.bar);
+    expect(shelf.customName, 'Botellero del kebab');
   });
 }

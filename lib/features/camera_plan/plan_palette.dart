@@ -8,6 +8,7 @@ import 'camera_plan_constants.dart';
 import 'light_family.dart';
 import 'light_symbols.dart';
 import 'light/street_lamp.dart';
+import 'prop_box.dart';
 
 /// Herramienta activa del lienzo.
 enum PlanTool {
@@ -74,6 +75,9 @@ class PlanPalette extends StatelessWidget {
   /// Un palio (2×2 a 6×6, con tela de difusión o rebote).
   final VoidCallback? onAddPalio;
   final ValueChanged<PropType> onAddProp;
+
+  /// Un rectángulo con forma: poyete, barra de bar, estantería (CA.7–CA.8).
+  final ValueChanged<String>? onAddBox;
   final VoidCallback onAddMeter;
 
   /// Luces del proyecto, de la pantalla Equipo.
@@ -106,6 +110,7 @@ class PlanPalette extends StatelessWidget {
     this.onAddStreetLamp,
     this.onAddPalio,
     required this.onAddProp,
+    this.onAddBox,
     required this.onAddMeter,
     this.projectLights = const [],
     this.onAddCatalogLight,
@@ -278,6 +283,18 @@ class PlanPalette extends StatelessWidget {
                   label: type.label,
                   onTap: () => onAddProp(type),
                 ),
+            if (onAddBox != null)
+              for (final (name, shape, _, _, _, _) in PropBox.presets)
+                if (shape != PropBox.box)
+                  _PaletteButton(
+                    icon: Icon(switch (shape) {
+                      PropBox.bar => Icons.local_bar_outlined,
+                      PropBox.shelf => Icons.shelves,
+                      _ => Icons.crop_square,
+                    }, size: 16),
+                    label: name,
+                    onTap: () => onAddBox!(shape),
+                  ),
           ]),
         ],
       ),

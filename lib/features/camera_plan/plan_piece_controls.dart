@@ -15,6 +15,7 @@ import 'plan_marks.dart';
 import 'plan_opening.dart';
 import 'plan_segment.dart';
 import 'plan_street.dart';
+import 'prop_box.dart';
 import 'street_controls.dart';
 import 'rig/drape_controls.dart';
 import 'rig/plan_drape.dart';
@@ -535,13 +536,69 @@ class PlanPieceControls extends StatelessWidget {
       final size = LightScene.furnitureSizeM(el);
       final height = LightScene.propHeightM(el);
       String cm(double m) => '${(m * 100).round()} cm';
+      // Un rectángulo puede ser un poyete o una barra larga (CA.7).
+      final isBox = PropBox.isBox(el);
+      final maxLen = isBox ? PropBox.maxLengthM : 4.0;
+      Widget typed(String label, double current, String key) => SizedBox(
+        width: 92,
+        child: TextFormField(
+          key: ValueKey('$key:${el.id}:$current'),
+          initialValue: current.toStringAsFixed(2).replaceAll('.', ','),
+          decoration: InputDecoration(
+            isDense: true,
+            labelText: label,
+            suffixText: 'm',
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onFieldSubmitted: (v) {
+            final m = double.tryParse(v.replaceAll(',', '.').trim());
+            if (m == null || m <= 0) return;
+            el.props[key] = (m.clamp(0.05, maxLen) * 100).round() / 100;
+            onUpdate();
+          },
+        ),
+      );
       children.addAll([
+        if (isBox) ...[
+          Text('Forma', style: AppTypography.caption(palette)),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final (name, shape, _, _, _, _) in PropBox.presets)
+                ChoiceChip(
+                  label: Text(name),
+                  selected: PropBox.shapeOf(el) == shape,
+                  onSelected: (_) {
+                    PropBox.apply(el, shape);
+                    onUpdate();
+                  },
+                ),
+            ],
+          ),
+          if (PropBox.shapeOf(el) == PropBox.bar ||
+              PropBox.shapeOf(el) == PropBox.shelf)
+            toggle(
+              'Botellas de cristal encima',
+              PropBox.hasBottles(el),
+              (v) => el.props[PropBox.bottlesKey] = v,
+            ),
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: 8,
+            children: [
+              typed('Ancho', size.width, LightScene.widthKey),
+              typed('Fondo', size.depth, LightScene.depthKey),
+              typed('Alto', height, LightScene.heightKey),
+            ],
+          ),
+        ],
         slider(
           'Ancho',
           cm(size.width),
           current: size.width,
           min: 0.2,
-          max: 4,
+          max: maxLen,
           onChanged: (v) =>
               el.props[LightScene.widthKey] = (v * 100).round() / 100,
         ),
@@ -550,7 +607,7 @@ class PlanPieceControls extends StatelessWidget {
           cm(size.depth),
           current: size.depth,
           min: 0.2,
-          max: 4,
+          max: maxLen,
           onChanged: (v) =>
               el.props[LightScene.depthKey] = (v * 100).round() / 100,
         ),

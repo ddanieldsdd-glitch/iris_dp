@@ -98,6 +98,7 @@ import 'rig/plan_hall.dart';
 import '../../core/utils/platform_keys.dart';
 import 'light/wall_mount.dart';
 import 'light/street_lamp.dart';
+import 'prop_box.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
   final int projectId;
@@ -2969,6 +2970,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     await _addElement(el);
   }
 
+  /// Un rectángulo con forma (CA.7–CA.8): poyete, barra o estantería.
+  Future<void> _addBox(String shape) async {
+    final count = _elements.where((e) => e.type == ElementType.prop).length;
+    final el = PlanElement(
+      id: 0,
+      type: ElementType.prop,
+      position: Offset(250 + count * 50.0, 250),
+      label: PropType.rectangle.dbValue,
+    );
+    PlanElementCompat.applyAutoMapping(el);
+    PropBox.apply(el, shape);
+    await _addElement(el);
+  }
+
   Future<void> _addArchitecture(ArchitectureType type) async {
     final count = _elements.where((e) => e.type == ElementType.wall).length;
     final el = PlanElement(
@@ -5003,6 +5018,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     onAddStreetLamp: _addStreetLamp,
                     onAddPalio: _addPalio,
                     onAddProp: _addProp,
+                    onAddBox: _addBox,
                     onAddMeter: _addMeter,
                     projectLights: _gear.lights,
                     onAddCatalogLight: _addCatalogLight,

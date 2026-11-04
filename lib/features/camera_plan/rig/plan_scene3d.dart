@@ -22,6 +22,7 @@ import '../light_overrides.dart';
 import '../plan_opening.dart';
 import '../plan_segment.dart';
 import '../plan_street.dart';
+import '../prop_box.dart';
 import '../light/street_lamp.dart';
 import 'plan_drape.dart';
 import 'plan_hall.dart';
@@ -246,6 +247,11 @@ class PlanScene3d {
             'widthM': _r(LightScene.furnitureSizeM(el).width),
             'depthM': _r(LightScene.furnitureSizeM(el).depth),
             'heightM': _r(LightScene.propHeightM(el)),
+            // La forma del rectángulo (CA.7–CA.8).
+            if (PropBox.isBox(el)) ...{
+              'shape': PropBox.shapeOf(el),
+              if (PropBox.hasBottles(el)) 'bottles': true,
+            },
             'asset': ?UnrealAssetRef.of(el)?.toPayload(),
             // Miniatura 3/4 del asset (F6.20 B4): el visor la pone de cartel.
             'thumb': ?UnrealAssetRef.of(el)?.thumb34,

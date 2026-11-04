@@ -826,10 +826,65 @@
         g.add(r);
         break;
       }
+      case 'rectangle':
+        boxShape(g, p.shape, w, h, d, mat, !!p.bottles);
+        break;
       default:
         g.add(box(w, h, d, mat));
     }
     return g;
+  }
+
+  // Vidrio de botella: verde, ámbar y transparente (CA.8).
+  const bottleGlass = [0x2f6b3a, 0x7a4a1c, 0xcfe3e6].map((c) => new THREE.MeshStandardMaterial({
+    color: c, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.55,
+  }));
+
+  // Una fila de botellas a lo largo de x, de pie sobre y0.
+  function bottleRow(g, w, y0, z, maxH) {
+    const hgt = Math.min(0.32, maxH);
+    if (hgt < 0.12) return;
+    const n = Math.floor((w - 0.06) / 0.11);
+    for (let i = 0; i < n; i++) {
+      const glass = bottleGlass[(i * 7 + Math.floor(y0 * 10)) % bottleGlass.length];
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, hgt * 0.65, 10), glass);
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.03, hgt * 0.35, 8), glass);
+      const x = -w / 2 + 0.08 + i * 0.11;
+      body.position.set(x, y0 + hgt * 0.325, z);
+      neck.position.set(x, y0 + hgt * 0.65 + hgt * 0.175, z);
+      g.add(body, neck);
+    }
+  }
+
+  // Formas del rectángulo (CA.7–CA.8). El frente (donde se pone la gente)
+  // es +z.
+  function boxShape(g, shape, w, h, d, mat, bottles) {
+    if (shape === 'bar') {
+      const top = 0.05, over = Math.min(0.12, d * 0.25);
+      g.add(box(w, h - top, d - over, mat, 0, (h - top) / 2, -over / 2));
+      g.add(box(w + 0.04, top, d, dark, 0, h - top / 2, 0));
+      // Reposapiés.
+      const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, w, 8), dark);
+      rail.rotation.z = Math.PI / 2;
+      rail.position.set(0, 0.22, d / 2 - over + 0.06);
+      g.add(rail);
+      if (bottles) bottleRow(g, w, h, -d / 2 + 0.1, 0.32);
+      return;
+    }
+    if (shape === 'shelf') {
+      const t = 0.025, n = Math.max(2, Math.round(h / 0.42));
+      g.add(box(t, h, d, mat, -w / 2 + t / 2, h / 2, 0));
+      g.add(box(t, h, d, mat, w / 2 - t / 2, h / 2, 0));
+      g.add(box(w, h, 0.015, mat, 0, h / 2, -d / 2 + 0.0075));
+      const gap = h / n;
+      for (let k = 0; k <= n; k++) {
+        const y = Math.min(k * gap, h - t / 2);
+        g.add(box(w - 2 * t, t, d, mat, 0, y + t / 2, 0));
+        if (bottles && k < n) bottleRow(g, w - 2 * t, y + t, 0, gap - t - 0.03);
+      }
+      return;
+    }
+    g.add(box(w, h, d, mat));
   }
 
   // ── Etiquetas ────────────────────────────────────────────────────────
