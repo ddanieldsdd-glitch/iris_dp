@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
+import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
 import 'package:iris_dp/features/camera_plan/plan_opening.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/rig/scan_capture.dart';
@@ -183,5 +184,43 @@ void main() {
     expect(p.dx, lessThan(4));
     expect(p.dy, greaterThan(0));
     expect(p.dy, lessThan(3));
+  });
+
+  test('escaparate y farola pasan a la planta', () {
+    final base = room();
+    final s = ScanStructure(
+      floorY: 0,
+      heightM: 2.6,
+      heightEstimated: false,
+      axisDeg: 0,
+      walls: base.walls,
+      openings: const [
+        ScanOpening(
+          kind: ScanOpeningKind.storefront,
+          wall: 0,
+          center: Offset(2, 0),
+          width: 3,
+          sill: 0,
+          head: 2.4,
+          confidence: 0.9,
+        ),
+      ],
+      objects: const [],
+      lights: const [ScanLight(Offset(2, 1.5), 2.4, 'neón o rótulo')],
+    );
+    final items = reviewItems(s);
+    final shop = items.firstWhere((it) => it.kind == ReviewKind.storefront);
+    expect(shop.label, 'Escaparate');
+    final light = items.firstWhere((it) => it.kind == ReviewKind.light);
+    expect(light.label, 'Neón o rótulo');
+    expect(light.dubious, isFalse);
+
+    final els = reviewElements(s, items, 0.01);
+    final window = els.firstWhere(PlanOpening.isWindow);
+    expect(PlanOpening.width(window), closeTo(300, 1e-6));
+    expect(PlanOpening.sill(window), 0);
+    final lamp = els.firstWhere((e) => e.type == ElementType.light);
+    expect(lamp.position, const Offset(200, 150));
+    expect(lamp.props[PlanLight.heightKey], 2.4);
   });
 }

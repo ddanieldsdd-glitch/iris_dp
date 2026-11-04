@@ -4,13 +4,14 @@ import 'dart:ui';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/light_scene.dart';
+import '../light/plan_light.dart';
 import '../plan_opening.dart';
 import '../plan_segment.dart';
 import 'scan_capture.dart';
 import 'scan_structure.dart';
 
 /// Qué es cada cosa que se revisa (ES.3).
-enum ReviewKind { wall, door, window, passage, object }
+enum ReviewKind { wall, door, window, passage, storefront, object, light }
 
 /// Una propuesta del solucionador en la revisión: se acepta o no, y se le
 /// pueden corregir las medidas.
@@ -29,6 +30,10 @@ class ReviewItem {
   /// Tipo de mueble, solo para [ReviewKind.object].
   PropType propType;
 
+  /// Qué luz práctica es (farola, fluorescente…), solo para
+  /// [ReviewKind.light].
+  String name;
+
   ReviewItem({
     required this.kind,
     required this.index,
@@ -41,7 +46,17 @@ class ReviewItem {
     this.depth = 0,
     this.height = 0,
     this.propType = PropType.rectangle,
+    this.name = '',
   });
+
+  /// Un hueco en una pared: puerta, ventana, paso o escaparate.
+  bool get isOpening => switch (kind) {
+    ReviewKind.door ||
+    ReviewKind.window ||
+    ReviewKind.passage ||
+    ReviewKind.storefront => true,
+    _ => false,
+  };
 
   /// Lo que no está claro: se pregunta enseñando la foto.
   bool get dubious => confidence < 0.7;
@@ -51,6 +66,9 @@ class ReviewItem {
     ReviewKind.door => 'Puerta',
     ReviewKind.window => 'Ventana',
     ReviewKind.passage => 'Paso',
+    ReviewKind.storefront => 'Escaparate',
+    ReviewKind.light =>
+      name.isEmpty ? 'Luz práctica' : name[0].toUpperCase() + name.substring(1),
     ReviewKind.object => switch (propType) {
       PropType.bed => 'Cama',
       PropType.table => 'Mesa',
@@ -77,6 +95,7 @@ List<ReviewItem> reviewItems(ScanStructure s) => [
         ScanOpeningKind.door => ReviewKind.door,
         ScanOpeningKind.window => ReviewKind.window,
         ScanOpeningKind.passage => ReviewKind.passage,
+        ScanOpeningKind.storefront => ReviewKind.storefront,
       },
       index: i,
       confidence: s.openings[i].confidence,
@@ -93,6 +112,15 @@ List<ReviewItem> reviewItems(ScanStructure s) => [
       depth: s.objects[i].depth,
       height: s.objects[i].heightM,
       propType: guessFurniture(s.objects[i]),
+    ),
+  for (var i = 0; i < s.lights.length; i++)
+    ReviewItem(
+      kind: ReviewKind.light,
+      index: i,
+      // La ha tocado quien escaneaba: segura.
+      confidence: 1,
+      height: s.lights[i].y,
+      name: s.lights[i].label,
     ),
 ];
 
@@ -123,7 +151,12 @@ List<List<double>> reviewPoints(ScanStructure s, ReviewItem item) {
         at(w.end, s.heightM),
         at(w.start, s.heightM),
       ];
-    case ReviewKind.door || ReviewKind.window || ReviewKind.passage:
+    case ReviewKind.light:
+      return [at(s.lights[item.index].position, item.height)];
+    case ReviewKind.door ||
+        ReviewKind.window ||
+        ReviewKind.passage ||
+        ReviewKind.storefront:
       final o = s.openings[item.index];
       final d = s.walls[o.wall].dir * (item.width / 2);
       return [
@@ -233,7 +266,26 @@ List<PlanElement> reviewElements(
             ..props[kScanThicknessKey] = _round(it.thickness)
             ..props[kScanSourceKey] = kScanSourceValue,
         );
-      case ReviewKind.door || ReviewKind.window || ReviewKind.passage:
+      case ReviewKind.light:
+        // Una luz práctica de la localización: entra como luz en la planta,
+        // a su altura y con su nombre.
+        out.add(
+          PlanElement(
+            id: 0,
+            type: ElementType.light,
+            position: s.lights[it.index].position / mpu,
+            lightType: LightType.practical,
+            label: it.label,
+            props: {
+              PlanLight.heightKey: _round(it.height),
+              kScanSourceKey: kScanSourceValue,
+            },
+          ),
+        );
+      case ReviewKind.door ||
+          ReviewKind.window ||
+          ReviewKind.passage ||
+          ReviewKind.storefront:
         final o = s.openings[it.index];
         // Un hueco va sobre su pared: sin ella no tiene dónde ir.
         if (!items.any(
@@ -243,7 +295,8 @@ List<PlanElement> reviewElements(
         }
         final d = s.walls[o.wall].dir;
         final type = switch (it.kind) {
-          ReviewKind.window => ArchitectureType.window,
+          // Un escaparate es una ventana de cristal que llega al suelo.
+          ReviewKind.window || ReviewKind.storefront => ArchitectureType.window,
           ReviewKind.passage => ArchitectureType.opening,
           _ when it.width >= 1.3 => ArchitectureType.doubleDoor,
           _ => ArchitectureType.doorOpen,

@@ -35,6 +35,9 @@ class ScanReviewSheet extends StatefulWidget {
   final Rect? topRect;
   final ReviewPhotoFinder? findPhoto;
 
+  /// La luz que había al escanear, para el resumen (ES.1b).
+  final String? lightNote;
+
   const ScanReviewSheet({
     super.key,
     required this.structure,
@@ -42,6 +45,7 @@ class ScanReviewSheet extends StatefulWidget {
     this.topPng,
     this.topRect,
     this.findPhoto,
+    this.lightNote,
   });
 
   static Future<ScanReviewResult?> show(
@@ -51,6 +55,7 @@ class ScanReviewSheet extends StatefulWidget {
     Uint8List? topPng,
     Rect? topRect,
     ReviewPhotoFinder? findPhoto,
+    String? lightNote,
   }) => showDialog<ScanReviewResult>(
     context: context,
     builder: (_) => Dialog(
@@ -64,6 +69,7 @@ class ScanReviewSheet extends StatefulWidget {
           topPng: topPng,
           topRect: topRect,
           findPhoto: findPhoto,
+          lightNote: lightNote,
         ),
       ),
     ),
@@ -202,6 +208,7 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
             doubt: palette.warning,
             off: palette.error,
             object: const Color(0xFFAFA9EC),
+            light: const Color(0xFFFAC775),
           );
           return GestureDetector(
             onTapUp: (e) => _select(painter.hit(e.localPosition, box.biggest)),
@@ -225,15 +232,26 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
         line('${count(ReviewKind.window)} ventanas'),
         if (count(ReviewKind.passage) > 0)
           line('${count(ReviewKind.passage)} pasos'),
+        if (count(ReviewKind.storefront) > 0)
+          line('${count(ReviewKind.storefront)} escaparates'),
         line('${count(ReviewKind.object)} muebles'),
+        if (count(ReviewKind.light) > 0)
+          line('${count(ReviewKind.light)} luces prácticas'),
+        if (widget.lightNote != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(widget.lightNote!, style: AppTypography.caption(palette)),
+        ],
         const SizedBox(height: AppSpacing.md),
-        _number(
-          palette,
-          s.heightEstimated ? 'Techo (estimado)' : 'Techo',
-          _height,
-          (v) => _height = v,
-        ),
-        if (s.heightEstimated)
+        if (s.exterior)
+          line('Exterior: a cielo abierto')
+        else
+          _number(
+            palette,
+            s.heightEstimated ? 'Techo (estimado)' : 'Techo',
+            _height,
+            (v) => _height = v,
+          ),
+        if (s.heightEstimated && !s.exterior)
           Text(
             'El techo no se vio en el escaneo: mídelo si puedes.',
             style: AppTypography.caption(palette),
@@ -306,7 +324,10 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
     ReviewKind.wall => [
       _number(palette, 'Grosor', it.thickness, (v) => it.thickness = v),
     ],
-    ReviewKind.door || ReviewKind.passage => [
+    ReviewKind.light => [
+      _number(palette, 'Altura', it.height, (v) => it.height = v),
+    ],
+    ReviewKind.door || ReviewKind.passage || ReviewKind.storefront => [
       _number(palette, 'Ancho', it.width, (v) => it.width = v),
       _number(palette, 'Alto', it.head, (v) => it.head = v),
     ],
@@ -443,7 +464,7 @@ class _ReviewPainter extends CustomPainter {
   final ui.Image? top;
   final Rect? topRect;
   final ReviewItem? selected;
-  final Color sure, doubt, off, object;
+  final Color sure, doubt, off, object, light;
 
   _ReviewPainter({
     required this.s,
@@ -456,6 +477,7 @@ class _ReviewPainter extends CustomPainter {
     required this.doubt,
     required this.off,
     required this.object,
+    required this.light,
   });
 
   /// De metros a la pantalla, con margen y sin deformar.
@@ -534,7 +556,13 @@ class _ReviewPainter extends CustomPainter {
 
     // Primero los huecos, que van encima de las paredes.
     for (final kind in [
-      {ReviewKind.door, ReviewKind.window, ReviewKind.passage},
+      {ReviewKind.light},
+      {
+        ReviewKind.door,
+        ReviewKind.window,
+        ReviewKind.passage,
+        ReviewKind.storefront,
+      },
       {ReviewKind.object},
       {ReviewKind.wall},
     ]) {
@@ -545,6 +573,8 @@ class _ReviewPainter extends CustomPainter {
         if (it.kind == ReviewKind.wall) {
           final w = s.walls[it.index];
           d = toSegment(map(w.start), map(w.end));
+        } else if (it.kind == ReviewKind.light) {
+          d = (map(s.lights[it.index].position) - at).distance;
         } else if (it.kind == ReviewKind.object) {
           final pts = _box(it).map(map).toList();
           d = (Path()..addPolygon(pts, true)).contains(at)
@@ -603,14 +633,26 @@ class _ReviewPainter extends CustomPainter {
             Path()..addPolygon(_box(it).map(map).toList(), true),
             paint,
           );
-        case ReviewKind.door || ReviewKind.window || ReviewKind.passage:
+        case ReviewKind.light:
+          final c = map(s.lights[it.index].position);
+          canvas.drawCircle(c, chosen ? 9 : 6, Paint()..color = light);
+          canvas.drawCircle(
+            c,
+            chosen ? 14 : 10,
+            Paint()
+              ..color = light.withValues(alpha: 0.35)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2,
+          );
+        case ReviewKind.door ||
+            ReviewKind.window ||
+            ReviewKind.passage ||
+            ReviewKind.storefront:
           break;
       }
     }
     // Los huecos, encima: un corte en la pared y su color.
-    for (final it in items.where(
-      (it) => it.kind != ReviewKind.wall && it.kind != ReviewKind.object,
-    )) {
+    for (final it in items.where((it) => it.isOpening)) {
       final (a, b) = _openingSpan(it);
       final w = s.walls[s.openings[it.index].wall];
       final width = math.max(4.0, w.thickness * k + 2);

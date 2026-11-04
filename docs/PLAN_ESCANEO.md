@@ -43,6 +43,7 @@ iPhone (ARKit)              PC (RealityScan)
 | ES.1 | La captura del iPhone guarda la estructura (`capture.json` v2) | hecho (falta probar en el iPhone) |
 | ES.2 | Solucionador de estructura | hecho (pruebas sintéticas; falta la casa real) |
 | ES.3 | Revisión en la planta y «pegar al escaneo» | hecho, sin probar con un escaneo real (elegida la opción «A con la foto de B»: toda la casa en el lienzo y, al tocar algo dudoso, la foto real del sitio) |
+| ES.1b / ES.2b | Locales (pizzerías, kebabs) y calles de noche | hecho en Dart con pruebas; la parte del iPhone, en la sesión de ES.1 |
 | ES.4 | Paredes limpias con la textura real proyectada | después |
 | ES.5 | Muebles sustituidos por modelos | después |
 | ES.6 | Unreal sin aberraciones | después |
@@ -78,7 +79,8 @@ en el mundo de ARKit (metros, Y arriba):
     "boundary": [[x, z], …]         // contorno en el sistema del ancla, opcional
   }],
   "marks": [{
-    "kind": "corner" | "door" | "window" | "floor" | "ceiling",
+    "kind": "corner" | "door" | "window" | "floor" | "ceiling" | "storefront" | "light",
+    "label": "farola",              // solo en las luces, opcional
     "position": [x, y, z],          // en el mundo
     "planeId": "UUID"               // el plano tocado, opcional
   }],
@@ -145,6 +147,39 @@ Cada elemento lleva `confidence` (0–1) y `source` (`mesh`, `arkit` o `mark`).
   - todo va en props libres, sin cambiar el esquema.
 - El motor de luz ya convierte segmentos y aberturas en bloqueadores y
   aperturas; solo hay que comprobar que respeta `heightM`.
+
+### ES.1b / ES.2b · Locales y calles de noche
+
+Pensado para escanear pizzerías, kebabs y calles de noche (2026-11-04).
+
+En la captura (iPhone):
+
+- Selector **Interior / Exterior** al empezar; se guarda como `setting`.
+- Botón de **linterna**. Cada foto guarda `torch`, la luz que estima ARKit
+  (`light: {intensity, kelvin}`) y la exposición (`exposure: {duration,
+  offset}`).
+- Con poca luz, aviso «Más despacio: hay poca luz» si la foto se va a mover
+  más de 4 px durante la exposición.
+- Marcas nuevas: `storefront` (los dos bordes del escaparate) y `light` con
+  `label` (farola, fluorescente, neón o rótulo, bombilla, foco).
+
+En el solucionador:
+
+- **Barras y campanas**: una pared tiene que verse también entre 1,0 y 1,7 m.
+  Así no salen como pared ni la barra de 1,1 m ni la campana colgada del techo.
+- **Escaparates**: los cristales no salen en la malla. Un hueco de suelo con
+  dintel de más de 2,4 m de ancho se toma por escaparate. Si se marcaron sus
+  dos bordes, mandan los toques. Pasa a la planta como ventana con alféizar 0.
+- **Exterior**: sin techo (recinto a cielo abierto). Los muebles de la calle
+  (papeleras, bancos) se miden desde el suelo que tienen al lado, así que una
+  calle en cuesta no se confunde con un mueble. El visor da para eso la
+  rejilla `bottom`.
+- **Luces prácticas**: cada marca `light` pasa a la planta como luz práctica
+  con su altura. La revisión enseña además la temperatura y la cantidad de luz
+  que había al escanear, sin contar las fotos con linterna.
+
+Pendiente: aceras y bordillos (dos suelos a 15 cm) y fachadas que no llegan a
+la altura del corte.
 
 ### ES.4 – ES.7 · Después
 

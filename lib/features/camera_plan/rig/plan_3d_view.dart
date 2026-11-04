@@ -874,9 +874,16 @@ class _Plan3dViewState extends State<Plan3dView> {
     final captureDir = PlanScan.capture(el);
     final capture = captureDir == null ? null : CapturePackage.read(captureDir);
     CaptureHints? hints;
-    if (capture != null && capture.hasStructure) {
-      final mapped = await _mapPoints('scanToPlan', id, capture.hintPoints());
-      if (mapped != null) hints = capture.hintsFrom(mapped);
+    if (capture != null) {
+      hints = CaptureHints(exterior: capture.exterior);
+      if (capture.hasStructure) {
+        final mapped = await _mapPoints(
+          'scanToPlan',
+          id,
+          capture.hintPoints(),
+        );
+        if (mapped != null) hints = capture.hintsFrom(mapped);
+      }
     }
     // Primera pasada para el suelo y el techo; con ellos, la rejilla de los
     // muebles.
@@ -892,6 +899,22 @@ class _Plan3dViewState extends State<Plan3dView> {
       structure: solveStructure(profile, capture: hints),
       capture: capture,
     );
+  }
+
+  /// La luz que había al escanear, en palabras: temperatura y cantidad.
+  static String? _lightNote(CapturePackage c) {
+    final k = c.kelvin, i = c.lightIntensity;
+    if (k == null && i == null) return null;
+    final parts = [
+      if (k != null) '${(k / 100).round() * 100} K',
+      if (i != null)
+        i < 150
+            ? 'muy poca luz'
+            : i < 500
+            ? 'poca luz'
+            : 'luz normal',
+    ];
+    return 'Al escanear: ${parts.join(', ')} (estimado por el iPhone).';
   }
 
   /// «Pegar al escaneo» (ES.3): las paredes dibujadas a mano se ajustan a
@@ -961,6 +984,7 @@ class _Plan3dViewState extends State<Plan3dView> {
     final result = await ScanReviewSheet.show(
       context,
       structure: structure,
+      lightNote: capture == null ? null : _lightNote(capture),
       cut: cut,
       topPng: topOk ? base64Decode(top['png'] as String) : null,
       topRect: topOk
@@ -990,10 +1014,14 @@ class _Plan3dViewState extends State<Plan3dView> {
     final inside = interiorPoint(structure);
     if (inside != null && widget.onRoom != null) {
       await widget.onRoom!(
+        // En la calle, a cielo abierto; en un local, con su techo.
         RoomSetting(
           x: inside.dx / mpu,
           y: inside.dy / mpu,
-          ceilingM: (result.heightM * 100).round() / 100,
+          openSky: structure.exterior,
+          ceilingM: structure.exterior
+              ? null
+              : (result.heightM * 100).round() / 100,
         ),
       );
     }

@@ -95,9 +95,21 @@ ScanProfile profileOf(List<Box> boxes, {int seed = 1}) {
   final rows = ((zs.reduce(math.max) - gz0) / cell).ceil();
   final cap = y1 - 0.2;
   final top = List<double?>.filled(cols * rows, null);
+  // Lo más bajo que se ve en cada celda desde arriba: se sube desde el suelo
+  // por las cajas apoyadas unas en otras (escalones, una papelera…).
+  final bottom = List<double?>.filled(cols * rows, null);
+  final byBase = [...boxes]..sort((a, b) => a.y0.compareTo(b.y0));
   for (var j = 0; j < rows; j++) {
     for (var i = 0; i < cols; i++) {
       final p = Offset(gx0 + (i + 0.5) * cell, gz0 + (j + 0.5) * cell);
+      double? seen;
+      for (final b in byBase) {
+        if (!b.contains(p) || b.y0 >= cap) continue;
+        if (seen == null || b.y0 <= seen + 1e-6) {
+          seen = math.max(seen ?? b.y1, b.y1);
+        }
+      }
+      bottom[j * cols + i] = seen;
       for (final b in boxes.skip(1)) {
         if (b.y0 >= cap || !b.contains(p)) continue;
         final t = math.min(b.y1, cap - 0.01);
@@ -120,6 +132,7 @@ ScanProfile profileOf(List<Box> boxes, {int seed = 1}) {
       cols: cols,
       rows: rows,
       top: top,
+      bottom: bottom,
     ),
   );
 }
@@ -280,5 +293,107 @@ void main() {
     );
     expect(top.source, ScanSource.arkit);
     expect(top.start.dy, closeTo(0.06, 0.015));
+  });
+
+  group('locales (ES.1b)', () {
+    /// Un kebab de 6 × 4 con techo a 2,8 m: barra de 1,1 m, campana
+    /// extractora colgada del techo y escaparate de cristal de 3,6 m en la
+    /// fachada (la malla no ve el cristal: solo el dintel encima).
+    List<Box> kebab() {
+      const h = 2.8;
+      return [
+        Box.span(-0.3, -0.3, 6.3, 4.3, -0.05, 0),
+        Box.span(-0.3, -0.3, 6.3, 4.3, h, h + 0.05),
+        // Fachada (z = 4) con el escaparate de x 1 a 4,6.
+        Box.span(-0.06, 3.94, 1, 4.06, 0, h),
+        Box.span(1, 3.94, 4.6, 4.06, 2.4, h),
+        Box.span(4.6, 3.94, 6.06, 4.06, 0, h),
+        Box.wall(const Offset(6, 4), const Offset(6, 0), 0, h),
+        Box.wall(const Offset(6, 0), const Offset(0, 0), 0, h),
+        Box.wall(const Offset(0, 0), const Offset(0, 4), 0, h),
+        // Barra.
+        Box.span(1, 1.4, 5, 2.0, 0, 1.1),
+        // Campana sobre la plancha, de 1,9 m al techo.
+        Box.span(1.5, 0.06, 3.5, 0.8, 1.9, h),
+      ];
+    }
+
+    test('la barra y la campana no son paredes; el escaparate sí sale', () {
+      final s = solveStructure(profileOf(kebab()));
+      expect(s.walls, hasLength(4));
+      for (final w in s.walls) {
+        // Nada en z = 0,8 (la campana) ni en z = 1,4 / 2,0 (la barra).
+        final horizontal = (w.start.dy - w.end.dy).abs() < 0.01;
+        if (horizontal) {
+          expect(
+            [0.0, 4.0].any((z) => (w.start.dy - z).abs() < 0.1),
+            isTrue,
+            reason: 'pared de más en z = ${w.start.dy}',
+          );
+        }
+      }
+      final shop = s.openings.where(
+        (o) => o.kind == ScanOpeningKind.storefront,
+      );
+      expect(shop, hasLength(1));
+      expect(shop.single.width, closeTo(3.6, 0.1));
+      expect(shop.single.center.dx, closeTo(2.8, 0.1));
+      expect(shop.single.head, closeTo(2.4, 0.1));
+      // La barra sale como mueble.
+      expect(
+        s.objects.where((o) => (o.heightM - 1.1).abs() < 0.1),
+        hasLength(1),
+      );
+    });
+
+    test('los toques en los bordes del escaparate mandan', () {
+      final s = solveStructure(
+        profileOf(kebab()),
+        capture: const CaptureHints(
+          storefronts: [Offset(1.05, 4.0), Offset(4.55, 3.95)],
+        ),
+      );
+      final shop = s.openings.where(
+        (o) => o.kind == ScanOpeningKind.storefront,
+      );
+      expect(shop, hasLength(1));
+      expect(shop.single.width, closeTo(3.5, 0.02));
+      expect(shop.single.confidence, greaterThanOrEqualTo(0.9));
+    });
+  });
+
+  test('calle de noche: sin techo, en cuesta, con papelera y farola', () {
+    // Calle de 30 × 8 entre dos fachadas de 6 m que sube 0,6 m en 30 m a
+    // escalones de 10 cm (cada 5 m). Una papelera de 1 m arriba de la
+    // cuesta.
+    final boxes = <Box>[
+      // Solo se ve la calle: nada detrás de las fachadas.
+      Box.span(0, -0.06, 30, 8.06, -0.05, 0),
+      for (var k = 1; k < 6; k++) Box.span(k * 5.0, 0.06, 30, 7.94, 0, k * 0.1),
+      Box.wall(const Offset(0, 0), const Offset(30, 0), 0, 6),
+      Box.wall(const Offset(0, 8), const Offset(30, 8), 0, 6),
+      Box.span(26, 3, 26.6, 3.6, 0.5, 1.5),
+    ];
+    final s = solveStructure(
+      profileOf(boxes),
+      capture: const CaptureHints(
+        exterior: true,
+        lights: [ScanLight(Offset(12, 0.4), 4.5, 'farola')],
+      ),
+    );
+    expect(s.exterior, isTrue);
+    expect(s.heightEstimated, isTrue);
+    expect(s.walls, hasLength(2));
+    for (final w in s.walls) {
+      expect(w.length, closeTo(30, 0.2));
+    }
+    final bin = s.objects.where((o) => (o.center.dx - 26.3).abs() < 0.3);
+    expect(bin, hasLength(1));
+    // Medida desde el suelo de al lado (0,5), no desde abajo de la calle.
+    expect(bin.single.heightM, closeTo(1.0, 0.1));
+    // Los escalones de la cuesta no son muebles.
+    expect(s.objects, hasLength(1));
+    expect(s.lights.single.y, closeTo(4.5, 0.05));
+    expect(s.lights.single.label, 'farola');
   });
 }

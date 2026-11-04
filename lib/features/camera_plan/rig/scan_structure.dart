@@ -66,11 +66,12 @@ class ScanProfile {
 }
 
 /// Rejilla cenital: en cada celda, la altura más alta del escaneo (null si
-/// no hay nada).
+/// no hay nada) y la más baja, que en la calle da el suelo de cada sitio.
 class ScanGrid {
   final double x0, y0, cell;
   final int cols, rows;
   final List<double?> top;
+  final List<double?>? bottom;
 
   const ScanGrid({
     required this.x0,
@@ -79,6 +80,7 @@ class ScanGrid {
     required this.cols,
     required this.rows,
     required this.top,
+    this.bottom,
   });
 
   static ScanGrid? fromJson(Map json) {
@@ -93,7 +95,41 @@ class ScanGrid {
       cols: cols.toInt(),
       rows: rows.toInt(),
       top: [for (final v in top) (v as num?)?.toDouble()],
+      bottom: json['bottom'] is List && json['bottom'].length == top.length
+          ? [for (final v in json['bottom']) (v as num?)?.toDouble()]
+          : null,
     );
+  }
+
+  /// El suelo de cada celda: lo más bajo a menos de [radiusM] (una calle en
+  /// cuesta no tiene un solo suelo). Null donde no se vio nada cerca.
+  List<double?> ground(double radiusM) {
+    final src = bottom ?? top;
+    final r = math.max(1, (radiusM / cell).round());
+    double? lo(double? a, double? b) =>
+        a == null ? b : (b == null ? a : math.min(a, b));
+    // Mínimo separable: primero por filas, después por columnas.
+    final rowMin = List<double?>.filled(src.length, null);
+    for (var j = 0; j < rows; j++) {
+      for (var i = 0; i < cols; i++) {
+        double? m;
+        for (var k = math.max(0, i - r); k <= math.min(cols - 1, i + r); k++) {
+          m = lo(m, src[j * cols + k]);
+        }
+        rowMin[j * cols + i] = m;
+      }
+    }
+    final out = List<double?>.filled(src.length, null);
+    for (var i = 0; i < cols; i++) {
+      for (var j = 0; j < rows; j++) {
+        double? m;
+        for (var k = math.max(0, j - r); k <= math.min(rows - 1, j + r); k++) {
+          m = lo(m, rowMin[k * cols + i]);
+        }
+        out[j * cols + i] = m;
+      }
+    }
+    return out;
   }
 
   double? at(int i, int j) =>
@@ -117,12 +153,36 @@ class CaptureHints {
   /// Alturas tocadas en el suelo y el techo, en la vertical del 3D.
   final double? floorY, ceilingY;
 
+  /// Bordes de escaparates o cristaleras tocados: la fotogrametría no ve el
+  /// cristal, así que el hueco sale de estos toques.
+  final List<Offset> storefronts;
+
+  /// Luces prácticas tocadas (farolas, fluorescentes, rótulos…).
+  final List<ScanLight> lights;
+
+  /// Una calle o un patio: sin techo.
+  final bool exterior;
+
   const CaptureHints({
     this.wallPlanes = const [],
     this.corners = const [],
     this.floorY,
     this.ceilingY,
+    this.storefronts = const [],
+    this.lights = const [],
+    this.exterior = false,
   });
+}
+
+/// Una luz práctica de la localización: dónde está y qué es. [y] va en la
+/// vertical del 3D al leer la captura y en metros sobre el suelo en
+/// [ScanStructure.lights].
+class ScanLight {
+  final Offset position;
+  final double y;
+  final String label;
+
+  const ScanLight(this.position, this.y, this.label);
 }
 
 class ScanWall {
@@ -150,7 +210,8 @@ class ScanWall {
   double tOf(Offset p) => _dot(p, dir);
 }
 
-enum ScanOpeningKind { door, window, passage }
+/// [storefront]: un escaparate o una cristalera de suelo a dintel.
+enum ScanOpeningKind { door, window, passage, storefront }
 
 class ScanOpening {
   final ScanOpeningKind kind;
@@ -208,6 +269,12 @@ class ScanStructure {
   final List<ScanOpening> openings;
   final List<ScanObject> objects;
 
+  /// Luces prácticas tocadas en la captura, con su altura sobre el suelo.
+  final List<ScanLight> lights;
+
+  /// Una calle o un patio: sin techo.
+  final bool exterior;
+
   const ScanStructure({
     required this.floorY,
     required this.heightM,
@@ -216,6 +283,8 @@ class ScanStructure {
     required this.walls,
     required this.openings,
     required this.objects,
+    this.lights = const [],
+    this.exterior = false,
   });
 }
 
@@ -239,6 +308,9 @@ ScanStructure solveStructure(
   if (capture?.floorY != null) floorY = capture!.floorY!;
   if (capture?.ceilingY != null) ceilingY = capture!.ceilingY!;
   if (ceilingY != null && ceilingY - floorY < 1.6) ceilingY = null;
+  // En la calle, lo que mira abajo son balcones y toldos, no un techo.
+  final exterior = capture?.exterior ?? false;
+  if (exterior) ceilingY = null;
 
   final rel = [for (final h in p.heights) h - floorY];
   final step = p.heights.length > 1 ? p.heights[1] - p.heights[0] : 0.15;
@@ -281,6 +353,20 @@ ScanStructure solveStructure(
         ? 0.0
         : seen.where((s) => s).length / judge.length;
     if (support < 0.5) continue;
+    // Una pared se ve también a media altura; una campana extractora o un
+    // altillo cuelgan del techo y no bajan hasta ahí.
+    final mid = [
+      for (var k = 0; k < rel.length; k++)
+        if (rel[k] >= 1.0 && rel[k] <= 1.7 && rel[k] < topRel - 0.04) k,
+    ];
+    if (mid.isNotEmpty &&
+        !mid.any(
+          (k) =>
+              _coverage(wall, p.slices[k]).where((b) => b).length * _binM >=
+              math.max(0.25 * wall.length, 0.3),
+        )) {
+      continue;
+    }
     // Con el techo a la vista, una pared llega hasta él; un mueble alto no.
     if (ceilingY != null &&
         seen.length >= 2 &&
@@ -343,10 +429,15 @@ ScanStructure solveStructure(
     openings.addAll(_openingsOf(i, walls[i], p, rel, step, heightM));
   }
 
+  // Escaparates: los toques en sus bordes mandan sobre lo que diga la malla.
+  if (capture != null) {
+    _storefronts(walls, openings, capture.storefronts, heightM);
+  }
+
   // 7 · Muebles.
   final objects = p.grid == null
       ? const <ScanObject>[]
-      : _objects(p.grid!, walls, floorY, heightM, axis);
+      : _objects(p.grid!, walls, floorY, heightM, axis, localGround: exterior);
 
   return ScanStructure(
     floorY: floorY,
@@ -356,7 +447,53 @@ ScanStructure solveStructure(
     walls: walls,
     openings: _dropOccluded(openings, walls, p.grid, floorY),
     objects: objects,
+    lights: [
+      for (final l in capture?.lights ?? const <ScanLight>[])
+        ScanLight(l.position, l.y - floorY, l.label),
+    ],
+    exterior: exterior,
   );
+}
+
+/// Un escaparate entre cada dos toques seguidos sobre la misma pared (de
+/// 0,5 a 12 m): sustituye a los huecos que la malla viera ahí.
+void _storefronts(
+  List<ScanWall> walls,
+  List<ScanOpening> openings,
+  List<Offset> marks,
+  double heightM,
+) {
+  for (var i = 0; i < walls.length; i++) {
+    final w = walls[i];
+    final t0 = w.tOf(w.start), t1 = w.tOf(w.end);
+    final ts = <double>[
+      for (final m in marks)
+        if ((_dot(m, w.normal) - w.offset).abs() <= w.thickness / 2 + 0.3 &&
+            w.tOf(m) >= t0 - 0.3 &&
+            w.tOf(m) <= t1 + 0.3)
+          w.tOf(m).clamp(t0, t1).toDouble(),
+    ]..sort();
+    for (var k = 0; k + 1 < ts.length; k += 2) {
+      final a = ts[k], b = ts[k + 1];
+      if (b - a < 0.5 || b - a > 12) continue;
+      openings.removeWhere((o) {
+        if (o.wall != i) return false;
+        final t = w.tOf(o.center);
+        return t + o.width / 2 > a && t - o.width / 2 < b;
+      });
+      openings.add(
+        ScanOpening(
+          kind: ScanOpeningKind.storefront,
+          wall: i,
+          center: w.normal * w.offset + w.dir * ((a + b) / 2),
+          width: b - a,
+          sill: 0,
+          head: math.min(heightM, 2.6),
+          confidence: 0.9,
+        ),
+      );
+    }
+  }
 }
 
 double _firstSliceY(ScanProfile p) =>
@@ -736,7 +873,7 @@ List<ScanOpening> _openingsOf(
     if (c != _Cell.solid) {
       final isDoor = c == _Cell.door;
       final ok = isDoor
-          ? width >= 0.55 && width <= 2.4
+          ? width >= 0.55 && width <= 8
           : width >= 0.3 && width <= 4;
       // Un hueco que toca el extremo de la pared puede ser solo un trozo sin
       // escanear: menos confianza.
@@ -757,7 +894,13 @@ List<ScanOpening> _openingsOf(
           final t = w.tOf(w.start) + (b + e + 1) / 2 * _binM;
           out.add(
             ScanOpening(
-              kind: isDoor ? ScanOpeningKind.door : ScanOpeningKind.window,
+              // Más ancho que una puerta doble: un escaparate (su cristal no
+              // sale en la malla).
+              kind: !isDoor
+                  ? ScanOpeningKind.window
+                  : width > 2.4
+                  ? ScanOpeningKind.storefront
+                  : ScanOpeningKind.door,
               wall: index,
               center: w.normal * w.offset + w.dir * t,
               width: width,
@@ -786,13 +929,14 @@ List<ScanOpening> _dropOccluded(
   return [
     for (final o in openings)
       if (o.kind == ScanOpeningKind.passage ||
+          o.confidence >= 0.9 ||
           !_occluded(o, walls[o.wall], grid, floorY))
         o,
   ];
 }
 
 bool _occluded(ScanOpening o, ScanWall w, ScanGrid grid, double floorY) {
-  final limit = o.kind == ScanOpeningKind.door ? 1.2 : o.sill + 0.4;
+  final limit = o.kind == ScanOpeningKind.window ? o.sill + 0.4 : 1.2;
   for (final side in [1.0, -1.0]) {
     var hits = 0, total = 0;
     for (var a = -0.4; a <= 0.4001; a += 0.1) {
@@ -817,9 +961,13 @@ List<ScanObject> _objects(
   List<ScanWall> walls,
   double floorY,
   double heightM,
-  double axis,
-) {
+  double axis, {
+  bool localGround = false,
+}) {
   if (walls.isEmpty) return const [];
+  // En la calle, cada mueble se mide desde el suelo que tiene al lado.
+  final ground = localGround ? g.ground(1.0) : null;
+  double baseOf(int k) => ground?[k] ?? floorY;
   var minX = double.infinity, minY = double.infinity;
   var maxX = -double.infinity, maxY = -double.infinity;
   for (final w in walls) {
@@ -846,7 +994,7 @@ List<ScanObject> _objects(
     for (var i = 0; i < g.cols; i++) {
       final top = g.at(i, j);
       if (top == null) continue;
-      final h = top - floorY;
+      final h = top - baseOf(j * g.cols + i);
       if (h < 0.12 || h > heightM - 0.15) continue;
       final c = g.center(i, j);
       if (c.dx < minX || c.dx > maxX || c.dy < minY || c.dy > maxY) continue;
@@ -892,7 +1040,7 @@ List<ScanObject> _objects(
       u1 = math.max(u1, u);
       v0 = math.min(v0, v);
       v1 = math.max(v1, v);
-      tops.add(g.top[k]! - floorY);
+      tops.add(g.top[k]! - baseOf(k));
     }
     tops.sort();
     final width = u1 - u0 + g.cell, depth = v1 - v0 + g.cell;

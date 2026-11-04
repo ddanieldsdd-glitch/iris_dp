@@ -165,4 +165,51 @@ void main() {
     expect(pkg.frames, hasLength(1));
     expect(pkg.hasStructure, isFalse);
   });
+
+  test('capture.json v2 de noche: escena, luz por foto y marcas nuevas', () {
+    final pkg = CapturePackage.fromJson('/x', {
+      'version': 2,
+      'setting': 'exterior',
+      'frames': [
+        {
+          ...lookingX,
+          'light': {'intensity': 120, 'kelvin': 2100},
+          'exposure': {'duration': 0.033, 'offset': 0},
+        },
+        {
+          ...lookingX,
+          'file': 'f_00002.jpg',
+          'light': {'intensity': 900, 'kelvin': 5500},
+          'torch': true,
+        },
+        {
+          ...lookingX,
+          'file': 'f_00003.jpg',
+          'light': {'intensity': 140, 'kelvin': 2300},
+        },
+      ],
+      'marks': [
+        {
+          'kind': 'storefront',
+          'position': [1.0, 1.0, -3.0],
+        },
+        {
+          'kind': 'light',
+          'label': 'farola',
+          'position': [2.0, 4.5, -1.0],
+        },
+      ],
+    });
+    expect(pkg.exterior, isTrue);
+    expect(pkg.frames.first.exposure, 0.033);
+    expect(pkg.frames[1].torch, isTrue);
+    // La foto con linterna no cuenta para la luz de la localización.
+    expect(pkg.kelvin, 2300);
+    expect(pkg.lightIntensity, 140);
+    final hints = pkg.hintsFrom(pkg.hintPoints());
+    expect(hints.exterior, isTrue);
+    expect(hints.storefronts.single, const Offset(1, -3));
+    expect(hints.lights.single.label, 'farola');
+    expect(hints.lights.single.y, 4.5);
+  });
 }

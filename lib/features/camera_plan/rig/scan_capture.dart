@@ -22,12 +22,26 @@ class CaptureFrame {
   final int width;
   final int height;
 
+  /// La luz que estimó ARKit al hacer la foto (ES.1b): intensidad (1000 =
+  /// luz neutra de interior) y temperatura de color. Null en capturas viejas.
+  final double? lightIntensity, kelvin;
+
+  /// Exposición de la cámara, en segundos.
+  final double? exposure;
+
+  /// Con la linterna encendida: su luz no es la de la localización.
+  final bool torch;
+
   const CaptureFrame({
     required this.file,
     required this.transform,
     required this.intrinsics,
     required this.width,
     required this.height,
+    this.lightIntensity,
+    this.kelvin,
+    this.exposure,
+    this.torch = false,
   });
 
   static CaptureFrame? fromJson(Map json) {
@@ -47,8 +61,15 @@ class CaptureFrame {
       intrinsics: [for (final v in k) (v as num).toDouble()],
       width: w.toInt(),
       height: h.toInt(),
+      lightIntensity: _num(json['light'], 'intensity'),
+      kelvin: _num(json['light'], 'kelvin'),
+      exposure: _num(json['exposure'], 'duration'),
+      torch: json['torch'] == true,
     );
   }
+
+  static double? _num(Object? map, String key) =>
+      map is Map && map[key] is num ? (map[key] as num).toDouble() : null;
 
   /// Columna [c] (0–3) de la matriz: los ejes de la cámara y su posición.
   List<double> column(int c) => transform.sublist(c * 4, c * 4 + 3);
@@ -117,18 +138,22 @@ class CapturePlane {
       vertical && (classification == 'wall' || classification == 'none');
 }
 
-/// Un toque de precisión en la captura: esquina, puerta, ventana, suelo o
-/// techo, en el mundo de ARKit.
+/// Un toque de precisión en la captura, en el mundo de ARKit: esquina,
+/// puerta, ventana, suelo, techo, borde de escaparate (`storefront`) o luz
+/// práctica (`light`, con su tipo en [label]: farola, fluorescente…).
 class CaptureMark {
   final String kind;
   final List<double> position;
+  final String? label;
 
-  const CaptureMark(this.kind, this.position);
+  const CaptureMark(this.kind, this.position, {this.label});
 
   static CaptureMark? fromJson(Map json) {
     final pos = json['position'], kind = json['kind'];
     if (pos is! List || pos.length != 3 || kind is! String) return null;
-    return CaptureMark(kind, [for (final v in pos) (v as num).toDouble()]);
+    return CaptureMark(kind, [
+      for (final v in pos) (v as num).toDouble(),
+    ], label: json['label'] as String?);
   }
 }
 
@@ -148,6 +173,9 @@ class CapturePackage {
   /// Nube dispersa de ARKit: x, y, z seguidos.
   final List<double> points;
 
+  /// Una calle o un patio (`exterior`) o un local (`interior`, por defecto).
+  final bool exterior;
+
   const CapturePackage(
     this.dir,
     this.frames, {
@@ -156,7 +184,27 @@ class CapturePackage {
     this.planes = const [],
     this.marks = const [],
     this.points = const [],
+    this.exterior = false,
   });
+
+  /// La temperatura de color de la localización: la mediana de las fotos
+  /// sin linterna. Null si la captura no la trae.
+  double? get kelvin {
+    final k = [
+      for (final f in frames)
+        if (!f.torch && f.kelvin != null) f.kelvin!,
+    ]..sort();
+    return k.isEmpty ? null : k[k.length ~/ 2];
+  }
+
+  /// Cuánta luz había: la mediana de la intensidad de ARKit sin linterna.
+  double? get lightIntensity {
+    final v = [
+      for (final f in frames)
+        if (!f.torch && f.lightIntensity != null) f.lightIntensity!,
+    ]..sort();
+    return v.isEmpty ? null : v[v.length ~/ 2];
+  }
 
   static bool isCapture(String dir) => File(p.join(dir, manifest)).existsSync();
 
@@ -186,6 +234,7 @@ class CapturePackage {
       points: points is List && points.length % 3 == 0
           ? [for (final v in points) (v as num).toDouble()]
           : const [],
+      exterior: json['setting'] == 'exterior',
     );
   }
 
@@ -210,7 +259,8 @@ class CapturePackage {
     if (mapped.length != (walls * 2 + marks.length) * 3) {
       return const CaptureHints();
     }
-    final corners = <Offset>[];
+    final corners = <Offset>[], storefronts = <Offset>[];
+    final lights = <ScanLight>[];
     final floors = <double>[], ceilings = <double>[];
     for (var i = 0; i < marks.length; i++) {
       final k = walls * 2 + i;
@@ -221,6 +271,12 @@ class CapturePackage {
           floors.add(mapped[k * 3 + 1]);
         case 'ceiling':
           ceilings.add(mapped[k * 3 + 1]);
+        case 'storefront':
+          storefronts.add(at(k));
+        case 'light':
+          lights.add(
+            ScanLight(at(k), mapped[k * 3 + 1], marks[i].label ?? 'práctica'),
+          );
       }
     }
     double? mean(List<double> v) =>
@@ -230,6 +286,9 @@ class CapturePackage {
       corners: corners,
       floorY: mean(floors),
       ceilingY: mean(ceilings),
+      storefronts: storefronts,
+      lights: lights,
+      exterior: exterior,
     );
   }
 

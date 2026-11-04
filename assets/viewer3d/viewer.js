@@ -1614,6 +1614,9 @@
           if (ny > 0) up[k] += area; else down[k] += area;
         }
       }
+      // Solo se cortan las caras que se acercan a la vertical: un suelo en
+      // cuesta, una mesa o una cama cortados darían líneas que no son paredes.
+      if (len > 0 && Math.abs(nrm.y / len) > 0.5) return;
       const lo = Math.min(a.y, b.y, c.y), hi = Math.max(a.y, b.y, c.y);
       const k0 = Math.max(0, Math.ceil((lo - y0 - step / 2) / step));
       for (let k = k0; k < heights.length && heights[k] < hi; k++) {
@@ -1648,11 +1651,14 @@
     const rows = Math.max(1, Math.ceil((box.max.z - box.min.z) / cell));
     if (cols * rows > 4e6) return null;
     const top = new Float64Array(cols * rows).fill(-1e9);
+    // Lo más bajo de cada celda, sin límite de altura: el suelo de la calle.
+    const bottom = new Float64Array(cols * rows).fill(1e9);
     const put = (x, y, z) => {
-      if (y <= fromY || y >= toY) return;
       const i = Math.min(cols - 1, Math.floor((x - box.min.x) / cell));
       const j = Math.min(rows - 1, Math.floor((z - box.min.z) / cell));
       const k = j * cols + i;
+      if (y < bottom[k]) bottom[k] = y;
+      if (y <= fromY || y >= toY) return;
       if (y > top[k]) top[k] = y;
     };
     eachScanTriangle(w, (a, b, c) => {
@@ -1665,6 +1671,7 @@
       x0: box.min.x, y0: box.min.z, cell, cols, rows,
       // Celda vacía: null.
       top: Array.from(top, (v) => (v < -1e8 ? null : Math.round(v * 1000) / 1000)),
+      bottom: Array.from(bottom, (v) => (v > 1e8 ? null : Math.round(v * 1000) / 1000)),
     });
   }
 
