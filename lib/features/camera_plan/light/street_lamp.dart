@@ -51,9 +51,12 @@ class StreetLamp {
   /// Convierte [el] en farola en su sitio: práctica, a 4,5 m, mirando al
   /// suelo con un haz ancho y, la de brazo, pegada a la pared.
   static void apply(PlanElement el, {String style = styleArm}) {
-    el
-      ..lightType = LightType.practical
-      ..label = style == stylePole ? poleName : armName;
+    el.lightType = LightType.practical;
+    // Su nombre, salvo que ya tenga uno propio.
+    final own = el.customName;
+    if (own == null || own == armName || own == poleName) {
+      el.customName = style == stylePole ? poleName : armName;
+    }
     el.props
       ..[fixtureKey] = fixtureValue
       ..[styleKey] = style

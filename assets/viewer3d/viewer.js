@@ -970,7 +970,10 @@
   function updateLabels() {
     for (const l of labels) {
       const layerShown = l.userData.layer ? shown[l.userData.layer] !== false : true;
-      l.visible = layerShown && (showNames || clearView || l.userData.id === selectedId);
+      // En «Maqueta» se ven los nombres de lo que se coloca, no los de las
+      // paredes (con «Nombres», todos).
+      const inMaqueta = clearView && l.userData.layer !== 'walls';
+      l.visible = layerShown && (showNames || inMaqueta || l.userData.id === selectedId);
     }
   }
 
@@ -1006,7 +1009,8 @@
       (anyLit || sc.sun));
     // Fondo según el entorno (F6.21.1): plató negro, exterior con cielo.
     scene.background = new THREE.Color(
-      env === 'studio' ? '#050505'
+      clearView ? (env === 'studio' ? '#3a3d42' : '#c9d1d9')
+        : env === 'studio' ? '#050505'
         : env === 'exterior' ? (sc.sun ? '#9cbfdf' : '#0b1020')
         : baseBg);
     const k = physical ? sc.exposure.scale : 1;
