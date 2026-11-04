@@ -7,6 +7,7 @@ import '../../core/theme/app_typography.dart';
 import 'camera_plan_constants.dart';
 import 'light_family.dart';
 import 'light_symbols.dart';
+import 'light/street_lamp.dart';
 
 /// Herramienta activa del lienzo.
 enum PlanTool {
@@ -67,6 +68,9 @@ class PlanPalette extends StatelessWidget {
   final void Function(String name, Color color)? onAddCast;
   final ValueChanged<LightType> onAddLight;
 
+  /// Una farola de la calle, de brazo o de báculo (CA.5).
+  final ValueChanged<String>? onAddStreetLamp;
+
   /// Un palio (2×2 a 6×6, con tela de difusión o rebote).
   final VoidCallback? onAddPalio;
   final ValueChanged<PropType> onAddProp;
@@ -99,6 +103,7 @@ class PlanPalette extends StatelessWidget {
     this.cast = const [],
     this.onAddCast,
     required this.onAddLight,
+    this.onAddStreetLamp,
     this.onAddPalio,
     required this.onAddProp,
     required this.onAddMeter,
@@ -201,6 +206,7 @@ class PlanPalette extends StatelessWidget {
             projectLights: projectLights,
             catalogLights: catalogLights,
             onAddLight: onAddLight,
+            onAddStreetLamp: onAddStreetLamp,
             onAddCatalogLight: onAddCatalogLight,
             onQuickAdd: onQuickAddLight,
           ),
@@ -343,6 +349,7 @@ class PlanLightBrowser extends StatefulWidget {
   final List<Light> projectLights;
   final List<Light> catalogLights;
   final ValueChanged<LightType> onAddLight;
+  final ValueChanged<String>? onAddStreetLamp;
   final ValueChanged<Light>? onAddCatalogLight;
   final ValueChanged<String>? onQuickAdd;
 
@@ -351,6 +358,7 @@ class PlanLightBrowser extends StatefulWidget {
     required this.projectLights,
     required this.catalogLights,
     required this.onAddLight,
+    this.onAddStreetLamp,
     this.onAddCatalogLight,
     this.onQuickAdd,
   });
@@ -422,7 +430,11 @@ class _PlanLightBrowserState extends State<PlanLightBrowser> {
           icon: LightSymbolPreview(type: type, size: 18),
           label: name,
           tooltip: 'Añadir $name (genérica)',
-          onTap: () => widget.onAddLight(type),
+          onTap: () => switch (StreetLamp.styleForName(name)) {
+            final style? when widget.onAddStreetLamp != null =>
+              widget.onAddStreetLamp!(style),
+            _ => widget.onAddLight(type),
+          },
         ),
       ),
     );

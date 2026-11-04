@@ -21,6 +21,7 @@ import '../light_beam.dart';
 import '../light_overrides.dart';
 import '../plan_opening.dart';
 import '../plan_segment.dart';
+import '../light/street_lamp.dart';
 import 'plan_drape.dart';
 import 'plan_hall.dart';
 import 'plan_rig.dart';
@@ -732,7 +733,7 @@ class PlanScene3d {
     LightType.lightPanel ||
     LightType.led1x1 => 'panel',
     LightType.softbox || LightType.octagon || LightType.chimera => 'softbox',
-    LightType.practical => 'practical',
+    LightType.practical => StreetLamp.isOn(el) ? 'lamp' : 'practical',
     _ => 'can',
   };
 
@@ -777,7 +778,12 @@ class PlanScene3d {
     final dz = math.sin(tilt);
     // Apunta al suelo si llega; si no, a lo que alcanza el haz.
     final reach = (beam?.reach ?? 300) * mpu;
-    final t = dz < -0.02 ? math.min((z - level) / -dz, reach) : reach;
+    // Una farola llega siempre al suelo.
+    final t = dz < -0.02
+        ? (StreetLamp.isOn(el)
+              ? (z - level) / -dz
+              : math.min((z - level) / -dz, reach))
+        : reach;
     final p = xy(el.position);
     final light = PlanLight.of(el);
     return {
@@ -796,6 +802,13 @@ class PlanScene3d {
             : [0.0, 0.0, 1.0],
       },
       if (LightWallMount.isOn(el)) 'mount': PlanLight.mountWall,
+      // La farola: de brazo, hacia la pared que tiene detrás; de báculo,
+      // hasta el suelo.
+      if (StreetLamp.isOn(el)) ...{
+        'lampStyle': StreetLamp.isPole(el) ? 'pole' : 'arm',
+        'back': [_r(-hx), _r(-hy)],
+        'ground': _r(level),
+      },
       'pos': [p[0], p[1], _r(z)],
       'aim': [_r(p[0] + dx * t), _r(p[1] + dy * t), _r(z + dz * t)],
       'beamDeg': beam?.spread ?? 360,

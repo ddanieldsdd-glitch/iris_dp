@@ -97,6 +97,7 @@ import 'rig/rig_report.dart';
 import 'rig/plan_hall.dart';
 import '../../core/utils/platform_keys.dart';
 import 'light/wall_mount.dart';
+import 'light/street_lamp.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
   final int projectId;
@@ -2903,6 +2904,21 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     await _addElement(el);
   }
 
+  /// Una farola (CA.5): la de brazo nace pegada a la pared más cercana.
+  Future<void> _addStreetLamp(String style) async {
+    final count = _elements.where((e) => e.type == ElementType.light).length;
+    final el = PlanElement(
+      id: 0,
+      type: ElementType.light,
+      position: _snapToGrid(_viewCenter + Offset(count % 5 * 36.0, 0)),
+    );
+    StreetLamp.apply(el, style: style);
+    if (style == StreetLamp.styleArm) {
+      LightWallMount.snap(el, _visibleElements, _metersPerUnit);
+    }
+    await _addElement(el, keepPosition: true);
+  }
+
   /// Un palio (F6.22.1): 4×4 con Grid Cloth de partida; la tela, el rebote,
   /// la medida, la altura y la inclinación se cambian en su ficha.
   Future<void> _addPalio() async {
@@ -4984,6 +5000,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     ],
                     onAddCast: (name, color) => _addActor(color, name: name),
                     onAddLight: _addLight,
+                    onAddStreetLamp: _addStreetLamp,
                     onAddPalio: _addPalio,
                     onAddProp: _addProp,
                     onAddMeter: _addMeter,
@@ -6710,10 +6727,26 @@ class _ElementPanelState extends State<_ElementPanel> {
                           '${beam.cct.round()} K',
                           LightBeam.cctKey,
                           beam.cct,
-                          2000,
+                          1800,
                           10000,
                           step: 100,
                         ),
+                        // Lo que suele haber en la calle (CA.5).
+                        if (StreetLamp.isOn(element))
+                          Wrap(
+                            spacing: 6,
+                            children: [
+                              for (final (name, k) in StreetLamp.kelvinPresets)
+                                ChoiceChip(
+                                  label: Text('$name · ${k.round()} K'),
+                                  selected: (beam.cct - k).abs() < 50,
+                                  onSelected: (_) {
+                                    element.props[LightBeam.cctKey] = k;
+                                    widget.onUpdate();
+                                  },
+                                ),
+                            ],
+                          ),
                         if (PlanLight.opticsOf(element) case final optics
                             when optics.focusable)
                           _focusControl(optics, beam.spread)

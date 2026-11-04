@@ -76,6 +76,11 @@ const kLightGroups = <LightGroup>[
   LightGroup('balloon', LightFamily.practical, 'Globos', [
     (LightType.practical, 'Globo'),
   ]),
+  // Las farolas de la localización (CA.5).
+  LightGroup('street', LightFamily.practical, 'Farolas', [
+    (LightType.practical, 'Farola de brazo'),
+    (LightType.practical, 'Farola de báculo'),
+  ]),
 ];
 
 LightGroup lightGroupById(String id) =>

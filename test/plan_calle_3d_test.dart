@@ -3,6 +3,7 @@ import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
+import 'package:iris_dp/features/camera_plan/light/street_lamp.dart';
 import 'package:iris_dp/features/camera_plan/light/wall_mount.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
@@ -154,5 +155,54 @@ void main() {
       wall(Offset.zero, const Offset(400, 0)),
     ], metersPerUnit: mpu);
     expect(plain.blockers.firstWhere((b) => b.isWall).heightM, 2.5);
+  });
+
+  test(
+    'CA.5: la farola de brazo, en la fachada, cálida y mirando al suelo',
+    () {
+      final w = wall(
+        Offset.zero,
+        const Offset(800, 0),
+        props: {PlanSegment.heightKey: 16.0},
+      );
+      final lamp = PlanElement(
+        id: 6,
+        type: ElementType.light,
+        position: const Offset(300, 50),
+        props: {'uid': 'F'},
+      );
+      StreetLamp.apply(lamp);
+      expect(LightWallMount.snap(lamp, [w, lamp], mpu), isTrue);
+      expect(lamp.lightType, LightType.practical);
+      expect(PlanLight.heightOf(lamp), 4.5);
+      expect(PlanLight.elevationOf(lamp), -90);
+
+      final f = (scene([w, lamp])['fixtures'] as List).single as Map;
+      expect(f['shape'], 'lamp');
+      expect(f['lampStyle'], 'arm');
+      expect(f['cct'], StreetLamp.defaultKelvin);
+      expect((f['pos'] as List)[2], closeTo(4.5, 1e-6));
+      // Apunta a plomo hacia abajo.
+      expect((f['aim'] as List)[2], lessThan(0.1));
+      // El brazo va hacia la pared (que está en y = 0, detrás).
+      final back = (f['back'] as List).cast<double>();
+      expect(back[1], closeTo(1, 1e-6));
+
+      // Y alumbra lo que tiene debajo como una luz de verdad.
+      final light = PlanLight.of(lamp)!;
+      expect(light.watts, StreetLamp.defaultWatts);
+    },
+  );
+
+  test('CA.5: de báculo no se pega a nada', () {
+    final lamp = PlanElement(
+      id: 7,
+      type: ElementType.light,
+      position: Offset.zero,
+    );
+    StreetLamp.apply(lamp, style: StreetLamp.stylePole);
+    expect(LightWallMount.isOn(lamp), isFalse);
+    final f = (scene([lamp])['fixtures'] as List).single as Map;
+    expect(f['lampStyle'], 'pole');
   });
 }

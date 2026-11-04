@@ -545,6 +545,38 @@
       }
       return body;
     }
+    if (f.shape === 'lamp') {
+      // Farol de cristal con su sombrerete (CA.5).
+      const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.11, 0.38, 6), glow);
+      const hat = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.16, 6), dark);
+      hat.position.y = 0.27;
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 0.08, 6), dark);
+      base.position.y = -0.23;
+      body.add(glass, hat, base);
+      const back = f.back || [0, 1];
+      const bx = back[0], bz = -back[1];
+      if (f.lampStyle === 'pole') {
+        const h = Math.max(0.5, f.pos[2] - (f.ground || 0) - 0.27);
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, h, 10), dark);
+        pole.position.y = -0.27 - h / 2;
+        body.add(pole);
+      } else {
+        // Brazo de 60 cm hasta la fachada, con su codo.
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.6, 8), dark);
+        arm.rotation.z = Math.PI / 2;
+        const holder = new THREE.Group();
+        holder.add(arm);
+        holder.rotation.y = Math.atan2(-bz, bx);
+        holder.position.set(bx * 0.3, 0.33, bz * 0.3);
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.3, 0.16), dark);
+        plate.position.set(bx * 0.6, 0.3, bz * 0.6);
+        plate.rotation.y = Math.atan2(-bz, bx);
+        const hook = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.1, 6), dark);
+        hook.position.y = 0.36;
+        body.add(holder, plate, hook);
+      }
+      return body;
+    }
     const inner = new THREE.Group();
     if (f.shape === 'panel') {
       const s = Math.max(0.3, Math.min((f.source && f.source.sizeM) || 0.6, 1.5));

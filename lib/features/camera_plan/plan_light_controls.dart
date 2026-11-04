@@ -10,6 +10,7 @@ import 'light/photometry.dart';
 import 'light/plan_light.dart';
 import 'light_beam.dart';
 import 'light/wall_mount.dart';
+import 'light/street_lamp.dart';
 
 /// Controles fotométricos de una luz: potencia, dato medido, difusión, red
 /// y gelatina, con la lectura de lo que da a tres distancias.
@@ -227,6 +228,48 @@ class _PlanLightControlsState extends State<PlanLightControls> {
               widget.onUpdate();
             },
           ),
+          // Farolas de la calle (CA.5).
+          const SizedBox(height: AppSpacing.xs),
+          if (StreetLamp.isOn(_el))
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              segments: const [
+                ButtonSegment(
+                  value: StreetLamp.styleArm,
+                  label: Text('Farola de brazo'),
+                ),
+                ButtonSegment(
+                  value: StreetLamp.stylePole,
+                  label: Text('De báculo'),
+                ),
+              ],
+              selected: {
+                StreetLamp.isPole(_el)
+                    ? StreetLamp.stylePole
+                    : StreetLamp.styleArm,
+              },
+              onSelectionChanged: (v) {
+                final keep = PlanLight.heightOf(_el);
+                StreetLamp.apply(_el, style: v.first);
+                _el.props[PlanLight.heightKey] = keep;
+                setState(() {});
+                widget.onUpdate();
+              },
+            )
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.light_outlined, size: 16),
+                label: const Text('Convertir en farola'),
+                onPressed: () {
+                  StreetLamp.apply(_el);
+                  setState(() {});
+                  widget.onUpdate();
+                },
+              ),
+            ),
           if (LightWallMount.isTube(_el)) ...[
             const SizedBox(height: AppSpacing.xs),
             SegmentedButton<bool>(
