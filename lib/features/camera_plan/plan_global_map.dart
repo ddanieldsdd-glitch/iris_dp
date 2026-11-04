@@ -1,4 +1,3 @@
-import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,6 +12,7 @@ import 'plan_data.dart';
 import 'plan_item_actions.dart';
 import 'plan_shot_card.dart';
 import 'plan_sketch.dart';
+import 'plan_start_from.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import 'plan_trash_ui.dart';
@@ -57,13 +57,20 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
   PlanProjectData get _data => widget.data;
 
   Future<void> _newSetup({int? setId, int? siteId}) async {
-    final setup = await FloorPlanRepository(ref.read(databaseProvider))
-        .createLightSetup(
-          projectId: widget.projectId,
-          setId: setId,
-          siteId: siteId,
-        );
-    if (!mounted) return;
+    final db = ref.read(databaseProvider);
+    // En un set se puede empezar con la luz general de su localización.
+    final setup = setId != null
+        ? await createSetupForSet(
+            context,
+            db,
+            projectId: widget.projectId,
+            setId: setId,
+          )
+        : await FloorPlanRepository(db).createLightSetup(
+            projectId: widget.projectId,
+            siteId: siteId,
+          );
+    if (setup == null || !mounted) return;
     widget.onOpen(PlanTarget.lightSetup(setup.id, setup.name));
   }
 
@@ -90,22 +97,26 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
   }
 
   Future<void> _newSet(LocationSite site) async {
-    final name = await askPlanName(
+    final sets = _data.setsOfSite(site.id);
+    final request = await askNewSet(
       context,
-      title: 'Nuevo set en ${site.name}',
-      hint: 'Cocina, río, pasillo…',
+      siteName: site.name,
+      sets: sets,
+      siteHasLights: _data.setupsOfSite(site.id).isNotEmpty,
+      setsWithLights: {
+        for (final set in sets)
+          if (_data.setupsOfSet(set.id).isNotEmpty) set.id,
+      },
     );
-    if (name == null) return;
-    await ref
-        .read(databaseProvider)
-        .insertLocation(
-          LocationBasePlansCompanion.insert(
-            projectId: widget.projectId,
-            siteId: Value(site.id),
-            locationName: name,
-            sortOrder: Value(_data.setsOfSite(site.id).length),
-          ),
-        );
+    if (request == null) return;
+    await FloorPlanRepository(ref.read(databaseProvider)).createSet(
+      projectId: widget.projectId,
+      siteId: site.id,
+      name: request.name,
+      fromSet: request.fromSet,
+      fromSite: request.fromSite,
+      includeLights: request.includeLights,
+    );
   }
 
   @override

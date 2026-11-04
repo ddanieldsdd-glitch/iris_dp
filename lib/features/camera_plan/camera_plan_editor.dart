@@ -46,6 +46,7 @@ import 'plan_image_widgets.dart';
 import 'plan_images.dart';
 import 'plan_item_actions.dart' show PlanMenuRow;
 import 'plan_sketch.dart' show moveDrawingToFreehandSketch;
+import 'plan_start_from.dart' show createSetupForSet;
 import 'plan_light_map.dart';
 import 'plan_project_gear_dialog.dart';
 import 'plan_marks.dart';
@@ -1207,11 +1208,19 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
     LightSetup? chosen;
     if (choice == create) {
-      chosen = await _repo.createLightSetup(
-        projectId: widget.projectId,
-        setId: _linkedSet?.id,
-        siteId: _linkedSet == null ? _linkedSite?.id : null,
-      );
+      final set = _linkedSet;
+      chosen = set != null
+          ? await createSetupForSet(
+              context,
+              ref.read(databaseProvider),
+              projectId: widget.projectId,
+              setId: set.id,
+            )
+          : await _repo.createLightSetup(
+              projectId: widget.projectId,
+              siteId: _linkedSite?.id,
+            );
+      if (chosen == null || !mounted) return;
     } else if (choice != none) {
       chosen = setups.firstWhere((s) => s.id == choice);
     }
