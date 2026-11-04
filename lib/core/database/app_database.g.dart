@@ -6130,6 +6130,17 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _coverImageMeta = const VerificationMeta(
+    'coverImage',
+  );
+  @override
+  late final GeneratedColumn<String> coverImage = GeneratedColumn<String>(
+    'cover_image',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -6162,6 +6173,7 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     storyboardImagePath,
     cellStylesJson,
     exportLayoutJson,
+    coverImage,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6403,6 +6415,12 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         ),
       );
     }
+    if (data.containsKey('cover_image')) {
+      context.handle(
+        _coverImageMeta,
+        coverImage.isAcceptableOrUnknown(data['cover_image']!, _coverImageMeta),
+      );
+    }
     return context;
   }
 
@@ -6532,6 +6550,10 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         DriftSqlType.string,
         data['${effectivePrefix}export_layout_json'],
       ),
+      coverImage: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_image'],
+      ),
     );
   }
 
@@ -6574,6 +6596,7 @@ class Shot extends DataClass implements Insertable<Shot> {
   final String? storyboardImagePath;
   final String? cellStylesJson;
   final String? exportLayoutJson;
+  final String? coverImage;
   const Shot({
     required this.id,
     this.uid,
@@ -6605,6 +6628,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     this.storyboardImagePath,
     this.cellStylesJson,
     this.exportLayoutJson,
+    this.coverImage,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6687,6 +6711,9 @@ class Shot extends DataClass implements Insertable<Shot> {
     if (!nullToAbsent || exportLayoutJson != null) {
       map['export_layout_json'] = Variable<String>(exportLayoutJson);
     }
+    if (!nullToAbsent || coverImage != null) {
+      map['cover_image'] = Variable<String>(coverImage);
+    }
     return map;
   }
 
@@ -6764,6 +6791,9 @@ class Shot extends DataClass implements Insertable<Shot> {
       exportLayoutJson: exportLayoutJson == null && nullToAbsent
           ? const Value.absent()
           : Value(exportLayoutJson),
+      coverImage: coverImage == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coverImage),
     );
   }
 
@@ -6811,6 +6841,7 @@ class Shot extends DataClass implements Insertable<Shot> {
       ),
       cellStylesJson: serializer.fromJson<String?>(json['cellStylesJson']),
       exportLayoutJson: serializer.fromJson<String?>(json['exportLayoutJson']),
+      coverImage: serializer.fromJson<String?>(json['coverImage']),
     );
   }
   @override
@@ -6847,6 +6878,7 @@ class Shot extends DataClass implements Insertable<Shot> {
       'storyboardImagePath': serializer.toJson<String?>(storyboardImagePath),
       'cellStylesJson': serializer.toJson<String?>(cellStylesJson),
       'exportLayoutJson': serializer.toJson<String?>(exportLayoutJson),
+      'coverImage': serializer.toJson<String?>(coverImage),
     };
   }
 
@@ -6881,6 +6913,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     Value<String?> storyboardImagePath = const Value.absent(),
     Value<String?> cellStylesJson = const Value.absent(),
     Value<String?> exportLayoutJson = const Value.absent(),
+    Value<String?> coverImage = const Value.absent(),
   }) => Shot(
     id: id ?? this.id,
     uid: uid.present ? uid.value : this.uid,
@@ -6934,6 +6967,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     exportLayoutJson: exportLayoutJson.present
         ? exportLayoutJson.value
         : this.exportLayoutJson,
+    coverImage: coverImage.present ? coverImage.value : this.coverImage,
   );
   Shot copyWithCompanion(ShotsCompanion data) {
     return Shot(
@@ -6997,6 +7031,9 @@ class Shot extends DataClass implements Insertable<Shot> {
       exportLayoutJson: data.exportLayoutJson.present
           ? data.exportLayoutJson.value
           : this.exportLayoutJson,
+      coverImage: data.coverImage.present
+          ? data.coverImage.value
+          : this.coverImage,
     );
   }
 
@@ -7032,7 +7069,8 @@ class Shot extends DataClass implements Insertable<Shot> {
           ..write('routeJson: $routeJson, ')
           ..write('storyboardImagePath: $storyboardImagePath, ')
           ..write('cellStylesJson: $cellStylesJson, ')
-          ..write('exportLayoutJson: $exportLayoutJson')
+          ..write('exportLayoutJson: $exportLayoutJson, ')
+          ..write('coverImage: $coverImage')
           ..write(')'))
         .toString();
   }
@@ -7069,6 +7107,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     storyboardImagePath,
     cellStylesJson,
     exportLayoutJson,
+    coverImage,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -7103,7 +7142,8 @@ class Shot extends DataClass implements Insertable<Shot> {
           other.routeJson == this.routeJson &&
           other.storyboardImagePath == this.storyboardImagePath &&
           other.cellStylesJson == this.cellStylesJson &&
-          other.exportLayoutJson == this.exportLayoutJson);
+          other.exportLayoutJson == this.exportLayoutJson &&
+          other.coverImage == this.coverImage);
 }
 
 class ShotsCompanion extends UpdateCompanion<Shot> {
@@ -7137,6 +7177,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
   final Value<String?> storyboardImagePath;
   final Value<String?> cellStylesJson;
   final Value<String?> exportLayoutJson;
+  final Value<String?> coverImage;
   const ShotsCompanion({
     this.id = const Value.absent(),
     this.uid = const Value.absent(),
@@ -7168,6 +7209,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.storyboardImagePath = const Value.absent(),
     this.cellStylesJson = const Value.absent(),
     this.exportLayoutJson = const Value.absent(),
+    this.coverImage = const Value.absent(),
   });
   ShotsCompanion.insert({
     this.id = const Value.absent(),
@@ -7200,6 +7242,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.storyboardImagePath = const Value.absent(),
     this.cellStylesJson = const Value.absent(),
     this.exportLayoutJson = const Value.absent(),
+    this.coverImage = const Value.absent(),
   }) : sceneId = Value(sceneId),
        projectId = Value(projectId),
        number = Value(number);
@@ -7234,6 +7277,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Expression<String>? storyboardImagePath,
     Expression<String>? cellStylesJson,
     Expression<String>? exportLayoutJson,
+    Expression<String>? coverImage,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -7271,6 +7315,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
         'storyboard_image_path': storyboardImagePath,
       if (cellStylesJson != null) 'cell_styles_json': cellStylesJson,
       if (exportLayoutJson != null) 'export_layout_json': exportLayoutJson,
+      if (coverImage != null) 'cover_image': coverImage,
     });
   }
 
@@ -7305,6 +7350,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Value<String?>? storyboardImagePath,
     Value<String?>? cellStylesJson,
     Value<String?>? exportLayoutJson,
+    Value<String?>? coverImage,
   }) {
     return ShotsCompanion(
       id: id ?? this.id,
@@ -7337,6 +7383,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
       storyboardImagePath: storyboardImagePath ?? this.storyboardImagePath,
       cellStylesJson: cellStylesJson ?? this.cellStylesJson,
       exportLayoutJson: exportLayoutJson ?? this.exportLayoutJson,
+      coverImage: coverImage ?? this.coverImage,
     );
   }
 
@@ -7437,6 +7484,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     if (exportLayoutJson.present) {
       map['export_layout_json'] = Variable<String>(exportLayoutJson.value);
     }
+    if (coverImage.present) {
+      map['cover_image'] = Variable<String>(coverImage.value);
+    }
     return map;
   }
 
@@ -7472,7 +7522,8 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
           ..write('routeJson: $routeJson, ')
           ..write('storyboardImagePath: $storyboardImagePath, ')
           ..write('cellStylesJson: $cellStylesJson, ')
-          ..write('exportLayoutJson: $exportLayoutJson')
+          ..write('exportLayoutJson: $exportLayoutJson, ')
+          ..write('coverImage: $coverImage')
           ..write(')'))
         .toString();
   }
@@ -45512,6 +45563,7 @@ typedef $$ShotsTableCreateCompanionBuilder =
       Value<String?> storyboardImagePath,
       Value<String?> cellStylesJson,
       Value<String?> exportLayoutJson,
+      Value<String?> coverImage,
     });
 typedef $$ShotsTableUpdateCompanionBuilder =
     ShotsCompanion Function({
@@ -45545,6 +45597,7 @@ typedef $$ShotsTableUpdateCompanionBuilder =
       Value<String?> storyboardImagePath,
       Value<String?> cellStylesJson,
       Value<String?> exportLayoutJson,
+      Value<String?> coverImage,
     });
 
 final class $$ShotsTableReferences
@@ -45832,6 +45885,11 @@ class $$ShotsTableFilterComposer extends Composer<_$AppDatabase, $ShotsTable> {
 
   ColumnFilters<String> get exportLayoutJson => $composableBuilder(
     column: $table.exportLayoutJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverImage => $composableBuilder(
+    column: $table.coverImage,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -46142,6 +46200,11 @@ class $$ShotsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get coverImage => $composableBuilder(
+    column: $table.coverImage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ScenesTableOrderingComposer get sceneId {
     final $$ScenesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -46345,6 +46408,11 @@ class $$ShotsTableAnnotationComposer
 
   GeneratedColumn<String> get exportLayoutJson => $composableBuilder(
     column: $table.exportLayoutJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get coverImage => $composableBuilder(
+    column: $table.coverImage,
     builder: (column) => column,
   );
 
@@ -46585,6 +46653,7 @@ class $$ShotsTableTableManager
                 Value<String?> storyboardImagePath = const Value.absent(),
                 Value<String?> cellStylesJson = const Value.absent(),
                 Value<String?> exportLayoutJson = const Value.absent(),
+                Value<String?> coverImage = const Value.absent(),
               }) => ShotsCompanion(
                 id: id,
                 uid: uid,
@@ -46616,6 +46685,7 @@ class $$ShotsTableTableManager
                 storyboardImagePath: storyboardImagePath,
                 cellStylesJson: cellStylesJson,
                 exportLayoutJson: exportLayoutJson,
+                coverImage: coverImage,
               ),
           createCompanionCallback:
               ({
@@ -46649,6 +46719,7 @@ class $$ShotsTableTableManager
                 Value<String?> storyboardImagePath = const Value.absent(),
                 Value<String?> cellStylesJson = const Value.absent(),
                 Value<String?> exportLayoutJson = const Value.absent(),
+                Value<String?> coverImage = const Value.absent(),
               }) => ShotsCompanion.insert(
                 id: id,
                 uid: uid,
@@ -46680,6 +46751,7 @@ class $$ShotsTableTableManager
                 storyboardImagePath: storyboardImagePath,
                 cellStylesJson: cellStylesJson,
                 exportLayoutJson: exportLayoutJson,
+                coverImage: coverImage,
               ),
           withReferenceMapper: (p0) => p0
               .map(

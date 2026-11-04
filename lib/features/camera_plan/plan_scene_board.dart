@@ -21,6 +21,7 @@ import 'plan_item_actions.dart';
 import 'plan_sketch.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
+import 'shot_cover.dart';
 import 'shot_route.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
@@ -274,10 +275,8 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
           sketches: _data.sketchesOfScene(_scene.id),
           data: _data,
           onOpen: _openSketch,
-          onNewElements: () =>
-              _newSketch(kind: LightSetupKind.sketchElements),
-          onNewFreehand: () =>
-              _newSketch(kind: LightSetupKind.sketchFreehand),
+          onNewElements: () => _newSketch(kind: LightSetupKind.sketchElements),
+          onNewFreehand: () => _newSketch(kind: LightSetupKind.sketchFreehand),
           onToPlan: _sketchToPlan,
         ),
         for (final set in sets) _setSection(palette, set),
@@ -756,25 +755,29 @@ class _ShotCard extends StatelessWidget {
             SizedBox(
               width: 64,
               height: 48,
-              child: drawn.isEmpty && drawings.isEmpty && sketches.isNotEmpty
-                  ? Tooltip(
-                      message: 'Boceto de planta · clic para verlo',
-                      child: GestureDetector(
-                        onTap: sketchMenu,
-                        child: Image.file(
-                          File(sketches.last),
-                          fit: BoxFit.cover,
-                          cacheWidth: 200,
-                        ),
-                      ),
-                    )
-                  : PlanThumbnail(
-                      elements: drawn,
-                      drawings: drawings,
-                      inherited: data.baseOfShot(shot),
-                      focus: data.zoneOf(data.set(data.setIdOfShot(shot))),
-                      emptyIcon: Icons.videocam_outlined,
-                    ),
+              // La imagen del plano (storyboard o referencia); sin ella, su
+              // planta o el boceto.
+              child:
+                  shotCoverThumbnail(shot, cacheWidth: 200) ??
+                  (drawn.isEmpty && drawings.isEmpty && sketches.isNotEmpty
+                      ? Tooltip(
+                          message: 'Boceto de planta · clic para verlo',
+                          child: GestureDetector(
+                            onTap: sketchMenu,
+                            child: Image.file(
+                              File(sketches.last),
+                              fit: BoxFit.cover,
+                              cacheWidth: 200,
+                            ),
+                          ),
+                        )
+                      : PlanThumbnail(
+                          elements: drawn,
+                          drawings: drawings,
+                          inherited: data.baseOfShot(shot),
+                          focus: data.zoneOf(data.set(data.setIdOfShot(shot))),
+                          emptyIcon: Icons.videocam_outlined,
+                        )),
             ),
             const SizedBox(width: 8),
             Expanded(
