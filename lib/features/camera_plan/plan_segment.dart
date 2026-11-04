@@ -41,6 +41,20 @@ class PlanSegment {
 
   static String kind(PlanElement el) => el.props['kind'] as String? ?? kindWall;
 
+  /// Alto de la pared en metros (CA.4). Null: el de la nave o 2,5 m.
+  static const heightKey = 'heightM';
+
+  /// Grosor de la pared en metros (CA.1). Lo pone el escaneo o se elige a
+  /// mano; sin él, [defaultThicknessM].
+  static const thicknessKey = 'thicknessM';
+  static const defaultThicknessM = 0.12;
+
+  static double? heightM(PlanElement el) =>
+      (el.props[heightKey] as num?)?.toDouble();
+
+  static double thicknessM(PlanElement el) =>
+      (el.props[thicknessKey] as num?)?.toDouble() ?? defaultThicknessM;
+
   static String kindLabel(String kind) => switch (kind) {
     kindStreet => 'Calle',
     kindRelief => 'Relieve',

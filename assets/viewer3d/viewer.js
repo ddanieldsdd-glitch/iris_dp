@@ -489,10 +489,60 @@
   }
 
   const wallMat = new THREE.MeshStandardMaterial({ color: 0xc3c9ce, roughness: 0.85, side: THREE.DoubleSide, transparent: true, opacity: 0.6, depthWrite: false });
+  const wallSolid = new THREE.MeshStandardMaterial({ color: 0xd9dcdf, roughness: 0.9, side: THREE.DoubleSide });
   const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fc7d6, roughness: 0.1, metalness: 0.1, side: THREE.DoubleSide, transparent: true, opacity: 0.25, depthWrite: false });
+
+  // Un tramo de pared con grosor (CA.1): las dos caras, el canto de arriba,
+  // el de abajo y los dos de los lados.
+  function slab(out, a, b, z0, zLoA, zLoB, zHiA, zHiB, t) {
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len * t / 2, ny = dx / len * t / 2;
+    const P = (p, s, z) => V(p[0] + nx * s, p[1] + ny * s, z0 + z);
+    const a0 = P(a, 1, zLoA), b0 = P(b, 1, zLoB), b1 = P(b, 1, zHiB), a1 = P(a, 1, zHiA);
+    const c0 = P(a, -1, zLoA), d0 = P(b, -1, zLoB), d1 = P(b, -1, zHiB), c1 = P(a, -1, zHiA);
+    quad(out, a0, b0, b1, a1);
+    quad(out, d0, c0, c1, d1);
+    quad(out, a1, b1, d1, c1);
+    quad(out, c0, d0, b0, a0);
+    quad(out, c0, a0, a1, c1);
+    quad(out, b0, d0, d1, b1);
+  }
+
+  // Una tabla de p a q (en planta), de z0 a z1 y de grosor t.
+  function plank(p, q, z0, z1, t, mat) {
+    const dx = q[0] - p[0], dy = q[1] - p[1], len = Math.hypot(dx, dy);
+    if (len < 0.01 || z1 - z0 < 0.01) return null;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len, z1 - z0, t), mat);
+    m.position.copy(V((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (z0 + z1) / 2));
+    m.rotation.y = Math.atan2(dy, dx);
+    return m;
+  }
+
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 });
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x6e6a64, roughness: 0.6 });
+
+  // Puertas y ventanas con su marco y sus hojas (CA.2). Una puerta cerrada
+  // tapa el hueco; abierta, la hoja gira sobre la bisagra.
+  function addLeaves(o, z0, top) {
+    if (!o.span) return;
+    const a = [o.span[0], o.span[1]], b = [o.span[2], o.span[3]];
+    const lo = z0 + (o.sill || 0), hi = z0 + Math.min(o.head || 2.1, top || 99);
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len * 0.03, uy = dy / len * 0.03;
+    const parts = [
+      plank([a[0] - ux, a[1] - uy], [a[0] + ux, a[1] + uy], lo, hi, 0.14, frameMat),
+      plank([b[0] - ux, b[1] - uy], [b[0] + ux, b[1] + uy], lo, hi, 0.14, frameMat),
+      plank(a, b, hi, hi + 0.05, 0.14, frameMat),
+    ];
+    if (o.kind === 'window') parts.push(plank(a, b, lo - 0.04, lo, 0.18, frameMat));
+    for (const l of o.leaves || []) parts.push(plank([l[0], l[1]], [l[2], l[3]], lo + 0.01, hi - 0.01, 0.04, leafMat));
+    for (const m of parts) if (m) L.walls.add(m);
+  }
 
   function addWall(w) {
     const pts = w.points, z0 = w.z0 || 0, holes = w.openings || [];
+    // En «Maqueta» las paredes van macizas y con su grosor.
+    const thick = clearView ? (w.thick || 0) : 0;
     const cum = [0];
     for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
     const pos = [], glass = [];
@@ -510,6 +560,7 @@
         const hole = holes.find((o) => mid > o.from && mid < o.to);
         const face = (zLoA, zLoB, zHiA, zHiB, out) => {
           if (zHiA - zLoA < 1e-3 && zHiB - zLoB < 1e-3) return;
+          if (thick > 0 && out === pos) return slab(out, a, b, z0, zLoA, zLoB, zHiA, zHiB, thick);
           quad(out, V(a[0], a[1], z0 + zLoA), V(b[0], b[1], z0 + zLoB), V(b[0], b[1], z0 + zHiB), V(a[0], a[1], z0 + zHiA));
         };
         if (!hole) {
@@ -521,7 +572,8 @@
         }
       }
     }
-    L.walls.add(meshFrom(pos, wallMat, w.id));
+    L.walls.add(meshFrom(pos, clearView ? wallSolid : wallMat, w.id));
+    for (const o of holes) addLeaves(o, z0, w.tops[0]);
     if (glass.length) L.glass.add(meshFrom(glass, glassMat, null));
   }
 
@@ -733,6 +785,27 @@
     labelsGroup.add(sprite);
   }
 
+  // En «Maqueta», una línea de puntos de cada foco al suelo con su altura
+  // (CA.1): es lo que hace falta para colocarlo bien.
+  const guideMat = new THREE.LineDashedMaterial({ color: 0xf2c14e, dashSize: 0.12, gapSize: 0.08, transparent: true, opacity: 0.85 });
+  function heightGuides(sc) {
+    const ground = (sc.environment && sc.environment.groundM) || 0;
+    for (const f of sc.fixtures || []) {
+      const h = f.pos[2] - ground;
+      if (h < 0.4) continue;
+      const g = new THREE.BufferGeometry().setFromPoints([V(f.pos[0], f.pos[1], f.pos[2]), V(f.pos[0], f.pos[1], ground)]);
+      const line = new THREE.Line(g, guideMat);
+      line.computeLineDistances();
+      L.fixtures.add(line);
+      const sprite = makeLabel(h.toFixed(1).replace('.', ',') + ' m', 'light');
+      sprite.position.copy(V(f.pos[0], f.pos[1], ground + h / 2));
+      sprite.userData.id = 'h:' + f.id;
+      sprite.userData.layer = 'fixtures';
+      labels.push(sprite);
+      labelsGroup.add(sprite);
+    }
+  }
+
   function updateLabels() {
     for (const l of labels) {
       const layerShown = l.userData.layer ? shown[l.userData.layer] !== false : true;
@@ -830,7 +903,8 @@
     const span = Math.max(sz.x, sz.z, 6);
     // Suelo: gris neutro en plató, del terreno elegido fuera y, mucho más
     // grande, hasta el horizonte.
-    const floorColor = env === 'studio' ? 0x767676
+    const floorColor = clearView ? 0x5d6166
+      : env === 'studio' ? 0x767676
       : env === 'exterior' ? ((sc.environment && sc.environment.groundRgb) || 0x4f6b35)
       : 0x8a8378;
     const floorSpan = env === 'exterior' ? span + 400 : span + 30;
@@ -841,7 +915,7 @@
     const grid = new THREE.GridHelper(Math.ceil(span + 30), Math.ceil(span + 30), 0x6d7378, 0x7f858a);
     grid.position.set(c.x, 0, c.z);
     grid.material.transparent = true;
-    grid.material.opacity = 0.25;
+    grid.material.opacity = clearView ? 0.55 : 0.25;
     root.add(grid);
 
     (sc.halls || []).forEach(addHall);
@@ -1026,6 +1100,7 @@
       return V(m.p[0], m.p[1], (d.z0 || 0) + m.top + 0.3);
     });
     tag(sc.scans, null, (q) => V(q.at[0], q.at[1], (q.z0 || 0) + 0.5));
+    if (clearView) heightGuides(sc);
     updateLabels();
 
     // El sol, con sombras de lo que tapa (en «Claro», no).

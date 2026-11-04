@@ -1277,6 +1277,21 @@ class _Plan3dViewState extends State<Plan3dView> {
                 )
               : const SizedBox.shrink(),
         ),
+        // Luz o maqueta, a mano (CA.1): antes solo estaba en el panel.
+        IconButton(
+          tooltip: _realLight
+              ? 'Ver como maqueta, para colocar'
+              : 'Ver con la luz de los focos',
+          icon: Icon(
+            _realLight ? Icons.view_in_ar_outlined : Icons.lightbulb_outline,
+            size: 18,
+            color: palette.textSecondary,
+          ),
+          onPressed: () => setState(() {
+            _realLight = !_realLight;
+            _schedule();
+          }),
+        ),
         PopupMenuButton<String>(
           tooltip: 'Qué se ve',
           icon: Icon(
@@ -1553,8 +1568,8 @@ class _Plan3dViewState extends State<Plan3dView> {
             ),
             const ButtonSegment(
               value: false,
-              icon: Icon(Icons.wb_sunny_outlined, size: 16),
-              label: Text('Claro'),
+              icon: Icon(Icons.view_in_ar_outlined, size: 16),
+              label: Text('Maqueta'),
             ),
           ],
           selected: {_realLight},
@@ -1567,8 +1582,8 @@ class _Plan3dViewState extends State<Plan3dView> {
           _realLight
               ? 'Solo la luz de los focos (y el sol o el cielo si toca), a la '
                     'exposición de la cámara.'
-              : 'Luz de trabajo pareja, sin sombras, con los nombres: para ver '
-                    'dónde va cada foco, marco y palio.',
+              : 'Maqueta: todo sólido y con luz pareja, con los nombres y la '
+                    'altura de cada foco hasta el suelo, para colocar.',
           style: AppTypography.caption(
             palette,
           ).copyWith(color: palette.textTertiary),

@@ -650,6 +650,18 @@ class PlanScene3d {
             : 'gap',
         if (PlanOpening.isWindow(o) && !PlanOpening.solidLeaves(o))
           'glass': true,
+        // El marco y las hojas (CA.2): una puerta cerrada se ve cerrada.
+        if (PlanOpening.isDoor(o) || PlanOpening.isWindow(o)) ...{
+          'span': [
+            ...xy(PlanOpening.span(o).$1),
+            ...xy(PlanOpening.span(o).$2),
+          ],
+          'leaves': [
+            if (PlanOpening.isDoor(o) || PlanOpening.solidLeaves(o))
+              for (final (h, e) in PlanOpening.leaves(o, includeClosed: true))
+                [...xy(h), ...xy(e)],
+          ],
+        },
       });
     }
     holes.sort((a, b) => (a['from'] as double).compareTo(b['from'] as double));
@@ -660,6 +672,7 @@ class PlanScene3d {
       'points': [for (final p in pts) xy(p)],
       'z0': level,
       'tops': tops,
+      'thick': _r(PlanSegment.thicknessM(el)),
       'openings': holes,
     };
   }
