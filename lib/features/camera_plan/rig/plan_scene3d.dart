@@ -251,6 +251,17 @@ class PlanScene3d {
             if (PropBox.isBox(el)) ...{
               'shape': PropBox.shapeOf(el),
               if (PropBox.hasBottles(el)) 'bottles': true,
+              // La barra curva: su eje en metros (x a lo ancho, y hacia
+              // atrás) hasta la pared.
+              if (PropBox.curve(el, elements, mpu) case final c?)
+                'curve': {
+                  'radiusM': _r(c.radiusM),
+                  if (c.leftReachM case final m?) 'left': _r(m),
+                  if (c.rightReachM case final m?) 'right': _r(m),
+                  'path': [
+                    for (final p in c.centerline) [_r(p.dx), _r(p.dy)],
+                  ],
+                },
             },
             'asset': ?UnrealAssetRef.of(el)?.toPayload(),
             // Miniatura 3/4 del asset (F6.20 B4): el visor la pone de cartel.

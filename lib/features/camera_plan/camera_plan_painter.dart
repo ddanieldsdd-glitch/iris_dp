@@ -26,6 +26,7 @@ import 'plan_sun_painter.dart';
 import 'plan_terrain_painter.dart';
 import 'plan_segment.dart';
 import 'plan_street.dart';
+import 'prop_box.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
 import 'rig/rig_painter.dart';
@@ -3085,7 +3086,28 @@ class CameraPlanPainter extends CustomPainter {
         canvas.drawRect(const Rect.fromLTWH(-14, -20, 28, 12), paint);
       case PropType.rectangle:
       case null:
-        canvas.drawRect(body, paint);
+        // La barra curva (CA.8): su contorno hasta la pared.
+        final curve = PropBox.curve(el, elements, mpu);
+        if (curve != null) {
+          final pts = curve.outline(size.depth);
+          canvas.drawPath(
+            Path()..addPolygon([for (final p in pts) p / mpu], true),
+            paint,
+          );
+        } else {
+          canvas.drawRect(body, paint);
+        }
+        if (PropBox.shapeOf(el) == PropBox.bar) {
+          // Una flecha pequeña marca el lado de los clientes.
+          final y = body.top - 4;
+          canvas.drawPath(
+            Path()
+              ..moveTo(-5, y)
+              ..lineTo(0, y - 6)
+              ..lineTo(5, y),
+            paint,
+          );
+        }
     }
   }
 

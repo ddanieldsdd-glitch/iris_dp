@@ -32,7 +32,7 @@ legible**, después la calle.
 | CA.5 | Farola real: brazo en fachada o báculo, 4,5 m, kelvin editable | hecho |
 | CA.6 | Calle con perfil: calzada, aceras, bordillo o plataforma única, fachadas y «Poner farolas» | hecho |
 | CA.7 | Poyete / murete y cajas de hasta 30 m con medidas escritas | hecho |
-| CA.8 | Barra de bar y estanterías con botellas de cristal (pedido el 2026-11-04) | hecho |
+| CA.8 | Barra de bar y estanterías con botellas de cristal (pedido el 2026-11-04); la barra puede curvarse por un extremo o los dos y llegar recta hasta la pared de detrás | hecho |
 
 ### Medidas de referencia de la calle
 

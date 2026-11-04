@@ -330,4 +330,37 @@ void main() {
     PropBox.apply(shelf, PropBox.bar);
     expect(shelf.customName, 'Botellero del kebab');
   });
+
+  test('CA.8: la barra curva llega hasta la pared de detrás', () {
+    final bar = rect();
+    PropBox.apply(bar, PropBox.bar);
+    // Sin curva, recta como siempre.
+    expect(PropBox.curve(bar, [bar], mpu), isNull);
+    bar.props[PropBox.curveKey] = PropBox.curveBoth;
+    // La pared, 2,5 m detrás (abajo en la planta si la barra mira arriba).
+    final back = wall(const Offset(-500, 350), const Offset(500, 350));
+    final c = PropBox.curve(bar, [bar, back], mpu)!;
+    expect(c.radiusM, PropBox.defaultCurveRadiusM);
+    // 2,5 m − 0,6 de la curva − 6 cm de media pared.
+    expect(c.leftReachM, closeTo(1.84, 1e-6));
+    expect(c.rightReachM, closeTo(1.84, 1e-6));
+    expect(c.centerline.first.dy, closeTo(2.44, 1e-6));
+    expect(c.centerline.last.dx, closeTo(1.2, 1e-6));
+    final p = (scene([bar, back])['props'] as List).single as Map;
+    final curve = p['curve'] as Map;
+    expect(curve['left'], 1.84);
+    expect((curve['path'] as List).length, c.centerline.length);
+
+    // Girada 90°, busca la pared que le queda detrás (a la izquierda).
+    bar
+      ..rotation = 90
+      ..props[PropBox.curveKey] = PropBox.curveRight;
+    final side = wall(const Offset(-200, -500), const Offset(-200, 500));
+    final r = PropBox.curve(bar, [bar, back, side], mpu)!;
+    expect(r.leftReachM, isNull);
+    expect(r.rightReachM, closeTo(3 - 0.6 - 0.06, 1e-6));
+
+    // Sin pared detrás, solo la curva.
+    expect(PropBox.curve(bar, [bar], mpu)!.rightReachM, 0);
+  });
 }

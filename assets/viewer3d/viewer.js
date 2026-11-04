@@ -827,7 +827,7 @@
         break;
       }
       case 'rectangle':
-        boxShape(g, p.shape, w, h, d, mat, !!p.bottles);
+        boxShape(g, p.shape, w, h, d, mat, !!p.bottles, p.curve);
         break;
       default:
         g.add(box(w, h, d, mat));
@@ -856,26 +856,57 @@
     }
   }
 
-  // Formas del rectángulo (CA.7–CA.8). El frente (donde se pone la gente)
-  // es +z.
-  function boxShape(g, shape, w, h, d, mat, bottles) {
+  // Formas del rectángulo (CA.7–CA.8).
+  // Marco de la pieza: x a lo ancho, +z hacia atrás (el lado contrario al
+  // que mira en la planta). Los clientes de la barra y el frente de la
+  // estantería quedan hacia −z, donde apunta la pieza.
+  function boxShape(g, shape, w, h, d, mat, bottles, curve) {
     if (shape === 'bar') {
+      // La barra sigue su eje: recta, o curvada hacia atrás hasta la pared.
+      const path = (curve && curve.path && curve.path.length > 1)
+        ? curve.path : [[-w / 2, 0], [w / 2, 0]];
       const top = 0.05, over = Math.min(0.12, d * 0.25);
-      g.add(box(w, h - top, d - over, mat, 0, (h - top) / 2, -over / 2));
-      g.add(box(w + 0.04, top, d, dark, 0, h - top / 2, 0));
-      // Reposapiés.
-      const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, w, 8), dark);
-      rail.rotation.z = Math.PI / 2;
-      rail.position.set(0, 0.22, d / 2 - over + 0.06);
-      g.add(rail);
-      if (bottles) bottleRow(g, w, h, -d / 2 + 0.1, 0.32);
+      const ang = [];
+      for (let i = 0; i + 1 < path.length; i++) {
+        ang.push(Math.atan2(path[i + 1][1] - path[i][1], path[i + 1][0] - path[i][0]));
+      }
+      // Lo que se alarga cada tramo para cerrar la junta por fuera.
+      const joint = (i) => {
+        if (i < 0 || i + 1 >= ang.length) return 0;
+        let t = Math.abs(ang[i + 1] - ang[i]);
+        if (t > Math.PI) t = 2 * Math.PI - t;
+        return d / 2 * Math.tan(t / 2);
+      };
+      for (let i = 0; i + 1 < path.length; i++) {
+        const a = path[i], b = path[i + 1];
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (len < 1e-4) continue;
+        const ea = joint(i - 1), eb = joint(i);
+        const L = len + ea + eb;
+        const s = new THREE.Group();
+        // Centro del tramo, corrido por las juntas.
+        const shift = (eb - ea) / 2;
+        s.position.set((a[0] + b[0]) / 2 + Math.cos(ang[i]) * shift, 0,
+          (a[1] + b[1]) / 2 + Math.sin(ang[i]) * shift);
+        s.rotation.y = -ang[i];
+        const ends = path.length === 2 ? 0.04 : 0;
+        s.add(box(L, h - top, d - over, mat, 0, (h - top) / 2, over / 2));
+        s.add(box(L + ends, top, d, dark, 0, h - top / 2, 0));
+        // Reposapiés.
+        const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, L, 8), dark);
+        rail.rotation.z = Math.PI / 2;
+        rail.position.set(0, 0.22, -(d / 2 - over + 0.06));
+        s.add(rail);
+        if (bottles && len > 0.3) bottleRow(s, len, h, d / 2 - 0.1, 0.32);
+        g.add(s);
+      }
       return;
     }
     if (shape === 'shelf') {
       const t = 0.025, n = Math.max(2, Math.round(h / 0.42));
       g.add(box(t, h, d, mat, -w / 2 + t / 2, h / 2, 0));
       g.add(box(t, h, d, mat, w / 2 - t / 2, h / 2, 0));
-      g.add(box(w, h, 0.015, mat, 0, h / 2, -d / 2 + 0.0075));
+      g.add(box(w, h, 0.015, mat, 0, h / 2, d / 2 - 0.0075));
       const gap = h / n;
       for (let k = 0; k <= n; k++) {
         const y = Math.min(k * gap, h - t / 2);

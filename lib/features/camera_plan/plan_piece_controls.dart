@@ -583,6 +583,43 @@ class PlanPieceControls extends StatelessWidget {
               PropBox.hasBottles(el),
               (v) => el.props[PropBox.bottlesKey] = v,
             ),
+          // La barra se curva hacia atrás y llega hasta la pared (CA.8).
+          if (PropBox.shapeOf(el) == PropBox.bar) ...[
+            Text('Curva hacia la pared', style: AppTypography.caption(palette)),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final (name, curve) in PropBox.curveOptions)
+                  ChoiceChip(
+                    label: Text(name),
+                    selected: PropBox.curveOf(el) == curve,
+                    onSelected: (_) {
+                      el.props[PropBox.curveKey] = curve;
+                      onUpdate();
+                    },
+                  ),
+              ],
+            ),
+            if (PropBox.curveOf(el) != PropBox.curveNone) ...[
+              slider(
+                'Radio de la curva',
+                cm(PropBox.curveRadiusM(el)),
+                current: PropBox.curveRadiusM(el),
+                min: 0.3,
+                max: 2,
+                onChanged: (v) =>
+                    el.props[PropBox.curveRadiusKey] = (v * 100).round() / 100,
+              ),
+              Text(
+                'La curva gira hacia el lado del camarero (detrás de la '
+                'flecha) y sigue recta hasta la pared que tenga detrás.',
+                style: AppTypography.caption(
+                  palette,
+                ).copyWith(color: palette.textTertiary),
+              ),
+            ],
+          ],
           const SizedBox(height: AppSpacing.xs),
           Wrap(
             spacing: 8,
