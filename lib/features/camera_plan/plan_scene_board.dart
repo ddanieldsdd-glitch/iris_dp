@@ -1178,6 +1178,9 @@ class PlanShotCameraBadges extends StatelessWidget {
       ),
       child: Text(
         text,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.fade,
         style: TextStyle(
           color: color,
           fontSize: 9,
