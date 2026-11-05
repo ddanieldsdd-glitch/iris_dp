@@ -58,6 +58,7 @@ void main() {
       late String dest;
       late File marker;
       late File script;
+      late File verify;
 
       setUp(() {
         dir = Directory.systemTemp.createTempSync('iris_auto_update');
@@ -67,14 +68,19 @@ void main() {
         script = File('${dir.path}/instalar.sh')
           ..writeAsStringSync(MacAutoUpdate.applyScript);
         marker = File('${dir.path}/preparada.json');
+        // En los tests, «entera» = lleva Contents/ok (no hay firma).
+        verify = File('${dir.path}/verificar.sh')
+          ..writeAsStringSync('#!/bin/bash\ntest -f "\$1/Contents/ok"\n');
+        Process.runSync('chmod', ['+x', verify.path]);
       });
 
       tearDown(() => dir.deleteSync(recursive: true));
 
-      String stage(String version) {
+      String stage(String version, {bool whole = true}) {
         final app = '${dir.path}/IRIS-$version.app';
         Directory('$app/Contents').createSync(recursive: true);
         File('$app/Contents/version').writeAsStringSync(version);
+        if (whole) File('$app/Contents/ok').writeAsStringSync('');
         marker.writeAsStringSync(
           jsonEncode({'version': version, 'build': 17, 'app': app}),
         );
@@ -82,14 +88,18 @@ void main() {
       }
 
       Future<void> run(Process app) async {
-        final waiter = await Process.start('/bin/bash', [
-          script.path,
-          '${app.pid}',
-          dest,
-          marker.path,
-          '0',
-          '${dir.path}/instalar.log',
-        ]);
+        final waiter = await Process.start(
+          '/bin/bash',
+          [
+            script.path,
+            '${app.pid}',
+            dest,
+            marker.path,
+            '0',
+            '${dir.path}/instalar.log',
+          ],
+          environment: {'IRIS_UPDATE_VERIFY': verify.path},
+        );
         // Mientras IRIS sigue abierta, no toca nada.
         await Future<void>.delayed(const Duration(milliseconds: 1500));
         expect(File('$dest/Contents/version').readAsStringSync(), '1.0.19');
@@ -115,6 +125,19 @@ void main() {
         stage('1.1.1');
         await waiting;
         expect(File('$dest/Contents/version').readAsStringSync(), '1.1.1');
+      });
+
+      test('una preparada rota no se instala: sigue la que había', () async {
+        final broken = stage('1.5.0', whole: false);
+        final app = await Process.start('sleep', ['30']);
+        await run(app);
+        expect(File('$dest/Contents/version').readAsStringSync(), '1.0.19');
+        expect(Directory(broken).existsSync(), isFalse);
+        expect(marker.existsSync(), isFalse);
+        expect(
+          File('${dir.path}/instalar.log').readAsStringSync(),
+          contains('no está entera'),
+        );
       });
 
       test('sin versión preparada deja la que había', () async {

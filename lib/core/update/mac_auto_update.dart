@@ -75,7 +75,10 @@ abstract final class MacAutoUpdate {
       final staged = StagedMacUpdate.fromJson(
         jsonDecode(await file.readAsString()),
       );
-      if (staged == null || !Directory(staged.appPath).existsSync()) {
+      if (staged == null ||
+          !Directory(
+            p.join(staged.appPath, 'Contents', 'MacOS'),
+          ).existsSync()) {
         return null;
       }
       return staged;
@@ -107,8 +110,24 @@ abstract final class MacAutoUpdate {
     return b != null && b.startsWith('/Applications/');
   }
 
+  /// La preparación en marcha en este proceso: quien pida otra (el aviso y
+  /// «Reiniciar ahora» a la vez) espera a esa en vez de empezar otra que
+  /// borre lo que la primera está dejando (pasó el 2026-11-05 con la v1.5.0).
+  static Future<StagedMacUpdate>? _staging;
+
   /// Descarga [release] y la deja lista (si no lo estaba ya).
-  static Future<StagedMacUpdate> stage(AppRelease release) async {
+  static Future<StagedMacUpdate> stage(AppRelease release) {
+    final running = _staging;
+    if (running != null) return running;
+    final next = _stage(release);
+    _staging = next;
+    next.whenComplete(() {
+      if (identical(_staging, next)) _staging = null;
+    }).ignore();
+    return next;
+  }
+
+  static Future<StagedMacUpdate> _stage(AppRelease release) async {
     final already = await staged();
     if (already != null && already.buildNumber >= release.buildNumber) {
       return already;
@@ -274,6 +293,11 @@ abstract final class MacAutoUpdate {
   static const applyScript = r'''#!/bin/bash
 PID="$1"; DEST="$2"; MARKER="$3"; RELAUNCH="$4"; LOG="$5"
 log() { printf '%s  %s\n' "$(date '+%F %T')" "$*" >> "$LOG"; }
+# ¿Está la app entera y firmada? (IRIS_UPDATE_VERIFY solo en los tests.)
+verify() {
+  if [ -n "$IRIS_UPDATE_VERIFY" ]; then "$IRIS_UPDATE_VERIFY" "$1"
+  else codesign --verify --deep --strict "$1" 2>>"$LOG"; fi
+}
 # Un solo instalador esperando.
 DIR="$(dirname "$MARKER")"
 LOCK="$DIR/instalando"
@@ -298,12 +322,24 @@ if [ -z "$STAGED" ] || [ ! -d "$STAGED" ]; then
   [ "$RELAUNCH" = "1" ] || [ -f "$REOPEN" ] && { rm -f "$REOPEN"; open "$DEST"; }
   exit 0
 fi
+# Se comprueba justo antes de cambiarla: una copia que se estropeó después
+# de prepararla (el 2026-11-05 llegó a medio borrar) no se instala nunca.
+if ! verify "$STAGED"; then
+  log "La versión preparada no está entera; se tira y sigue la que había."
+  rm -rf "$STAGED"; rm -f "$MARKER"
+  if [ "$RELAUNCH" = "1" ] || [ -f "$REOPEN" ]; then rm -f "$REOPEN"; open "$DEST"; fi
+  exit 0
+fi
 OLD="$DEST.anterior"
 rm -rf "$OLD"
-if mv "$DEST" "$OLD" && mv "$STAGED" "$DEST"; then
+if mv "$DEST" "$OLD" && mv "$STAGED" "$DEST" && verify "$DEST"; then
   rm -rf "$OLD"
   rm -f "$MARKER"
   log "Actualizada: $DEST"
+elif [ -d "$OLD" ]; then
+  # Algo salió mal al moverla: vuelve la que había.
+  rm -rf "$DEST"; mv "$OLD" "$DEST"
+  log "No se pudo actualizar; sigue la versión que había."
 else
   [ -d "$DEST" ] || mv "$OLD" "$DEST"
   log "No se pudo actualizar; sigue la versión que había."
