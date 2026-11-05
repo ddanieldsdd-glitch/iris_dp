@@ -2,7 +2,7 @@
 # Deja lista la instalación automática de IRIS DP en el iPad y el iPhone:
 #   1. guarda el equipo de firma (Personal Team de Xcode),
 #   2. copia install_ipad.sh a un sitio fijo (no cambia al cambiar de rama),
-#   3. programa una tarea de macOS que cada hora mira si toca renovar.
+#   3. programa una tarea de macOS que cada 15 minutos mira si toca renovar.
 #
 #   setup_ipad_install.sh [TEAM_ID]     configura y programa
 #   setup_ipad_install.sh --uninstall   quita la tarea programada
@@ -65,7 +65,7 @@ else
   echo "Aviso: no hay .env en $ROOT; la app del iPad saldrá sin nube."
 fi
 
-# ── 3. Tarea programada (cada hora y al iniciar sesión) ─────────────────────
+# ── 3. Tarea programada (cada 15 minutos y al iniciar sesión) ─────────────────────
 FLUTTER_BIN="$(dirname "$(command -v flutter)")"
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -79,7 +79,7 @@ cat > "$PLIST" <<PLIST
     <string>$STATE_DIR/install_ipad.sh</string>
     <string>--auto</string>
   </array>
-  <key>StartInterval</key><integer>3600</integer>
+  <key>StartInterval</key><integer>900</integer>
   <key>RunAtLoad</key><true/>
   <key>ProcessType</key><string>Background</string>
   <key>EnvironmentVariables</key>
@@ -95,4 +95,4 @@ cat > "$PLIST" <<PLIST
 PLIST
 launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
 launchctl bootstrap "$DOMAIN" "$PLIST"
-echo "✓ Tarea programada: cada hora mira si toca renovar (registro en $LOG_DIR)."
+echo "✓ Tarea programada: cada 15 minutos mira si toca renovar (registro en $LOG_DIR)."

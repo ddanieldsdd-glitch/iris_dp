@@ -2,9 +2,10 @@
 # Compila IRIS DP firmada con el equipo personal de Xcode y la instala en el
 # iPad y el iPhone emparejados con este Mac, por Wi‑Fi o cable. La firma
 # gratuita dura 7 días: en modo --auto se renueva sola en cada dispositivo
-# cuando le quedan menos de 3,5 días o hay un main nuevo con el CI en verde,
-# en cuanto el Mac y ese dispositivo coinciden encendidos. Como instalar
-# cierra la app, de día solo lo hace si quedan menos de 1,5 días.
+# cuando le quedan menos de 5 días o hay un main nuevo con el CI en verde,
+# en cuanto el Mac y ese dispositivo coinciden encendidos (se mira cada 15
+# minutos). Como instalar cierra la app, espera a que IRIS no esté abierta en
+# el dispositivo; con menos de 1,5 días de firma instala aunque lo esté.
 #
 #   install_ipad.sh                    instala el último main con CI en verde
 #   install_ipad.sh --ref <rama>       instala esa rama o commit (sin mirar el CI)
@@ -28,7 +29,7 @@ TEAM_FILE="$STATE_DIR/team_id"
 LOG_DIR="$HOME/Library/Logs/IRIS-DP"
 LOG="$LOG_DIR/install_ipad.log"
 PROFILES="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
-RENEW_BELOW_DAYS=3.5
+RENEW_BELOW_DAYS=5
 
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 
@@ -140,6 +141,21 @@ PY
 device_reachable() {
   with_timeout 90 xcrun devicectl device info details --device "$1" >/dev/null 2>&1
 }
+# ¿IRIS está abierta en el dispositivo? Si no se puede saber, se da por cerrada.
+app_running() {
+  local json; json="$(mktemp)"
+  with_timeout 60 xcrun devicectl device info processes --device "$1" \
+    --json-output "$json" >/dev/null 2>&1 || { rm -f "$json"; return 1; }
+  python3 - "$json" <<'PY2'
+import json, sys
+try:
+    ps = json.load(open(sys.argv[1]))["result"]["runningProcesses"]
+except Exception:
+    sys.exit(1)
+sys.exit(0 if any("/Runner.app/" in str(p.get("executable", "")) for p in ps) else 1)
+PY2
+  local rc=$?; rm -f "$json"; return $rc
+}
 
 DEVICES=()
 while IFS= read -r line; do DEVICES+=("$line"); done < <(find_devices)
@@ -206,7 +222,6 @@ fi
 # Cada entrada: «id<TAB>nombre<TAB>sha<TAB>etiqueta<TAB>de_día».
 TODO=()
 TARGET_UDIDS=()
-HOUR=$((10#$(date +%H)))
 for line in "${DEVICES[@]}"; do
   IFS=$'\t' read -r ID KIND NAME UDID <<<"$line"
   SHA="$MAIN_SHA"; LABEL="$MAIN_LABEL"; DAY_INSTALL=0
@@ -230,12 +245,8 @@ for line in "${DEVICES[@]}"; do
     if at_least "$LEFT" "$RENEW_BELOW_DAYS" && [[ "$SHA" == "$INSTALLED_SHA" ]]; then
       continue
     fi
-    # Instalar cierra la app. Si no corre prisa, solo de madrugada
-    # (2:00–6:59); con menos de 1,5 días de firma, a cualquier hora.
-    if (( HOUR < 2 || HOUR >= 7 )); then
-      at_least "$LEFT" 1.5 && continue
-      DAY_INSTALL=1
-    fi
+    # Con menos de 1,5 días se instala aunque IRIS esté abierta (avisando).
+    at_least "$LEFT" 1.5 || DAY_INSTALL=1
   fi
   if ! device_reachable "$ID"; then
     log "$NAME no responde (¿dormido, bloqueado o en otra Wi‑Fi?); se reintentará."
@@ -247,6 +258,14 @@ for line in "${DEVICES[@]}"; do
       fi
     fi
     [[ $AUTO == 1 ]] || echo "Enciende $NAME, desbloquéalo y ponlo en la misma Wi‑Fi (o por cable)." >&2
+    continue
+  fi
+  # Instalar cierra la app: si IRIS está abierta y no corre prisa, se espera.
+  if [[ $AUTO == 1 && $DAY_INSTALL == 0 ]] && app_running "$ID"; then
+    if [[ "$(dev_get "$ID" waiting_on)" != "$(date +%F)" ]]; then
+      log "IRIS está abierta en $NAME; renuevo cuando se cierre."
+      dev_set "$ID" "waiting_on=$(date +%F)"
+    fi
     continue
   fi
   TODO+=("$ID"$'\t'"$NAME"$'\t'"$SHA"$'\t'"$LABEL"$'\t'"$DAY_INSTALL")
