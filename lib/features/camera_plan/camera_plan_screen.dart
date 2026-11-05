@@ -13,6 +13,7 @@ import '../../shared/pdf_export/camera_plan_pdf.dart';
 import 'camera_plan_grouping.dart';
 import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
+import 'plan_repair_dialog.dart';
 import 'plan_data.dart';
 import 'plan_global_map.dart';
 import 'plan_index.dart';
@@ -94,6 +95,15 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
               PopupMenuItem(value: 'site', child: Text('Nueva localización')),
               PopupMenuItem(value: 'free', child: Text('Nueva planta libre')),
             ],
+          ),
+          IconButton(
+            tooltip: 'Ordenar la planta',
+            icon: Icon(Icons.auto_fix_high, color: palette.textSecondary),
+            onPressed: () => showPlanRepairDialog(
+              context,
+              ref.read(databaseProvider),
+              projectId,
+            ),
           ),
           IconButton(
             tooltip: 'Papelera de plantas',
