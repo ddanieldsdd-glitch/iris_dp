@@ -14,6 +14,7 @@ import 'camera_plan_grouping.dart';
 import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
 import 'plan_repair_dialog.dart';
+import 'plan_site_sets.dart';
 import 'plan_data.dart';
 import 'plan_global_map.dart';
 import 'plan_index.dart';
@@ -41,6 +42,9 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
   /// Lo que se está viendo. `null` = aún no se ha tocado nada: se enseña la
   /// primera escena o, si no hay, todo el proyecto.
   PlanPick? _pick;
+
+  /// En una localización, el mapa en vez de sus sets.
+  bool _siteMap = false;
 
   int get projectId => widget.projectId;
 
@@ -152,7 +156,10 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
               onByScript: (v) => setState(() => _byScript = v),
               pick: pick,
               onPick: (p) {
-                setState(() => _pick = p);
+                setState(() {
+                  _pick = p;
+                  _siteMap = false;
+                });
                 if (!wide) Navigator.of(context).maybePop();
               },
             );
@@ -163,13 +170,35 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
                 data: data,
                 onOpen: _open,
               ),
-              PlanPickKind.site => PlanGlobalMap(
+              PlanPickKind.site when !_siteMap => PlanSiteSets(
                 projectId: projectId,
+                site: data.site(pick.id)!,
                 data: data,
                 onOpen: _open,
-                siteId: pick.id,
-                onScene: (scene) =>
-                    setState(() => _pick = PlanPick.scene(scene.id)),
+                onMap: () => setState(() => _siteMap = true),
+              ),
+              PlanPickKind.site => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                    child: TextButton.icon(
+                      onPressed: () => setState(() => _siteMap = false),
+                      icon: const Icon(Icons.view_list_outlined, size: 16),
+                      label: const Text('Sets de la localización'),
+                    ),
+                  ),
+                  Expanded(
+                    child: PlanGlobalMap(
+                      projectId: projectId,
+                      data: data,
+                      onOpen: _open,
+                      siteId: pick.id,
+                      onScene: (scene) =>
+                          setState(() => _pick = PlanPick.scene(scene.id)),
+                    ),
+                  ),
+                ],
               ),
               PlanPickKind.overview => PlanGlobalMap(
                 projectId: projectId,

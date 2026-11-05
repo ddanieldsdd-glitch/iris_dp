@@ -8,6 +8,7 @@ import 'camera_plan_constants.dart';
 import 'camera_links.dart';
 import 'camera_plan_element_model.dart';
 import 'floor_plan_json.dart';
+import 'group_light.dart';
 import 'floor_plan_scope.dart';
 import 'light/ambient.dart';
 import 'env_overrides.dart';
@@ -153,8 +154,24 @@ class FloorPlanRepository {
     }
   }
 
+  /// La luz compartida de un grupo de sets (SG.2).
+  Future<void> saveGroupElements(
+    int groupId,
+    List<PlanElement> elements,
+  ) async {
+    final group = await db.getSetGroupById(groupId);
+    if (group == null) return;
+    await db.setSetGroupPlanJson(groupId, _reencode(group.planJson, elements));
+  }
+
   /// Cambia los elementos conservando la escala y el fondo de la capa.
-  String _reencode(String? previousJson, List<PlanElement> elements) {
+  /// Con [hiddenGroupLights], cambia también las luces del grupo que el set
+  /// no lleva.
+  String _reencode(
+    String? previousJson,
+    List<PlanElement> elements, {
+    List<String>? hiddenGroupLights,
+  }) {
     final previous = FloorPlanJson.decodeDocument(previousJson);
     return FloorPlanJson.encodeDocument(
       FloorPlanDocument(
@@ -163,13 +180,30 @@ class FloorPlanRepository {
         underlay: previous.underlay,
         ambient: previous.ambient,
         environment: previous.environment,
+        hiddenGroupLights: hiddenGroupLights ?? previous.hiddenGroupLights,
+      ),
+    );
+  }
+
+  /// Las luces del grupo que el set no lleva (SG.3).
+  Future<void> saveHiddenGroupLights(int setupId, List<String> uids) async {
+    final setup = await db.getLightSetupById(setupId);
+    if (setup == null) return;
+    final doc = FloorPlanJson.decodeDocument(setup.planJson);
+    await db.updateLightSetup(
+      setup.copyWith(
+        planJson: Value(
+          _reencode(setup.planJson, doc.elements, hiddenGroupLights: uids),
+        ),
       ),
     );
   }
 
   /// El entorno de un set o una localización (F6.21.1), de su planta.
   static SetEnvironment environmentOf(String? planJson) =>
-      SetEnvironment.fromJson(FloorPlanJson.decodeDocument(planJson).environment);
+      SetEnvironment.fromJson(
+        FloorPlanJson.decodeDocument(planJson).environment,
+      );
 
   /// El entorno de un set: el de su planta o, si no lo tiene (se eligió
   /// antes de haber set), el de su localización.
@@ -266,7 +300,7 @@ class FloorPlanRepository {
         return PlanLayers(
           environment: base.environment,
           set: base.set,
-          groupLight: FloorPlanJson.decode(group?.planJson),
+          groupLight: GroupLight.visible(group?.planJson, setup.planJson),
           lightSetup: setup,
           group: group,
         );
@@ -330,7 +364,7 @@ class FloorPlanRepository {
       set: base.set,
       // La luz compartida del grupo, también con los ajustes del plano.
       groupLight: LightOverrides.apply(
-        FloorPlanJson.decode(group?.planJson),
+        GroupLight.visible(group?.planJson, setup?.planJson),
         shot.lightOverridesJson,
       ),
       // La luz del esquema, con los ajustes propios de este plano.
@@ -733,22 +767,19 @@ class FloorPlanRepository {
     return 'Setup ${taken.length + 1}';
   }
 
-  /// Esquemas que puede usar un plano: los de su set, los de su localización
-  /// y las plantas libres.
+  /// Sets que puede usar un plano: todos los de su localización (estén en
+  /// la zona que estén, SG.2) y las plantas libres.
   Future<List<LightSetup>> lightSetupsForScene(Scene scene) async {
     final all = await db.getLightSetupsForProject(scene.projectId);
-    int? siteId = scene.locationSiteId;
-    if (siteId == null && scene.locationId != null) {
-      siteId = (await db.getLocationById(scene.locationId!))?.siteId;
-    }
+    final zones = await db.getLocationsMapForProject(scene.projectId);
+    final siteId = scene.locationSiteId ?? zones[scene.locationId]?.siteId;
     return all.where((s) {
       // Los bocetos no llevan planos.
       if (s.kind != LightSetupKind.plan) return false;
-      if (s.locationBasePlanId != null) {
-        return s.locationBasePlanId == scene.locationId;
-      }
-      if (s.locationSiteId != null) return s.locationSiteId == siteId;
-      return true;
+      final own = s.locationSiteId ?? zones[s.locationBasePlanId]?.siteId;
+      if (own != null) return own == siteId;
+      return s.locationBasePlanId == null ||
+          s.locationBasePlanId == scene.locationId;
     }).toList();
   }
 

@@ -205,12 +205,11 @@ class PlanIndex extends StatelessWidget {
       }
     } else {
       for (final site in data.sites) {
-        final sets = data.setsOfSite(site.id);
-        final loose = data.scenesOfSiteWithoutSet(site.id);
-        final scenes = [
-          for (final set in sets) ...data.scenesOfSet(set.id),
-          ...loose,
-        ];
+        // Sin zonas (SG.2): la localización, sus sets y sus escenas.
+        final scenes = scenesInScriptOrder([
+          for (final sc in data.scenes)
+            if (data.siteIdOfScene(sc) == site.id) sc,
+        ]);
         rows.add(
           heading(
             site.name,
@@ -220,26 +219,33 @@ class PlanIndex extends StatelessWidget {
             onTap: () => onPick(PlanPick.site(site.id)),
           ),
         );
-        for (final set in sets) {
-          final ofSet = data.scenesOfSet(set.id);
+        final sets = data.lightSetsOfSite(site.id);
+        if (sets.isNotEmpty) {
+          final groups = data.groupsOfSite(site.id).length;
           rows.add(
-            setLabel(set.locationName, data.shotsOfScenes(ofSet).length),
+            InkWell(
+              onTap: () => onPick(PlanPick.site(site.id)),
+              child: setLabel(
+                [
+                  '${sets.length} set${sets.length == 1 ? '' : 's'}',
+                  if (groups > 0) '$groups grupo${groups == 1 ? '' : 's'}',
+                ].join(' · '),
+                data.shotsOfScenes(scenes).where((sh) {
+                  return data.setup(sh.lightSetupId) != null;
+                }).length,
+              ),
+            ),
           );
-          for (final scene in ofSet) {
-            rows.add(sceneRow(scene, indent: 20));
-          }
         }
-        if (loose.isNotEmpty) {
-          rows.add(setLabel('Sin set', data.shotsOfScenes(loose).length));
-          for (final scene in loose) {
-            rows.add(sceneRow(scene, indent: 20));
-          }
+        for (final scene in scenes) {
+          rows.add(sceneRow(scene, indent: 20));
         }
       }
+      // Escenas de zonas sin localización.
       for (final set in data.orphanSets) {
         final ofSet = data.scenesOfSet(set.id);
         if (ofSet.isEmpty) continue;
-        rows.add(setLabel(set.locationName, data.shotsOfScenes(ofSet).length));
+        rows.add(heading(set.locationName, count: ofSet.length));
         for (final scene in ofSet) {
           rows.add(sceneRow(scene, indent: 20));
         }
@@ -282,7 +288,7 @@ class PlanIndex extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   '${data.sites.length} localizaciones · '
-                  '${data.sets.length} sets · '
+                  '${data.planSetups.length} sets · '
                   '${data.scenes.length} escenas · '
                   '${data.shots.length} planos',
                   style: AppTypography.caption(

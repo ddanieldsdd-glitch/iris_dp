@@ -144,19 +144,22 @@ void main() {
     expect(find.text('GRIP · CORTA'), findsOneWidget);
     expect(find.text('Lista de material'), findsOneWidget);
 
-    // El navegador de plantas entra plegado.
-    expect(find.text('Plano del set'), findsNothing);
+    // El navegador de plantas entra plegado. Ya no enseña las zonas: la
+    // localización y sus sets (SG.2).
+    expect(find.text('Plano maestro'), findsNothing);
     await tester.tap(find.byTooltip('Mostrar plantas'));
     await settle(tester);
-    expect(find.text('Plano del set'), findsOneWidget);
+    expect(find.text('Plano maestro'), findsOneWidget);
+    expect(find.text('Plano del set'), findsNothing);
     expect(find.text('Esquema siguiente'), findsNothing);
     expect(find.byTooltip('Esquema siguiente'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     // Desde el navegador se cambia de planta sin volver al mapa.
-    await tester.tap(find.text('Plano del set'));
+    await tester.tap(find.text('Plano maestro'));
     await settle(tester);
-    expect(find.text('Plano de set'), findsOneWidget);
+    expect(find.textContaining('Plano maestro'), findsWidgets);
+    expect(find.text('Esquema de luz · Cabaña'), findsNothing);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -239,7 +242,11 @@ void main() {
         ),
       );
       shotId = await db.insertShot(
-        ShotsCompanion.insert(sceneId: sceneId, projectId: projectId, number: 1),
+        ShotsCompanion.insert(
+          sceneId: sceneId,
+          projectId: projectId,
+          number: 1,
+        ),
       );
     });
     await tester.pumpWidget(
@@ -460,74 +467,70 @@ void main() {
     ))!;
 
     testWidgets('el inicio es el tablero de la escena: los planos se '
-        'arrastran a un esquema y a otro set de la localización', (
+        'arrastran a un set nuevo y a otro set de la localización', (
       tester,
     ) async {
       await seed(
         tester,
         siteJson: '{"version":2,"elements":[${element('wall', 300, 300)}]}',
       );
-      late int otherSetId;
+      late int otherSetupId;
       await tester.runAsync(() async {
-        otherSetId = await db.insertLocation(
+        final repo = FloorPlanRepository(db);
+        // Un set de otra zona de la misma localización: se ofrece igual.
+        final zone = await db.insertLocation(
           LocationBasePlansCompanion.insert(
             projectId: projectId,
             siteId: Value(siteId),
             locationName: 'Quirófano',
           ),
         );
+        otherSetupId = (await repo.createLightSetup(
+          projectId: projectId,
+          setId: zone,
+          name: 'Luz quirófano',
+        )).id;
         // Otra localización: sus sets no deben ofrecerse en el tablero.
         final other = await db.insertSite(
           LocationSitesCompanion.insert(projectId: projectId, name: 'Bosque'),
         );
-        await db.insertLocation(
-          LocationBasePlansCompanion.insert(
-            projectId: projectId,
-            siteId: Value(other),
-            locationName: 'Claro',
-          ),
+        await repo.createLightSetup(
+          projectId: projectId,
+          siteId: other,
+          name: 'Luz claro',
         );
       });
       await tester.pumpWidget(host(CameraPlanScreen(projectId: projectId)));
       await settle(tester);
 
-      // El índice, a la izquierda: localización, set y escena.
+      // El índice, a la izquierda: localización, sus sets y sus escenas,
+      // sin zonas.
       expect(find.text('HOSPITAL'), findsWidgets);
-      expect(find.text('Urgencias'), findsOneWidget);
       expect(find.text('Escena 1'), findsWidgets);
       expect(find.text('1 plano · 1 sin luz'), findsOneWidget);
       // El tablero de la primera escena, a la derecha.
-      expect(find.text('SET URGENCIAS'), findsOneWidget);
       expect(find.text('Sin luz'), findsOneWidget);
       expect(find.text('P1'), findsOneWidget);
+      expect(find.text('Luz quirófano'), findsOneWidget);
+      expect(find.text('Luz claro'), findsNothing);
 
-      // Soltar el plano en «Esquema nuevo» lo crea con el plano dentro.
-      await dragTo(tester, find.text('P1'), find.text('Esquema nuevo'));
+      // Soltar el plano en «Set nuevo» lo crea con el plano dentro.
+      await dragTo(tester, find.text('P1'), find.text('Set nuevo'));
       var shot = await theShot(tester);
       expect(shot.lightSetupId, isNotNull);
       expect(shot.locationBasePlanId, isNull);
       expect(find.text('Setup A'), findsOneWidget);
       expect(find.text('1 plano'), findsOneWidget);
 
-      // Otro set: solo se ofrecen los de la localización de la escena.
-      await tester.tap(find.text('Otro set de Hospital'));
-      await settle(tester);
-      // En el índice y en el menú; «Claro» solo en el índice.
-      expect(find.text('Quirófano'), findsNWidgets(2));
-      expect(find.text('Claro'), findsOneWidget);
-      await tester.tap(find.text('Quirófano').last);
-      await settle(tester);
-      expect(find.text('SET QUIRÓFANO'), findsOneWidget);
-
-      // A «Sin luz» del otro set: cambia de set y se queda sin esquema.
+      // Al set de la otra zona: cambia de set, no de entorno.
       await dragTo(
         tester,
         find.text('P1'),
-        find.byKey(ValueKey('col_${otherSetId}_null')),
+        find.byKey(ValueKey('col_$otherSetupId')),
       );
       shot = await theShot(tester);
-      expect(shot.locationBasePlanId, otherSetId);
-      expect(shot.lightSetupId, isNull);
+      expect(shot.lightSetupId, otherSetupId);
+      expect(shot.locationBasePlanId, isNull);
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -535,18 +538,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     });
 
-    testWidgets('esquemas y sets se copian, se pegan, se duplican y se '
-        'borran desde el tablero', (tester) async {
+    testWidgets('los sets se copian, se pegan, se duplican y se borran '
+        'desde el tablero', (tester) async {
       await seed(tester, siteJson: '{"version":2,"elements":[]}');
-      late int otherSetId;
       await tester.runAsync(() async {
-        otherSetId = await db.insertLocation(
-          LocationBasePlansCompanion.insert(
-            projectId: projectId,
-            siteId: Value(siteId),
-            locationName: 'Quirófano',
-          ),
-        );
         final setup = await FloorPlanRepository(
           db,
         ).createLightSetup(projectId: projectId, setId: setId);
@@ -575,7 +570,7 @@ void main() {
         () => db.getLightSetupsForProject(projectId),
       ))!;
 
-      // ⌘D con el ratón encima duplica el esquema, con su planta.
+      // ⌘D con el ratón encima duplica el set, con su planta.
       await keys(find.text('Setup A'), LogicalKeyboardKey.keyD);
       expect(find.text('Setup A (copia)'), findsOneWidget);
       var all = await setups();
@@ -583,44 +578,20 @@ void main() {
       expect(all.last.planJson, all.first.planJson);
       expect(all.last.locationBasePlanId, setId);
 
-      // ⌘C lo copia; en el otro set aparece «Pegar «Setup A»».
+      // ⌘C lo copia; bajo «Set nuevo» aparece «Pegar «Setup A»», que lo
+      // pega en la localización.
       await keys(find.text('Setup A'), LogicalKeyboardKey.keyC);
       expect(PlanBoardClipboard.current.value?.name, 'Setup A');
-      await tester.tap(find.text('Otro set de Hospital'));
-      await settle(tester);
-      await tester.tap(find.text('Quirófano').last);
-      await settle(tester);
       await tester.tap(find.text('Pegar «Setup A»').last);
       await settle(tester);
       all = await setups();
-      expect(
-        all.where((s) => s.locationBasePlanId == otherSetId).map((s) => s.name),
-        ['Setup A'],
-      );
+      expect(all, hasLength(3));
+      expect(all.where((s) => s.locationSiteId == siteId).map((s) => s.name), [
+        'Setup A',
+      ]);
 
-      // Borrar el set Quirófano desde su menú se lleva su esquema.
-      await tester.tap(find.byTooltip('Opciones del set').last);
-      await settle(tester);
-      await tester.tap(find.text('Borrar set…'));
-      await settle(tester);
-      expect(
-        find.textContaining('¿Borrar el set «Quirófano»?'),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('Borrar'));
-      await settle(tester);
-      final left = await tester.runAsync(() => db.getLocationById(otherSetId));
-      expect(left, isNull);
-      all = await setups();
-      expect(all.where((s) => s.locationBasePlanId == otherSetId), isEmpty);
-      expect(all, hasLength(2));
-      // Queda en la papelera, y se ofrece deshacer.
-      expect(find.text('Deshacer'), findsOneWidget);
-      final trash = await tester.runAsync(() => db.select(db.planTrash).get());
-      expect(trash!.map((t) => t.label), ['Set «Quirófano»']);
-
-      // Supr sobre el esquema copia lo borra, tras confirmar; el plano no
-      // se toca porque no lo usa.
+      // Supr sobre la copia la borra, tras confirmar; el plano no se toca
+      // porque no la usa.
       await tester.sendEventToBinding(
         TestPointer(
           1,
@@ -633,8 +604,8 @@ void main() {
       await tester.tap(find.text('Borrar'));
       await settle(tester);
       all = await setups();
-      expect(all.map((s) => s.name), ['Setup A']);
-      expect((await theShot(tester)).lightSetupId, all.single.id);
+      expect(all.map((s) => s.name), ['Setup A', 'Setup A']);
+      expect((await theShot(tester)).lightSetupId, all.first.id);
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

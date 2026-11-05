@@ -17,6 +17,7 @@ import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
 import 'plan_data.dart';
 import 'plan_guide.dart';
+import 'plan_site_sets.dart' show groupLightCount;
 import 'plan_item_actions.dart';
 import 'plan_sketch.dart';
 import 'plan_target.dart';
@@ -52,7 +53,7 @@ class PlanSceneBoard extends ConsumerStatefulWidget {
 
 class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
   /// Sets añadidos al tablero a mano, aún sin planos.
-  final _extraSets = <int>{};
+  final _extraSetups = <int>{};
 
   /// Planos marcados para arrastrarlos juntos.
   final _picked = <int>{};
@@ -65,24 +66,16 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
   void didUpdateWidget(PlanSceneBoard old) {
     super.didUpdateWidget(old);
     if (old.scene.id != widget.scene.id) {
-      _extraSets.clear();
+      _extraSetups.clear();
       _picked.clear();
     }
   }
 
-  /// Lleva unos planos a un set y a un esquema. Con el set de la escena no
-  /// hace falta guardarlo: es el de partida.
-  Future<void> _move(
-    List<Shot> shots,
-    LocationBasePlan? set,
-    LightSetup? setup,
-  ) async {
+  /// Lleva unos planos a un set (SG.2). El entorno es siempre el de la
+  /// localización de la escena: no se cambia de zona.
+  Future<void> _move(List<Shot> shots, LightSetup? setup) async {
     for (final shot in shots) {
-      await _db.moveShot(
-        shot.id,
-        setId: set == null || set.id == _scene.locationId ? null : set.id,
-        lightSetupId: setup?.id,
-      );
+      await _db.moveShot(shot.id, setId: null, lightSetupId: setup?.id);
     }
     if (mounted) setState(_picked.clear);
   }
@@ -189,8 +182,10 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
     final color = _data.colors.sceneColor(_scene);
     final location = locationFromCanonical(_scene.locationCanonical);
     final site = _data.site(_data.siteIdOfScene(_scene));
-    final sets = _data.boardSetsOf(_scene, extra: _extraSets);
-    final addable = _data.setsToAdd(_scene, sets.map((s) => s?.id));
+    final parts = _data.boardGroupsOf(_scene, extra: _extraSetups);
+    final addable = _data.lightSetsToAdd(_scene, [
+      for (final part in parts) ...part.sets.map((s) => s.id),
+    ]);
     final shots = _data.shotsOfScene(_scene.id);
 
     return ListView(
@@ -247,7 +242,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
           site == null
               ? 'Esta escena aún no tiene localización. Elígela con el botón '
                     'de arriba para repartir sus planos por sets.'
-              : 'Arrastra cada plano al esquema de luz con el que se rueda. '
+              : 'Arrastra cada plano al set con el que se rueda. '
                     'Con Mayús o Cmd se marcan varios para moverlos juntos.',
           style: AppTypography.caption(
             palette,
@@ -279,16 +274,52 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
           onNewFreehand: () => _newSketch(kind: LightSetupKind.sketchFreehand),
           onToPlan: _sketchToPlan,
         ),
-        for (final set in sets) _setSection(palette, set),
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.lg),
+          child: Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            crossAxisAlignment: WrapCrossAlignment.start,
+            children: [
+              _column(palette, setup: null),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _NewSetupColumn(
+                    onTap: () => _newSetup(_data.set(_scene.locationId)),
+                    onDrop: (shots) async => _move(
+                      shots,
+                      await _newSetup(_data.set(_scene.locationId)),
+                    ),
+                  ),
+                  PlanPasteButton(
+                    target: PlanPasteTarget(
+                      siteId: _data.siteIdOfScene(_scene),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        for (final part in parts) _groupSection(palette, part.group, part.sets),
         if (addable.isNotEmpty)
           Align(
             alignment: Alignment.centerLeft,
             child: PopupMenuButton<int>(
               tooltip: 'Otro set de ${site?.name ?? 'la localización'}',
-              onSelected: (id) => setState(() => _extraSets.add(id)),
+              onSelected: (id) => setState(() => _extraSetups.add(id)),
               itemBuilder: (_) => [
-                for (final set in addable)
-                  PopupMenuItem(value: set.id, child: Text(set.locationName)),
+                for (final s in addable)
+                  PopupMenuItem(
+                    value: s.id,
+                    child: Text(
+                      [
+                        s.name,
+                        if (_data.group(s.groupId) case final g?) g.name,
+                      ].join(' · '),
+                    ),
+                  ),
               ],
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
@@ -312,102 +343,51 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
     );
   }
 
-  Widget _setSection(AppPalette palette, LocationBasePlan? set) {
-    final setups = _data.boardSetupsOf(_scene, set?.id);
-    final own = set?.id == _scene.locationId;
-    final setColor = set == null
-        ? palette.textTertiary
-        : _data.colors.setColor(set);
-    final actions = set == null
-        ? null
-        : SetActions(
-            context,
-            _db,
-            set,
-            sceneCount: _data.scenesOfSet(set.id).length,
-            setupCount: _data.setupsOfSet(set.id).length,
-          );
-    // Lo que se pega en esta fila: un esquema va a este set.
-    final paste = set == null
-        ? PlanPasteTarget(siteId: _data.siteIdOfScene(_scene))
-        : PlanPasteTarget(setId: set.id);
-    final header = Row(
-      children: [
-        Container(width: 4, height: 18, color: setColor),
-        const SizedBox(width: 8),
-        Text(
-          set == null ? 'SIN SET' : 'SET ${set.locationName.toUpperCase()}',
-          style: AppTypography.label(palette),
-        ),
-        const SizedBox(width: 8),
-        if (set != null && own)
-          Text(
-            'el de la escena',
-            style: AppTypography.caption(
-              palette,
-            ).copyWith(color: palette.textTertiary),
-          ),
-        const Spacer(),
-        if (set != null) ...[
-          TextButton.icon(
-            onPressed: () => showAssociateShotsDialog(
-              context,
-              ref.read(databaseProvider),
-              set: set,
-              scenes: [_scene],
-            ),
-            icon: const Icon(Icons.playlist_add_check, size: 15),
-            label: const Text('Asociar planos…'),
-          ),
-          TextButton.icon(
-            onPressed: () =>
-                widget.onOpen(PlanTarget.set(set.id, set.locationName)),
-            icon: const Icon(Icons.grid_on_outlined, size: 15),
-            label: const Text('Planta del set'),
-          ),
-          SetMenuButton(
-            set: set,
-            sceneCount: actions!.sceneCount,
-            setupCount: actions.setupCount,
-          ),
-        ],
-      ],
-    );
+  /// Una fila del tablero: los sets de un grupo (que comparten la luz), o
+  /// los sueltos.
+  Widget _groupSection(
+    AppPalette palette,
+    SetGroup? group,
+    List<LightSetup> sets,
+  ) {
+    final lights = group == null ? 0 : groupLightCount(group);
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (actions == null)
-            header
-          else
-            PlanItemKeys(
-              onCopy: actions.copy,
-              onDuplicate: actions.duplicate,
-              onPaste: actions.paste,
-              onDelete: actions.delete,
-              child: header,
-            ),
+          Row(
+            children: [
+              Icon(
+                group == null ? Icons.layers_outlined : Icons.folder_outlined,
+                size: 16,
+                color: group == null ? palette.textTertiary : palette.accent,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                group == null ? 'SETS' : group.name.toUpperCase(),
+                style: AppTypography.label(palette),
+              ),
+              if (group != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  lights == 0
+                      ? 'luz compartida, aún vacía'
+                      : 'comparten $lights luces',
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.textTertiary),
+                ),
+              ],
+            ],
+          ),
           const SizedBox(height: AppSpacing.sm),
           Wrap(
             spacing: AppSpacing.md,
             runSpacing: AppSpacing.md,
             crossAxisAlignment: WrapCrossAlignment.start,
             children: [
-              _column(palette, set: set, setup: null),
-              for (final setup in setups)
-                _column(palette, set: set, setup: setup),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _NewSetupColumn(
-                    onTap: () => _newSetup(set),
-                    onDrop: (shots) async =>
-                        _move(shots, set, await _newSetup(set)),
-                  ),
-                  PlanPasteButton(target: paste),
-                ],
-              ),
+              for (final setup in sets) _column(palette, setup: setup),
             ],
           ),
         ],
@@ -415,20 +395,16 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
     );
   }
 
-  Widget _column(
-    AppPalette palette, {
-    required LocationBasePlan? set,
-    required LightSetup? setup,
-  }) {
-    final shots = _data.boardShots(_scene, set?.id, setup?.id);
+  Widget _column(AppPalette palette, {required LightSetup? setup}) {
+    final shots = _data.boardShotsOfSet(_scene, setup?.id);
     final color = setup == null
         ? palette.textTertiary
         : _data.setupColor(setup);
     final target = DragTarget<List<Shot>>(
       onWillAcceptWithDetails: (d) => d.data.any((s) => !shots.contains(s)),
-      onAcceptWithDetails: (d) => _move(d.data, set, setup),
+      onAcceptWithDetails: (d) => _move(d.data, setup),
       builder: (context, candidate, _) => Container(
-        key: ValueKey('col_${set?.id}_${setup?.id}'),
+        key: ValueKey('col_${setup?.id}'),
         width: _ShotCard.width + 20,
         constraints: const BoxConstraints(minHeight: 150),
         decoration: BoxDecoration(
@@ -509,13 +485,14 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                     width: double.infinity,
                     child: PlanThumbnail(
                       elements: [
+                        ..._data.groupLightOf(setup),
                         ..._data.ownOfSetup(setup),
                         for (final shot in shots)
                           ..._data.ownOfShot(shot, tagged: true),
                       ],
                       inherited: _data.inheritedOfSetup(setup),
                       drawings: _data.drawingsOfSetup(setup),
-                      focus: _data.zoneOf(set),
+                      focus: _data.zoneOf(_data.set(setup.locationBasePlanId)),
                       emptyIcon: Icons.wb_incandescent_outlined,
                     ),
                   ),
@@ -670,7 +647,7 @@ class _NewSetupColumn extends StatelessWidget {
               Icon(Icons.add, color: palette.textSecondary),
               const SizedBox(height: 4),
               Text(
-                'Esquema nuevo',
+                'Set nuevo',
                 style: AppTypography.caption(palette),
                 textAlign: TextAlign.center,
               ),

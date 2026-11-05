@@ -128,7 +128,7 @@ class _SetupTag extends ConsumerWidget {
         : <LightSetup>[];
 
     return PopupMenuButton<int>(
-      tooltip: 'Esquema de luz del plano',
+      tooltip: 'Set del plano',
       padding: EdgeInsets.zero,
       onSelected: (choice) async {
         final db = ref.read(databaseProvider);
@@ -160,7 +160,7 @@ class _SetupTag extends ConsumerWidget {
               ],
             ),
           ),
-        const PopupMenuItem(value: _create, child: Text('Nuevo esquema')),
+        const PopupMenuItem(value: _create, child: Text('Set nuevo')),
         if (setup != null)
           const PopupMenuItem(value: _none, child: Text('Sin luz')),
       ],
@@ -496,7 +496,7 @@ class _ShotChip extends ConsumerWidget {
             ),
           ),
           PopupMenuButton<int>(
-            tooltip: 'Esquema de luz del plano',
+            tooltip: 'Set del plano',
             padding: EdgeInsets.zero,
             onSelected: (choice) async {
               final db = ref.read(databaseProvider);
@@ -528,7 +528,7 @@ class _ShotChip extends ConsumerWidget {
                     ],
                   ),
                 ),
-              const PopupMenuItem(value: _create, child: Text('Nuevo esquema')),
+              const PopupMenuItem(value: _create, child: Text('Set nuevo')),
               if (shot.lightSetupId != null)
                 const PopupMenuItem(value: _none, child: Text('Sin luz')),
             ],

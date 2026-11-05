@@ -10,7 +10,9 @@ import '../../shared/annotations/annotation_document.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
 import 'camera_plan_grouping.dart';
+import 'env_overrides.dart';
 import 'floor_plan_json.dart';
+import 'group_light.dart';
 import 'light_overrides.dart';
 
 /// Colores de los esquemas de luz, por orden dentro de su set.
@@ -32,6 +34,9 @@ class PlanProjectData {
   final List<Scene> scenes;
   final List<Shot> shots;
 
+  /// Grupos de sets: los que comparten luz (SG.1).
+  final List<SetGroup> groups;
+
   /// Elementos de planta de todos los planos.
   final List<CameraPlanElement> elementRows;
 
@@ -46,6 +51,7 @@ class PlanProjectData {
     required this.setups,
     required this.scenes,
     required this.shots,
+    this.groups = const [],
     this.elementRows = const [],
     this.drawingRows = const [],
   }) : colors = ProjectColorScheme.resolve(
@@ -152,6 +158,112 @@ class PlanProjectData {
         : 'Esc $number · Plano ${shot.number}';
   }
 
+  // ── Sets de una localización (SG.2) ───────────────────────────────────────
+
+  SetGroup? group(int? id) {
+    for (final g in groups) {
+      if (g.id == id) return g;
+    }
+    return null;
+  }
+
+  /// Todos los sets de una localización, estén o no en una zona.
+  List<LightSetup> lightSetsOfSite(int siteId) => [
+    for (final s in planSetups)
+      if (siteIdOfSetup(s) == siteId) s,
+  ];
+
+  /// Grupos de una localización (y los que tienen sets suyos).
+  List<SetGroup> groupsOfSite(int siteId) {
+    final used = {
+      for (final s in lightSetsOfSite(siteId))
+        if (s.groupId != null) s.groupId,
+    };
+    return [
+      for (final g in groups)
+        if (g.locationSiteId == siteId || used.contains(g.id)) g,
+    ];
+  }
+
+  List<LightSetup> setsOfGroup(int groupId) => [
+    for (final s in planSetups)
+      if (s.groupId == groupId) s,
+  ];
+
+  /// Escenas que se ruedan en un set, en orden de guion.
+  List<Scene> scenesOfSetup(int setupId) {
+    final ids = {for (final s in shotsOfSetup(setupId)) s.sceneId};
+    return scenesInScriptOrder(
+      scenes.where((s) => ids.contains(s.id)).toList(),
+    );
+  }
+
+  /// Posición en el guion del primer plano del set; sin planos, al final.
+  int _narrativeIndex(LightSetup setup) {
+    final order = {
+      for (final (i, s) in scenesInScriptOrder(scenes).indexed) s.id: i,
+    };
+    var best = 1 << 30;
+    for (final shot in shotsOfSetup(setup.id)) {
+      final i = (order[shot.sceneId] ?? 0) * 10000 + shot.number;
+      if (i < best) best = i;
+    }
+    return best;
+  }
+
+  /// Los sets de una localización en el orden elegido ([mode], o el de la
+  /// localización): por grupo (fondo), narrativo o a mano. Ese orden es el
+  /// de rodaje y el del PDF. Cada tramo lleva su grupo; en el orden por
+  /// grupo, los sueltos van al final con grupo nulo.
+  List<({SetGroup? group, List<LightSetup> sets})> orderedSets(
+    int siteId, {
+    String? mode,
+  }) {
+    final all = lightSetsOfSite(siteId);
+    int bySort(LightSetup a, LightSetup b) {
+      final c = a.sortOrder.compareTo(b.sortOrder);
+      return c != 0 ? c : a.id.compareTo(b.id);
+    }
+
+    switch (SetOrderMode.of(mode ?? site(siteId)?.setOrderMode)) {
+      case SetOrderMode.narrative:
+        final list = [...all]
+          ..sort((a, b) {
+            final c = _narrativeIndex(a).compareTo(_narrativeIndex(b));
+            return c != 0 ? c : bySort(a, b);
+          });
+        return [(group: null, sets: list)];
+      case SetOrderMode.manual:
+        final list = [...all]
+          ..sort((a, b) {
+            final c = (a.shootOrder ?? 1 << 30).compareTo(
+              b.shootOrder ?? 1 << 30,
+            );
+            return c != 0
+                ? c
+                : _narrativeIndex(a).compareTo(_narrativeIndex(b));
+          });
+        return [(group: null, sets: list)];
+      case SetOrderMode.group:
+        final out = <({SetGroup? group, List<LightSetup> sets})>[];
+        for (final g in groupsOfSite(siteId)) {
+          out.add((
+            group: g,
+            sets: [
+              for (final s in all)
+                if (s.groupId == g.id) s,
+            ]..sort(bySort),
+          ));
+        }
+        final loose = [
+          for (final s in all)
+            if (group(s.groupId) == null) s,
+        ]..sort(bySort);
+        if (loose.isNotEmpty) out.add((group: null, sets: loose));
+        return out;
+    }
+  }
+
   // ── Esquema de cada plano ─────────────────────────────────────────────────
 
   LightSetup? setup(int? id) {
@@ -178,16 +290,15 @@ class PlanProjectData {
         kLightSetupColors.length];
   }
 
-  /// Esquemas que puede usar una escena: los de su set, los generales de su
-  /// localización y las plantas libres.
+  /// Sets que puede usar una escena: todos los de su localización (estén en
+  /// la zona que estén, SG.2) y las plantas libres.
   List<LightSetup> setupsForScene(Scene scene) {
-    final siteId = scene.locationSiteId ?? set(scene.locationId)?.siteId;
+    final siteId = siteIdOfScene(scene);
     return planSetups.where((s) {
-      if (s.locationBasePlanId != null) {
-        return s.locationBasePlanId == scene.locationId;
-      }
-      if (s.locationSiteId != null) return s.locationSiteId == siteId;
-      return true;
+      final own = siteIdOfSetup(s);
+      if (own != null) return own == siteId;
+      return s.locationBasePlanId == null ||
+          s.locationBasePlanId == scene.locationId;
     }).toList();
   }
 
@@ -329,61 +440,80 @@ class PlanProjectData {
   List<Shot> sequencesOf(Scene scene) =>
       shotsOfScene(scene.id).where(isSequence).toList();
 
-  /// Sets del tablero de una escena: el suyo primero, después los otros
-  /// sets de su localización donde se ruede algún plano y los que se hayan
-  /// añadido a mano ([extra]). `null` = la escena no tiene set.
-  List<LocationBasePlan?> boardSetsOf(
+  // ── Tablero por grupos y sets (SG.2) ─────────────────────────────────────
+
+  /// Hasta cuántos sets de la localización se ven todos en el tablero.
+  static const boardAllSetsUpTo = 4;
+
+  /// Sets del tablero de una escena: los que usan sus planos y los
+  /// añadidos a mano ([extra]), por grupo y en el orden de la localización.
+  List<({SetGroup? group, List<LightSetup> sets})> boardGroupsOf(
     Scene scene, {
     Iterable<int> extra = const [],
   }) {
-    final own = set(scene.locationId);
+    final siteId = siteIdOfScene(scene);
+    final ofSite = siteId == null
+        ? const <LightSetup>[]
+        : lightSetsOfSite(siteId);
     final ids = <int>{
       for (final shot in shotsOfScene(scene.id))
-        if (!isSequence(shot) && setIdOfShot(shot) != null) setIdOfShot(shot)!,
+        if (!isSequence(shot) && setup(shot.lightSetupId) != null)
+          shot.lightSetupId!,
       ...extra,
-    }..remove(own?.id);
-    return [
-      own,
-      for (final s in sets)
-        if (ids.contains(s.id)) s,
+      // Con pocos sets en la localización, se ven todos.
+      if (ofSite.length <= boardAllSetsUpTo) ...ofSite.map((s) => s.id),
+    };
+    final order = <int>[
+      if (siteId != null)
+        for (final part in orderedSets(siteId, mode: 'group'))
+          for (final s in part.sets) s.id,
     ];
+    final shown =
+        [
+          for (final s in planSetups)
+            if (ids.contains(s.id)) s,
+        ]..sort((a, b) {
+          int at(LightSetup s) {
+            final i = order.indexOf(s.id);
+            return i < 0 ? 1 << 20 : i;
+          }
+
+          return at(a).compareTo(at(b));
+        });
+    final out = <({SetGroup? group, List<LightSetup> sets})>[];
+    final groupIds = <int?>[];
+    for (final s in shown) {
+      final g = group(s.groupId)?.id;
+      if (!groupIds.contains(g)) groupIds.add(g);
+    }
+    // Los sueltos, al final.
+    if (groupIds.remove(null)) groupIds.add(null);
+    for (final g in groupIds) {
+      out.add((
+        group: group(g),
+        sets: [
+          for (final s in shown)
+            if (group(s.groupId)?.id == g) s,
+        ],
+      ));
+    }
+    return out;
   }
 
   /// Sets de la localización de la escena que aún no están en su tablero.
-  List<LocationBasePlan> setsToAdd(Scene scene, Iterable<int?> shown) {
+  List<LightSetup> lightSetsToAdd(Scene scene, Iterable<int> shown) {
     final siteId = siteIdOfScene(scene);
-    if (siteId == null) return const [];
+    final list = siteId == null ? freeSetups : lightSetsOfSite(siteId);
     return [
-      for (final s in setsOfSite(siteId))
+      for (final s in list)
         if (!shown.contains(s.id)) s,
     ];
   }
 
-  /// Planos (no secuencia) de una escena que se ruedan en un set.
-  List<Shot> _boardShots(Scene scene, int? setId) => [
+  /// Planos (no secuencia) de la escena en un set; `null` = sin luz.
+  List<Shot> boardShotsOfSet(Scene scene, int? setupId) => [
     for (final shot in shotsOfScene(scene.id))
-      if (!isSequence(shot) && setIdOfShot(shot) == setId) shot,
-  ];
-
-  /// Columnas de un set en el tablero: sus esquemas y, además, cualquier
-  /// otro (de la localización o libre) que use algún plano de ahí.
-  List<LightSetup> boardSetupsOf(Scene scene, int? setId) {
-    final used = {
-      for (final shot in _boardShots(scene, setId))
-        if (setup(shot.lightSetupId) != null) shot.lightSetupId!,
-    };
-    return [
-      for (final s in planSetups)
-        if ((setId != null && s.locationBasePlanId == setId) ||
-            used.contains(s.id))
-          s,
-    ];
-  }
-
-  /// Planos de una casilla del tablero. `setupId` nulo = «Sin luz».
-  List<Shot> boardShots(Scene scene, int? setId, int? setupId) => [
-    for (final shot in _boardShots(scene, setId))
-      if (setup(shot.lightSetupId)?.id == setupId) shot,
+      if (!isSequence(shot) && setup(shot.lightSetupId)?.id == setupId) shot,
   ];
 
   /// Lo propio de un plano en un tramo de su secuencia.
@@ -439,14 +569,39 @@ class PlanProjectData {
   List<PlanElement> ownOfSetup(LightSetup setup) =>
       FloorPlanJson.decode(setup.planJson);
 
+  /// La luz compartida del grupo del set (SG.1).
+  List<PlanElement> groupLightOf(LightSetup setup) =>
+      GroupLight.visible(group(setup.groupId)?.planJson, setup.planJson);
+
   /// Lo que un esquema ve debajo: entorno de la localización y set.
   List<PlanElement> inheritedOfSetup(LightSetup setup) {
     final owner = set(setup.locationBasePlanId);
-    return [
-      ...environmentOf(siteIdOfSetup(setup)),
-      if (owner != null) ...ownOfSet(owner),
-    ];
+    // Con los cambios de entorno propios del set (SG.3).
+    final resolved = EnvOverrides.apply(
+      environment: environmentOf(siteIdOfSetup(setup)),
+      set: owner == null ? const [] : ownOfSet(owner),
+      json: setup.envOverridesJson,
+    );
+    return [...resolved.environment, ...resolved.set];
   }
+}
+
+/// Cómo se ordenan los sets de una localización (`LocationSites.setOrderMode`).
+enum SetOrderMode {
+  /// Por grupo: los sets con el mismo fondo, juntos.
+  group,
+
+  /// Por el orden del guion.
+  narrative,
+
+  /// A mano: el orden de rodaje.
+  manual;
+
+  static SetOrderMode of(String? value) => switch (value) {
+    'narrative' => narrative,
+    'manual' => manual,
+    _ => group,
+  };
 }
 
 /// Escucha localizaciones, sets, esquemas, escenas y planos de un proyecto.
@@ -481,29 +636,35 @@ class PlanDataBuilder extends ConsumerWidget {
                     builder: (context, elements) =>
                         StreamBuilder<List<ProjectAnnotationDocument>>(
                           stream: db.watchPlanAnnotationDocuments(projectId),
-                          builder: (context, drawings) {
-                            if (!sites.hasData ||
-                                !sets.hasData ||
-                                !setups.hasData ||
-                                !scenes.hasData ||
-                                !shots.hasData ||
-                                !elements.hasData ||
-                                !drawings.hasData) {
-                              return loading();
-                            }
-                            return builder(
-                              context,
-                              PlanProjectData(
-                                sites: sites.data!,
-                                sets: sets.data!,
-                                setups: setups.data!,
-                                scenes: scenes.data!,
-                                shots: shots.data!,
-                                elementRows: elements.data!,
-                                drawingRows: drawings.data!,
+                          builder: (context, drawings) =>
+                              StreamBuilder<List<SetGroup>>(
+                                stream: db.watchSetGroupsForProject(projectId),
+                                builder: (context, groups) {
+                                  if (!groups.hasData ||
+                                      !sites.hasData ||
+                                      !sets.hasData ||
+                                      !setups.hasData ||
+                                      !scenes.hasData ||
+                                      !shots.hasData ||
+                                      !elements.hasData ||
+                                      !drawings.hasData) {
+                                    return loading();
+                                  }
+                                  return builder(
+                                    context,
+                                    PlanProjectData(
+                                      sites: sites.data!,
+                                      sets: sets.data!,
+                                      setups: setups.data!,
+                                      scenes: scenes.data!,
+                                      shots: shots.data!,
+                                      groups: groups.data!,
+                                      elementRows: elements.data!,
+                                      drawingRows: drawings.data!,
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
                         ),
                   ),
             ),

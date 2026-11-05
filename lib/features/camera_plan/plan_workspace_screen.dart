@@ -264,10 +264,7 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
         for (final set in _data.orphanSets) ..._data.setupsOfSet(set.id),
       ];
     }
-    return [
-      ..._data.setupsOfSite(siteId),
-      for (final set in _data.setsOfSite(siteId)) ..._data.setupsOfSet(set.id),
-    ];
+    return [for (final part in _data.orderedSets(siteId)) ...part.sets];
   }
 
   void _stepSetup(int siteId, int delta) {
@@ -366,17 +363,23 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
     );
   }
 
+  /// Localización › Grupo › Set › Planos (SG.2), en el orden de rodaje.
   List<Widget> _siteItems(int siteId) {
     final site = _data.site(siteId);
     if (site == null) return const [];
     final color = _data.colors.siteColor(site.id);
-    final withoutSet = _data.scenesOfSiteWithoutSet(site.id);
+    final unlit = [
+      for (final sc in _data.scenes)
+        if (_data.siteIdOfScene(sc) == site.id)
+          for (final shot in _data.shotsOfScene(sc.id))
+            if (_data.setup(shot.lightSetupId) == null) shot,
+    ];
 
     return [
       _planRow(
         target: PlanTarget.site(site.id, site.name),
         title: 'Plano maestro',
-        subtitle: site.name,
+        subtitle: '${site.name} · el entorno de todos sus sets',
         color: color,
         thumbnail: PlanThumbnail(
           elements: _data.environmentOf(site.id),
@@ -384,11 +387,21 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
           emptyIcon: Icons.map_outlined,
         ),
       ),
-      for (final setup in _data.setupsOfSite(site.id)) _setupRow(setup),
-      for (final set in _data.setsOfSite(site.id)) ..._setItems(set),
-      if (withoutSet.isNotEmpty) ...[
-        _header('Sin set', color),
-        for (final scene in withoutSet) ..._sceneItems(scene),
+      for (final part in _data.orderedSets(site.id)) ...[
+        if (part.group != null)
+          _header(part.group!.name, context.palette.accent)
+        else if (_data.groupsOfSite(site.id).isNotEmpty &&
+            SetOrderMode.of(site.setOrderMode) == SetOrderMode.group)
+          _header('Sin grupo', color),
+        for (final setup in part.sets) ...[
+          _setupRow(setup),
+          for (final shot in _data.shotsOfSetup(setup.id))
+            _shotRow(shot, indent: 1),
+        ],
+      ],
+      if (unlit.isNotEmpty) ...[
+        _header('Planos sin set', color),
+        for (final shot in unlit) _shotRow(shot, indent: 1),
       ],
     ];
   }
@@ -696,7 +709,9 @@ class PlanShotStrip extends StatelessWidget {
             tooltip: current < 0 ? 'Abrir el primer plano' : 'Plano siguiente',
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.chevron_right),
-            onPressed: current < shots.length - 1 ? () => go(current + 1) : null,
+            onPressed: current < shots.length - 1
+                ? () => go(current + 1)
+                : null,
           ),
         ],
       ),

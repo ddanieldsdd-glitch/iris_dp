@@ -100,12 +100,16 @@ class FloorPlanDocument {
   /// exterior, tal como lo escribe `SetEnvironment.toJson`.
   final Map<String, dynamic>? environment;
 
+  /// Luces del grupo que este set no lleva (SG.3), por identificador.
+  final List<String> hiddenGroupLights;
+
   const FloorPlanDocument({
     this.elements = const [],
     this.metersPerUnit,
     this.underlay,
     this.ambient,
     this.environment,
+    this.hiddenGroupLights = const [],
   });
 
   bool get isEmpty => elements.isEmpty && underlay == null;
@@ -128,6 +132,8 @@ class FloorPlanJson {
       'underlay': ?document.underlay?.toJson(),
       'ambient': ?document.ambient,
       'environment': ?document.environment,
+      if (document.hiddenGroupLights.isNotEmpty)
+        'hiddenGroupLights': document.hiddenGroupLights,
       'elements': document.elements.map(_elementToJson).toList(),
     });
   }
@@ -152,6 +158,10 @@ class FloorPlanJson {
         environment: data['environment'] is Map
             ? Map<String, dynamic>.from(data['environment'] as Map)
             : null,
+        hiddenGroupLights: [
+          for (final uid in data['hiddenGroupLights'] as List? ?? const [])
+            if (uid is String) uid,
+        ],
       );
     } catch (_) {
       return const FloorPlanDocument();
