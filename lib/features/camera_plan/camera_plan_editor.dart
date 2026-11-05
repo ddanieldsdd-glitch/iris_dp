@@ -103,6 +103,9 @@ import '../../core/utils/platform_keys.dart';
 import 'light/wall_mount.dart';
 import 'light/street_lamp.dart';
 import 'prop_box.dart';
+import 'env_overrides.dart';
+import 'env_scope_dialog.dart';
+import 'group_light.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
   final int projectId;
@@ -335,6 +338,43 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Cómo es en el esquema cada luz que este plano tiene ajustada, por su
   /// identificador.
   final Map<String, PlanElement> _setupOriginals = {};
+
+  /// Grupo del set abierto: su luz se ve en la capa «Luz del grupo» (SG.3).
+  SetGroup? _group;
+
+  /// Sets de la localización, para preguntar a quién afecta el entorno.
+  List<LightSetup> _siteSets = const [];
+
+  /// Cómo estaban el entorno y la luz del grupo al cargarlos o guardarlos,
+  /// por identificador: con eso se sabe qué ha cambiado (SG.3).
+  Map<String, String> _envBaseline = const {};
+  Map<String, String> _groupBaseline = const {};
+
+  /// Luces del grupo que este set no lleva.
+  List<String> _hiddenGroupLights = const [];
+
+  /// A quién afectan los cambios de entorno y de luz del grupo, si se ha
+  /// pedido no volver a preguntar mientras se edita este set.
+  EnvScopeAnswer? _envScope;
+  GroupLightScope? _groupLightScope;
+  int? _scopesForSetup;
+
+  /// Guardando identificadores nuevos: no se pregunta nada.
+  bool _savingUids = false;
+
+  /// Los cambios de entorno desde un set se preguntan (SG.3): solo en la
+  /// planta de un set o de un plano con set.
+  bool get _envScoped =>
+      _lightSetup != null &&
+      _linkedSite != null &&
+      (widget.scope == FloorPlanScope.lightSetup ||
+          widget.scope == FloorPlanScope.shot);
+
+  static Map<String, String> _baselineOf(Iterable<PlanElement> elements) => {
+    for (final el in elements)
+      if (LightOverrides.uidOf(el) case final uid?)
+        uid: FloorPlanJson.encode([el]),
+  };
 
   /// Mapa de exposición en falso color, en lugar de los haces.
   late bool _exposureMap = _planPrefs.exposureMap;
@@ -724,16 +764,80 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       }
     }
 
-    addLayer(
-      PlanLayer.environment,
-      FloorPlanJson.decode(linkedSite?.floorPlanJson),
-    );
-    addLayer(PlanLayer.set, FloorPlanJson.decode(linkedSet?.floorPlanJson));
+    var siteElements = FloorPlanJson.decode(linkedSite?.floorPlanJson);
+    var zoneElements = FloorPlanJson.decode(linkedSet?.floorPlanJson);
+    final envScoped =
+        lightSetup != null &&
+        linkedSite != null &&
+        (widget.scope == FloorPlanScope.lightSetup ||
+            widget.scope == FloorPlanScope.shot);
+    if (envScoped) {
+      // Los cambios del set van por identificador: el entorno los necesita
+      // fijos antes de aplicarlos (SG.3).
+      if (LightOverrides.ensureUids(siteElements).isNotEmpty) {
+        await _repo.saveElements(
+          scope: FloorPlanScope.site,
+          elements: siteElements,
+          siteId: linkedSite.id,
+        );
+      }
+      if (linkedSet != null &&
+          LightOverrides.ensureUids(zoneElements).isNotEmpty) {
+        await _repo.saveElements(
+          scope: FloorPlanScope.set,
+          elements: zoneElements,
+          setId: linkedSet.id,
+        );
+      }
+      final resolved = EnvOverrides.apply(
+        environment: siteElements,
+        set: zoneElements,
+        json: lightSetup.envOverridesJson,
+      );
+      siteElements = resolved.environment;
+      zoneElements = resolved.set;
+      if (linkedSet == null) {
+        // Sin zona, lo que añade el set va con el entorno.
+        siteElements = [...siteElements, ...zoneElements];
+        zoneElements = const [];
+      }
+    }
+    addLayer(PlanLayer.environment, siteElements);
+    addLayer(PlanLayer.set, zoneElements);
     // La luz del esquema. Si el plano tiene ajustes propios, se ve con
     // ellos y se recuerda cómo es en el esquema.
     final setupLights = FloorPlanJson.decode(lightSetup?.planJson);
     final originals = <String, PlanElement>{};
     final overrides = LightOverrides.decode(shot?.lightOverridesJson);
+    // La luz del grupo, como la ve este set, y con los ajustes del plano.
+    final group = lightSetup?.groupId != null
+        ? await db.getSetGroupById(lightSetup!.groupId!)
+        : null;
+    addLayer(PlanLayer.groupLight, [
+      for (final el in GroupLight.visible(group?.planJson, lightSetup?.planJson))
+        if (overrides[LightOverrides.uidOf(el)] case final own?)
+          () {
+            final uid = LightOverrides.uidOf(el)!;
+            originals[uid] = el;
+            return own
+              ..props[LightOverrides.uidKey] = uid
+              ..shotOverride = true;
+          }()
+        else
+          el,
+    ]);
+    final siteSets = [
+      for (final s in projectSetups)
+        if (s.kind == LightSetupKind.plan &&
+            linkedSite != null &&
+            (s.locationSiteId ??
+                    allSets
+                        .where((z) => z.id == s.locationBasePlanId)
+                        .firstOrNull
+                        ?.siteId) ==
+                linkedSite.id)
+          s,
+    ];
     final shownLights = [
       for (final el in setupLights)
         if (overrides[LightOverrides.uidOf(el)] case final own?)
@@ -767,6 +871,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final unsaved = {
       for (final el in LightOverrides.ensureUids(elements)) el.layer,
     };
+    final envBaseline = _baselineOf(
+      elements.where(
+        (e) => e.layer == PlanLayer.environment || e.layer == PlanLayer.set,
+      ),
+    );
+    final groupBaseline = _baselineOf(
+      elements.where((e) => e.layer == PlanLayer.groupLight),
+    );
 
     // Zonas de los sets sobre el plano maestro.
     final zones = <PlanZone>[];
@@ -967,6 +1079,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _setupOriginals
         ..clear()
         ..addAll(originals);
+      _group = group;
+      _siteSets = siteSets;
+      _envBaseline = envBaseline;
+      _groupBaseline = groupBaseline;
+      _hiddenGroupLights = FloorPlanJson.decodeDocument(
+        lightSetup?.planJson,
+      ).hiddenGroupLights;
+      if (_scopesForSetup != lightSetup?.id) {
+        _scopesForSetup = lightSetup?.id;
+        _envScope = null;
+        _groupLightScope = null;
+      }
       _otherCameras = otherCameras;
       _otherCameraShot
         ..clear()
@@ -1322,6 +1446,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   bool _hasLayer(PlanLayer layer) => switch (layer) {
     PlanLayer.environment => _linkedSite != null,
     PlanLayer.set => _linkedSet != null,
+    PlanLayer.groupLight => _group != null,
     PlanLayer.light => _lightSetup != null,
     PlanLayer.shot => _shot != null,
   };
@@ -1353,14 +1478,24 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Future<void> _saveNewUids() async {
     final layers = _uidsToSave;
     _uidsToSave = const {};
-    for (final layer in layers) {
-      await _saveLayer(layer);
+    _savingUids = true;
+    try {
+      for (final layer in layers) {
+        await _saveLayer(layer);
+      }
+    } finally {
+      _savingUids = false;
     }
   }
 
   /// Guarda una capa entera en su sitio.
   Future<void> _saveLayer(PlanLayer layer) async {
     if (!_hasLayer(layer)) return;
+    if (_envScoped &&
+        (layer == PlanLayer.environment || layer == PlanLayer.set)) {
+      await _saveEnvironmentOfSet();
+      return;
+    }
     final list = _layerElements(layer);
     LightOverrides.ensureUids(list);
     switch (layer) {
@@ -1376,37 +1511,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           elements: list,
           setId: _linkedSet!.id,
         );
+      case PlanLayer.groupLight:
+        await _saveGroupLight(list);
       case PlanLayer.light:
         // Con el identificador estable, un plano ajusta un elemento del
         // esquema sin tocar el de los demás.
-        final own = <String, PlanElement>{};
-        final shared = <PlanElement>[];
-        for (final el in list) {
-          final uid = LightOverrides.uidOf(el)!;
-          final original = _setupOriginals[uid];
-          if (el.shotOverride && original != null && _shot != null) {
-            // Ajustado solo en este plano: el esquema conserva el suyo.
-            own[uid] = el;
-            shared.add(original);
-          } else {
-            shared.add(el);
-          }
-        }
         await _repo.saveElements(
           scope: FloorPlanScope.lightSetup,
-          elements: shared,
+          elements: _sharedVersions(list),
           lightSetupId: _lightSetup!.id,
         );
-        final shot = _shot;
-        if (shot != null) {
-          await _repo.saveLightOverrides(shot.id, own);
-          _shot =
-              await (ref
-                      .read(databaseProvider)
-                      .select(ref.read(databaseProvider).shots)
-                    ..where((s) => s.id.equals(shot.id)))
-                  .getSingleOrNull();
-        }
+        await _saveShotOverrides();
       case PlanLayer.shot:
         await _repo.saveElements(
           scope: FloorPlanScope.shot,
@@ -1416,10 +1531,252 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
   }
 
+  /// Cada elemento como es en su esquema (o en el grupo): lo ajustado solo
+  /// en este plano conserva el suyo.
+  List<PlanElement> _sharedVersions(List<PlanElement> list) => [
+    for (final el in list)
+      if (el.shotOverride &&
+          _shot != null &&
+          _setupOriginals[LightOverrides.uidOf(el)] != null)
+        _setupOriginals[LightOverrides.uidOf(el)]!
+      else
+        el,
+  ];
+
+  /// Los ajustes propios del plano, de la luz del set y de la del grupo.
+  Future<void> _saveShotOverrides() async {
+    final shot = _shot;
+    if (shot == null) return;
+    final own = <String, PlanElement>{
+      for (final el in _elements)
+        if ((el.layer == PlanLayer.light ||
+                el.layer == PlanLayer.groupLight) &&
+            el.shotOverride &&
+            _setupOriginals[LightOverrides.uidOf(el)] != null)
+          LightOverrides.uidOf(el)!: el,
+    };
+    await _repo.saveLightOverrides(shot.id, own);
+    final db = ref.read(databaseProvider);
+    _shot = await (db.select(
+      db.shots,
+    )..where((s) => s.id.equals(shot.id))).getSingleOrNull();
+  }
+
+  /// Lo que ha cambiado en [list] respecto a [baseline]: lo cambiado o
+  /// nuevo, por identificador, y lo quitado.
+  static ({Map<String, PlanElement> changed, List<String> removed}) _diff(
+    Map<String, String> baseline,
+    List<PlanElement> list,
+  ) {
+    final now = _baselineOf(list);
+    return (
+      changed: {
+        for (final el in list)
+          if (LightOverrides.uidOf(el) case final uid?
+              when baseline[uid] != now[uid])
+            uid: el,
+      },
+      removed: [
+        for (final uid in baseline.keys)
+          if (!now.containsKey(uid)) uid,
+      ],
+    );
+  }
+
+  /// Guarda la luz del grupo (SG.3): para todo el grupo o, si se elige,
+  /// solo para este set (una copia propia, o sin esa luz).
+  Future<void> _saveGroupLight(List<PlanElement> list) async {
+    final group = _group;
+    final setup = _lightSetup;
+    if (group == null || setup == null) return;
+    final shared = _sharedVersions(list);
+    final diff = _diff(_groupBaseline, shared);
+    if (diff.changed.isEmpty && diff.removed.isEmpty) {
+      await _saveShotOverrides();
+      return;
+    }
+    var scope = _savingUids ? GroupLightScope.group : _groupLightScope;
+    if (scope == null) {
+      final answer = await askGroupLightScope(
+        context,
+        group: group,
+        setup: setup,
+        setCount: _siteSets.where((s) => s.groupId == group.id).length,
+      );
+      if (answer == null) {
+        await _load();
+        return;
+      }
+      scope = answer.scope;
+      if (answer.remember) _groupLightScope = scope;
+    }
+    final db = ref.read(databaseProvider);
+    if (scope == GroupLightScope.group) {
+      // Sobre lo guardado: el grupo tiene luces que este set no ve.
+      final stored = [
+        ...FloorPlanJson.decode((await db.getSetGroupById(group.id))?.planJson),
+      ];
+      stored.removeWhere(
+        (e) => diff.removed.contains(LightOverrides.uidOf(e)),
+      );
+      for (final entry in diff.changed.entries) {
+        final at = stored.indexWhere(
+          (e) => LightOverrides.uidOf(e) == entry.key,
+        );
+        if (at >= 0) {
+          stored[at] = entry.value;
+        } else {
+          stored.add(entry.value);
+        }
+      }
+      await _repo.saveGroupElements(group.id, stored);
+      _group = await db.getSetGroupById(group.id);
+    } else {
+      // Este set se queda con su versión: pasa a su luz, con el mismo uid.
+      setState(() {
+        for (final el in diff.changed.values) {
+          el
+            ..layer = PlanLayer.light
+            ..shotOverride = false;
+          _setupOriginals.remove(LightOverrides.uidOf(el));
+        }
+      });
+      if (diff.removed.isNotEmpty) {
+        _hiddenGroupLights = {..._hiddenGroupLights, ...diff.removed}.toList();
+        await _repo.saveHiddenGroupLights(setup.id, _hiddenGroupLights);
+      }
+      if (diff.changed.isNotEmpty) await _saveLayer(PlanLayer.light);
+    }
+    _groupBaseline = _baselineOf(
+      _sharedVersions(_layerElements(PlanLayer.groupLight)),
+    );
+    await _saveShotOverrides();
+  }
+
+  /// Guarda un cambio de entorno hecho desde un set (SG.3): pregunta a
+  /// quién afecta (este set, otros, el grupo o la localización) y lo
+  /// guarda donde toca.
+  Future<void> _saveEnvironmentOfSet() async {
+    final setup = _lightSetup!;
+    final site = _linkedSite!;
+    final list = [
+      ..._layerElements(PlanLayer.environment),
+      ..._layerElements(PlanLayer.set),
+    ];
+    LightOverrides.ensureUids(list);
+    final diff = _diff(_envBaseline, list);
+    if (diff.changed.isEmpty && diff.removed.isEmpty) return;
+    final others = [
+      for (final s in _siteSets)
+        if (s.id != setup.id) s,
+    ];
+    var answer = _envScope;
+    if (answer == null && others.isEmpty) {
+      // Un solo set: el entorno es el suyo.
+      answer = (scope: EnvScope.site, sets: const <int>[], remember: true);
+    }
+    if (answer == null) {
+      final group = _group;
+      final asked = await askEnvScope(
+        context,
+        setup: setup,
+        siteName: site.name,
+        otherSets: others,
+        group: group,
+        groupSets: [
+          for (final s in _siteSets)
+            if (group != null && s.groupId == group.id) s,
+        ],
+      );
+      if (asked == null) {
+        await _load();
+        return;
+      }
+      answer = asked;
+      if (asked.remember) _envScope = asked;
+    }
+    final db = ref.read(databaseProvider);
+    final siteBase = [
+      ...FloorPlanJson.decode((await db.getSiteById(site.id))?.floorPlanJson),
+    ];
+    final zone = _linkedSet;
+    final zoneBase = zone == null
+        ? <PlanElement>[]
+        : [
+            ...FloorPlanJson.decode(
+              (await db.getLocationById(zone.id))?.floorPlanJson,
+            ),
+          ];
+    final baseUids = {
+      for (final el in [...siteBase, ...zoneBase]) LightOverrides.uidOf(el),
+    };
+    if (answer.scope == EnvScope.site) {
+      // El entorno definitivo cambia; este set deja de cambiarlo.
+      siteBase.removeWhere((e) => diff.removed.contains(LightOverrides.uidOf(e)));
+      zoneBase.removeWhere((e) => diff.removed.contains(LightOverrides.uidOf(e)));
+      for (final entry in diff.changed.entries) {
+        final copy = LightOverrides.clone(entry.value);
+        int at(List<PlanElement> l) =>
+            l.indexWhere((e) => LightOverrides.uidOf(e) == entry.key);
+        if (at(siteBase) >= 0) {
+          siteBase[at(siteBase)] = copy;
+        } else if (at(zoneBase) >= 0) {
+          zoneBase[at(zoneBase)] = copy;
+        } else if (zone != null && entry.value.layer == PlanLayer.set) {
+          zoneBase.add(copy);
+        } else {
+          siteBase.add(copy);
+        }
+      }
+      await _repo.saveElements(
+        scope: FloorPlanScope.site,
+        elements: siteBase,
+        siteId: site.id,
+      );
+      if (zone != null) {
+        await _repo.saveElements(
+          scope: FloorPlanScope.set,
+          elements: zoneBase,
+          setId: zone.id,
+        );
+      }
+      final own = EnvOverrides.decode(
+        (await db.getLightSetupById(setup.id))?.envOverridesJson,
+      );
+      final touched = [...diff.changed.keys, ...diff.removed];
+      if (touched.any(own.containsKey)) {
+        own.removeWhere((uid, _) => touched.contains(uid));
+        await db.setLightSetupEnvOverrides(setup.id, EnvOverrides.encode(own));
+      }
+    } else {
+      for (final id in {setup.id, ...answer.sets}) {
+        final target = await db.getLightSetupById(id);
+        if (target == null) continue;
+        final own = EnvOverrides.decode(target.envOverridesJson);
+        for (final entry in diff.changed.entries) {
+          own[entry.key] = LightOverrides.clone(entry.value);
+        }
+        for (final uid in diff.removed) {
+          if (baseUids.contains(uid)) {
+            own[uid] = null;
+          } else {
+            own.remove(uid);
+          }
+        }
+        await db.setLightSetupEnvOverrides(id, EnvOverrides.encode(own));
+      }
+    }
+    _envBaseline = _baselineOf(list);
+    _lightSetup = await db.getLightSetupById(setup.id);
+  }
+
   /// Hace que una luz del esquema se ajuste solo en este plano, o la
   /// devuelve a como está en el esquema.
   Future<void> _setShotOverride(PlanElement el, bool own) async {
-    if (_shot == null || el.layer != PlanLayer.light) return;
+    if (_shot == null ||
+        (el.layer != PlanLayer.light && el.layer != PlanLayer.groupLight)) {
+      return;
+    }
     LightOverrides.ensureUids([el]);
     final uid = LightOverrides.uidOf(el)!;
     if (own) {
@@ -1430,7 +1787,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       if (original != null) {
         final index = _elements.indexOf(el);
         original
-          ..layer = PlanLayer.light
+          ..layer = el.layer
           ..id = --_tempId
           ..shotOverride = false;
         setState(() {
@@ -1442,7 +1799,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         setState(() => el.shotOverride = false);
       }
     }
-    await _saveLayer(PlanLayer.light);
+    await _saveLayer(el.layer);
     _commitHistory();
   }
 
@@ -1694,9 +2051,19 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   String _scopeNotice(PlanLayer layer) {
     String shots(int n) => '$n plano${n == 1 ? '' : 's'}';
     return switch (layer) {
+      PlanLayer.environment when _envScoped => switch (_envScope?.scope) {
+        null => 'Entorno · al cambiarlo se pregunta a quién afecta',
+        EnvScope.site => 'Entorno · cambia en toda la localización',
+        EnvScope.group => 'Entorno · cambia en todo el grupo',
+        EnvScope.someSets => 'Entorno · cambia en este set y en otros',
+        EnvScope.thisSet => 'Entorno · solo cambia en este set',
+      },
       PlanLayer.environment =>
         'Entorno · cambia en toda la localización'
             '${_linkedSite != null ? ' «${_linkedSite!.name}»' : ''}',
+      PlanLayer.groupLight =>
+        'Luz del grupo «${_group?.name ?? ''}» · '
+            '${_groupLightScope == GroupLightScope.thisSet ? 'cambia solo en este set' : 'la comparten sus sets'}',
       PlanLayer.set =>
         'Set «${_linkedSet?.locationName ?? ''}» · '
             'cambia en sus ${shots(_setShotCount)}',
@@ -5760,7 +6127,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 gear: _gear,
                                 canOverride:
                                     _shot != null &&
-                                    _selected!.layer == PlanLayer.light,
+                                    (_selected!.layer == PlanLayer.light ||
+                                        _selected!.layer ==
+                                            PlanLayer.groupLight),
                                 onOverride: (own) =>
                                     _setShotOverride(_selected!, own),
                                 onLinkShots: _canLinkShots(_selected!)

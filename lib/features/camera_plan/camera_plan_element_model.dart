@@ -17,6 +17,9 @@ enum PlanLayer {
   /// Añadidos propios del set.
   set,
 
+  /// Luz compartida del grupo de sets (SG.3).
+  groupLight,
+
   /// Esquema de luz.
   light,
 
@@ -28,6 +31,7 @@ extension PlanLayerLabel on PlanLayer {
   String get label => switch (this) {
     PlanLayer.environment => 'Entorno',
     PlanLayer.set => 'Set',
+    PlanLayer.groupLight => 'Luz del grupo',
     PlanLayer.light => 'Luz',
     PlanLayer.shot => 'Cámara',
   };
