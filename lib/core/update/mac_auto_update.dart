@@ -98,6 +98,15 @@ abstract final class MacAutoUpdate {
     } catch (_) {}
   }
 
+  /// ¿Es la copia instalada en /Applications? Solo esa se actualiza sola:
+  /// una copia de pruebas abierta a la vez prepararía la misma versión en la
+  /// misma carpeta y las dos se pisarían (pasó el 2026-11-05 con la v1.4.3:
+  /// la librería de PDF quedó rota y la app no abría).
+  static bool isInstalledCopy([String? bundle]) {
+    final b = bundle ?? runningBundle();
+    return b != null && b.startsWith('/Applications/');
+  }
+
   /// Descarga [release] y la deja lista (si no lo estaba ya).
   static Future<StagedMacUpdate> stage(AppRelease release) async {
     final already = await staged();
@@ -105,46 +114,111 @@ abstract final class MacAutoUpdate {
       return already;
     }
     final dir = await _dir();
-    final dmg = await downloadAppRelease(release);
+    // Una sola copia de IRIS prepara a la vez, aunque haya varias abiertas.
+    final lock = Directory(p.join(dir.path, 'preparando'));
+    if (!takeLock(lock)) {
+      throw StateError('Otra ventana de IRIS ya está preparando la versión');
+    }
     try {
-      final mount = await _attach(dmg);
+      final dmg = await downloadAppRelease(
+        release,
+        fileName: 'IRIS-${release.buildNumber}-$pid.dmg',
+      );
       try {
-        final source = Directory(mount)
-            .listSync()
-            .whereType<Directory>()
-            .firstWhere(
-              (d) => d.path.endsWith('.app'),
-              orElse: () => throw StateError('El DMG no trae la app'),
-            );
-        final target = p.join(dir.path, 'IRIS-${release.buildNumber}.app');
-        if (Directory(target).existsSync()) {
-          Directory(target).deleteSync(recursive: true);
-        }
-        final copy = await Process.run('ditto', [source.path, target]);
-        if (copy.exitCode != 0) {
-          throw StateError('No se pudo preparar la app: ${copy.stderr}');
-        }
-        await Process.run('xattr', ['-dr', 'com.apple.quarantine', target]);
-        // Las preparadas de antes sobran.
-        for (final old in dir.listSync().whereType<Directory>()) {
-          if (old.path != target && old.path.endsWith('.app')) {
-            old.deleteSync(recursive: true);
+        final mount = await _attach(dmg);
+        try {
+          final source = Directory(mount)
+              .listSync()
+              .whereType<Directory>()
+              .firstWhere(
+                (d) => d.path.endsWith('.app'),
+                orElse: () => throw StateError('El DMG no trae la app'),
+              );
+          final target = p.join(dir.path, 'IRIS-${release.buildNumber}.app');
+          // Se copia aparte y solo se pone en su sitio si la firma cuadra:
+          // una copia a medias o rota no llega nunca a instalarse.
+          final partial = '$target.parcial-$pid';
+          _remove(partial);
+          final copy = await Process.run('ditto', [source.path, partial]);
+          if (copy.exitCode != 0) {
+            _remove(partial);
+            throw StateError('No se pudo preparar la app: ${copy.stderr}');
           }
+          await Process.run('xattr', ['-dr', 'com.apple.quarantine', partial]);
+          final check = await Process.run('codesign', [
+            '--verify',
+            '--deep',
+            '--strict',
+            partial,
+          ]);
+          if (check.exitCode != 0) {
+            _remove(partial);
+            throw StateError(
+              'La versión descargada no está entera: ${check.stderr}',
+            );
+          }
+          _remove(target);
+          Directory(partial).renameSync(target);
+          // Las preparadas de antes sobran.
+          for (final old in dir.listSync().whereType<Directory>()) {
+            if (old.path != target && old.path.contains('.app')) {
+              _remove(old.path);
+            }
+          }
+          final staged = StagedMacUpdate(
+            version: release.version,
+            buildNumber: release.buildNumber,
+            appPath: target,
+          );
+          await (await _marker()).writeAsString(jsonEncode(staged.toJson()));
+          return staged;
+        } finally {
+          await Process.run('hdiutil', ['detach', mount, '-quiet', '-force']);
         }
-        final staged = StagedMacUpdate(
-          version: release.version,
-          buildNumber: release.buildNumber,
-          appPath: target,
-        );
-        await (await _marker()).writeAsString(jsonEncode(staged.toJson()));
-        return staged;
       } finally {
-        await Process.run('hdiutil', ['detach', mount, '-quiet', '-force']);
+        try {
+          File(dmg).deleteSync();
+        } catch (_) {}
       }
     } finally {
-      try {
-        File(dmg).deleteSync();
-      } catch (_) {}
+      _remove(lock.path);
+    }
+  }
+
+  static void _remove(String path) {
+    try {
+      final d = Directory(path);
+      if (d.existsSync()) d.deleteSync(recursive: true);
+    } catch (_) {}
+  }
+
+  /// Toma el cerrojo [lock] (una carpeta con el pid dentro). Si lo tiene
+  /// otro proceso vivo, `false`; si quedó de uno que ya no está, se quita.
+  @visibleForTesting
+  static bool takeLock(Directory lock, {int? ownPid}) {
+    final me = ownPid ?? pid;
+    final owner = File(p.join(lock.path, 'pid'));
+    if (lock.existsSync()) {
+      final other = int.tryParse(
+        (owner.existsSync() ? owner.readAsStringSync() : '').trim(),
+      );
+      if (other != null && other != me && _alive(other)) return false;
+      _remove(lock.path);
+    }
+    try {
+      lock.createSync(recursive: false);
+    } on FileSystemException {
+      return false; // Otro proceso lo tomó justo ahora.
+    }
+    owner.writeAsStringSync('$me');
+    return true;
+  }
+
+  static bool _alive(int other) {
+    try {
+      return Process.runSync('kill', ['-0', '$other']).exitCode == 0;
+    } catch (_) {
+      return false;
     }
   }
 

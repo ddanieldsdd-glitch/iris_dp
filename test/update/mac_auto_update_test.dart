@@ -26,6 +26,31 @@ void main() {
     expect(MacAutoUpdate.runningBundle('/usr/bin/dart'), isNull);
   });
 
+  test('solo se actualiza sola la copia de /Applications', () {
+    expect(MacAutoUpdate.isInstalledCopy('/Applications/IRIS DP.app'), isTrue);
+    expect(
+      MacAutoUpdate.isInstalledCopy(
+        '/Users/d/iris_dp_calle/build/macos/Build/Products/Release/'
+        'iris_dp.app',
+      ),
+      isFalse,
+    );
+  });
+
+  test('una sola copia de IRIS prepara la versión a la vez', () {
+    final tmp = Directory.systemTemp.createTempSync('cerrojo');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final lock = Directory('${tmp.path}/preparando');
+    // Lo toma este proceso; otro vivo (este mismo pid, visto desde fuera)
+    // no puede.
+    expect(MacAutoUpdate.takeLock(lock), isTrue);
+    expect(MacAutoUpdate.takeLock(lock, ownPid: pid + 1), isFalse);
+    // Uno que quedó de un proceso que ya no existe se quita.
+    File('${lock.path}/pid').writeAsStringSync('999999');
+    expect(MacAutoUpdate.takeLock(lock, ownPid: pid + 1), isTrue);
+    expect(File('${lock.path}/pid').readAsStringSync(), '${pid + 1}');
+  });
+
   group(
     'al cerrarse IRIS se cambia por la nueva',
     () {

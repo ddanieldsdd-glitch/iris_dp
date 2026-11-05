@@ -28,6 +28,7 @@ class AppUpdateDownloadProgress {
 Future<String> downloadAppRelease(
   AppRelease release, {
   void Function(AppUpdateDownloadProgress progress)? onProgress,
+  String? fileName,
 }) async {
   final uri = Uri.parse(release.downloadUrl);
   final request = http.Request('GET', uri);
@@ -38,8 +39,7 @@ Future<String> downloadAppRelease(
 
   final total = response.contentLength;
   final tempDir = await getTemporaryDirectory();
-  final fileName = p.basename(uri.path);
-  final destPath = p.join(tempDir.path, fileName);
+  final destPath = p.join(tempDir.path, fileName ?? p.basename(uri.path));
   final file = File(destPath);
   final sink = file.openWrite();
 

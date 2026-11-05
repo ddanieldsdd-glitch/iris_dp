@@ -141,8 +141,11 @@ class AppUpdateNotifier extends Notifier<AppUpdateState> {
     if (release != null && _autoUpdates) unawaited(prepare(release));
   }
 
-  /// Mac: se actualiza sola (Windows e iPad siguen con el aviso).
-  bool get _autoUpdates => !kIsWeb && Platform.isMacOS;
+  /// Mac: se actualiza sola (Windows e iPad siguen con el aviso). Solo la
+  /// copia de /Applications: una de pruebas no toca la carpeta de las
+  /// actualizaciones.
+  bool get _autoUpdates =>
+      !kIsWeb && Platform.isMacOS && MacAutoUpdate.isInstalledCopy();
 
   bool _armed = false;
 
