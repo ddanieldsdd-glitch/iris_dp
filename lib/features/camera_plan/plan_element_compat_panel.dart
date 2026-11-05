@@ -254,15 +254,18 @@ class _CameraSection extends StatelessWidget {
         const SizedBox(height: 4),
         DropdownButtonFormField<String>(
           isExpanded: true,
-          initialValue:
-              kStabilizationPresets.contains(
-                element.stabilization?.toUpperCase(),
-              )
-              ? element.stabilization!.toUpperCase()
+          // Un movimiento del guion técnico («MANO», «TRÍPODE»…) se
+          // enseña tal cual, no como «STEADY».
+          initialValue: element.stabilization?.trim().isNotEmpty == true
+              ? element.stabilization!.trim().toUpperCase()
               : 'STEADY',
           decoration: const InputDecoration(isDense: true),
           items: [
-            for (final p in kStabilizationPresets)
+            for (final p in {
+              if (element.stabilization?.trim().isNotEmpty == true)
+                element.stabilization!.trim().toUpperCase(),
+              ...kStabilizationPresets,
+            })
               DropdownMenuItem(value: p, child: Text(p)),
           ],
           onChanged: (v) {

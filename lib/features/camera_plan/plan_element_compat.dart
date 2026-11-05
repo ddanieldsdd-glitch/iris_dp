@@ -116,14 +116,19 @@ class PlanElementCompat {
     final m = (movement ?? 'STEADY').trim().toUpperCase();
     return switch (m) {
       'DOLLY' || 'DOLLY IN' || 'DOLLY OUT' => 'dolly',
-      'TRACK' || 'TRACKING' || 'TRAVELLING' => 'track',
+      'TRACK' || 'TRACKING' || 'TRAVELLING' || 'SEGUIMIENTO' => 'track',
       'PAN' || 'PAN L' || 'PAN R' => 'pan',
       'TILT' || 'TILT U' || 'TILT D' => 'tilt',
-      'CRANE' || 'JIB' || 'GRUA' => 'crane',
-      'HANDHELD' || 'MANO' || 'MANO AL HOMBRO' => 'handheld',
+      'CRANE' || 'JIB' || 'GRUA' || 'GRÚA' => 'crane',
+      'HANDHELD' || 'MANO' || 'MANO AL HOMBRO' || 'EN MANO' => 'handheld',
       'STEADICAM' || 'GIMBAL' => 'stabilized',
       'ZOOM' => 'zoom',
-      'STATIC' || 'FIJO' || 'STEADY' || 'ESTATICA' => 'static',
+      'STATIC' ||
+      'FIJO' ||
+      'STEADY' ||
+      'ESTATICA' ||
+      'TRÍPODE' ||
+      'TRIPODE' => 'static',
       _ => 'other',
     };
   }

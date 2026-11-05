@@ -31,6 +31,7 @@ import 'camera_plan_grouping.dart';
 import '../equipment/widgets/light_quick_add_sheet.dart';
 import 'camera_links.dart';
 import 'camera_links_dialog.dart';
+import 'camera_shot_sync.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
@@ -1536,12 +1537,42 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       builder: (ctx) => LinkShotsDialog(
         camera: camera.cameraLetter,
         options: options,
+        sceneId: _scene?.id,
       ),
     );
     if (picked == null || !mounted) return;
+    // Los planos nuevos cuya focal o movimiento no coincide con la cámara:
+    // se pregunta una vez cuál se queda (SG.4).
+    final added = [
+      for (final o in options)
+        if (picked.contains(o.shot.id) && !o.linked) o,
+    ];
+    var source = CameraShotSource.script;
+    final clash = [
+      for (final o in added)
+        if (CameraShotSync.conflicts(camera, o.shot)) o.label,
+    ];
+    if (clash.isNotEmpty) {
+      final answer = await askCameraShotSource(
+        context,
+        camera: camera.cameraLetter,
+        shots: clash,
+      );
+      if (answer == null || !mounted) return;
+      source = answer;
+    }
+    // Una cámara de un solo plano lleva en el set lo mismo que en el plano.
+    if (source == CameraShotSource.script &&
+        picked.length == 1 &&
+        added.length == 1 &&
+        CameraShotSync.cameraFromShot(camera, added.single.shot)) {
+      await _saveLayer(PlanLayer.light);
+      if (!mounted) return;
+      setState(() {});
+    }
     await links.setLinks(setup, camera, picked, [
       for (final o in options) o.shot,
-    ]);
+    ], source: source);
     if (!mounted) return;
     _showSnack(
       picked.isEmpty
@@ -7075,6 +7106,34 @@ class _ElementPanelState extends State<_ElementPanel> {
                         decoration: const InputDecoration(hintText: '50mm'),
                         onSubmitted: _commitLens,
                         onEditingComplete: () => _commitLens(_lensCtrl.text),
+                      ),
+                      // El movimiento con las palabras del guion técnico:
+                      // lo que se elige aquí va también al plano (SG.4).
+                      const SizedBox(height: AppSpacing.sm),
+                      Text('Movimiento', style: AppTypography.caption(palette)),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          for (final m in {
+                            ...CameraShotSync.movements,
+                            if (element.stabilization?.trim().isNotEmpty ==
+                                true)
+                              element.stabilization!.trim().toUpperCase(),
+                          })
+                            ChoiceChip(
+                              label: Text(m),
+                              visualDensity: VisualDensity.compact,
+                              selected:
+                                  element.stabilization?.trim().toUpperCase() ==
+                                  m,
+                              onSelected: (_) {
+                                element.stabilization = m;
+                                widget.onUpdate();
+                              },
+                            ),
+                        ],
                       ),
                     ],
                     if (PlanMarks.supports(element))

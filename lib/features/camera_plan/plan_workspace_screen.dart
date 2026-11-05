@@ -38,6 +38,26 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
     setState(() => _target = target);
   }
 
+  /// El editor con la tira de planos encima (SG.5): en un plano, los de su
+  /// escena; en un set, los suyos. Se pasa de uno a otro sin salir.
+  Widget _editorWithStrip() {
+    if (_target.scope != FloorPlanScope.shot &&
+        _target.scope != FloorPlanScope.lightSetup) {
+      return _editor();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PlanDataBuilder(
+          projectId: widget.projectId,
+          builder: (context, data) =>
+              PlanShotStrip(data: data, target: _target, onOpen: _open),
+        ),
+        Expanded(child: _editor()),
+      ],
+    );
+  }
+
   Widget _editor() {
     final key = ValueKey('${_target.scope.name}:${_target.id}:${_target.leg}');
     return switch (_target.scope) {
@@ -101,7 +121,7 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
     final bottom = MediaQuery.paddingOf(context).bottom;
     return Stack(
       children: [
-        Positioned.fill(child: _editor()),
+        Positioned.fill(child: _editorWithStrip()),
         // Encima de la barra de abajo del editor (Añadir · Guardar), a la
         // izquierda, donde no tapa sus botones.
         Positioned(
@@ -171,7 +191,7 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
                     ),
             ),
           ),
-          Expanded(child: _editor()),
+          Expanded(child: _editorWithStrip()),
         ],
       ),
     );
@@ -585,6 +605,100 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Los planos entre los que se puede saltar desde la planta abierta (SG.5):
+/// en un plano, los de su escena; en un set, los que lo usan. Con ◀ ▶ se va
+/// al anterior y al siguiente.
+class PlanShotStrip extends StatelessWidget {
+  final PlanProjectData data;
+  final PlanTarget target;
+  final void Function(PlanTarget target) onOpen;
+
+  const PlanShotStrip({
+    super.key,
+    required this.data,
+    required this.target,
+    required this.onOpen,
+  });
+
+  /// Los planos de la tira y el título que llevan delante.
+  static (String, List<Shot>) shotsFor(
+    PlanProjectData data,
+    PlanTarget target,
+  ) {
+    if (target.scope == FloorPlanScope.lightSetup) {
+      return ('Planos del set', data.shotsOfSetup(target.id));
+    }
+    final shot = data.shots.where((s) => s.id == target.id).firstOrNull;
+    final scene = data.scene(shot?.sceneId);
+    if (shot == null || scene == null) return ('', const []);
+    return ('Esc ${scene.label}', data.shotsOfScenes([scene]));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final (title, shots) = shotsFor(data, target);
+    if (shots.isEmpty) return const SizedBox.shrink();
+    final current = target.scope == FloorPlanScope.shot
+        ? shots.indexWhere((s) => s.id == target.id)
+        : -1;
+    void go(int i) =>
+        onOpen(PlanTarget.shot(shots[i].id, data.shotLabel(shots[i])));
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(bottom: BorderSide(color: palette.border)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Plano anterior',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.chevron_left),
+            onPressed: current > 0 ? () => go(current - 1) : null,
+          ),
+          Text(title, style: AppTypography.caption(palette)),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final (i, shot) in shots.indexed)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 2,
+                      vertical: 6,
+                    ),
+                    child: ChoiceChip(
+                      key: ValueKey('strip-shot-${shot.id}'),
+                      visualDensity: VisualDensity.compact,
+                      label: Text(
+                        target.scope == FloorPlanScope.shot
+                            ? 'P${shot.number}'
+                            : '${data.scene(shot.sceneId)?.label ?? '–'}'
+                                  '·P${shot.number}',
+                      ),
+                      selected: i == current,
+                      onSelected: (_) => go(i),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: current < 0 ? 'Abrir el primer plano' : 'Plano siguiente',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.chevron_right),
+            onPressed: current < shots.length - 1 ? () => go(current + 1) : null,
+          ),
+        ],
       ),
     );
   }
