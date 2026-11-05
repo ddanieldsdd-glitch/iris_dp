@@ -12,6 +12,7 @@ import '../../features/camera_plan/camera_plan_constants.dart';
 import '../../features/camera_plan/camera_plan_element_model.dart';
 import '../../features/camera_plan/camera_plan_grouping.dart';
 import '../../features/camera_plan/floor_plan_repository.dart';
+import '../../features/camera_plan/plan_data.dart';
 import '../../features/camera_plan/plan_images.dart';
 import '../../features/camera_plan/plan_segment.dart';
 
@@ -430,41 +431,165 @@ abstract final class CameraPlanPdfDiagram {
   }
 }
 
+/// En qué orden salen las plantas en el PDF.
+enum CameraPlanPdfOrder {
+  /// Orden de rodaje (SG.5): localización › grupo › set › planos, en el
+  /// orden que tenga cada localización; al final, los planos sin set.
+  shooting,
+
+  /// Orden del guion: escena a escena.
+  script,
+}
+
+/// Un apartado del PDF: un título (0 = localización o bloque, 1 = grupo,
+/// 2 = set o escena) y sus planos.
+class CameraPlanPdfSection {
+  final int level;
+  final String title;
+  final List<Shot> shots;
+
+  const CameraPlanPdfSection(this.level, this.title, [this.shots = const []]);
+}
+
 /// PDF resumen de blocking / planta de cámara por escena y plano.
 class CameraPlanPdfExporter {
   CameraPlanPdfExporter._();
+
+  /// Los apartados en orden de rodaje: cada localización con sus sets en su
+  /// orden (por grupo, narrativo o a mano), numerados; después, los planos
+  /// sin set, escena a escena.
+  static List<CameraPlanPdfSection> shootingOrder(PlanProjectData data) {
+    final out = <CameraPlanPdfSection>[];
+    final placed = <int>{};
+    for (final site in data.sites) {
+      final parts = data.orderedSets(site.id);
+      final withShots = [
+        for (final part in parts)
+          for (final s in part.sets)
+            if (data.shotsOfSetup(s.id).isNotEmpty) s,
+      ];
+      if (withShots.isEmpty) continue;
+      out.add(CameraPlanPdfSection(0, site.name));
+      var n = 0;
+      for (final part in parts) {
+        final sets = [
+          for (final s in part.sets)
+            if (data.shotsOfSetup(s.id).isNotEmpty) s,
+        ];
+        if (sets.isEmpty) continue;
+        if (part.group != null) {
+          out.add(CameraPlanPdfSection(1, 'Grupo ${part.group!.name}'));
+        }
+        for (final s in sets) {
+          n++;
+          final shots = data.shotsOfSetup(s.id);
+          placed.addAll(shots.map((sh) => sh.id));
+          final scenes = data.scenesOfSetup(s.id).map((sc) => sc.label);
+          out.add(
+            CameraPlanPdfSection(
+              2,
+              '$n. ${s.name} · Esc ${scenes.join(', ')}',
+              shots,
+            ),
+          );
+        }
+      }
+    }
+    // Planos con set fuera de toda localización, y los que no tienen set.
+    final rest = [
+      for (final scene in scenesInScriptOrder(data.scenes))
+        (
+          scene: scene,
+          shots: [
+            for (final shot in data.shotsOfScene(scene.id))
+              if (!placed.contains(shot.id)) shot,
+          ],
+        ),
+    ].where((e) => e.shots.isNotEmpty).toList();
+    if (rest.isNotEmpty) {
+      if (out.isNotEmpty) out.add(const CameraPlanPdfSection(0, 'Sin set'));
+      for (final e in rest) {
+        out.add(
+          CameraPlanPdfSection(
+            2,
+            'Esc ${e.scene.label} · ${e.scene.locationCanonical}',
+            e.shots,
+          ),
+        );
+      }
+    }
+    return out;
+  }
 
   static Future<List<int>> buildBytes({
     required Project project,
     required List<Scene> scenes,
     required AppDatabase db,
+    CameraPlanPdfOrder order = CameraPlanPdfOrder.shooting,
   }) async {
     final doc = pw.Document();
-    final ordered = scenesInScriptOrder(scenes);
     final blocks = <pw.Widget>[
       pw.Text(
         project.name,
         style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
       ),
       pw.Text(
-        'Plantas de cámara — blocking cenital',
+        order == CameraPlanPdfOrder.shooting
+            ? 'Plantas de luz y cámara — orden de rodaje'
+            : 'Plantas de cámara — blocking cenital',
         style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
       ),
       pw.SizedBox(height: 16),
     ];
 
-    for (final scene in ordered) {
+    final List<CameraPlanPdfSection> sections;
+    if (order == CameraPlanPdfOrder.shooting) {
+      final sites = await (db.select(
+        db.locationSites,
+      )..where((s) => s.projectId.equals(project.id))).get();
+      final zones = await db.getLocationsMapForProject(project.id);
+      final data = PlanProjectData(
+        sites: sites,
+        sets: zones.values.toList(),
+        setups: await db.getLightSetupsForProject(project.id),
+        scenes: scenes,
+        shots: await db.getShotsForProject(project.id),
+        groups: await db.getSetGroupsForProject(project.id),
+      );
+      sections = shootingOrder(data);
+    } else {
+      sections = [
+        for (final scene in scenesInScriptOrder(scenes))
+          CameraPlanPdfSection(
+            2,
+            'Esc ${scene.label} · ${scene.locationCanonical}',
+            (await db.getShotsForScene(
+              scene.id,
+            ))..sort((a, b) => a.number.compareTo(b.number)),
+          ),
+      ];
+    }
+    final sceneLabels = {for (final s in scenes) s.id: s.label};
+
+    for (final section in sections) {
       blocks.add(
         pw.Text(
-          'Esc ${scene.label} · ${scene.locationCanonical}',
-          style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+          section.title,
+          style: pw.TextStyle(
+            fontSize: switch (section.level) {
+              0 => 15,
+              1 => 13,
+              _ => 12,
+            },
+            fontWeight: pw.FontWeight.bold,
+            color: section.level == 1 ? PdfColors.blueGrey700 : null,
+          ),
         ),
       );
       blocks.add(pw.SizedBox(height: 6));
+      if (section.level < 2) continue;
 
-      final shots = await db.getShotsForScene(scene.id);
-      shots.sort((a, b) => a.number.compareTo(b.number));
-
+      final shots = section.shots;
       if (shots.isEmpty) {
         blocks.add(pw.Text('Sin planos.'));
         blocks.add(pw.SizedBox(height: 12));
@@ -486,7 +611,10 @@ class CameraPlanPdfExporter {
 
         blocks.add(
           pw.Text(
-            'Plano ${shot.number}',
+            order == CameraPlanPdfOrder.shooting
+                ? 'Esc ${sceneLabels[shot.sceneId] ?? '?'} · '
+                      'Plano ${shot.number}'
+                : 'Plano ${shot.number}',
             style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
           ),
         );

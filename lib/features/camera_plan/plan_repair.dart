@@ -2,6 +2,7 @@ import '../../core/database/app_database.dart';
 import 'camera_links.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
+import 'floor_plan_json.dart';
 import 'floor_plan_repository.dart';
 import 'floor_plan_scope.dart';
 import 'light_overrides.dart';
@@ -43,13 +44,36 @@ class AssignSuggestion {
   });
 }
 
+/// Lo dibujado en una zona (que ya no se enseña): se propone pasarlo al
+/// entorno de la localización, que ven todos sus sets (SG.6).
+class ZoneSuggestion {
+  final LocationSite site;
+  final LocationBasePlan zone;
+  final int elements;
+
+  /// ¿Es la única zona dibujada de la localización? Entonces se marca.
+  final bool alone;
+
+  const ZoneSuggestion({
+    required this.site,
+    required this.zone,
+    required this.elements,
+    required this.alone,
+  });
+}
+
 class PlanRepairReport {
   final List<MergeSuggestion> merges;
   final List<AssignSuggestion> assigns;
+  final List<ZoneSuggestion> zones;
 
-  const PlanRepairReport({this.merges = const [], this.assigns = const []});
+  const PlanRepairReport({
+    this.merges = const [],
+    this.assigns = const [],
+    this.zones = const [],
+  });
 
-  bool get isEmpty => merges.isEmpty && assigns.isEmpty;
+  bool get isEmpty => merges.isEmpty && assigns.isEmpty && zones.isEmpty;
 }
 
 /// «Ordenar la planta» (SG.6): encuentra el lío de esquemas (uno por plano,
@@ -91,7 +115,27 @@ class PlanRepair {
     final sceneSite = {for (final s in scenes) s.id: s.locationSiteId};
     final merges = <MergeSuggestion>[];
     final assigns = <AssignSuggestion>[];
+    final zones = <ZoneSuggestion>[];
     for (final site in sites) {
+      final drawn = [
+        for (final zone in sets)
+          if (zone.siteId == site.id)
+            (
+              zone: zone,
+              count: FloorPlanJson.decode(zone.floorPlanJson).length,
+            ),
+      ].where((z) => z.count > 0).toList();
+      for (final z in drawn) {
+        zones.add(
+          ZoneSuggestion(
+            site: site,
+            zone: z.zone,
+            elements: z.count,
+            alone: drawn.length == 1,
+          ),
+        );
+      }
+
       final own = [
         for (final s in setups)
           if (siteOfSetup(s) == site.id) s,
@@ -154,7 +198,7 @@ class PlanRepair {
         );
       }
     }
-    return PlanRepairReport(merges: merges, assigns: assigns);
+    return PlanRepairReport(merges: merges, assigns: assigns, zones: zones);
   }
 
   /// Junta [sources] en [targetId]: sus luces, cámaras y actores pasan a la
@@ -242,6 +286,37 @@ class PlanRepair {
       }
       await trash.deleteLightSetup(id);
     }
+  }
+
+  /// Lo dibujado en la zona pasa al entorno de su localización: lo ven
+  /// todos sus sets y se edita desde cualquiera. La zona se queda vacía.
+  Future<void> foldZone(int zoneId) async {
+    final zone = await db.getLocationById(zoneId);
+    final siteId = zone?.siteId;
+    if (zone == null || siteId == null) return;
+    final repo = FloorPlanRepository(db);
+    final moving = FloorPlanJson.decode(zone.floorPlanJson);
+    if (moving.isEmpty) return;
+    final env = [
+      ...await repo.loadElements(scope: FloorPlanScope.site, siteId: siteId),
+    ];
+    LightOverrides.ensureUids([...env, ...moving]);
+    final uids = {for (final e in env) LightOverrides.uidOf(e)};
+    for (final e in moving) {
+      if (uids.contains(LightOverrides.uidOf(e))) LightOverrides.renewUids([e]);
+      e.layer = PlanLayer.environment;
+      env.add(e);
+    }
+    await repo.saveElements(
+      scope: FloorPlanScope.site,
+      siteId: siteId,
+      elements: env,
+    );
+    await repo.saveElements(
+      scope: FloorPlanScope.set,
+      setId: zoneId,
+      elements: const [],
+    );
   }
 
   /// Los [shots] pasan a usar el esquema [setupId].

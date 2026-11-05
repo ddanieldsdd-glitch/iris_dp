@@ -43,6 +43,10 @@ class _PlanRepairDialog extends StatefulWidget {
 class _PlanRepairDialogState extends State<_PlanRepairDialog> {
   late final _merges = {for (final m in widget.report.merges) m};
   late final _assigns = {for (final a in widget.report.assigns) a};
+  late final _zones = {
+    for (final z in widget.report.zones)
+      if (z.alone) z,
+  };
   bool _busy = false;
 
   Future<void> _apply() async {
@@ -52,6 +56,9 @@ class _PlanRepairDialogState extends State<_PlanRepairDialog> {
     }
     for (final a in _assigns) {
       await widget.repair.assign(a.setup.id, [for (final s in a.shots) s.id]);
+    }
+    for (final z in _zones) {
+      await widget.repair.foldZone(z.zone.id);
     }
     if (mounted) Navigator.pop(context, true);
   }
@@ -85,7 +92,7 @@ class _PlanRepairDialogState extends State<_PlanRepairDialog> {
         child: report.isEmpty
             ? Text(
                 'La planta está en orden: no hay esquemas de un solo plano '
-                'que juntar ni luces dibujadas sin usar.',
+                'que juntar, luces dibujadas sin usar ni zonas dibujadas.',
                 style: AppTypography.bodyMedium(palette),
               )
             : ListView(
@@ -116,6 +123,21 @@ class _PlanRepairDialogState extends State<_PlanRepairDialog> {
                           'Asignarlo a los ${a.shots.length} planos sin luz '
                           'de la localización.',
                     ),
+                  for (final z in report.zones)
+                    item(
+                      value: _zones.contains(z),
+                      onChanged: (v) => v ? _zones.add(z) : _zones.remove(z),
+                      title:
+                          '${z.site.name}: pasar «${z.zone.locationName}» '
+                          'a la localización',
+                      detail:
+                          '${z.elements} elemento${z.elements == 1 ? '' : 's'} '
+                          'dibujado${z.elements == 1 ? '' : 's'} en la zona '
+                          'pasan al entorno de la localización: lo ven todos '
+                          'sus sets y se edita desde cualquiera.'
+                          '${z.alone ? '' : ' Hay otras zonas dibujadas: '
+                                    'revisa que no se pisen.'}',
+                    ),
                 ],
               ),
       ),
@@ -126,7 +148,8 @@ class _PlanRepairDialogState extends State<_PlanRepairDialog> {
         ),
         if (!report.isEmpty)
           FilledButton(
-            onPressed: _busy || (_merges.isEmpty && _assigns.isEmpty)
+            onPressed:
+                _busy || (_merges.isEmpty && _assigns.isEmpty && _zones.isEmpty)
                 ? null
                 : _apply,
             child: Text(_busy ? 'Ordenando…' : 'Ordenar'),

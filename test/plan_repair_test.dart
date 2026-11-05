@@ -161,4 +161,33 @@ void main() {
       expect((await PlanRepair(db).analyze(projectId)).isEmpty, isTrue);
     },
   );
+
+  test('lo dibujado en la zona pasa al entorno de la localización', () async {
+    final wall = PlanElement(
+      id: 0,
+      type: ElementType.wall,
+      position: const Offset(100, 100),
+    );
+    await repo.saveElements(
+      scope: FloorPlanScope.set,
+      setId: setId,
+      elements: [wall, light(10)],
+    );
+    final report = await PlanRepair(db).analyze(projectId);
+    final z = report.zones.single;
+    expect(z.zone.id, setId);
+    expect(z.elements, 2);
+    expect(z.alone, isTrue);
+
+    await PlanRepair(db).foldZone(setId);
+    final zone = await db.getLocationById(setId);
+    expect(FloorPlanJson.decode(zone!.floorPlanJson), isEmpty);
+    final env = await repo.loadElements(
+      scope: FloorPlanScope.site,
+      siteId: zone.siteId,
+    );
+    expect(env.map((e) => e.type), [ElementType.wall, ElementType.light]);
+    expect(env.every((e) => LightOverrides.uidOf(e) != null), isTrue);
+    expect((await PlanRepair(db).analyze(projectId)).zones, isEmpty);
+  });
 }

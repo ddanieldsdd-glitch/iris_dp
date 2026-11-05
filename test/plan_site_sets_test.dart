@@ -12,6 +12,7 @@ import 'package:iris_dp/features/camera_plan/camera_plan_screen.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
 import 'package:iris_dp/features/camera_plan/plan_data.dart';
+import 'package:iris_dp/shared/pdf_export/camera_plan_pdf.dart';
 
 /// SG.2: la localización con sus sets, por grupo y en orden de rodaje.
 void main() {
@@ -99,6 +100,50 @@ void main() {
     data = await load();
     parts = data.orderedSets(siteId, mode: 'manual');
     expect(parts.single.sets.map((s) => s.id), [setC.id, setA.id, setB.id]);
+  });
+
+  test('el PDF sale en orden de rodaje: localización, grupo y set', () async {
+    final group = await db.insertSetGroup(
+      SetGroupsCompanion.insert(
+        projectId: projectId,
+        locationSiteId: Value(siteId),
+        name: 'Fondo fachada',
+      ),
+    );
+    await db.assignLightSetupToGroup(setB.id, group);
+    // Un plano sin set va al final.
+    final scene3 = await db.insertScene(
+      ScenesCompanion.insert(
+        projectId: projectId,
+        number: 3,
+        name: 'Escena 3',
+        locationCanonical: 'INT. BAR - NOCHE',
+        locationPureName: 'BAR',
+      ),
+    );
+    await db.insertShot(
+      ShotsCompanion.insert(sceneId: scene3, projectId: projectId, number: 1),
+    );
+
+    var sections = CameraPlanPdfExporter.shootingOrder(await load());
+    expect(sections.map((s) => (s.level, s.title)), [
+      (0, 'Calle'),
+      (1, 'Grupo Fondo fachada'),
+      (2, '1. Setup B · Esc 1'),
+      (2, '2. Setup A · Esc 2'),
+      (0, 'Sin set'),
+      (2, 'Esc 3 · INT. BAR - NOCHE'),
+    ]);
+    expect(sections[2].shots, hasLength(1));
+
+    // En orden narrativo, sin cabeceras de grupo.
+    await db.setSiteSetOrderMode(siteId, 'narrative');
+    sections = CameraPlanPdfExporter.shootingOrder(await load());
+    expect(sections.map((s) => s.title).take(3), [
+      'Calle',
+      '1. Setup B · Esc 1',
+      '2. Setup A · Esc 2',
+    ]);
   });
 
   testWidgets('la localización enseña sus sets, se agrupan y se reordenan', (
