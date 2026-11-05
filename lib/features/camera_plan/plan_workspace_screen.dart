@@ -8,6 +8,10 @@ import '../../core/theme/app_typography.dart';
 import 'camera_plan_editor.dart';
 import 'floor_plan_scope.dart';
 import 'plan_data.dart';
+import 'plan_scene_board.dart' show PlanShotCameraBadges;
+import 'plan_set_summary.dart';
+import 'plan_strip_link.dart';
+import 'shot_cover.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import '../../shared/rich_text/script_markup.dart';
@@ -33,6 +37,15 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
   late PlanTarget _target = widget.initial;
   bool? _navigatorOpen;
 
+  /// Une la tira de planos con el editor del set (SV.3).
+  final _stripLink = PlanStripLink();
+
+  @override
+  void dispose() {
+    _stripLink.dispose();
+    super.dispose();
+  }
+
   void _open(PlanTarget target) {
     if (target == _target) return;
     setState(() => _target = target);
@@ -50,8 +63,12 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
       children: [
         PlanDataBuilder(
           projectId: widget.projectId,
-          builder: (context, data) =>
-              PlanShotStrip(data: data, target: _target, onOpen: _open),
+          builder: (context, data) => PlanShotStrip(
+            data: data,
+            target: _target,
+            onOpen: _open,
+            link: _stripLink,
+          ),
         ),
         Expanded(child: _editor()),
       ],
@@ -81,6 +98,7 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
         lightSetupId: _target.id,
         setupName: _target.label,
         onNavigate: _open,
+        stripLink: _stripLink,
       ),
       FloorPlanScope.shot => CameraPlanEditor.shot(
         key: key,
@@ -626,16 +644,23 @@ class _PlanNavigatorState extends State<_PlanNavigator> {
 /// Los planos entre los que se puede saltar desde la planta abierta (SG.5):
 /// en un plano, los de su escena; en un set, los que lo usan. Con ◀ ▶ se va
 /// al anterior y al siguiente.
+/// La tira de arriba del editor (SV.2): el set que se está viendo (su
+/// planta, cuándo se rueda, su luz y sus cámaras) y sus planos como
+/// tarjetas con imagen, número, tipo y cámara. En un set, tocar un plano
+/// con una cámara seleccionada la vincula; arrastrarlo a la planta, también
+/// (SV.3).
 class PlanShotStrip extends StatelessWidget {
   final PlanProjectData data;
   final PlanTarget target;
   final void Function(PlanTarget target) onOpen;
+  final PlanStripLink? link;
 
   const PlanShotStrip({
     super.key,
     required this.data,
     required this.target,
     required this.onOpen,
+    this.link,
   });
 
   /// Los planos de la tira y el título que llevan delante.
@@ -652,58 +677,126 @@ class PlanShotStrip extends StatelessWidget {
     return ('Esc ${scene.label}', data.shotsOfScenes([scene]));
   }
 
+  /// El set de lo que se ve: el abierto, o el del plano abierto.
+  LightSetup? get _setup {
+    if (target.scope == FloorPlanScope.lightSetup) {
+      return data.setup(target.id);
+    }
+    final shot = data.shots.where((s) => s.id == target.id).firstOrNull;
+    return shot == null ? null : data.setup(shot.lightSetupId);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final link = this.link;
+    if (link == null) return _build(context, null);
+    return ListenableBuilder(
+      listenable: link,
+      builder: (context, _) => _build(context, link),
+    );
+  }
+
+  Widget _build(BuildContext context, PlanStripLink? link) {
     final palette = context.palette;
     final (title, shots) = shotsFor(data, target);
-    if (shots.isEmpty) return const SizedBox.shrink();
+    final setup = _setup;
+    if (shots.isEmpty && setup == null) return const SizedBox.shrink();
+    final inSet = target.scope == FloorPlanScope.lightSetup;
     final current = target.scope == FloorPlanScope.shot
         ? shots.indexWhere((s) => s.id == target.id)
         : -1;
     void go(int i) =>
         onOpen(PlanTarget.shot(shots[i].id, data.shotLabel(shots[i])));
+    final camera = inSet ? link?.camera : null;
     return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      height: 84,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 6,
+      ),
       decoration: BoxDecoration(
         color: palette.surface,
         border: Border(bottom: BorderSide(color: palette.border)),
       ),
       child: Row(
         children: [
+          if (setup != null)
+            _SetHeader(
+              data: data,
+              setup: setup,
+              open: inSet,
+              onOpen: () => onOpen(PlanTarget.lightSetup(setup.id, setup.name)),
+            ),
           IconButton(
             tooltip: 'Plano anterior',
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.chevron_left),
             onPressed: current > 0 ? () => go(current - 1) : null,
           ),
-          Text(title, style: AppTypography.caption(palette)),
-          const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                for (final (i, shot) in shots.indexed)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 2,
-                      vertical: 6,
-                    ),
-                    child: ChoiceChip(
-                      key: ValueKey('strip-shot-${shot.id}'),
-                      visualDensity: VisualDensity.compact,
-                      label: Text(
-                        target.scope == FloorPlanScope.shot
-                            ? 'P${shot.number}'
-                            : '${data.scene(shot.sceneId)?.label ?? '–'}'
-                                  '·P${shot.number}',
-                      ),
-                      selected: i == current,
-                      onSelected: (_) => go(i),
-                    ),
+            child: shots.isEmpty
+                ? Text(
+                    'Este set aún no tiene planos: llévalos desde el tablero '
+                    'de la localización.',
+                    style: AppTypography.caption(
+                      palette,
+                    ).copyWith(color: palette.textTertiary),
+                  )
+                : ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      if (camera != null)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Text(
+                              'Cámara $camera:\ntoca sus planos',
+                              style: AppTypography.caption(
+                                palette,
+                              ).copyWith(color: palette.success, fontSize: 10),
+                            ),
+                          ),
+                        )
+                      else if (!inSet)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Text(
+                              title,
+                              style: AppTypography.caption(palette),
+                            ),
+                          ),
+                        ),
+                      for (final (i, shot) in shots.indexed)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: _StripShotCard(
+                            key: ValueKey('strip-shot-${shot.id}'),
+                            shot: shot,
+                            data: data,
+                            sceneTag: inSet,
+                            selected: i == current,
+                            linked:
+                                camera != null &&
+                                link!.linked.contains(shot.id),
+                            dimmed:
+                                camera != null &&
+                                !link!.linked.contains(shot.id),
+                            draggable: inSet && link != null,
+                            onAddCamera:
+                                inSet &&
+                                    link != null &&
+                                    link.canAddCamera &&
+                                    data.camerasOfShot(shot).isEmpty
+                                ? () => link.addCamera(shot.id)
+                                : null,
+                            onTap: camera != null
+                                ? () => link!.toggle(shot.id)
+                                : () => go(i),
+                          ),
+                        ),
+                    ],
                   ),
-              ],
-            ),
           ),
           IconButton(
             tooltip: current < 0 ? 'Abrir el primer plano' : 'Plano siguiente',
@@ -715,6 +808,283 @@ class PlanShotStrip extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// El set en la tira: su planta pequeña, nombre y qué set es de un vistazo.
+class _SetHeader extends StatelessWidget {
+  final PlanProjectData data;
+  final LightSetup setup;
+
+  /// Es el set abierto (si no, se toca para abrirlo).
+  final bool open;
+  final VoidCallback onOpen;
+
+  const _SetHeader({
+    required this.data,
+    required this.setup,
+    required this.open,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final color = data.setupColor(setup);
+    final summary = SetSummary.of(data, setup);
+    final group = data.group(setup.groupId);
+    final warnings = [
+      if (summary.shotsWithoutCamera > 0)
+        '${summary.shotsWithoutCamera} sin cámara',
+    ];
+    return Tooltip(
+      message: open ? summary.lightText : 'Abrir el set (todas sus cámaras)',
+      child: InkWell(
+        key: const ValueKey('strip-set-header'),
+        onTap: open ? null : onOpen,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 270,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: open ? 0.12 : 0.05),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: color.withValues(alpha: open ? 0.7 : 0.35),
+            ),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  width: 84,
+                  height: 62,
+                  child: PlanThumbnail(
+                    elements: [
+                      ...data.groupLightOf(setup),
+                      ...data.ownOfSetup(setup),
+                    ],
+                    inherited: data.inheritedOfSetup(setup),
+                    drawings: data.drawingsOfSetup(setup),
+                    emptyIcon: Icons.wb_incandescent_outlined,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: color,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            setup.name,
+                            style: AppTypography.label(palette),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      [
+                        if (summary.when != null) summary.when!,
+                        if (group != null) group.name,
+                      ].join(' · '),
+                      style: AppTypography.caption(
+                        palette,
+                      ).copyWith(fontSize: 10),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      summary.lightText,
+                      style: AppTypography.caption(
+                        palette,
+                      ).copyWith(fontSize: 10, color: palette.textTertiary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      [
+                        summary.cameraText,
+                        '${summary.shots} plano${summary.shots == 1 ? '' : 's'}',
+                        ...warnings,
+                      ].join(' · '),
+                      style: AppTypography.caption(palette).copyWith(
+                        fontSize: 10,
+                        color: warnings.isEmpty
+                            ? palette.textTertiary
+                            : palette.warning,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Un plano en la tira: imagen, número, tipo y cámara.
+class _StripShotCard extends StatelessWidget {
+  final Shot shot;
+  final PlanProjectData data;
+  final bool sceneTag;
+  final bool selected;
+  final bool linked;
+  final bool dimmed;
+  final bool draggable;
+  final VoidCallback onTap;
+  final VoidCallback? onAddCamera;
+
+  const _StripShotCard({
+    super.key,
+    required this.shot,
+    required this.data,
+    required this.sceneTag,
+    required this.selected,
+    required this.linked,
+    required this.dimmed,
+    required this.draggable,
+    required this.onTap,
+    this.onAddCamera,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final tag = sceneTag
+        ? '${data.scene(shot.sceneId)?.label ?? '–'}·P${shot.number}'
+        : 'P${shot.number}';
+    final type = [
+      if (shot.framing?.isNotEmpty == true) scriptMarkupToPlain(shot.framing),
+      if (shot.lens?.isNotEmpty == true) shot.lens!,
+      if (shot.movement?.isNotEmpty == true) shot.movement!,
+    ].join(' · ');
+    final border = linked
+        ? palette.success
+        : selected
+        ? palette.accent
+        : palette.border;
+    final card = Opacity(
+      opacity: dimmed ? 0.5 : 1,
+      child: Material(
+        color: palette.surfaceElevated,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: border, width: linked || selected ? 2 : 0.6),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 200,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 72,
+                  height: double.infinity,
+                  child:
+                      shotCoverThumbnail(shot, cacheWidth: 200) ??
+                      ColoredBox(
+                        color: palette.background,
+                        child: Icon(
+                          Icons.videocam_outlined,
+                          color: palette.textTertiary,
+                        ),
+                      ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(tag, style: AppTypography.label(palette)),
+                      if (type.isNotEmpty)
+                        Text(
+                          type,
+                          style: AppTypography.caption(
+                            palette,
+                          ).copyWith(fontSize: 10),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: PlanShotCameraBadges(
+                              cameras: data.camerasOfShot(shot),
+                            ),
+                          ),
+                          if (onAddCamera != null)
+                            InkWell(
+                              key: ValueKey('strip-add-camera-${shot.id}'),
+                              onTap: onAddCamera,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 3),
+                                child: Text(
+                                  '+ cámara',
+                                  style: TextStyle(
+                                    color: palette.accent,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!draggable) return card;
+    return Draggable<PlanStripShot>(
+      data: PlanStripShot(shot.id),
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: Material(
+        color: palette.accent,
+        borderRadius: BorderRadius.circular(8),
+        elevation: 6,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Text(
+            '$tag → planta',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.35, child: card),
+      child: card,
     );
   }
 }

@@ -72,6 +72,7 @@ import 'plan_opening.dart';
 import 'plan_palette.dart';
 import 'plan_piece_controls.dart';
 import 'plan_segment.dart';
+import 'plan_strip_link.dart';
 import 'plan_target.dart';
 import 'shot_route.dart';
 import '../locations/location_scan_service.dart';
@@ -126,6 +127,10 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
   /// Guía localización › sets › planos, cuando a un plano le falta algo.
   final PlanGuide? guide;
 
+  /// La tira de planos de arriba (SV.3): en un set, sus planos se vinculan
+  /// a las cámaras tocándolos o arrastrándolos a la planta.
+  final PlanStripLink? stripLink;
+
   const CameraPlanEditor({
     super.key,
     required this.projectId,
@@ -138,6 +143,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     this.leg,
     this.onNavigate,
     this.guide,
+    this.stripLink,
   });
 
   /// Plano maestro de localización.
@@ -153,7 +159,8 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
        setId = null,
        lightSetupId = null,
        shotId = null,
-       leg = null;
+       leg = null,
+       stripLink = null;
 
   /// Plano base del set de rodaje.
   const CameraPlanEditor.set({
@@ -168,7 +175,8 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
        lightSetupId = null,
        shotId = null,
        leg = null,
-       guide = null;
+       guide = null,
+       stripLink = null;
 
   /// Esquema de luz compartido entre planos.
   const CameraPlanEditor.lightSetup({
@@ -177,6 +185,7 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
     required int this.lightSetupId,
     required String setupName,
     this.onNavigate,
+    this.stripLink,
   }) : label = setupName,
        scope = FloorPlanScope.lightSetup,
        siteId = null,
@@ -198,7 +207,8 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
        siteId = null,
        setId = null,
        lightSetupId = null,
-       guide = null;
+       guide = null,
+       stripLink = null;
 
   @override
   ConsumerState<CameraPlanEditor> createState() => _CameraPlanEditorState();
@@ -333,7 +343,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// qué plano lleva cada una.
   List<PlanElement> _otherCameras = const [];
   final Map<PlanElement, PlanTarget> _otherCameraShot = {};
-  late bool _showOtherCameras = _planPrefs.otherCameras;
+  /// Las cámaras de otros planos ya no se dibujan encima (SV.2): cada set
+  /// enseña solo sus cámaras; los demás planos están en la tira de arriba.
+  final bool _showOtherCameras = false;
 
   /// Cómo es en el esquema cada luz que este plano tiene ajustada, por su
   /// identificador.
@@ -596,6 +608,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _imageCache.addListener(_onImageLoaded);
     AppPrefs.instance.addListener(_onPrefsChanged);
     UnrealThumbs.instance.addListener(_onThumbs);
+    widget.stripLink?.attach(
+      this,
+      onToggle: _stripToggle,
+      onAddCamera: (shotId) => _stripAddCamera(shotId),
+    );
     _load();
   }
 
@@ -607,9 +624,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (!mounted || next == prev) return;
     setState(() {
       if (next.snap != prev.snap) _snap = next.snap;
-      if (next.otherCameras != prev.otherCameras) {
-        _showOtherCameras = next.otherCameras;
-      }
       if (next.exposureMap != prev.exposureMap) {
         _exposureMap = next.exposureMap;
       }
@@ -624,6 +638,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   @override
   void dispose() {
+    final strip = widget.stripLink;
+    if (strip != null) Future.microtask(() => strip.detach(this));
     AppPrefs.instance.removeListener(_onPrefsChanged);
     UnrealThumbs.instance.removeListener(_onThumbs);
     final live = _live;
@@ -1872,7 +1888,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Lista de los planos del set con casillas: la cámara pasa a ser la de
   /// los marcados (una copia en cada uno, que la sigue) y estos usan este
   /// esquema de luz.
-  Future<void> _linkCameraToShots(PlanElement camera) async {
+  Future<void> _linkCameraToShots(
+    PlanElement camera, {
+    Set<int> Function(Set<int> linked)? change,
+  }) async {
     final setup = _lightSetup;
     if (setup == null) return;
     if (LightOverrides.ensureUids([camera]).isNotEmpty) {
@@ -1889,15 +1908,39 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       );
       return;
     }
-    final picked = await showDialog<Set<int>>(
-      context: context,
-      builder: (ctx) => LinkShotsDialog(
-        camera: camera.cameraLetter,
-        options: options,
-        sceneId: _scene?.id,
-      ),
-    );
+    final picked = change != null
+        ? change({
+            for (final o in options)
+              if (o.linked) o.shot.id,
+          })
+        : await showDialog<Set<int>>(
+            context: context,
+            builder: (ctx) => LinkShotsDialog(
+              camera: camera.cameraLetter,
+              options: options,
+              sceneId: _scene?.id,
+            ),
+          );
     if (picked == null || !mounted) return;
+    // Con un gesto (tira o arrastre), un plano que ya tiene otra cámara
+    // del set pregunta: esta la sustituye o es su cámara B (SV.3).
+    if (change != null) {
+      final busy = [
+        for (final o in options)
+          if (picked.contains(o.shot.id) &&
+              !o.linked &&
+              o.cameras.any((l) => l != camera.cameraLetter))
+            o,
+      ];
+      if (busy.isNotEmpty) {
+        final replace = await _askReplaceCamera(camera, busy.first);
+        if (replace == null || !mounted) return;
+        if (replace) {
+          await _unlinkOtherCameras(camera, {for (final o in busy) o.shot.id});
+          if (!mounted) return;
+        }
+      }
+    }
     // Los planos nuevos cuya focal o movimiento no coincide con la cámara:
     // se pregunta una vez cuál se queda (SG.4).
     final added = [
@@ -1938,6 +1981,214 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 'plano${picked.length == 1 ? '' : 's'}.',
     );
     await _load();
+    if (!mounted) return;
+    // La cámara sigue seleccionada: se pueden seguir tocando planos.
+    final again = _elements
+        .where((e) => LightOverrides.uidOf(e) == uid)
+        .firstOrNull;
+    if (again != null) _select(again);
+    _stripCameraUid = null;
+    _syncStrip();
+  }
+
+  // ── Tira de planos (SV.3) ─────────────────────────────────────────────
+
+  /// Cámara del set que la tira está resaltando.
+  String? _stripCameraUid;
+
+  /// Una cámara del set seleccionada en un set (sin plano abierto).
+  PlanElement? get _selectedSetCamera {
+    final sel = _selected;
+    if (sel == null ||
+        _shot != null ||
+        _lightSetup == null ||
+        sel.type != ElementType.camera ||
+        sel.layer != PlanLayer.light) {
+      return null;
+    }
+    return sel;
+  }
+
+  /// Cuenta a la tira qué cámara está seleccionada y a qué planos va.
+  void _syncStrip() {
+    final strip = widget.stripLink;
+    if (strip == null) return;
+    final cam = _selectedSetCamera;
+    final uid = cam == null ? null : LightOverrides.uidOf(cam);
+    final key = cam == null ? null : (uid ?? '#${cam.id}');
+    if (key == _stripCameraUid) return;
+    _stripCameraUid = key;
+    if (cam == null) {
+      strip.show(null, const {});
+      return;
+    }
+    if (uid == null) {
+      strip.show(cam.cameraLetter, const {});
+      return;
+    }
+    final setup = _lightSetup!;
+    unawaited(() async {
+      final options = await CameraLinks(
+        ref.read(databaseProvider),
+      ).linkableShots(setup, uid);
+      if (!mounted || _stripCameraUid != key) return;
+      strip.show(cam.cameraLetter, {
+        for (final o in options)
+          if (o.linked) o.shot.id,
+      });
+    }());
+  }
+
+  /// Tocar un plano de la tira con una cámara seleccionada: lo vincula o
+  /// lo desvincula.
+  Future<void> _stripToggle(int shotId) async {
+    final cam = _selectedSetCamera;
+    if (cam == null) return;
+    await _linkCameraToShots(
+      cam,
+      change: (linked) => linked.contains(shotId)
+          ? ({...linked}..remove(shotId))
+          : {...linked, shotId},
+    );
+  }
+
+  /// Una cámara nueva del set, ya vinculada a [shotId], con su focal y su
+  /// movimiento. Sin [at], en el centro de lo que se ve.
+  Future<void> _stripAddCamera(int shotId, {Offset? at}) async {
+    if (_lightSetup == null || _shot != null) return;
+    final shot = await ref.read(databaseProvider).getShotById(shotId);
+    if (shot == null || !mounted) return;
+    final used = {
+      for (final e in _elements)
+        if (e.type == ElementType.camera) e.cameraLetter,
+    };
+    var code = 65;
+    while (used.contains(String.fromCharCode(code))) {
+      code++;
+    }
+    final camera = PlanElement(
+      id: 0,
+      type: ElementType.camera,
+      position: at ?? _viewCenter,
+      cameraLetter: String.fromCharCode(code),
+      cameraNumber: used.length + 1,
+      stabilization: shot.movement ?? 'STEADY',
+      lens: shot.lens ?? '50mm',
+    )..applyProjectGear(_gear);
+    await _addElement(camera, keepPosition: at != null);
+    if (!mounted) return;
+    await _linkCameraToShots(camera, change: (_) => {shotId});
+  }
+
+  /// Un plano de la tira soltado en la planta: sobre una cámara del set,
+  /// la vincula; en un hueco, crea allí una cámara para ese plano.
+  Future<void> _onStripDrop(PlanStripShot data, Offset local) async {
+    if (_lightSetup == null || _shot != null) return;
+    final pos = _toCanvasCoords(local);
+    final hit = _elementAt(pos);
+    if (hit != null &&
+        hit.type == ElementType.camera &&
+        hit.layer == PlanLayer.light) {
+      _select(hit);
+      await _linkCameraToShots(
+        hit,
+        change: (linked) => {...linked, data.shotId},
+      );
+    } else {
+      await _stripAddCamera(data.shotId, at: _snapToGrid(pos));
+    }
+  }
+
+  /// El lienzo acepta planos arrastrados desde la tira.
+  Widget _stripDropTarget(Widget child) {
+    if (widget.stripLink == null) return child;
+    return Builder(
+      builder: (area) => DragTarget<PlanStripShot>(
+        onWillAcceptWithDetails: (_) => _lightSetup != null && _shot == null,
+        onAcceptWithDetails: (d) {
+          final box = area.findRenderObject() as RenderBox?;
+          if (box == null) return;
+          unawaited(_onStripDrop(d.data, box.globalToLocal(d.offset)));
+        },
+        builder: (context, candidates, _) => Stack(
+          fit: StackFit.expand,
+          children: [
+            child,
+            if (candidates.isNotEmpty)
+              IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: context.palette.accent, width: 2),
+                    color: context.palette.accent.withValues(alpha: 0.05),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// ¿La cámara [camera] sustituye a la que ya tiene el plano, o se añade
+  /// como otra cámara? Nulo si se cancela.
+  Future<bool?> _askReplaceCamera(PlanElement camera, LinkableShot shot) {
+    final palette = context.palette;
+    final others = shot.cameras.where((l) => l != camera.cameraLetter).toSet();
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.surfaceElevated,
+        title: Text(
+          '${shot.label} ya tiene cámara ${others.join(', ')}',
+          style: AppTypography.titleMedium(palette),
+        ),
+        content: Text(
+          '¿La cámara ${camera.cameraLetter} la sustituye, o se añade como '
+          'otra cámara del mismo plano?',
+          style: AppTypography.bodyMedium(palette),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            key: const ValueKey('camera-add-b'),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Añadir como cámara ${camera.cameraLetter}'),
+          ),
+          FilledButton(
+            key: const ValueKey('camera-replace'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sustituir'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Quita de [shotIds] las demás cámaras del set (no [keep]).
+  Future<void> _unlinkOtherCameras(PlanElement keep, Set<int> shotIds) async {
+    final setup = _lightSetup;
+    if (setup == null) return;
+    final links = CameraLinks(ref.read(databaseProvider));
+    final keepUid = LightOverrides.uidOf(keep);
+    for (final other in [..._elements]) {
+      if (other.type != ElementType.camera || other.layer != PlanLayer.light) {
+        continue;
+      }
+      final uid = LightOverrides.uidOf(other);
+      if (uid == null || uid == keepUid) continue;
+      final options = await links.linkableShots(setup, uid);
+      final linked = {
+        for (final o in options)
+          if (o.linked) o.shot.id,
+      };
+      if (!linked.any(shotIds.contains)) continue;
+      await links.setLinks(setup, other, linked.difference(shotIds), [
+        for (final o in options) o.shot,
+      ]);
+    }
   }
 
   /// Añade a la planta un aparato del catálogo de Equipo, con sus datos.
@@ -4997,22 +5248,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 ),
                 onPressed: _editEnvironment,
               ),
-            if (_otherCameras.isNotEmpty)
-              IconButton(
-                tooltip: _showOtherCameras
-                    ? 'Ocultar las cámaras de los otros planos'
-                    : 'Ver las cámaras de los otros planos',
-                visualDensity: VisualDensity.compact,
-                icon: Icon(
-                  Icons.switch_video_outlined,
-                  size: 18,
-                  color: _showOtherCameras
-                      ? palette.accent
-                      : palette.textTertiary,
-                ),
-                onPressed: () =>
-                    setState(() => _showOtherCameras = !_showOtherCameras),
-              ),
             if (_linkedSet != null && _linkedSite != null && _setZone != null)
               PopupMenuButton<String>(
                 tooltip: 'Zona del set',
@@ -5254,6 +5489,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    if (widget.stripLink != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncStrip();
+      });
+    }
     _wide = MediaQuery.sizeOf(context).width >= 1100;
     final compact = AppLayout.isCompact(context);
     // Otro equipo edita esta planta: aquí no se toca hasta que termine, y
@@ -5683,7 +5923,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                         child: Row(
                           children: [
                             Expanded(
-                              child: LayoutBuilder(
+                              child: _stripDropTarget(LayoutBuilder(
                                 builder: (context, constraints) {
                                   _canvasSize = constraints.biggest;
                                   final fit = _pendingFit;
@@ -6006,7 +6246,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                     ),
                                   );
                                 },
-                              ),
+                              )),
                             ),
                             if (_wide && _showOutliner) ...[
                               Container(width: 1, color: palette.border),

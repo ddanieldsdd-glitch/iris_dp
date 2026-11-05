@@ -722,14 +722,13 @@ class PlanBoardShotCard extends StatelessWidget {
 
     final card = Material(
       color: palette.surfaceElevated,
-      borderRadius: BorderRadius.circular(8),
       clipBehavior: Clip.antiAlias,
-      shape: picked
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(color: palette.accent, width: 2),
-            )
-          : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: picked
+            ? BorderSide(color: palette.accent, width: 2)
+            : BorderSide.none,
+      ),
       child: InkWell(
         onTap: () {
           final keys = HardwareKeyboard.instance;
