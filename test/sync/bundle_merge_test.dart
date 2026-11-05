@@ -265,4 +265,64 @@ void main() {
     final r = _merge(b, local, b);
     expect((r.merged['shots'] as List).single['lens'], '35mm');
   });
+  group('grupos de sets', () {
+    Map<String, dynamic> withSets({
+      List<Map<String, dynamic>> groups = const [],
+      List<Map<String, dynamic>> setups = const [],
+    }) =>
+        _bundle()
+          ..['setGroups'] = groups
+          ..['lightSetups'] = setups
+          ..['moodboardGroups'] = [
+            {'groupKey': 'mbg:0:Paleta', 'name': 'Paleta'},
+          ];
+    Map<String, dynamic> group(String uid, int i, String name) => {
+      'uid': uid,
+      'setGroupKey': 'setGroup:$i',
+      'name': name,
+    };
+    Map<String, dynamic> setup(String uid, int i, {String? groupKey}) => {
+      'uid': uid,
+      'lightSetupKey': 'lightSetup:$i',
+      'name': 'Setup $i',
+      if (groupKey != null) 'setGroupKey': groupKey,
+    };
+
+    test('un grupo nuevo en la nube y su set llegan enlazados', () {
+      final b = withSets(setups: [setup('a', 0)]);
+      final cloud = withSets(
+        groups: [group('g1', 0, 'Fondo')],
+        setups: [setup('a', 0, groupKey: 'setGroup:0')],
+      );
+      // Aquí se añadió otro grupo, con la misma clave.
+      final local = withSets(
+        groups: [group('g2', 0, 'Barra')],
+        setups: [setup('a', 0)],
+      );
+      final r = _merge(b, local, cloud);
+      final groups = (r.merged['setGroups'] as List).cast<Map>();
+      expect(groups.map((g) => g['uid']), containsAll(['g1', 'g2']));
+      final fondo = groups.firstWhere((g) => g['uid'] == 'g1');
+      final a = (r.merged['lightSetups'] as List).single as Map;
+      expect(a['setGroupKey'], fondo['setGroupKey']);
+      // El moodboard sigue con su clave.
+      expect(
+        (r.merged['moodboardGroups'] as List).single['groupKey'],
+        'mbg:0:Paleta',
+      );
+    });
+
+    test('borrar el grupo en un lado deja el set suelto', () {
+      final b = withSets(
+        groups: [group('g1', 0, 'Fondo')],
+        setups: [setup('a', 0, groupKey: 'setGroup:0')],
+      );
+      // En la nube se borró el grupo; aquí no se tocó.
+      final cloud = withSets(setups: [setup('a', 0)]);
+      final r = _merge(b, b, cloud);
+      expect(r.merged['setGroups'], isEmpty);
+      final a = (r.merged['lightSetups'] as List).single as Map;
+      expect(a['setGroupKey'], isNull);
+    });
+  });
 }

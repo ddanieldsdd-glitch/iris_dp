@@ -59,6 +59,7 @@ abstract final class BundleMerge {
     'locationSites',
     'siteImages',
     'locationBasePlans',
+    'setGroups',
     'lightSetups',
     'locationImages',
     'scenes',
@@ -71,6 +72,7 @@ abstract final class BundleMerge {
   static const selfKeys = {
     'locationSites': 'siteKey',
     'locationBasePlans': 'setKey',
+    'setGroups': 'setGroupKey',
     'lightSetups': 'lightSetupKey',
     'scenes': 'sceneKey',
     'shots': 'shotKey',
@@ -85,6 +87,8 @@ abstract final class BundleMerge {
     'locationSetKey': 'locationBasePlans',
     'lightSetupKey': 'lightSetups',
     'planSetupKey': 'lightSetups',
+    // No `groupKey`: esa es la de los grupos del moodboard.
+    'setGroupKey': 'setGroups',
     'sceneKey': 'scenes',
     'shotKey': 'shots',
   };
@@ -714,6 +718,8 @@ abstract final class BundleMerge {
         return 'Localización ${rec['name'] ?? ''}'.trim();
       case 'locationBasePlans':
         return 'Set ${rec['locationName'] ?? ''}'.trim();
+      case 'setGroups':
+        return 'Grupo de sets ${rec['name'] ?? ''}'.trim();
       case 'lightSetups':
         return 'Esquema de luz ${rec['name'] ?? ''}'.trim();
       case 'siteImages':

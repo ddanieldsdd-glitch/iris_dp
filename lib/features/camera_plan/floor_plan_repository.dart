@@ -10,6 +10,7 @@ import 'camera_plan_element_model.dart';
 import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
 import 'light/ambient.dart';
+import 'env_overrides.dart';
 import 'light_overrides.dart';
 import 'set_environment.dart';
 import 'plan_prefs.dart';
@@ -23,6 +24,9 @@ class PlanLayers {
   /// Añadidos propios del set.
   final List<PlanElement> set;
 
+  /// Luz compartida del grupo de sets, con los ajustes del plano.
+  final List<PlanElement> groupLight;
+
   /// Luces y grip del esquema de luz.
   final List<PlanElement> light;
 
@@ -31,16 +35,27 @@ class PlanLayers {
 
   final LightSetup? lightSetup;
 
+  /// Grupo del set, si lo tiene.
+  final SetGroup? group;
+
   const PlanLayers({
     this.environment = const [],
     this.set = const [],
+    this.groupLight = const [],
     this.light = const [],
     this.shot = const [],
     this.lightSetup,
+    this.group,
   });
 
   /// Todo lo que se ve, en orden de pintado.
-  List<PlanElement> get all => [...environment, ...set, ...light, ...shot];
+  List<PlanElement> get all => [
+    ...environment,
+    ...set,
+    ...groupLight,
+    ...light,
+    ...shot,
+  ];
 }
 
 /// Qué es un esquema de luz (`LightSetups.kind`).
@@ -242,9 +257,18 @@ class FloorPlanRepository {
             ? await db.getLightSetupById(lightSetupId)
             : null;
         if (setup == null) return const PlanLayers();
-        return _baseLayers(
+        final base = await _baseLayers(
           setId: setup.locationBasePlanId,
           siteId: setup.locationSiteId,
+          setup: setup,
+        );
+        final group = await _groupOf(setup);
+        return PlanLayers(
+          environment: base.environment,
+          set: base.set,
+          groupLight: FloorPlanJson.decode(group?.planJson),
+          lightSetup: setup,
+          group: group,
         );
       case FloorPlanScope.shot:
         if (shotId == null) return const PlanLayers();
@@ -256,13 +280,17 @@ class FloorPlanRepository {
         return PlanLayers(
           environment: layers.environment,
           set: layers.set,
+          groupLight: layers.groupLight,
           light: layers.light,
           lightSetup: layers.lightSetup,
+          group: layers.group,
         );
     }
   }
 
-  /// Todas las capas de un plano: entorno, set, esquema de luz y lo propio.
+  /// Todas las capas de un plano: entorno (con los cambios del set), set,
+  /// luz del grupo, esquema de luz y lo propio. Los ajustes de luz del plano
+  /// valen para la luz del grupo y para la del esquema.
   ///
   /// El set es el del plano y, si no tiene uno propio, el de su escena. En
   /// un plano secuencia, [leg] elige el tramo: su set, su luz y lo que se
@@ -291,13 +319,20 @@ class FloorPlanRepository {
           ownSet?.siteId ??
           scene?.locationSiteId ??
           setup?.locationSiteId,
+      setup: setup,
     );
+    final group = setup != null ? await _groupOf(setup) : null;
     // En una secuencia, cada tramo ve solo lo que se colocó en él.
     final own = await _shotElements(shot.id);
     final legIndex = route.isEmpty ? null : (leg ?? 0);
     return PlanLayers(
       environment: base.environment,
       set: base.set,
+      // La luz compartida del grupo, también con los ajustes del plano.
+      groupLight: LightOverrides.apply(
+        FloorPlanJson.decode(group?.planJson),
+        shot.lightOverridesJson,
+      ),
       // La luz del esquema, con los ajustes propios de este plano.
       light: LightOverrides.apply(
         FloorPlanJson.decode(setup?.planJson),
@@ -310,6 +345,7 @@ class FloorPlanRepository {
                 if (legOf(el) == legIndex) el,
             ],
       lightSetup: setup,
+      group: group,
     );
   }
 
@@ -321,13 +357,23 @@ class FloorPlanRepository {
   Future<List<PlanElement>> resolvedElementsForShot(Shot shot) async =>
       (await layersForShot(shot)).all;
 
-  Future<PlanLayers> _baseLayers({int? setId, int? siteId}) async {
+  /// Entorno y zona; con [setup], ya con sus cambios de entorno.
+  Future<PlanLayers> _baseLayers({
+    int? setId,
+    int? siteId,
+    LightSetup? setup,
+  }) async {
     final set = setId != null ? await db.getLocationById(setId) : null;
-    return PlanLayers(
+    final resolved = EnvOverrides.apply(
       environment: await _environment(set?.siteId ?? siteId),
       set: FloorPlanJson.decode(set?.floorPlanJson),
+      json: setup?.envOverridesJson,
     );
+    return PlanLayers(environment: resolved.environment, set: resolved.set);
   }
+
+  Future<SetGroup?> _groupOf(LightSetup setup) async =>
+      setup.groupId != null ? await db.getSetGroupById(setup.groupId!) : null;
 
   Future<List<PlanElement>> _environment(int? siteId) async {
     if (siteId == null) return const [];

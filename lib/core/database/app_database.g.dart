@@ -1977,6 +1977,17 @@ class $LocationSitesTable extends LocationSites
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _setOrderModeMeta = const VerificationMeta(
+    'setOrderMode',
+  );
+  @override
+  late final GeneratedColumn<String> setOrderMode = GeneratedColumn<String>(
+    'set_order_mode',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1993,6 +2004,7 @@ class $LocationSitesTable extends LocationSites
     latitude,
     longitude,
     placeLabel,
+    setOrderMode,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2100,6 +2112,15 @@ class $LocationSitesTable extends LocationSites
         placeLabel.isAcceptableOrUnknown(data['place_label']!, _placeLabelMeta),
       );
     }
+    if (data.containsKey('set_order_mode')) {
+      context.handle(
+        _setOrderModeMeta,
+        setOrderMode.isAcceptableOrUnknown(
+          data['set_order_mode']!,
+          _setOrderModeMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -2165,6 +2186,10 @@ class $LocationSitesTable extends LocationSites
         DriftSqlType.string,
         data['${effectivePrefix}place_label'],
       ),
+      setOrderMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}set_order_mode'],
+      ),
     );
   }
 
@@ -2191,6 +2216,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
   final double? latitude;
   final double? longitude;
   final String? placeLabel;
+  final String? setOrderMode;
   const LocationSite({
     required this.id,
     this.uid,
@@ -2206,6 +2232,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
     this.latitude,
     this.longitude,
     this.placeLabel,
+    this.setOrderMode,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2244,6 +2271,9 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
     if (!nullToAbsent || placeLabel != null) {
       map['place_label'] = Variable<String>(placeLabel);
     }
+    if (!nullToAbsent || setOrderMode != null) {
+      map['set_order_mode'] = Variable<String>(setOrderMode);
+    }
     return map;
   }
 
@@ -2281,6 +2311,9 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
       placeLabel: placeLabel == null && nullToAbsent
           ? const Value.absent()
           : Value(placeLabel),
+      setOrderMode: setOrderMode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(setOrderMode),
     );
   }
 
@@ -2304,6 +2337,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
       latitude: serializer.fromJson<double?>(json['latitude']),
       longitude: serializer.fromJson<double?>(json['longitude']),
       placeLabel: serializer.fromJson<String?>(json['placeLabel']),
+      setOrderMode: serializer.fromJson<String?>(json['setOrderMode']),
     );
   }
   @override
@@ -2324,6 +2358,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
       'latitude': serializer.toJson<double?>(latitude),
       'longitude': serializer.toJson<double?>(longitude),
       'placeLabel': serializer.toJson<String?>(placeLabel),
+      'setOrderMode': serializer.toJson<String?>(setOrderMode),
     };
   }
 
@@ -2342,6 +2377,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
     Value<double?> latitude = const Value.absent(),
     Value<double?> longitude = const Value.absent(),
     Value<String?> placeLabel = const Value.absent(),
+    Value<String?> setOrderMode = const Value.absent(),
   }) => LocationSite(
     id: id ?? this.id,
     uid: uid.present ? uid.value : this.uid,
@@ -2361,6 +2397,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
     latitude: latitude.present ? latitude.value : this.latitude,
     longitude: longitude.present ? longitude.value : this.longitude,
     placeLabel: placeLabel.present ? placeLabel.value : this.placeLabel,
+    setOrderMode: setOrderMode.present ? setOrderMode.value : this.setOrderMode,
   );
   LocationSite copyWithCompanion(LocationSitesCompanion data) {
     return LocationSite(
@@ -2388,6 +2425,9 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
       placeLabel: data.placeLabel.present
           ? data.placeLabel.value
           : this.placeLabel,
+      setOrderMode: data.setOrderMode.present
+          ? data.setOrderMode.value
+          : this.setOrderMode,
     );
   }
 
@@ -2407,7 +2447,8 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
           ..write('sortOrder: $sortOrder, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
-          ..write('placeLabel: $placeLabel')
+          ..write('placeLabel: $placeLabel, ')
+          ..write('setOrderMode: $setOrderMode')
           ..write(')'))
         .toString();
   }
@@ -2428,6 +2469,7 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
     latitude,
     longitude,
     placeLabel,
+    setOrderMode,
   );
   @override
   bool operator ==(Object other) =>
@@ -2446,7 +2488,8 @@ class LocationSite extends DataClass implements Insertable<LocationSite> {
           other.sortOrder == this.sortOrder &&
           other.latitude == this.latitude &&
           other.longitude == this.longitude &&
-          other.placeLabel == this.placeLabel);
+          other.placeLabel == this.placeLabel &&
+          other.setOrderMode == this.setOrderMode);
 }
 
 class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
@@ -2464,6 +2507,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
   final Value<double?> latitude;
   final Value<double?> longitude;
   final Value<String?> placeLabel;
+  final Value<String?> setOrderMode;
   const LocationSitesCompanion({
     this.id = const Value.absent(),
     this.uid = const Value.absent(),
@@ -2479,6 +2523,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.placeLabel = const Value.absent(),
+    this.setOrderMode = const Value.absent(),
   });
   LocationSitesCompanion.insert({
     this.id = const Value.absent(),
@@ -2495,6 +2540,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.placeLabel = const Value.absent(),
+    this.setOrderMode = const Value.absent(),
   }) : projectId = Value(projectId),
        name = Value(name);
   static Insertable<LocationSite> custom({
@@ -2512,6 +2558,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
     Expression<double>? latitude,
     Expression<double>? longitude,
     Expression<String>? placeLabel,
+    Expression<String>? setOrderMode,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2528,6 +2575,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
       if (placeLabel != null) 'place_label': placeLabel,
+      if (setOrderMode != null) 'set_order_mode': setOrderMode,
     });
   }
 
@@ -2546,6 +2594,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
     Value<double?>? latitude,
     Value<double?>? longitude,
     Value<String?>? placeLabel,
+    Value<String?>? setOrderMode,
   }) {
     return LocationSitesCompanion(
       id: id ?? this.id,
@@ -2562,6 +2611,7 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       placeLabel: placeLabel ?? this.placeLabel,
+      setOrderMode: setOrderMode ?? this.setOrderMode,
     );
   }
 
@@ -2610,6 +2660,9 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
     if (placeLabel.present) {
       map['place_label'] = Variable<String>(placeLabel.value);
     }
+    if (setOrderMode.present) {
+      map['set_order_mode'] = Variable<String>(setOrderMode.value);
+    }
     return map;
   }
 
@@ -2629,7 +2682,8 @@ class LocationSitesCompanion extends UpdateCompanion<LocationSite> {
           ..write('sortOrder: $sortOrder, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
-          ..write('placeLabel: $placeLabel')
+          ..write('placeLabel: $placeLabel, ')
+          ..write('setOrderMode: $setOrderMode')
           ..write(')'))
         .toString();
   }
@@ -4928,6 +4982,471 @@ class ScenesCompanion extends UpdateCompanion<Scene> {
   }
 }
 
+class $SetGroupsTable extends SetGroups
+    with TableInfo<$SetGroupsTable, SetGroup> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SetGroupsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _locationSiteIdMeta = const VerificationMeta(
+    'locationSiteId',
+  );
+  @override
+  late final GeneratedColumn<int> locationSiteId = GeneratedColumn<int>(
+    'location_site_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES location_sites (id)',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _planJsonMeta = const VerificationMeta(
+    'planJson',
+  );
+  @override
+  late final GeneratedColumn<String> planJson = GeneratedColumn<String>(
+    'plan_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    uid,
+    projectId,
+    locationSiteId,
+    name,
+    planJson,
+    sortOrder,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'set_groups';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SetGroup> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('location_site_id')) {
+      context.handle(
+        _locationSiteIdMeta,
+        locationSiteId.isAcceptableOrUnknown(
+          data['location_site_id']!,
+          _locationSiteIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('plan_json')) {
+      context.handle(
+        _planJsonMeta,
+        planJson.isAcceptableOrUnknown(data['plan_json']!, _planJsonMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SetGroup map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SetGroup(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      locationSiteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}location_site_id'],
+      ),
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      planJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}plan_json'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+    );
+  }
+
+  @override
+  $SetGroupsTable createAlias(String alias) {
+    return $SetGroupsTable(attachedDatabase, alias);
+  }
+}
+
+class SetGroup extends DataClass implements Insertable<SetGroup> {
+  final int id;
+
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  final String? uid;
+  final int projectId;
+  final int? locationSiteId;
+  final String name;
+  final String? planJson;
+  final int sortOrder;
+  const SetGroup({
+    required this.id,
+    this.uid,
+    required this.projectId,
+    this.locationSiteId,
+    required this.name,
+    this.planJson,
+    required this.sortOrder,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
+    map['project_id'] = Variable<int>(projectId);
+    if (!nullToAbsent || locationSiteId != null) {
+      map['location_site_id'] = Variable<int>(locationSiteId);
+    }
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || planJson != null) {
+      map['plan_json'] = Variable<String>(planJson);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    return map;
+  }
+
+  SetGroupsCompanion toCompanion(bool nullToAbsent) {
+    return SetGroupsCompanion(
+      id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
+      projectId: Value(projectId),
+      locationSiteId: locationSiteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSiteId),
+      name: Value(name),
+      planJson: planJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(planJson),
+      sortOrder: Value(sortOrder),
+    );
+  }
+
+  factory SetGroup.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SetGroup(
+      id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      locationSiteId: serializer.fromJson<int?>(json['locationSiteId']),
+      name: serializer.fromJson<String>(json['name']),
+      planJson: serializer.fromJson<String?>(json['planJson']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
+      'projectId': serializer.toJson<int>(projectId),
+      'locationSiteId': serializer.toJson<int?>(locationSiteId),
+      'name': serializer.toJson<String>(name),
+      'planJson': serializer.toJson<String?>(planJson),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+    };
+  }
+
+  SetGroup copyWith({
+    int? id,
+    Value<String?> uid = const Value.absent(),
+    int? projectId,
+    Value<int?> locationSiteId = const Value.absent(),
+    String? name,
+    Value<String?> planJson = const Value.absent(),
+    int? sortOrder,
+  }) => SetGroup(
+    id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
+    projectId: projectId ?? this.projectId,
+    locationSiteId: locationSiteId.present
+        ? locationSiteId.value
+        : this.locationSiteId,
+    name: name ?? this.name,
+    planJson: planJson.present ? planJson.value : this.planJson,
+    sortOrder: sortOrder ?? this.sortOrder,
+  );
+  SetGroup copyWithCompanion(SetGroupsCompanion data) {
+    return SetGroup(
+      id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      locationSiteId: data.locationSiteId.present
+          ? data.locationSiteId.value
+          : this.locationSiteId,
+      name: data.name.present ? data.name.value : this.name,
+      planJson: data.planJson.present ? data.planJson.value : this.planJson,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SetGroup(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('locationSiteId: $locationSiteId, ')
+          ..write('name: $name, ')
+          ..write('planJson: $planJson, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    uid,
+    projectId,
+    locationSiteId,
+    name,
+    planJson,
+    sortOrder,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SetGroup &&
+          other.id == this.id &&
+          other.uid == this.uid &&
+          other.projectId == this.projectId &&
+          other.locationSiteId == this.locationSiteId &&
+          other.name == this.name &&
+          other.planJson == this.planJson &&
+          other.sortOrder == this.sortOrder);
+}
+
+class SetGroupsCompanion extends UpdateCompanion<SetGroup> {
+  final Value<int> id;
+  final Value<String?> uid;
+  final Value<int> projectId;
+  final Value<int?> locationSiteId;
+  final Value<String> name;
+  final Value<String?> planJson;
+  final Value<int> sortOrder;
+  const SetGroupsCompanion({
+    this.id = const Value.absent(),
+    this.uid = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.locationSiteId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.planJson = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  });
+  SetGroupsCompanion.insert({
+    this.id = const Value.absent(),
+    this.uid = const Value.absent(),
+    required int projectId,
+    this.locationSiteId = const Value.absent(),
+    required String name,
+    this.planJson = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  }) : projectId = Value(projectId),
+       name = Value(name);
+  static Insertable<SetGroup> custom({
+    Expression<int>? id,
+    Expression<String>? uid,
+    Expression<int>? projectId,
+    Expression<int>? locationSiteId,
+    Expression<String>? name,
+    Expression<String>? planJson,
+    Expression<int>? sortOrder,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
+      if (projectId != null) 'project_id': projectId,
+      if (locationSiteId != null) 'location_site_id': locationSiteId,
+      if (name != null) 'name': name,
+      if (planJson != null) 'plan_json': planJson,
+      if (sortOrder != null) 'sort_order': sortOrder,
+    });
+  }
+
+  SetGroupsCompanion copyWith({
+    Value<int>? id,
+    Value<String?>? uid,
+    Value<int>? projectId,
+    Value<int?>? locationSiteId,
+    Value<String>? name,
+    Value<String?>? planJson,
+    Value<int>? sortOrder,
+  }) {
+    return SetGroupsCompanion(
+      id: id ?? this.id,
+      uid: uid ?? this.uid,
+      projectId: projectId ?? this.projectId,
+      locationSiteId: locationSiteId ?? this.locationSiteId,
+      name: name ?? this.name,
+      planJson: planJson ?? this.planJson,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (locationSiteId.present) {
+      map['location_site_id'] = Variable<int>(locationSiteId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (planJson.present) {
+      map['plan_json'] = Variable<String>(planJson.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SetGroupsCompanion(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('locationSiteId: $locationSiteId, ')
+          ..write('name: $name, ')
+          ..write('planJson: $planJson, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $LightSetupsTable extends LightSetups
     with TableInfo<$LightSetupsTable, LightSetup> {
   @override
@@ -5107,6 +5626,42 @@ class $LightSetupsTable extends LightSetups
       'REFERENCES scenes (id)',
     ),
   );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<int> groupId = GeneratedColumn<int>(
+    'group_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES set_groups (id)',
+    ),
+  );
+  static const VerificationMeta _envOverridesJsonMeta = const VerificationMeta(
+    'envOverridesJson',
+  );
+  @override
+  late final GeneratedColumn<String> envOverridesJson = GeneratedColumn<String>(
+    'env_overrides_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _shootOrderMeta = const VerificationMeta(
+    'shootOrder',
+  );
+  @override
+  late final GeneratedColumn<int> shootOrder = GeneratedColumn<int>(
+    'shoot_order',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -5124,6 +5679,9 @@ class $LightSetupsTable extends LightSetups
     sortOrder,
     kind,
     sceneId,
+    groupId,
+    envOverridesJson,
+    shootOrder,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5237,6 +5795,27 @@ class $LightSetupsTable extends LightSetups
         sceneId.isAcceptableOrUnknown(data['scene_id']!, _sceneIdMeta),
       );
     }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    }
+    if (data.containsKey('env_overrides_json')) {
+      context.handle(
+        _envOverridesJsonMeta,
+        envOverridesJson.isAcceptableOrUnknown(
+          data['env_overrides_json']!,
+          _envOverridesJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('shoot_order')) {
+      context.handle(
+        _shootOrderMeta,
+        shootOrder.isAcceptableOrUnknown(data['shoot_order']!, _shootOrderMeta),
+      );
+    }
     return context;
   }
 
@@ -5306,6 +5885,18 @@ class $LightSetupsTable extends LightSetups
         DriftSqlType.int,
         data['${effectivePrefix}scene_id'],
       ),
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}group_id'],
+      ),
+      envOverridesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}env_overrides_json'],
+      ),
+      shootOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}shoot_order'],
+      ),
     );
   }
 
@@ -5333,6 +5924,9 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
   final int sortOrder;
   final String kind;
   final int? sceneId;
+  final int? groupId;
+  final String? envOverridesJson;
+  final int? shootOrder;
   const LightSetup({
     required this.id,
     this.uid,
@@ -5349,6 +5943,9 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     required this.sortOrder,
     required this.kind,
     this.sceneId,
+    this.groupId,
+    this.envOverridesJson,
+    this.shootOrder,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5384,6 +5981,15 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     if (!nullToAbsent || sceneId != null) {
       map['scene_id'] = Variable<int>(sceneId);
     }
+    if (!nullToAbsent || groupId != null) {
+      map['group_id'] = Variable<int>(groupId);
+    }
+    if (!nullToAbsent || envOverridesJson != null) {
+      map['env_overrides_json'] = Variable<String>(envOverridesJson);
+    }
+    if (!nullToAbsent || shootOrder != null) {
+      map['shoot_order'] = Variable<int>(shootOrder);
+    }
     return map;
   }
 
@@ -5418,6 +6024,15 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
       sceneId: sceneId == null && nullToAbsent
           ? const Value.absent()
           : Value(sceneId),
+      groupId: groupId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(groupId),
+      envOverridesJson: envOverridesJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(envOverridesJson),
+      shootOrder: shootOrder == null && nullToAbsent
+          ? const Value.absent()
+          : Value(shootOrder),
     );
   }
 
@@ -5442,6 +6057,9 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       kind: serializer.fromJson<String>(json['kind']),
       sceneId: serializer.fromJson<int?>(json['sceneId']),
+      groupId: serializer.fromJson<int?>(json['groupId']),
+      envOverridesJson: serializer.fromJson<String?>(json['envOverridesJson']),
+      shootOrder: serializer.fromJson<int?>(json['shootOrder']),
     );
   }
   @override
@@ -5463,6 +6081,9 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
       'sortOrder': serializer.toJson<int>(sortOrder),
       'kind': serializer.toJson<String>(kind),
       'sceneId': serializer.toJson<int?>(sceneId),
+      'groupId': serializer.toJson<int?>(groupId),
+      'envOverridesJson': serializer.toJson<String?>(envOverridesJson),
+      'shootOrder': serializer.toJson<int?>(shootOrder),
     };
   }
 
@@ -5482,6 +6103,9 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     int? sortOrder,
     String? kind,
     Value<int?> sceneId = const Value.absent(),
+    Value<int?> groupId = const Value.absent(),
+    Value<String?> envOverridesJson = const Value.absent(),
+    Value<int?> shootOrder = const Value.absent(),
   }) => LightSetup(
     id: id ?? this.id,
     uid: uid.present ? uid.value : this.uid,
@@ -5504,6 +6128,11 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     sortOrder: sortOrder ?? this.sortOrder,
     kind: kind ?? this.kind,
     sceneId: sceneId.present ? sceneId.value : this.sceneId,
+    groupId: groupId.present ? groupId.value : this.groupId,
+    envOverridesJson: envOverridesJson.present
+        ? envOverridesJson.value
+        : this.envOverridesJson,
+    shootOrder: shootOrder.present ? shootOrder.value : this.shootOrder,
   );
   LightSetup copyWithCompanion(LightSetupsCompanion data) {
     return LightSetup(
@@ -5530,6 +6159,13 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       kind: data.kind.present ? data.kind.value : this.kind,
       sceneId: data.sceneId.present ? data.sceneId.value : this.sceneId,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      envOverridesJson: data.envOverridesJson.present
+          ? data.envOverridesJson.value
+          : this.envOverridesJson,
+      shootOrder: data.shootOrder.present
+          ? data.shootOrder.value
+          : this.shootOrder,
     );
   }
 
@@ -5550,7 +6186,10 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
           ..write('sketchImagePath: $sketchImagePath, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('kind: $kind, ')
-          ..write('sceneId: $sceneId')
+          ..write('sceneId: $sceneId, ')
+          ..write('groupId: $groupId, ')
+          ..write('envOverridesJson: $envOverridesJson, ')
+          ..write('shootOrder: $shootOrder')
           ..write(')'))
         .toString();
   }
@@ -5572,6 +6211,9 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
     sortOrder,
     kind,
     sceneId,
+    groupId,
+    envOverridesJson,
+    shootOrder,
   );
   @override
   bool operator ==(Object other) =>
@@ -5591,7 +6233,10 @@ class LightSetup extends DataClass implements Insertable<LightSetup> {
           other.sketchImagePath == this.sketchImagePath &&
           other.sortOrder == this.sortOrder &&
           other.kind == this.kind &&
-          other.sceneId == this.sceneId);
+          other.sceneId == this.sceneId &&
+          other.groupId == this.groupId &&
+          other.envOverridesJson == this.envOverridesJson &&
+          other.shootOrder == this.shootOrder);
 }
 
 class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
@@ -5610,6 +6255,9 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
   final Value<int> sortOrder;
   final Value<String> kind;
   final Value<int?> sceneId;
+  final Value<int?> groupId;
+  final Value<String?> envOverridesJson;
+  final Value<int?> shootOrder;
   const LightSetupsCompanion({
     this.id = const Value.absent(),
     this.uid = const Value.absent(),
@@ -5626,6 +6274,9 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     this.sortOrder = const Value.absent(),
     this.kind = const Value.absent(),
     this.sceneId = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.envOverridesJson = const Value.absent(),
+    this.shootOrder = const Value.absent(),
   });
   LightSetupsCompanion.insert({
     this.id = const Value.absent(),
@@ -5643,6 +6294,9 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     this.sortOrder = const Value.absent(),
     this.kind = const Value.absent(),
     this.sceneId = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.envOverridesJson = const Value.absent(),
+    this.shootOrder = const Value.absent(),
   }) : projectId = Value(projectId),
        name = Value(name);
   static Insertable<LightSetup> custom({
@@ -5661,6 +6315,9 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     Expression<int>? sortOrder,
     Expression<String>? kind,
     Expression<int>? sceneId,
+    Expression<int>? groupId,
+    Expression<String>? envOverridesJson,
+    Expression<int>? shootOrder,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -5679,6 +6336,9 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
       if (sortOrder != null) 'sort_order': sortOrder,
       if (kind != null) 'kind': kind,
       if (sceneId != null) 'scene_id': sceneId,
+      if (groupId != null) 'group_id': groupId,
+      if (envOverridesJson != null) 'env_overrides_json': envOverridesJson,
+      if (shootOrder != null) 'shoot_order': shootOrder,
     });
   }
 
@@ -5698,6 +6358,9 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     Value<int>? sortOrder,
     Value<String>? kind,
     Value<int?>? sceneId,
+    Value<int?>? groupId,
+    Value<String?>? envOverridesJson,
+    Value<int?>? shootOrder,
   }) {
     return LightSetupsCompanion(
       id: id ?? this.id,
@@ -5715,6 +6378,9 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
       sortOrder: sortOrder ?? this.sortOrder,
       kind: kind ?? this.kind,
       sceneId: sceneId ?? this.sceneId,
+      groupId: groupId ?? this.groupId,
+      envOverridesJson: envOverridesJson ?? this.envOverridesJson,
+      shootOrder: shootOrder ?? this.shootOrder,
     );
   }
 
@@ -5766,6 +6432,15 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
     if (sceneId.present) {
       map['scene_id'] = Variable<int>(sceneId.value);
     }
+    if (groupId.present) {
+      map['group_id'] = Variable<int>(groupId.value);
+    }
+    if (envOverridesJson.present) {
+      map['env_overrides_json'] = Variable<String>(envOverridesJson.value);
+    }
+    if (shootOrder.present) {
+      map['shoot_order'] = Variable<int>(shootOrder.value);
+    }
     return map;
   }
 
@@ -5786,7 +6461,10 @@ class LightSetupsCompanion extends UpdateCompanion<LightSetup> {
           ..write('sketchImagePath: $sketchImagePath, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('kind: $kind, ')
-          ..write('sceneId: $sceneId')
+          ..write('sceneId: $sceneId, ')
+          ..write('groupId: $groupId, ')
+          ..write('envOverridesJson: $envOverridesJson, ')
+          ..write('shootOrder: $shootOrder')
           ..write(')'))
         .toString();
   }
@@ -37716,6 +38394,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LocationBasePlansTable locationBasePlans =
       $LocationBasePlansTable(this);
   late final $ScenesTable scenes = $ScenesTable(this);
+  late final $SetGroupsTable setGroups = $SetGroupsTable(this);
   late final $LightSetupsTable lightSetups = $LightSetupsTable(this);
   late final $ShotsTable shots = $ShotsTable(this);
   late final $ShootDocumentsTable shootDocuments = $ShootDocumentsTable(this);
@@ -37793,6 +38472,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     locationSites,
     locationBasePlans,
     scenes,
+    setGroups,
     lightSetups,
     shots,
     shootDocuments,
@@ -38238,6 +38918,24 @@ final class $$ProjectsTableReferences
     ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_scenesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$SetGroupsTable, List<SetGroup>>
+  _setGroupsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.setGroups,
+    aliasName: $_aliasNameGenerator(db.projects.id, db.setGroups.projectId),
+  );
+
+  $$SetGroupsTableProcessedTableManager get setGroupsRefs {
+    final manager = $$SetGroupsTableTableManager(
+      $_db,
+      $_db.setGroups,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_setGroupsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -38828,6 +39526,31 @@ class $$ProjectsTableFilterComposer
           }) => $$ScenesTableFilterComposer(
             $db: $db,
             $table: $db.scenes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> setGroupsRefs(
+    Expression<bool> Function($$SetGroupsTableFilterComposer f) f,
+  ) {
+    final $$SetGroupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.setGroups,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SetGroupsTableFilterComposer(
+            $db: $db,
+            $table: $db.setGroups,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -39619,6 +40342,31 @@ class $$ProjectsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> setGroupsRefs<T extends Object>(
+    Expression<T> Function($$SetGroupsTableAnnotationComposer a) f,
+  ) {
+    final $$SetGroupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.setGroups,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SetGroupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.setGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> lightSetupsRefs<T extends Object>(
     Expression<T> Function($$LightSetupsTableAnnotationComposer a) f,
   ) {
@@ -40045,6 +40793,7 @@ class $$ProjectsTableTableManager
             bool locationSitesRefs,
             bool locationBasePlansRefs,
             bool scenesRefs,
+            bool setGroupsRefs,
             bool lightSetupsRefs,
             bool shotsRefs,
             bool shootDocumentsRefs,
@@ -40204,6 +40953,7 @@ class $$ProjectsTableTableManager
                 locationSitesRefs = false,
                 locationBasePlansRefs = false,
                 scenesRefs = false,
+                setGroupsRefs = false,
                 lightSetupsRefs = false,
                 shotsRefs = false,
                 shootDocumentsRefs = false,
@@ -40227,6 +40977,7 @@ class $$ProjectsTableTableManager
                     if (locationSitesRefs) db.locationSites,
                     if (locationBasePlansRefs) db.locationBasePlans,
                     if (scenesRefs) db.scenes,
+                    if (setGroupsRefs) db.setGroups,
                     if (lightSetupsRefs) db.lightSetups,
                     if (shotsRefs) db.shots,
                     if (shootDocumentsRefs) db.shootDocuments,
@@ -40336,6 +41087,27 @@ class $$ProjectsTableTableManager
                                 table,
                                 p0,
                               ).scenesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (setGroupsRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          SetGroup
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._setGroupsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).setGroupsRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.projectId == item.id,
@@ -40703,6 +41475,7 @@ typedef $$ProjectsTableProcessedTableManager =
         bool locationSitesRefs,
         bool locationBasePlansRefs,
         bool scenesRefs,
+        bool setGroupsRefs,
         bool lightSetupsRefs,
         bool shotsRefs,
         bool shootDocumentsRefs,
@@ -40737,6 +41510,7 @@ typedef $$LocationSitesTableCreateCompanionBuilder =
       Value<double?> latitude,
       Value<double?> longitude,
       Value<String?> placeLabel,
+      Value<String?> setOrderMode,
     });
 typedef $$LocationSitesTableUpdateCompanionBuilder =
     LocationSitesCompanion Function({
@@ -40754,6 +41528,7 @@ typedef $$LocationSitesTableUpdateCompanionBuilder =
       Value<double?> latitude,
       Value<double?> longitude,
       Value<String?> placeLabel,
+      Value<String?> setOrderMode,
     });
 
 final class $$LocationSitesTableReferences
@@ -40824,6 +41599,27 @@ final class $$LocationSitesTableReferences
     ).filter((f) => f.locationSiteId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_scenesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$SetGroupsTable, List<SetGroup>>
+  _setGroupsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.setGroups,
+    aliasName: $_aliasNameGenerator(
+      db.locationSites.id,
+      db.setGroups.locationSiteId,
+    ),
+  );
+
+  $$SetGroupsTableProcessedTableManager get setGroupsRefs {
+    final manager = $$SetGroupsTableTableManager(
+      $_db,
+      $_db.setGroups,
+    ).filter((f) => f.locationSiteId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_setGroupsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -41013,6 +41809,11 @@ class $$LocationSitesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get setOrderMode => $composableBuilder(
+    column: $table.setOrderMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$ProjectsTableFilterComposer get projectId {
     final $$ProjectsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -41077,6 +41878,31 @@ class $$LocationSitesTableFilterComposer
           }) => $$ScenesTableFilterComposer(
             $db: $db,
             $table: $db.scenes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> setGroupsRefs(
+    Expression<bool> Function($$SetGroupsTableFilterComposer f) f,
+  ) {
+    final $$SetGroupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.setGroups,
+      getReferencedColumn: (t) => t.locationSiteId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SetGroupsTableFilterComposer(
+            $db: $db,
+            $table: $db.setGroups,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -41287,6 +42113,11 @@ class $$LocationSitesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get setOrderMode => $composableBuilder(
+    column: $table.setOrderMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ProjectsTableOrderingComposer get projectId {
     final $$ProjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -41369,6 +42200,11 @@ class $$LocationSitesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get setOrderMode => $composableBuilder(
+    column: $table.setOrderMode,
+    builder: (column) => column,
+  );
+
   $$ProjectsTableAnnotationComposer get projectId {
     final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -41434,6 +42270,31 @@ class $$LocationSitesTableAnnotationComposer
           }) => $$ScenesTableAnnotationComposer(
             $db: $db,
             $table: $db.scenes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> setGroupsRefs<T extends Object>(
+    Expression<T> Function($$SetGroupsTableAnnotationComposer a) f,
+  ) {
+    final $$SetGroupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.setGroups,
+      getReferencedColumn: (t) => t.locationSiteId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SetGroupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.setGroups,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -41588,6 +42449,7 @@ class $$LocationSitesTableTableManager
             bool projectId,
             bool locationBasePlansRefs,
             bool scenesRefs,
+            bool setGroupsRefs,
             bool lightSetupsRefs,
             bool shootDocumentsRefs,
             bool siteImagesRefs,
@@ -41622,6 +42484,7 @@ class $$LocationSitesTableTableManager
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<String?> placeLabel = const Value.absent(),
+                Value<String?> setOrderMode = const Value.absent(),
               }) => LocationSitesCompanion(
                 id: id,
                 uid: uid,
@@ -41637,6 +42500,7 @@ class $$LocationSitesTableTableManager
                 latitude: latitude,
                 longitude: longitude,
                 placeLabel: placeLabel,
+                setOrderMode: setOrderMode,
               ),
           createCompanionCallback:
               ({
@@ -41654,6 +42518,7 @@ class $$LocationSitesTableTableManager
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<String?> placeLabel = const Value.absent(),
+                Value<String?> setOrderMode = const Value.absent(),
               }) => LocationSitesCompanion.insert(
                 id: id,
                 uid: uid,
@@ -41669,6 +42534,7 @@ class $$LocationSitesTableTableManager
                 latitude: latitude,
                 longitude: longitude,
                 placeLabel: placeLabel,
+                setOrderMode: setOrderMode,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -41683,6 +42549,7 @@ class $$LocationSitesTableTableManager
                 projectId = false,
                 locationBasePlansRefs = false,
                 scenesRefs = false,
+                setGroupsRefs = false,
                 lightSetupsRefs = false,
                 shootDocumentsRefs = false,
                 siteImagesRefs = false,
@@ -41694,6 +42561,7 @@ class $$LocationSitesTableTableManager
                   explicitlyWatchedTables: [
                     if (locationBasePlansRefs) db.locationBasePlans,
                     if (scenesRefs) db.scenes,
+                    if (setGroupsRefs) db.setGroups,
                     if (lightSetupsRefs) db.lightSetups,
                     if (shootDocumentsRefs) db.shootDocuments,
                     if (siteImagesRefs) db.siteImages,
@@ -41772,6 +42640,27 @@ class $$LocationSitesTableTableManager
                                 table,
                                 p0,
                               ).scenesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.locationSiteId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (setGroupsRefs)
+                        await $_getPrefetchedData<
+                          LocationSite,
+                          $LocationSitesTable,
+                          SetGroup
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LocationSitesTableReferences
+                              ._setGroupsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LocationSitesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).setGroupsRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.locationSiteId == item.id,
@@ -41907,6 +42796,7 @@ typedef $$LocationSitesTableProcessedTableManager =
         bool projectId,
         bool locationBasePlansRefs,
         bool scenesRefs,
+        bool setGroupsRefs,
         bool lightSetupsRefs,
         bool shootDocumentsRefs,
         bool siteImagesRefs,
@@ -44538,6 +45428,550 @@ typedef $$ScenesTableProcessedTableManager =
         bool shootDocumentBlocksRefs,
       })
     >;
+typedef $$SetGroupsTableCreateCompanionBuilder =
+    SetGroupsCompanion Function({
+      Value<int> id,
+      Value<String?> uid,
+      required int projectId,
+      Value<int?> locationSiteId,
+      required String name,
+      Value<String?> planJson,
+      Value<int> sortOrder,
+    });
+typedef $$SetGroupsTableUpdateCompanionBuilder =
+    SetGroupsCompanion Function({
+      Value<int> id,
+      Value<String?> uid,
+      Value<int> projectId,
+      Value<int?> locationSiteId,
+      Value<String> name,
+      Value<String?> planJson,
+      Value<int> sortOrder,
+    });
+
+final class $$SetGroupsTableReferences
+    extends BaseReferences<_$AppDatabase, $SetGroupsTable, SetGroup> {
+  $$SetGroupsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.setGroups.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $LocationSitesTable _locationSiteIdTable(_$AppDatabase db) =>
+      db.locationSites.createAlias(
+        $_aliasNameGenerator(db.setGroups.locationSiteId, db.locationSites.id),
+      );
+
+  $$LocationSitesTableProcessedTableManager? get locationSiteId {
+    final $_column = $_itemColumn<int>('location_site_id');
+    if ($_column == null) return null;
+    final manager = $$LocationSitesTableTableManager(
+      $_db,
+      $_db.locationSites,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_locationSiteIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$LightSetupsTable, List<LightSetup>>
+  _lightSetupsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.lightSetups,
+    aliasName: $_aliasNameGenerator(db.setGroups.id, db.lightSetups.groupId),
+  );
+
+  $$LightSetupsTableProcessedTableManager get lightSetupsRefs {
+    final manager = $$LightSetupsTableTableManager(
+      $_db,
+      $_db.lightSetups,
+    ).filter((f) => f.groupId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_lightSetupsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$SetGroupsTableFilterComposer
+    extends Composer<_$AppDatabase, $SetGroupsTable> {
+  $$SetGroupsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get planJson => $composableBuilder(
+    column: $table.planJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationSitesTableFilterComposer get locationSiteId {
+    final $$LocationSitesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableFilterComposer(
+            $db: $db,
+            $table: $db.locationSites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> lightSetupsRefs(
+    Expression<bool> Function($$LightSetupsTableFilterComposer f) f,
+  ) {
+    final $$LightSetupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightSetups,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightSetupsTableFilterComposer(
+            $db: $db,
+            $table: $db.lightSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$SetGroupsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SetGroupsTable> {
+  $$SetGroupsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get planJson => $composableBuilder(
+    column: $table.planJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationSitesTableOrderingComposer get locationSiteId {
+    final $$LocationSitesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableOrderingComposer(
+            $db: $db,
+            $table: $db.locationSites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SetGroupsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SetGroupsTable> {
+  $$SetGroupsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get planJson =>
+      $composableBuilder(column: $table.planJson, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LocationSitesTableAnnotationComposer get locationSiteId {
+    final $$LocationSitesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.locationSiteId,
+      referencedTable: $db.locationSites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LocationSitesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.locationSites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> lightSetupsRefs<T extends Object>(
+    Expression<T> Function($$LightSetupsTableAnnotationComposer a) f,
+  ) {
+    final $$LightSetupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lightSetups,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LightSetupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.lightSetups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$SetGroupsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SetGroupsTable,
+          SetGroup,
+          $$SetGroupsTableFilterComposer,
+          $$SetGroupsTableOrderingComposer,
+          $$SetGroupsTableAnnotationComposer,
+          $$SetGroupsTableCreateCompanionBuilder,
+          $$SetGroupsTableUpdateCompanionBuilder,
+          (SetGroup, $$SetGroupsTableReferences),
+          SetGroup,
+          PrefetchHooks Function({
+            bool projectId,
+            bool locationSiteId,
+            bool lightSetupsRefs,
+          })
+        > {
+  $$SetGroupsTableTableManager(_$AppDatabase db, $SetGroupsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SetGroupsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SetGroupsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SetGroupsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<int?> locationSiteId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> planJson = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => SetGroupsCompanion(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                locationSiteId: locationSiteId,
+                name: name,
+                planJson: planJson,
+                sortOrder: sortOrder,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
+                required int projectId,
+                Value<int?> locationSiteId = const Value.absent(),
+                required String name,
+                Value<String?> planJson = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => SetGroupsCompanion.insert(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                locationSiteId: locationSiteId,
+                name: name,
+                planJson: planJson,
+                sortOrder: sortOrder,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$SetGroupsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({
+                projectId = false,
+                locationSiteId = false,
+                lightSetupsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (lightSetupsRefs) db.lightSetups,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (projectId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.projectId,
+                                    referencedTable: $$SetGroupsTableReferences
+                                        ._projectIdTable(db),
+                                    referencedColumn: $$SetGroupsTableReferences
+                                        ._projectIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+                        if (locationSiteId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.locationSiteId,
+                                    referencedTable: $$SetGroupsTableReferences
+                                        ._locationSiteIdTable(db),
+                                    referencedColumn: $$SetGroupsTableReferences
+                                        ._locationSiteIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (lightSetupsRefs)
+                        await $_getPrefetchedData<
+                          SetGroup,
+                          $SetGroupsTable,
+                          LightSetup
+                        >(
+                          currentTable: table,
+                          referencedTable: $$SetGroupsTableReferences
+                              ._lightSetupsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$SetGroupsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).lightSetupsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.groupId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$SetGroupsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SetGroupsTable,
+      SetGroup,
+      $$SetGroupsTableFilterComposer,
+      $$SetGroupsTableOrderingComposer,
+      $$SetGroupsTableAnnotationComposer,
+      $$SetGroupsTableCreateCompanionBuilder,
+      $$SetGroupsTableUpdateCompanionBuilder,
+      (SetGroup, $$SetGroupsTableReferences),
+      SetGroup,
+      PrefetchHooks Function({
+        bool projectId,
+        bool locationSiteId,
+        bool lightSetupsRefs,
+      })
+    >;
 typedef $$LightSetupsTableCreateCompanionBuilder =
     LightSetupsCompanion Function({
       Value<int> id,
@@ -44555,6 +45989,9 @@ typedef $$LightSetupsTableCreateCompanionBuilder =
       Value<int> sortOrder,
       Value<String> kind,
       Value<int?> sceneId,
+      Value<int?> groupId,
+      Value<String?> envOverridesJson,
+      Value<int?> shootOrder,
     });
 typedef $$LightSetupsTableUpdateCompanionBuilder =
     LightSetupsCompanion Function({
@@ -44573,6 +46010,9 @@ typedef $$LightSetupsTableUpdateCompanionBuilder =
       Value<int> sortOrder,
       Value<String> kind,
       Value<int?> sceneId,
+      Value<int?> groupId,
+      Value<String?> envOverridesJson,
+      Value<int?> shootOrder,
     });
 
 final class $$LightSetupsTableReferences
@@ -44654,6 +46094,25 @@ final class $$LightSetupsTableReferences
       $_db.scenes,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_sceneIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $SetGroupsTable _groupIdTable(_$AppDatabase db) =>
+      db.setGroups.createAlias(
+        $_aliasNameGenerator(db.lightSetups.groupId, db.setGroups.id),
+      );
+
+  $$SetGroupsTableProcessedTableManager? get groupId {
+    final $_column = $_itemColumn<int>('group_id');
+    if ($_column == null) return null;
+    final manager = $$SetGroupsTableTableManager(
+      $_db,
+      $_db.setGroups,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_groupIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -44765,6 +46224,16 @@ class $$LightSetupsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get envOverridesJson => $composableBuilder(
+    column: $table.envOverridesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get shootOrder => $composableBuilder(
+    column: $table.shootOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$ProjectsTableFilterComposer get projectId {
     final $$ProjectsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -44848,6 +46317,29 @@ class $$LightSetupsTableFilterComposer
           }) => $$ScenesTableFilterComposer(
             $db: $db,
             $table: $db.scenes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$SetGroupsTableFilterComposer get groupId {
+    final $$SetGroupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.setGroups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SetGroupsTableFilterComposer(
+            $db: $db,
+            $table: $db.setGroups,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -44972,6 +46464,16 @@ class $$LightSetupsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get envOverridesJson => $composableBuilder(
+    column: $table.envOverridesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get shootOrder => $composableBuilder(
+    column: $table.shootOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ProjectsTableOrderingComposer get projectId {
     final $$ProjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -45063,6 +46565,29 @@ class $$LightSetupsTableOrderingComposer
     );
     return composer;
   }
+
+  $$SetGroupsTableOrderingComposer get groupId {
+    final $$SetGroupsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.setGroups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SetGroupsTableOrderingComposer(
+            $db: $db,
+            $table: $db.setGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$LightSetupsTableAnnotationComposer
@@ -45110,6 +46635,16 @@ class $$LightSetupsTableAnnotationComposer
 
   GeneratedColumn<String> get kind =>
       $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get envOverridesJson => $composableBuilder(
+    column: $table.envOverridesJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get shootOrder => $composableBuilder(
+    column: $table.shootOrder,
+    builder: (column) => column,
+  );
 
   $$ProjectsTableAnnotationComposer get projectId {
     final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
@@ -45204,6 +46739,29 @@ class $$LightSetupsTableAnnotationComposer
     return composer;
   }
 
+  $$SetGroupsTableAnnotationComposer get groupId {
+    final $$SetGroupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.setGroups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SetGroupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.setGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
   Expression<T> shotsRefs<T extends Object>(
     Expression<T> Function($$ShotsTableAnnotationComposer a) f,
   ) {
@@ -45273,6 +46831,7 @@ class $$LightSetupsTableTableManager
             bool locationSiteId,
             bool locationBasePlanId,
             bool sceneId,
+            bool groupId,
             bool shotsRefs,
             bool lightingSetupsRefs,
           })
@@ -45305,6 +46864,9 @@ class $$LightSetupsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
                 Value<String> kind = const Value.absent(),
                 Value<int?> sceneId = const Value.absent(),
+                Value<int?> groupId = const Value.absent(),
+                Value<String?> envOverridesJson = const Value.absent(),
+                Value<int?> shootOrder = const Value.absent(),
               }) => LightSetupsCompanion(
                 id: id,
                 uid: uid,
@@ -45321,6 +46883,9 @@ class $$LightSetupsTableTableManager
                 sortOrder: sortOrder,
                 kind: kind,
                 sceneId: sceneId,
+                groupId: groupId,
+                envOverridesJson: envOverridesJson,
+                shootOrder: shootOrder,
               ),
           createCompanionCallback:
               ({
@@ -45339,6 +46904,9 @@ class $$LightSetupsTableTableManager
                 Value<int> sortOrder = const Value.absent(),
                 Value<String> kind = const Value.absent(),
                 Value<int?> sceneId = const Value.absent(),
+                Value<int?> groupId = const Value.absent(),
+                Value<String?> envOverridesJson = const Value.absent(),
+                Value<int?> shootOrder = const Value.absent(),
               }) => LightSetupsCompanion.insert(
                 id: id,
                 uid: uid,
@@ -45355,6 +46923,9 @@ class $$LightSetupsTableTableManager
                 sortOrder: sortOrder,
                 kind: kind,
                 sceneId: sceneId,
+                groupId: groupId,
+                envOverridesJson: envOverridesJson,
+                shootOrder: shootOrder,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -45370,6 +46941,7 @@ class $$LightSetupsTableTableManager
                 locationSiteId = false,
                 locationBasePlanId = false,
                 sceneId = false,
+                groupId = false,
                 shotsRefs = false,
                 lightingSetupsRefs = false,
               }) {
@@ -45455,6 +47027,21 @@ class $$LightSetupsTableTableManager
                                   )
                                   as T;
                         }
+                        if (groupId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.groupId,
+                                    referencedTable:
+                                        $$LightSetupsTableReferences
+                                            ._groupIdTable(db),
+                                    referencedColumn:
+                                        $$LightSetupsTableReferences
+                                            ._groupIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
 
                         return state;
                       },
@@ -45527,6 +47114,7 @@ typedef $$LightSetupsTableProcessedTableManager =
         bool locationSiteId,
         bool locationBasePlanId,
         bool sceneId,
+        bool groupId,
         bool shotsRefs,
         bool lightingSetupsRefs,
       })
@@ -68590,6 +70178,8 @@ class $AppDatabaseManager {
       $$LocationBasePlansTableTableManager(_db, _db.locationBasePlans);
   $$ScenesTableTableManager get scenes =>
       $$ScenesTableTableManager(_db, _db.scenes);
+  $$SetGroupsTableTableManager get setGroups =>
+      $$SetGroupsTableTableManager(_db, _db.setGroups);
   $$LightSetupsTableTableManager get lightSetups =>
       $$LightSetupsTableTableManager(_db, _db.lightSetups);
   $$ShotsTableTableManager get shots =>

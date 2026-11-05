@@ -273,4 +273,111 @@ void main() {
     )..where((s) => s.projectId.equals(target))).getSingle();
     expect(shot.cameraPlanImagePath, jsonEncode(['', 'setup:12', here]));
   });
+  group('grupos de sets (v9)', () {
+    test('grupos, cambios de entorno, orden de rodaje y modo vuelven igual',
+        () async {
+      final siteId = await db.insertSite(
+        LocationSitesCompanion.insert(
+          projectId: projectId,
+          name: 'Calle Raval',
+          setOrderMode: const Value('narrative'),
+        ),
+      );
+      final groupId = await db.insertSetGroup(
+        SetGroupsCompanion.insert(
+          projectId: projectId,
+          locationSiteId: Value(siteId),
+          name: 'Fondo fachada kebab',
+          planJson: const Value('{"version":2,"elements":[]}'),
+          sortOrder: const Value(2),
+        ),
+      );
+      await db.insertLightSetup(
+        LightSetupsCompanion.insert(
+          projectId: projectId,
+          locationSiteId: Value(siteId),
+          name: 'Setup A',
+          groupId: Value(groupId),
+          envOverridesJson: const Value('{"pared":{"hidden":true}}'),
+          shootOrder: const Value(4),
+        ),
+      );
+      await db.insertLightSetup(
+        LightSetupsCompanion.insert(projectId: projectId, name: 'Suelto'),
+      );
+
+      final bundle = await ProjectContentBundle.export(db, projectId);
+      expect(bundle['version'], 9);
+      final target = await importIntoNewProject(bundle);
+
+      final site = await (db.select(
+        db.locationSites,
+      )..where((s) => s.projectId.equals(target))).getSingle();
+      expect(site.setOrderMode, 'narrative');
+
+      final original = (await db.getSetGroupsForProject(projectId)).single;
+      final group = (await db.getSetGroupsForProject(target)).single;
+      expect(group.uid, original.uid);
+      expect(group.name, 'Fondo fachada kebab');
+      expect(group.planJson, original.planJson);
+      expect(group.sortOrder, 2);
+      expect(group.locationSiteId, site.id);
+
+      final setups = await db.getLightSetupsForProject(target);
+      final a = setups.firstWhere((s) => s.name == 'Setup A');
+      final loose = setups.firstWhere((s) => s.name == 'Suelto');
+      expect(a.groupId, group.id);
+      expect(a.envOverridesJson, '{"pared":{"hidden":true}}');
+      expect(a.shootOrder, 4);
+      expect(loose.groupId, isNull);
+      expect(loose.envOverridesJson, isNull);
+      expect(loose.shootOrder, isNull);
+    });
+
+    test('sin grupos el bundle no lleva los campos nuevos', () async {
+      await db.insertSite(
+        LocationSitesCompanion.insert(projectId: projectId, name: 'Calle'),
+      );
+      await db.insertLightSetup(
+        LightSetupsCompanion.insert(projectId: projectId, name: 'Setup A'),
+      );
+      final bundle = await ProjectContentBundle.export(db, projectId);
+      // Así la huella de los proyectos que no los usan no cambia.
+      expect(bundle.containsKey('setGroups'), isFalse);
+      final setup = (bundle['lightSetups'] as List).single as Map;
+      expect(setup.containsKey('setGroupKey'), isFalse);
+      expect(setup.containsKey('envOverridesJson'), isFalse);
+      expect(setup.containsKey('shootOrder'), isFalse);
+      final site = (bundle['locationSites'] as List).single as Map;
+      expect(site.containsKey('setOrderMode'), isFalse);
+    });
+
+    test('un bundle v8 se sigue importando', () async {
+      final bundle = <String, dynamic>{
+        'version': 8,
+        'locationSites': [
+          {'uid': 'site-uid', 'siteKey': 'site:0:Calle', 'name': 'Calle'},
+        ],
+        'lightSetups': [
+          {
+            'uid': 'setup-uid',
+            'lightSetupKey': 'lightSetup:0',
+            'siteKey': 'site:0:Calle',
+            'name': 'Setup A',
+            'planJson': null,
+            'sortOrder': 0,
+            'kind': 'planta',
+          },
+        ],
+      };
+      final target = await importIntoNewProject(bundle);
+      expect(await db.getSetGroupsForProject(target), isEmpty);
+      final setup = (await db.getLightSetupsForProject(target)).single;
+      expect(setup.name, 'Setup A');
+      expect(setup.groupId, isNull);
+      expect(setup.envOverridesJson, isNull);
+      expect(setup.shootOrder, isNull);
+      expect(setup.locationSiteId, isNotNull);
+    });
+  });
 }

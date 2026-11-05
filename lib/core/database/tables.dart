@@ -287,6 +287,27 @@ class LightSetups extends Table {
   TextColumn get kind => text().withDefault(const Constant('planta'))();
   // Escena a la que pertenece un boceto; nula = boceto libre.
   IntColumn get sceneId => integer().nullable().references(Scenes, #id)();
+  // Grupo de sets (schemaVersion 61): su luz se comparte por referencia.
+  IntColumn get groupId => integer().nullable().references(SetGroups, #id)();
+  // Cambios de entorno solo de este set, por uid: sustituye, añade o quita
+  // (`{"uid": …, "hidden": true}`) sobre el entorno de la localización.
+  TextColumn get envOverridesJson => text().nullable()();
+  // Orden de rodaje a mano dentro de la localización.
+  IntColumn get shootOrder => integer().nullable()();
+}
+
+/// Grupo de sets (schemaVersion 61), por ejemplo los del mismo fondo. Su
+/// [planJson] es la luz compartida: cambia una vez y cambia en todos.
+class SetGroups extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos: ver [newEntityUid].
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  IntColumn get locationSiteId =>
+      integer().nullable().references(LocationSites, #id)();
+  TextColumn get name => text()();
+  TextColumn get planJson => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 }
 
 class CameraPathPoints extends Table {
@@ -318,6 +339,8 @@ class LocationSites extends Table {
   RealColumn get longitude => real().nullable()();
   // Nombre del lugar elegido en el buscador: "Barcelona, Cataluña, España".
   TextColumn get placeLabel => text().nullable()();
+  // Orden de los sets (schemaVersion 61): group | narrative | manual.
+  TextColumn get setOrderMode => text().nullable()();
 }
 
 /// Imágenes de la localización contenedora (nivel sitio, no set).

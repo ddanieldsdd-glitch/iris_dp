@@ -136,7 +136,9 @@ class LukaCameraPlanExporter {
     FloorPlanRepository repo,
   ) async {
     final layers = await repo.layersForShot(shot);
-    if (layers.shot.isNotEmpty || layers.light.isNotEmpty) {
+    if (layers.shot.isNotEmpty ||
+        layers.light.isNotEmpty ||
+        layers.groupLight.isNotEmpty) {
       return (elements: layers.all, source: 'shot');
     }
 
