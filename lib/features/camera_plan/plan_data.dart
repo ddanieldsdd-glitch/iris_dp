@@ -332,6 +332,25 @@ class PlanProjectData {
     ];
   }
 
+  /// Letras de las cámaras de un plano (A, B…), sin repetir.
+  List<String> camerasOfShot(Shot shot) => {
+    for (final row in elementRows)
+      if (row.shotId == shot.id && row.type == 'camera') row.cameraLetter,
+  }.toList()..sort();
+
+  /// Planos de las escenas de una localización que aún no están en ninguno
+  /// de sus sets, en orden de guion.
+  List<Shot> shotsWithoutSetOfSite(int siteId) {
+    final sets = {for (final s in lightSetsOfSite(siteId)) s.id};
+    return _inScriptOrder(
+      shots.where((shot) {
+        final sc = scene(shot.sceneId);
+        if (sc == null || siteIdOfScene(sc) != siteId) return false;
+        return !sets.contains(shot.lightSetupId);
+      }),
+    );
+  }
+
   AnnotationDocument? _drawing(String type, int id) {
     final key = '$type:$id';
     final cached = _drawings[key];

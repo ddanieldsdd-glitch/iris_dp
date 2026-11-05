@@ -285,7 +285,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _NewSetupColumn(
+                  PlanNewSetColumn(
                     onTap: () => _newSetup(_data.set(_scene.locationId)),
                     onDrop: (shots) async => _move(
                       shots,
@@ -405,7 +405,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
       onAcceptWithDetails: (d) => _move(d.data, setup),
       builder: (context, candidate, _) => Container(
         key: ValueKey('col_${setup?.id}'),
-        width: _ShotCard.width + 20,
+        width: PlanBoardShotCard.width + 20,
         constraints: const BoxConstraints(minHeight: 150),
         decoration: BoxDecoration(
           color: candidate.isNotEmpty
@@ -503,7 +503,7 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
             for (final shot in shots)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: _ShotCard(
+                child: PlanBoardShotCard(
                   shot: shot,
                   data: _data,
                   picked: _picked.contains(shot.id),
@@ -612,11 +612,15 @@ class _MasterPlanChip extends StatelessWidget {
 
 /// La columna «+ esquema»: tocarla crea uno; soltar planos encima lo crea
 /// con ellos dentro.
-class _NewSetupColumn extends StatelessWidget {
+class PlanNewSetColumn extends StatelessWidget {
   final VoidCallback onTap;
   final ValueChanged<List<Shot>> onDrop;
 
-  const _NewSetupColumn({required this.onTap, required this.onDrop});
+  const PlanNewSetColumn({
+    super.key,
+    required this.onTap,
+    required this.onDrop,
+  });
 
   @override
   Widget build(BuildContext context) => _target(context.palette);
@@ -661,27 +665,37 @@ class _NewSetupColumn extends StatelessWidget {
 
 /// Un plano en el tablero. Se toca para abrir su planta y se arrastra para
 /// cambiarlo de esquema o de set.
-class _ShotCard extends StatelessWidget {
+class PlanBoardShotCard extends StatelessWidget {
   final Shot shot;
   final PlanProjectData data;
   final bool picked;
   final List<Shot> Function() dragged;
   final VoidCallback onOpen;
   final VoidCallback onPick;
-  final VoidCallback onSequence;
+  final VoidCallback? onSequence;
 
   /// Dibujar un boceto para este plano.
-  final VoidCallback onSketch;
+  final VoidCallback? onSketch;
 
-  const _ShotCard({
+  /// Con la escena delante del número («11·P3»): en el tablero de la
+  /// localización, donde se mezclan escenas.
+  final bool sceneTag;
+
+  /// Marca con las cámaras del plano (A, B…) o «sin cámara».
+  final bool showCameras;
+
+  const PlanBoardShotCard({
+    super.key,
     required this.shot,
     required this.data,
     required this.picked,
     required this.dragged,
     required this.onOpen,
     required this.onPick,
-    required this.onSequence,
-    required this.onSketch,
+    this.onSequence,
+    this.onSketch,
+    this.sceneTag = false,
+    this.showCameras = false,
   });
 
   static const double width = 168;
@@ -762,7 +776,12 @@ class _ShotCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('P${shot.number}', style: AppTypography.label(palette)),
+                  Text(
+                    sceneTag
+                        ? '${data.scene(shot.sceneId)?.label ?? '–'}·P${shot.number}'
+                        : 'P${shot.number}',
+                    style: AppTypography.label(palette),
+                  ),
                   if (details.isNotEmpty)
                     Text(
                       details,
@@ -772,6 +791,8 @@ class _ShotCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                  if (showCameras)
+                    PlanShotCameraBadges(cameras: data.camerasOfShot(shot)),
                 ],
               ),
             ),
@@ -786,8 +807,8 @@ class _ShotCard extends StatelessWidget {
                   'open' => onOpen(),
                   'pick' => onPick(),
                   'sketch' => sketchMenu(),
-                  'draw' => onSketch(),
-                  _ => onSequence(),
+                  'draw' => onSketch?.call(),
+                  _ => onSequence?.call(),
                 },
                 itemBuilder: (_) => [
                   const PopupMenuItem(
@@ -802,18 +823,20 @@ class _ShotCard extends StatelessWidget {
                           : 'Bocetos de planta (${entries.length})',
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'draw',
-                    child: Text('Dibujar un boceto para este plano'),
-                  ),
+                  if (onSketch != null)
+                    const PopupMenuItem(
+                      value: 'draw',
+                      child: Text('Dibujar un boceto para este plano'),
+                    ),
                   PopupMenuItem(
                     value: 'pick',
                     child: Text(picked ? 'Desmarcar' : 'Marcar para mover'),
                   ),
-                  const PopupMenuItem(
-                    value: 'sequence',
-                    child: Text('Es un plano secuencia'),
-                  ),
+                  if (onSequence != null)
+                    const PopupMenuItem(
+                      value: 'sequence',
+                      child: Text('Es un plano secuencia'),
+                    ),
                 ],
               ),
             ),
@@ -1132,6 +1155,42 @@ class _SequenceCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Las cámaras de un plano como marcas pequeñas («CAM A»), o un aviso
+/// «sin cámara» si no tiene ninguna.
+class PlanShotCameraBadges extends StatelessWidget {
+  final List<String> cameras;
+
+  const PlanShotCameraBadges({super.key, required this.cameras});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    Widget badge(String text, Color color) => Container(
+      margin: const EdgeInsets.only(top: 3, right: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.8),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+    return Wrap(
+      children: cameras.isEmpty
+          ? [badge('SIN CÁMARA', palette.warning)]
+          : [for (final c in cameras) badge('CAM $c', palette.success)],
     );
   }
 }

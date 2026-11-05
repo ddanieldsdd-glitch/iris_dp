@@ -149,7 +149,23 @@ void main() {
   testWidgets('la localización enseña sus sets, se agrupan y se reordenan', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(1400, 1000);
+    // Un plano de la localización aún sin set.
+    final loose = (await tester.runAsync(() async {
+      final scene = await db.insertScene(
+        ScenesCompanion.insert(
+          projectId: projectId,
+          number: 3,
+          name: 'Escena 3',
+          locationCanonical: 'EXT. CALLE - NOCHE',
+          locationPureName: 'CALLE',
+          locationSiteId: Value(siteId),
+        ),
+      );
+      return db.insertShot(
+        ShotsCompanion.insert(sceneId: scene, projectId: projectId, number: 4),
+      );
+    }))!;
+    tester.view.physicalSize = const Size(1600, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     Future<void> settle() async {
@@ -174,10 +190,32 @@ void main() {
     await tester.tap(find.text('CALLE').first);
     await settle();
     expect(find.text('Nuevo set'), findsOneWidget);
-    expect(find.text('Por fondo'), findsOneWidget);
+    expect(find.text('Por fondo'), findsNothing);
     expect(find.byKey(ValueKey('set-${setA.id}')), findsOneWidget);
-    expect(find.text('1·1'), findsOneWidget);
-    expect(find.text('2·1'), findsOneWidget);
+    // Los planos van como tarjetas, con su escena y su cámara.
+    expect(find.text('1·P1'), findsOneWidget);
+    expect(find.text('2·P1'), findsOneWidget);
+    expect(find.text('SIN CÁMARA'), findsNWidgets(2));
+    expect(find.text('Planos sin set'), findsOneWidget);
+
+    Future<void> dragTo(Finder from, Finder to) async {
+      final g = await tester.startGesture(tester.getCenter(from));
+      await g.moveBy(const Offset(0, 20));
+      await tester.pump();
+      await g.moveTo(tester.getCenter(to));
+      await tester.pump();
+      await g.up();
+      await settle();
+    }
+
+    // El plano sin set se arrastra al set C.
+    await dragTo(
+      find.byKey(ValueKey('site-shot-$loose')),
+      find.byKey(ValueKey('set-${setC.id}')),
+    );
+    final moved = (await tester.runAsync(() => db.getShotById(loose)))!;
+    expect(moved!.lightSetupId, setC.id);
+    expect(find.text('Planos sin set'), findsNothing);
 
     // Agrupar A y C: la luz de A pasa a ser la del grupo.
     await tester.tap(find.text('Agrupar sets…'));
@@ -212,22 +250,21 @@ void main() {
     expect(byId(setB.id).groupId, isNull);
     // La luz ya no está en el set: está en el grupo.
     expect(FloorPlanJson.decode(byId(setA.id).planJson), isEmpty);
-    expect(find.text('Fondo fachada'), findsWidgets);
-    expect(find.text('luz compartida · 1 luces'), findsOneWidget);
+    expect(find.text('Fondo fachada · luz compartida'), findsNWidgets(2));
 
-    // Orden narrativo: numerados por el guion.
-    await tester.tap(find.text('Narrativo'));
-    await settle();
+    // C se arrastra por su asa al sitio de A: el orden pasa a ser a mano.
+    await dragTo(
+      find.byKey(ValueKey('set-grip-${setC.id}')),
+      find.byKey(ValueKey('set-${setA.id}')),
+    );
     final site = (await tester.runAsync(() => db.getSiteById(siteId)))!;
-    expect(site.setOrderMode, 'narrative');
-    expect(
-      find.textContaining('1. Setup B', findRichText: true),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('2. Setup A', findRichText: true),
-      findsOneWidget,
-    );
+    expect(site.setOrderMode, 'manual');
+    final data = (await tester.runAsync(load))!;
+    final order = [
+      for (final part in data.orderedSets(siteId))
+        ...part.sets.map((s) => s.id),
+    ];
+    expect(order.indexOf(setC.id), lessThan(order.indexOf(setA.id)));
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
