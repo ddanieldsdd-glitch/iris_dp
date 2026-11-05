@@ -53,6 +53,7 @@ typedef WorkspaceScene = ({
     CameraPlanElements,
     CameraPathPoints,
     LightSetups,
+    SetGroups,
     LocationSites,
     LocationBasePlans,
     LocationImages,
@@ -587,6 +588,15 @@ class AppDatabase extends _$AppDatabase {
         // Qué imagen representa a cada plano: storyboard o referencia.
         await add(shots, shots.coverImage);
       }
+      if (from < 61) {
+        // Grupos de sets con luz compartida, cambios de entorno por set y
+        // orden de rodaje.
+        await m.createTable(setGroups);
+        await add(lightSetups, lightSetups.groupId);
+        await add(lightSetups, lightSetups.envOverridesJson);
+        await add(lightSetups, lightSetups.shootOrder);
+        await add(locationSites, locationSites.setOrderMode);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -774,6 +784,7 @@ class AppDatabase extends _$AppDatabase {
           ))
           .write(const LightingSetupsCompanion(planSetupId: Value(null)));
       await (delete(lightSetups)..where((s) => s.projectId.equals(id))).go();
+      await (delete(setGroups)..where((g) => g.projectId.equals(id))).go();
       await (delete(planImages)..where((i) => i.projectId.equals(id))).go();
       await (delete(
         locationCaptures,
@@ -902,6 +913,7 @@ class AppDatabase extends _$AppDatabase {
         await (delete(scenes)..where((s) => s.projectId.equals(id))).go();
       }
       await (delete(lightSetups)..where((s) => s.projectId.equals(id))).go();
+      await (delete(setGroups)..where((g) => g.projectId.equals(id))).go();
       // La papelera se queda: es de este equipo y sabe volver sola.
       await (delete(planImages)..where((i) => i.projectId.equals(id))).go();
       await (delete(
@@ -1108,6 +1120,23 @@ class AppDatabase extends _$AppDatabase {
       }
     }
 
+    final groupIdMap = <int, int>{};
+    for (final group in await getSetGroupsForProject(sourceId)) {
+      groupIdMap[group.id] = await insertSetGroup(
+        SetGroupsCompanion.insert(
+          projectId: newId,
+          locationSiteId: Value(
+            group.locationSiteId != null
+                ? siteIdMap[group.locationSiteId!]
+                : null,
+          ),
+          name: group.name,
+          planJson: Value(group.planJson),
+          sortOrder: Value(group.sortOrder),
+        ),
+      );
+    }
+
     final lightSetupIdMap = <int, int>{};
     for (final setup in await getLightSetupsForProject(sourceId)) {
       lightSetupIdMap[setup.id] = await insertLightSetup(
@@ -1131,6 +1160,11 @@ class AppDatabase extends _$AppDatabase {
           sketchJson: Value(setup.sketchJson),
           sketchImagePath: Value(setup.sketchImagePath),
           sortOrder: Value(setup.sortOrder),
+          groupId: Value(
+            setup.groupId != null ? groupIdMap[setup.groupId!] : null,
+          ),
+          envOverridesJson: Value(setup.envOverridesJson),
+          shootOrder: Value(setup.shootOrder),
         ),
       );
     }
@@ -1915,6 +1949,8 @@ class AppDatabase extends _$AppDatabase {
       // Los esquemas de luz de la localización pasan a plantas libres.
       await (update(lightSetups)..where((s) => s.locationSiteId.equals(id)))
           .write(const LightSetupsCompanion(locationSiteId: Value(null)));
+      await (update(setGroups)..where((g) => g.locationSiteId.equals(id)))
+          .write(const SetGroupsCompanion(locationSiteId: Value(null)));
       await (delete(locationSites)..where((s) => s.id.equals(id))).go();
     });
     if (projectId != null) await touchProjectContent(projectId);
@@ -2690,6 +2726,109 @@ class AppDatabase extends _$AppDatabase {
         .write(const LightingSetupsCompanion(planSetupId: Value(null)));
     await (delete(lightSetups)..where((s) => s.id.equals(id))).go();
     if (projectId != null) await touchProjectContent(projectId);
+  }
+
+  // ── Grupos de sets (SG.1) ──────────────
+  Stream<List<SetGroup>> watchSetGroupsForProject(int projectId) =>
+      (select(setGroups)
+            ..where((g) => g.projectId.equals(projectId))
+            ..orderBy([
+              (g) => OrderingTerm.asc(g.sortOrder),
+              (g) => OrderingTerm.asc(g.id),
+            ]))
+          .watch();
+
+  Future<List<SetGroup>> getSetGroupsForProject(int projectId) =>
+      (select(setGroups)
+            ..where((g) => g.projectId.equals(projectId))
+            ..orderBy([
+              (g) => OrderingTerm.asc(g.sortOrder),
+              (g) => OrderingTerm.asc(g.id),
+            ]))
+          .get();
+
+  Future<SetGroup?> getSetGroupById(int id) =>
+      (select(setGroups)..where((g) => g.id.equals(id))).getSingleOrNull();
+
+  Future<int> insertSetGroup(SetGroupsCompanion row) async {
+    final id = await into(setGroups).insert(row);
+    await touchProjectContent(row.projectId.value);
+    return id;
+  }
+
+  Future<void> updateSetGroup(SetGroup row) async {
+    await update(setGroups).replace(row);
+    await touchProjectContent(row.projectId);
+  }
+
+  /// La luz compartida del grupo.
+  Future<void> setSetGroupPlanJson(int groupId, String? planJson) async {
+    final group = await getSetGroupById(groupId);
+    if (group == null) return;
+    await (update(setGroups)..where((g) => g.id.equals(groupId))).write(
+      SetGroupsCompanion(planJson: Value(planJson)),
+    );
+    await touchProjectContent(group.projectId);
+  }
+
+  /// Borra el grupo. Sus sets se quedan, sin grupo.
+  Future<void> deleteSetGroup(int id) async {
+    final projectId = (await getSetGroupById(id))?.projectId;
+    await transaction(() async {
+      await (update(lightSetups)..where((s) => s.groupId.equals(id))).write(
+        const LightSetupsCompanion(groupId: Value(null)),
+      );
+      await (delete(setGroups)..where((g) => g.id.equals(id))).go();
+    });
+    if (projectId != null) await touchProjectContent(projectId);
+  }
+
+  /// Mete el set en el grupo, o lo saca con [groupId] nulo.
+  Future<void> assignLightSetupToGroup(int setupId, int? groupId) async {
+    final setup = await getLightSetupById(setupId);
+    if (setup == null) return;
+    await (update(lightSetups)..where((s) => s.id.equals(setupId))).write(
+      LightSetupsCompanion(groupId: Value(groupId)),
+    );
+    await touchProjectContent(setup.projectId);
+  }
+
+  Future<List<LightSetup>> getLightSetupsForGroup(int groupId) =>
+      (select(lightSetups)
+            ..where((s) => s.groupId.equals(groupId))
+            ..orderBy([
+              (s) => OrderingTerm.asc(s.sortOrder),
+              (s) => OrderingTerm.asc(s.id),
+            ]))
+          .get();
+
+  /// Cambios de entorno solo de este set (ver `LightSetups.envOverridesJson`).
+  Future<void> setLightSetupEnvOverrides(int setupId, String? json) async {
+    final setup = await getLightSetupById(setupId);
+    if (setup == null) return;
+    await (update(lightSetups)..where((s) => s.id.equals(setupId))).write(
+      LightSetupsCompanion(envOverridesJson: Value(json)),
+    );
+    await touchProjectContent(setup.projectId);
+  }
+
+  Future<void> setLightSetupShootOrder(int setupId, int? order) async {
+    final setup = await getLightSetupById(setupId);
+    if (setup == null) return;
+    await (update(lightSetups)..where((s) => s.id.equals(setupId))).write(
+      LightSetupsCompanion(shootOrder: Value(order)),
+    );
+    await touchProjectContent(setup.projectId);
+  }
+
+  /// Cómo se ordenan los sets de la localización: group | narrative | manual.
+  Future<void> setSiteSetOrderMode(int siteId, String? mode) async {
+    final site = await getSiteById(siteId);
+    if (site == null) return;
+    await (update(locationSites)..where((s) => s.id.equals(siteId))).write(
+      LocationSitesCompanion(setOrderMode: Value(mode)),
+    );
+    await touchProjectContent(site.projectId);
   }
 
   /// Qué imagen representa al plano: 'storyboard', 'reference' o nula (el
@@ -4811,7 +4950,7 @@ extension SceneLabel on Scene {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 60;
+const kSchemaVersion = 61;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

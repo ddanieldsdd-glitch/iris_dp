@@ -46,7 +46,11 @@ class CineTracerExportService {
 
       for (final shot in shots) {
         final layers = await FloorPlanRepository(db).layersForShot(shot);
-        final elements = <PlanElement>[...layers.light, ...layers.shot];
+        final elements = <PlanElement>[
+          ...layers.groupLight,
+          ...layers.light,
+          ...layers.shot,
+        ];
 
         for (final el in elements) {
           final block = _elementBlock(

@@ -36,4 +36,55 @@ void main() {
         .getSingle();
     expect(version.read<int>('user_version'), kSchemaVersion);
   });
+
+  test('la migración 60 → 61 añade grupos y columnas', () async {
+    final dir = Directory.systemTemp.createTempSync('iris_sg_migration');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/iris_dp.db');
+
+    // Una base del esquema 60: sin la tabla ni las columnas nuevas.
+    final fresh = AppDatabase.forTesting(NativeDatabase(file));
+    final pid = await fresh.insertProject(
+      ProjectsCompanion.insert(name: 'Kebab'),
+    );
+    final setupId = await fresh.insertLightSetup(
+      LightSetupsCompanion.insert(projectId: pid, name: 'Setup A'),
+    );
+    await fresh.customStatement('DROP TABLE set_groups');
+    for (final column in ['group_id', 'env_overrides_json', 'shoot_order']) {
+      await fresh.customStatement(
+        'ALTER TABLE light_setups DROP COLUMN $column',
+      );
+    }
+    await fresh.customStatement(
+      'ALTER TABLE location_sites DROP COLUMN set_order_mode',
+    );
+    await fresh.close();
+
+    final reopened = AppDatabase.forTesting(
+      NativeDatabase(
+        file,
+        setup: (raw) => raw.execute('PRAGMA user_version = 60'),
+      ),
+    );
+    addTearDown(reopened.close);
+
+    final setup = await reopened.getLightSetupById(setupId);
+    expect(setup?.name, 'Setup A');
+    expect(setup?.groupId, isNull);
+    final groupId = await reopened.insertSetGroup(
+      SetGroupsCompanion.insert(projectId: pid, name: 'Fondo'),
+    );
+    await reopened.assignLightSetupToGroup(setupId, groupId);
+    await reopened.setLightSetupShootOrder(setupId, 3);
+    await reopened.setLightSetupEnvOverrides(setupId, '{}');
+    final after = (await reopened.getLightSetupById(setupId))!;
+    expect(after.groupId, groupId);
+    expect(after.shootOrder, 3);
+    expect(after.envOverridesJson, '{}');
+    final version = await reopened
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    expect(version.read<int>('user_version'), 61);
+  });
 }

@@ -111,7 +111,11 @@ class ProjectContentBundle {
   /// v6: `uid` permanente de escenas, planos e imágenes.
   /// v7: también de esquemas de luz, sets, localizaciones, evidencias,
   /// pruebas de cámara, PDF anotados y muestras ópticas (sus archivos viajan).
-  static const bundleVersion = 8;
+  /// v9: grupos de sets (`setGroups`, `setGroupKey`), cambios de entorno y
+  /// orden de rodaje de cada set, y cómo ordena sus sets la localización.
+  /// Los campos nuevos solo van si tienen valor: la huella de los proyectos
+  /// que no los usan no cambia.
+  static const bundleVersion = 9;
 
   static Future<Map<String, dynamic>> export(
     AppDatabase db,
@@ -555,6 +559,12 @@ class ProjectContentBundle {
       for (var i = 0; i < lightSetupRows.length; i++)
         lightSetupRows[i].id: 'lightSetup:$i',
     };
+    final setGroupRows = await db.getSetGroupsForProject(projectId);
+    // `setGroupKey`, no `groupKey`: esa ya es la del moodboard.
+    final setGroupKeyById = {
+      for (var i = 0; i < setGroupRows.length; i++)
+        setGroupRows[i].id: 'setGroup:$i',
+    };
     for (final row in lightingSetups) {
       final planSetupId = row.remove('planSetupId') as int?;
       row['planSetupKey'] = planSetupId != null
@@ -602,6 +612,7 @@ class ProjectContentBundle {
               'latitude': s.latitude,
               'longitude': s.longitude,
               'placeLabel': s.placeLabel,
+              if (s.setOrderMode != null) 'setOrderMode': s.setOrderMode,
             },
           )
           .toList(),
@@ -627,6 +638,20 @@ class ProjectContentBundle {
             },
           )
           .toList(),
+      if (setGroupRows.isNotEmpty)
+        'setGroups': [
+          for (final g in setGroupRows)
+            {
+              'uid': g.uid,
+              'setGroupKey': setGroupKeyById[g.id],
+              'siteKey': g.locationSiteId != null
+                  ? siteKeyById[g.locationSiteId!]
+                  : null,
+              'name': g.name,
+              'planJson': g.planJson,
+              'sortOrder': g.sortOrder,
+            },
+        ],
       'lightSetups': lightSetupRows
           .map(
             (s) => {
@@ -648,6 +673,11 @@ class ProjectContentBundle {
               'sortOrder': s.sortOrder,
               'kind': s.kind,
               'sceneKey': s.sceneId != null ? sceneKeyById[s.sceneId!] : null,
+              if (s.groupId != null)
+                'setGroupKey': setGroupKeyById[s.groupId!],
+              if (s.envOverridesJson != null)
+                'envOverridesJson': s.envOverridesJson,
+              if (s.shootOrder != null) 'shootOrder': s.shootOrder,
             },
           )
           .toList(),
@@ -1631,6 +1661,7 @@ class ProjectContentBundle {
           latitude: Value((m['latitude'] as num?)?.toDouble()),
           longitude: Value((m['longitude'] as num?)?.toDouble()),
           placeLabel: Value(m['placeLabel'] as String?),
+          setOrderMode: Value(m['setOrderMode'] as String?),
         ),
       );
       siteKeyToId[m['siteKey'] as String] = id;
@@ -1679,6 +1710,24 @@ class ProjectContentBundle {
       setKeyToId[m['setKey'] as String] = id;
     }
 
+    // Grupos de sets (v9): antes que sus sets.
+    final setGroupKeyToId = <String, int>{};
+    for (final row in bundle['setGroups'] as List? ?? []) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final siteKey = m['siteKey'] as String?;
+      final id = await db.into(db.setGroups).insert(
+        SetGroupsCompanion.insert(
+          uid: bundleUid(m['uid']),
+          projectId: projectId,
+          locationSiteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
+          name: m['name'] as String? ?? 'Grupo',
+          planJson: Value(m['planJson'] as String?),
+          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+        ),
+      );
+      if (m['setGroupKey'] case final String key) setGroupKeyToId[key] = id;
+    }
+
     final lightSetupKeyToId = <String, int>{};
     final lightSetupIdByUid = <String, int>{};
     // Bocetos y su escena: las escenas llegan después.
@@ -1704,6 +1753,9 @@ class ProjectContentBundle {
           sketchImagePath: Value(m['sketchImagePath'] as String?),
           sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
           kind: Value(m['kind'] as String? ?? 'planta'),
+          groupId: Value(setGroupKeyToId[m['setGroupKey']]),
+          envOverridesJson: Value(m['envOverridesJson'] as String?),
+          shootOrder: Value(bundleInt(m['shootOrder'])),
         ),
       );
       lightSetupKeyToId[m['lightSetupKey'] as String] = id;

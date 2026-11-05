@@ -92,6 +92,7 @@ class PlanTrashService {
   static const kindSite = 'site';
   static const kindSet = 'set';
   static const kindLightSetup = 'light_setup';
+  static const kindSetGroup = 'set_group';
   static const kindPlanContents = 'plan_contents';
 
   // ─── Leer ──────────────────────────────────────────────────────────────
@@ -238,6 +239,28 @@ class PlanTrashService {
     return trashId;
   }
 
+  /// Borra el grupo de sets con su luz compartida. Sus sets se quedan, sin
+  /// grupo; al restaurarlo vuelven a él los que sigan sueltos.
+  Future<int?> deleteSetGroup(int groupId) async {
+    final group = await db.getSetGroupById(groupId);
+    if (group == null) return null;
+    final scope = await _Scope.load(db, group.projectId);
+    final payload = await _snapshot(scope, groupIds: {groupId});
+    late int trashId;
+    await db.transaction(() async {
+      trashId = await _addEntry(
+        group.projectId,
+        kind: kindSetGroup,
+        label: 'Grupo «${group.name}»',
+        detail: null,
+        payload: payload,
+      );
+      await _apply(payload);
+    });
+    await db.touchProjectContent(group.projectId);
+    return trashId;
+  }
+
   /// Vacía la planta para empezarla de cero; conserva el nombre, los planos
   /// asignados y la zona del set. Nulo si ya estaba vacía.
   Future<int?> clearPlan(FloorPlanScope scope, int id) async {
@@ -364,6 +387,7 @@ class PlanTrashService {
     Set<int> setIds = const {},
     Set<int> setupIds = const {},
     Set<int> fullShotIds = const {},
+    Set<int> groupIds = const {},
   }) async {
     final elements = fullShotIds.isEmpty
         ? const <CameraPlanElement>[]
@@ -421,6 +445,22 @@ class PlanTrashService {
       'setups': [
         for (final s in scope.setups)
           if (setupIds.contains(s.id)) s.toJson(),
+      ],
+      'groups': [
+        for (final g in scope.groups)
+          if (groupIds.contains(g.id)) g.toJson(),
+      ],
+      // Sets que se quedan, sin el grupo que se va.
+      'groupMembers': [
+        for (final s in scope.setups)
+          if (!setupIds.contains(s.id) && groupIds.contains(s.groupId))
+            {'id': s.id, 'group': s.groupId},
+      ],
+      // Grupos que se quedan, sin la localización que se va.
+      'groupSites': [
+        for (final g in scope.groups)
+          if (!groupIds.contains(g.id) && siteIds.contains(g.locationSiteId))
+            {'id': g.id, 'site': g.locationSiteId},
       ],
       'locationImages': [for (final i in locationImages) i.toJson()],
       'siteImages': [for (final i in siteImages) i.toJson()],
@@ -508,6 +548,16 @@ class PlanTrashService {
             ..where((l) => l.id.equals(row['id'] as int)))
           .write(const LightingSetupsCompanion(planSetupId: Value(null)));
     }
+    for (final row in _maps(payload['groupMembers'])) {
+      await (db.update(db.lightSetups)
+            ..where((s) => s.id.equals(row['id'] as int)))
+          .write(const LightSetupsCompanion(groupId: Value(null)));
+    }
+    for (final row in _maps(payload['groupSites'])) {
+      await (db.update(db.setGroups)
+            ..where((g) => g.id.equals(row['id'] as int)))
+          .write(const SetGroupsCompanion(locationSiteId: Value(null)));
+    }
     if (elementIds.isNotEmpty) {
       await (db.delete(
         db.cameraPathPoints,
@@ -542,6 +592,12 @@ class PlanTrashService {
       await (db.delete(
         db.lightSetups,
       )..where((s) => s.id.isIn(setupIds))).go();
+    }
+    final groupIds = _ids(payload['groups']);
+    if (groupIds.isNotEmpty) {
+      await (db.delete(
+        db.setGroups,
+      )..where((g) => g.id.isIn(groupIds))).go();
     }
     if (setIds.isNotEmpty) {
       await (db.delete(
@@ -679,6 +735,28 @@ class PlanTrashService {
                 .insert(row.toCompanion(false).copyWith(id: const Value.absent()));
     }
 
+    for (final json in _maps(payload['groups'])) {
+      var row = SetGroup.fromJson(json);
+      final existing = await _groupByUid(row.uid);
+      if (existing != null) {
+        ids.groups[row.id] = existing.id;
+        continue;
+      }
+      row = row.copyWith(
+        locationSiteId: Value(
+          row.locationSiteId == null
+              ? null
+              : await ids.site(db, row.locationSiteId!),
+        ),
+      );
+      final free = await db.getSetGroupById(row.id) == null;
+      ids.groups[row.id] = free
+          ? await db.into(db.setGroups).insert(row)
+          : await db
+                .into(db.setGroups)
+                .insert(row.toCompanion(false).copyWith(id: const Value.absent()));
+    }
+
     for (final json in _maps(payload['setups'])) {
       var row = LightSetup.fromJson(json);
       final existing = await _setupByUid(row.uid);
@@ -697,6 +775,10 @@ class PlanTrashService {
               ? null
               : await ids.set(db, row.locationBasePlanId!),
         ),
+        // Si su grupo ya no está, vuelve suelto.
+        groupId: Value(
+          row.groupId == null ? null : await ids.group(db, row.groupId!),
+        ),
       );
       final free = await db.getLightSetupById(row.id) == null;
       ids.setups[row.id] = free
@@ -704,6 +786,24 @@ class PlanTrashService {
           : await db
                 .into(db.lightSetups)
                 .insert(row.toCompanion(false).copyWith(id: const Value.absent()));
+    }
+
+    // Los sets que se quedaron vuelven a su grupo si siguen sueltos.
+    for (final row in _maps(payload['groupMembers'])) {
+      final groupId = await ids.group(db, row['group'] as int);
+      if (groupId == null) continue;
+      await (db.update(db.lightSetups)..where(
+            (s) => s.id.equals(row['id'] as int) & s.groupId.isNull(),
+          ))
+          .write(LightSetupsCompanion(groupId: Value(groupId)));
+    }
+    for (final row in _maps(payload['groupSites'])) {
+      final siteId = await ids.site(db, row['site'] as int);
+      if (siteId == null) continue;
+      await (db.update(db.setGroups)..where(
+            (g) => g.id.equals(row['id'] as int) & g.locationSiteId.isNull(),
+          ))
+          .write(SetGroupsCompanion(locationSiteId: Value(siteId)));
     }
 
     for (final json in _maps(payload['locationImages'])) {
@@ -937,6 +1037,13 @@ class PlanTrashService {
               ..limit(1))
             .getSingleOrNull();
 
+  Future<SetGroup?> _groupByUid(String? uid) async => uid == null
+      ? null
+      : (db.select(db.setGroups)
+              ..where((g) => g.uid.equals(uid))
+              ..limit(1))
+            .getSingleOrNull();
+
   static List<Map<String, dynamic>> _maps(Object? list) => [
     for (final row in list as List? ?? const [])
       Map<String, dynamic>.from(row as Map),
@@ -953,6 +1060,7 @@ class _IdMaps {
   final sites = <int, int>{};
   final sets = <int, int>{};
   final setups = <int, int>{};
+  final groups = <int, int>{};
 
   Future<int?> site(AppDatabase db, int id) async =>
       sites[id] ?? (await db.getSiteById(id))?.id;
@@ -962,6 +1070,9 @@ class _IdMaps {
 
   Future<int?> setup(AppDatabase db, int id) async =>
       setups[id] ?? (await db.getLightSetupById(id))?.id;
+
+  Future<int?> group(AppDatabase db, int id) async =>
+      groups[id] ?? (await db.getSetGroupById(id))?.id;
 }
 
 /// Todo lo del proyecto que hace falta para saber qué arrastra un borrado.
@@ -972,6 +1083,7 @@ class _Scope {
   final List<LightSetup> setups;
   final List<Scene> scenes;
   final List<Shot> shots;
+  final List<SetGroup> groups;
   final Map<int, Scene> sceneById;
 
   _Scope(
@@ -981,6 +1093,7 @@ class _Scope {
     this.setups,
     this.scenes,
     this.shots,
+    this.groups,
   ) : sceneById = {for (final s in scenes) s.id: s};
 
   static Future<_Scope> load(AppDatabase db, int projectId) async => _Scope(
@@ -996,6 +1109,7 @@ class _Scope {
       db.scenes,
     )..where((s) => s.projectId.equals(projectId))).get(),
     await db.getShotsForProject(projectId),
+    await db.getSetGroupsForProject(projectId),
   );
 
   Set<int> setIdsOfSite(int siteId) => {
