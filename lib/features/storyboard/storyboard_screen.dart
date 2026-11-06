@@ -1122,7 +1122,11 @@ class _StoryboardFrame extends ConsumerWidget {
           shot: shot,
         ),
         borderRadius: BorderRadius.circular(8),
-        child: imageArea,
+        child: ShotImagePasteTarget(
+          shot: shot,
+          target: ShotImageTarget.storyboard,
+          child: imageArea,
+        ),
       ),
     );
 

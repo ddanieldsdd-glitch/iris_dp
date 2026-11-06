@@ -170,8 +170,32 @@ void main() {
     },
   );
 
+  test('una imagen quitada no vuelve al bajar', () async {
+    final uid = await shotUid(storyboard: null);
+    final hydrate = MediaHydrateService(
+      db,
+      _FakeCloud(
+        assets: [
+          {
+            'entity_type': MediaEntityType.shotStoryboard,
+            'entity_key': mediaSlotKey(uid),
+            'delivery_url': 'https://res.cloudinary.com/x/sb',
+            'public_id': 'iris/ws/p/shot_storyboard/$uid',
+          },
+        ],
+      ),
+    );
+
+    expect(await hydrate.hydrateProject(projectId, 'cloud-1'), 0);
+    final shot = await (db.select(
+      db.shots,
+    )..where((s) => s.uid.equals(uid))).getSingle();
+    expect(shot.storyboardImagePath, isNull);
+  });
+
   test('al bajar, cada archivo va a su fila por el uid', () async {
-    final uid = await shotUid();
+    // La ruta llega del otro equipo y aquí aún no existe el archivo.
+    final uid = await shotUid(storyboard: '/Users/otro/no-existe/sb.png');
     final hydrate = MediaHydrateService(
       db,
       _FakeCloud(
@@ -242,7 +266,7 @@ void main() {
   });
 
   test('al bajar, los trazos quedan junto a su imagen', () async {
-    final uid = await shotUid();
+    final uid = await shotUid(storyboard: '/Users/otro/no-existe/sb.png');
     final dirPath = Directory.systemTemp.createTempSync('iris_strokes').path;
     final hydrate = MediaHydrateService(
       db,

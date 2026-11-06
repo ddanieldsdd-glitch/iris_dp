@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -606,12 +605,9 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     return false;
   });
 
-  /// Quita la imagen propia del storyboard.
-  Future<void> _remove() => _run(() async {
-    await _db.updateShotFields(
-      widget.shot.id,
-      const ShotsCompanion(storyboardImagePath: Value(null)),
-    );
+  /// Quita la imagen que se ve en el storyboard, sea propia o referencia.
+  Future<void> _remove(String path) => _run(() async {
+    await removeVisibleShotImage(db: _db, shot: await _current(), path: path);
     return true;
   });
 
@@ -783,7 +779,8 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                         _story
                             ? 'Es la imagen de referencia del plano. Pon '
                                   'otra aquí si el storyboard debe llevar una '
-                                  'distinta.'
+                                  'distinta. Al quitarla, se quita también '
+                                  'del guion técnico.'
                             : 'Es la imagen del storyboard. Pon otra aquí si '
                                   'la referencia debe ser distinta.',
                         style: AppTypography.caption(palette),
@@ -877,9 +874,15 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
                               ),
                             ),
                           ),
-                        if (hasOwn && _story)
+                        if (hasImage)
+                          FilledButton.tonalIcon(
+                            onPressed: _busy ? null : () => _copy(path),
+                            icon: const Icon(Icons.content_copy, size: 18),
+                            label: const Text('Copiar'),
+                          ),
+                        if (hasImage && _story)
                           TextButton.icon(
-                            onPressed: _busy ? null : _remove,
+                            onPressed: _busy ? null : () => _remove(path),
                             icon: Icon(
                               Icons.delete_outline,
                               size: 18,

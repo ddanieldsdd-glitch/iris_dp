@@ -141,7 +141,10 @@ Future<void> setPrimaryShotReference({
   final refs = await db.watchReferencesForShot(shot.id).first;
   if (!refs.any((r) => r.imagePath == imagePath)) return;
   if (shot.referenceImagePath == imagePath) return;
-  await db.updateShot(shot.copyWith(referenceImagePath: Value(imagePath)));
+  await db.updateShotFields(
+    shot.id,
+    ShotsCompanion(referenceImagePath: Value(imagePath)),
+  );
 }
 
 /// Elimina una referencia y actualiza la imagen principal si hace falta.
@@ -155,13 +158,39 @@ Future<void> deleteShotReferenceEntry({
   if (shot.referenceImagePath != reference.imagePath) return;
 
   final remaining = await db.watchReferencesForShot(shot.id).first;
-  await db.updateShot(
-    shot.copyWith(
-      referenceImagePath: remaining.isEmpty
-          ? const Value(null)
-          : Value(remaining.first.imagePath),
-    ),
+  await db.updateShotFields(
+    shot.id,
+    ShotsCompanion(referenceImagePath: Value(remaining.firstOrNull?.imagePath)),
   );
+}
+
+/// Quita del plano la imagen [path] que se está viendo, sea la propia del
+/// storyboard o una referencia. Si le quedan otras, se verá la siguiente.
+Future<void> removeVisibleShotImage({
+  required AppDatabase db,
+  required Shot shot,
+  required String path,
+}) async {
+  if (shot.storyboardImagePath == path) {
+    await db.updateShotFields(
+      shot.id,
+      const ShotsCompanion(storyboardImagePath: Value(null)),
+    );
+    return;
+  }
+  final references = await db.watchReferencesForShot(shot.id).first;
+  final reference = references.where((r) => r.imagePath == path).firstOrNull;
+  if (reference != null) {
+    await deleteShotReferenceEntry(db: db, shot: shot, reference: reference);
+  } else if (shot.referenceImagePath == path) {
+    // Principal antigua, sin fila propia en las referencias.
+    await db.updateShotFields(
+      shot.id,
+      ShotsCompanion(
+        referenceImagePath: Value(references.firstOrNull?.imagePath),
+      ),
+    );
+  }
 }
 
 /// Imágenes de referencia propias del plano, en su orden: un plano con

@@ -27,6 +27,10 @@ class MediaSlot {
 
   final String subfolder;
 
+  /// La ruta viaja con la fila, así que una casilla vacía es un archivo que
+  /// se quitó, no uno pendiente de bajar. El guion, por ejemplo, no viaja.
+  final bool emptyMeansRemoved;
+
   const MediaSlot({
     required this.entityType,
     required this.kind,
@@ -36,6 +40,7 @@ class MediaSlot {
     required this.subfolder,
     this.isList = false,
     this.nullable = true,
+    this.emptyMeansRemoved = false,
   });
 
   /// Archivos más grandes no se suben (límite de Supabase Storage).
@@ -55,6 +60,7 @@ const kMediaSlots = <MediaSlot>[
         'SELECT id, uid, storyboard_image_path AS path FROM shots '
         'WHERE project_id = ?',
     subfolder: 'storyboard',
+    emptyMeansRemoved: true,
   ),
   MediaSlot(
     entityType: MediaEntityType.shotPlanImage,
@@ -65,6 +71,7 @@ const kMediaSlots = <MediaSlot>[
         'SELECT id, uid, camera_plan_image_path AS path FROM shots '
         'WHERE project_id = ?',
     subfolder: 'camera_plans',
+    emptyMeansRemoved: true,
     // Una ruta o una lista JSON (bocetos del plano).
     isList: true,
   ),
@@ -272,4 +279,3 @@ List<String> decodeSlotPaths(String? raw) {
   }
   return [value];
 }
-

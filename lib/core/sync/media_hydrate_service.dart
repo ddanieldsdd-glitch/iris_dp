@@ -754,6 +754,16 @@ class MediaHydrateService {
 
     List<String> list() => decodeSlotPaths(raw);
 
+    // Lo quitado no se baja: si no, volvería en todos los equipos. La ruta de
+    // otro equipo se conserva hasta bajar el archivo, y una lista conserva su
+    // largo, así que aquí no falta nada por bajar.
+    if (slot.emptyMeansRemoved) {
+      final removed = slot.isList
+          ? index != null && index >= list().length
+          : raw == null || raw.isEmpty;
+      if (removed) return null;
+    }
+
     final current = slot.isList
         ? (index != null && index < list().length ? list()[index] : null)
         : raw;

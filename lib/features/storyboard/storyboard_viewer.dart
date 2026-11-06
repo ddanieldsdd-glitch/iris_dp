@@ -14,8 +14,13 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/utils/clipboard_image_reader.dart';
+import '../../core/utils/platform_keys.dart';
 import '../../core/utils/scene_format.dart';
 import '../../core/utils/shot_reference_import.dart';
+import '../../core/widgets/app_snackbar.dart';
+import '../../shared/history/edit_history.dart';
+import '../../shared/history/shot_edits.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
 import '../camera_plan/camera_plan_grouping.dart';
@@ -179,159 +184,171 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
       );
     }
 
-    return LiveEditingScope(child: CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): () =>
-            Navigator.of(context).maybePop(),
-        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-            _go(sequence, -1),
-        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-            _go(sequence, 1),
-      },
-      child: Focus(
-        autofocus: true,
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          body: SafeArea(
-            child: Column(
-              children: [
-                // Barra fija: nada de lo de abajo se le pone encima.
-                Container(
-                  color: palette.surfaceElevated,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: Row(
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Esc ${scene.label} · Plano ${shot.number}',
-                            style: AppTypography.titleMedium(palette),
+    return LiveEditingScope(
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              Navigator.of(context).maybePop(),
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+              _go(sequence, -1),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+              _go(sequence, 1),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  // Barra fija: nada de lo de abajo se le pone encima.
+                  Container(
+                    color: palette.surfaceElevated,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Esc ${scene.label} · Plano ${shot.number}',
+                              style: AppTypography.titleMedium(palette),
+                            ),
+                            Text(
+                              '${locationFromCanonical(scene.locationCanonical)}'
+                              ' · ${index + 1} de ${sequence.length}',
+                              style: AppTypography.caption(palette),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: AppSpacing.lg),
+                        if (lockedBy != null) ...[
+                          const Icon(
+                            Icons.lock_outline,
+                            size: 16,
+                            color: Color(0xFF7F77DD),
                           ),
+                          const SizedBox(width: 4),
                           Text(
-                            '${locationFromCanonical(scene.locationCanonical)}'
-                            ' · ${index + 1} de ${sequence.length}',
-                            style: AppTypography.caption(palette),
+                            'Editando en $lockedBy',
+                            style: AppTypography.caption(
+                              palette,
+                            ).copyWith(color: const Color(0xFF7F77DD)),
                           ),
+                          const SizedBox(width: AppSpacing.sm),
                         ],
-                      ),
-                      const SizedBox(width: AppSpacing.lg),
-                      if (lockedBy != null) ...[
-                        const Icon(
-                          Icons.lock_outline,
-                          size: 16,
-                          color: Color(0xFF7F77DD),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Editando en $lockedBy',
-                          style: AppTypography.caption(
-                            palette,
-                          ).copyWith(color: const Color(0xFF7F77DD)),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                      ],
-                      Expanded(
-                        child: IgnorePointer(
-                          ignoring: lockedBy != null,
-                          child: _TitleField(
-                          key: ValueKey('titulo_${shot.id}'),
-                          initial: scriptMarkupToPlain(shot.framing),
-                          // Escribiendo el título, el plano sale bloqueado en
-                          // los demás equipos.
-                          onFocusChanged: (focused) {
-                            final live = ref.read(liveEditingProvider);
-                            focused
-                                ? live.focusShot(shot.uid)
-                                : live.blurShot(shot.uid);
-                          },
-                          onChanged: (text) => db.updateShotFields(
-                            shot.id,
-                            ShotsCompanion(
-                              framing: Value(text.isEmpty ? null : text),
+                        Expanded(
+                          child: IgnorePointer(
+                            ignoring: lockedBy != null,
+                            child: _TitleField(
+                              key: ValueKey('titulo_${shot.id}'),
+                              initial: scriptMarkupToPlain(shot.framing),
+                              // Escribiendo el título, el plano sale bloqueado en
+                              // los demás equipos.
+                              onFocusChanged: (focused) {
+                                final live = ref.read(liveEditingProvider);
+                                focused
+                                    ? live.focusShot(shot.uid)
+                                    : live.blurShot(shot.uid);
+                              },
+                              onChanged: (text) => db.updateShotFields(
+                                shot.id,
+                                ShotsCompanion(
+                                  framing: Value(text.isEmpty ? null : text),
+                                ),
+                              ),
                             ),
                           ),
                         ),
+                        const SizedBox(width: AppSpacing.md),
+                        TextButton.icon(
+                          onPressed: lockedBy != null
+                              ? null
+                              : () async {
+                                  // Dibujando o cambiando la imagen, el plano
+                                  // sale bloqueado en los demás equipos.
+                                  final live = ref.read(liveEditingProvider);
+                                  live.focusShot(shot.uid);
+                                  await _openImageMenu(shot);
+                                  live.blurShot(shot.uid);
+                                },
+                          icon: const Icon(Icons.image_outlined, size: 18),
+                          label: const Text('Imagen'),
                         ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      TextButton.icon(
-                        onPressed: lockedBy != null
-                            ? null
-                            : () async {
-                                // Dibujando o cambiando la imagen, el plano
-                                // sale bloqueado en los demás equipos.
-                                final live = ref.read(liveEditingProvider);
-                                live.focusShot(shot.uid);
-                                await showShotImageMenu(
-                                  context,
-                                  shot,
-                                  target: ShotImageTarget.storyboard,
-                                );
-                                live.blurShot(shot.uid);
-                              },
-                        icon: const Icon(Icons.image_outlined, size: 18),
-                        label: const Text('Imagen'),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => showShotFramesExportSheet(
-                          context,
-                          scene: scene,
-                          shot: shot,
+                        if (_shownPath(shot) case final path?) ...[
+                          TextButton.icon(
+                            onPressed: () => _copyImage(path),
+                            icon: const Icon(Icons.content_copy, size: 18),
+                            label: const Text('Copiar'),
+                          ),
+                          TextButton.icon(
+                            onPressed: lockedBy != null
+                                ? null
+                                : () => _removeImage(shot, path),
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            label: const Text('Quitar'),
+                          ),
+                        ],
+                        TextButton.icon(
+                          onPressed: () => showShotFramesExportSheet(
+                            context,
+                            scene: scene,
+                            shot: shot,
+                          ),
+                          icon: const Icon(Icons.ios_share, size: 18),
+                          label: const Text('Exportar'),
                         ),
-                        icon: const Icon(Icons.ios_share, size: 18),
-                        label: const Text('Exportar'),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => _newShot(scene, sequence),
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Plano nuevo'),
-                      ),
-                      if (widget.onMore != null)
-                        IconButton(
-                          tooltip: 'Más opciones del plano',
-                          icon: const Icon(Icons.more_horiz),
-                          onPressed: () => widget.onMore!(shot),
+                        TextButton.icon(
+                          onPressed: () => _newShot(scene, sequence),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Plano nuevo'),
                         ),
-                      const SizedBox(width: AppSpacing.sm),
-                      FilledButton.tonalIcon(
-                        onPressed: () => Navigator.of(context).maybePop(),
-                        icon: const Icon(Icons.close, size: 18),
-                        label: const Text('Cerrar'),
-                      ),
-                    ],
+                        if (widget.onMore != null)
+                          IconButton(
+                            tooltip: 'Más opciones del plano',
+                            icon: const Icon(Icons.more_horiz),
+                            onPressed: () => widget.onMore!(shot),
+                          ),
+                        const SizedBox(width: AppSpacing.sm),
+                        FilledButton.tonalIcon(
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          icon: const Icon(Icons.close, size: 18),
+                          label: const Text('Cerrar'),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: Row(
-                    children: [
-                      _arrow(
-                        'Plano anterior (←)',
-                        Icons.chevron_left,
-                        index > 0 ? () => _go(sequence, -1) : null,
-                      ),
-                      Expanded(child: _image(shot)),
-                      _arrow(
-                        'Plano siguiente (→)',
-                        Icons.chevron_right,
-                        index < sequence.length - 1
-                            ? () => _go(sequence, 1)
-                            : null,
-                      ),
-                    ],
+                  Expanded(
+                    child: Row(
+                      children: [
+                        _arrow(
+                          'Plano anterior (←)',
+                          Icons.chevron_left,
+                          index > 0 ? () => _go(sequence, -1) : null,
+                        ),
+                        Expanded(child: _image(shot)),
+                        _arrow(
+                          'Plano siguiente (→)',
+                          Icons.chevron_right,
+                          index < sequence.length - 1
+                              ? () => _go(sequence, 1)
+                              : null,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                _strip(shot),
-              ],
+                  _strip(shot),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
   }
 
   final _zoom = TransformationController();
@@ -394,11 +411,7 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
             onSelected: (v) async {
               switch (v) {
                 case 'image':
-                  await showShotImageMenu(
-                    context,
-                    shot,
-                    target: ShotImageTarget.storyboard,
-                  );
+                  await _openImageMenu(shot);
                 case 'export':
                   await showShotFramesExportSheet(
                     context,
@@ -534,9 +547,48 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
     );
   }
 
-  Widget _compactImage(Shot shot) {
+  /// La imagen que se ve ahora del plano, si la hay.
+  String? _shownPath(Shot shot) {
     final path = _picked ?? storyboardImageOf(shot);
-    if (path == null || !File(path).existsSync()) return _image(shot);
+    return path != null && File(path).existsSync() ? path : null;
+  }
+
+  /// Tras el menú, la miniatura elegida puede ya no existir en el plano: se
+  /// vuelve a la imagen que le corresponde.
+  Future<void> _openImageMenu(Shot shot) async {
+    await showShotImageMenu(context, shot, target: ShotImageTarget.storyboard);
+    if (mounted) setState(() => _picked = null);
+  }
+
+  Future<void> _copyImage(String path) async {
+    final done = await ClipboardImageReader.copyImageFile(path);
+    if (!mounted) return;
+    AppSnackBar.show(
+      context,
+      done
+          ? 'Imagen copiada. Pégala con ${modKey}V sobre otra casilla.'
+          : 'No se ha podido copiar la imagen.',
+    );
+  }
+
+  Future<void> _removeImage(Shot shot, String path) async {
+    final db = ref.read(databaseProvider);
+    await recordShotImages(
+      db,
+      ref.read(editHistoryProvider),
+      shot.id,
+      () async {
+        final current = await db.getShotById(shot.id) ?? shot;
+        await removeVisibleShotImage(db: db, shot: current, path: path);
+      },
+      label: 'quitar imagen del plano',
+    );
+    if (mounted) setState(() => _picked = null);
+  }
+
+  Widget _compactImage(Shot shot) {
+    final path = _shownPath(shot);
+    if (path == null) return _image(shot);
     return InteractiveViewer(
       transformationController: _zoom,
       minScale: 1,
@@ -565,8 +617,8 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
 
   Widget _image(Shot shot) {
     final palette = context.palette;
-    final path = _picked ?? storyboardImageOf(shot);
-    if (path == null || !File(path).existsSync()) {
+    final path = _shownPath(shot);
+    if (path == null) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -585,11 +637,7 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
             ),
             const SizedBox(height: AppSpacing.md),
             FilledButton.icon(
-              onPressed: () => showShotImageMenu(
-                context,
-                shot,
-                target: ShotImageTarget.storyboard,
-              ),
+              onPressed: () => _openImageMenu(shot),
               icon: const Icon(Icons.image_outlined, size: 18),
               label: const Text('Elegir o dibujar una imagen'),
             ),
