@@ -64,6 +64,11 @@ class LightSource {
 
   /// Temperatura de color en kelvin.
   final double cct;
+
+  /// Color que emite un aparato RGB, 0xRRGGBB. `null` = luz blanca de
+  /// temperatura [cct]. Las gelatinas y las superficies solo mueven [cct]:
+  /// no tiñen este color.
+  final int? rgb;
   final PhotometryStatus status;
 
   /// Superficie mate (una tela, un rebote blanco): emite según la ley del
@@ -76,6 +81,7 @@ class LightSource {
     required this.beamDeg,
     this.sizeM = 0.1,
     this.cct = 5600,
+    this.rgb,
     this.status = PhotometryStatus.estimated,
     this.lambertian = false,
   });
@@ -149,6 +155,7 @@ class LightSource {
     double? beamDeg,
     double? sizeM,
     double? cct,
+    int? rgb,
     PhotometryStatus? status,
     bool? lambertian,
   }) => LightSource(
@@ -156,6 +163,7 @@ class LightSource {
     beamDeg: beamDeg ?? this.beamDeg,
     sizeM: sizeM ?? this.sizeM,
     cct: cct ?? this.cct,
+    rgb: rgb ?? this.rgb,
     status: status ?? this.status,
     lambertian: lambertian ?? this.lambertian,
   );

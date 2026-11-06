@@ -11,6 +11,7 @@ import '../plan_street.dart';
 import '../rig/plan_drape.dart';
 import '../rig/plan_rig.dart';
 import 'ambient.dart';
+import 'light_color.dart';
 import 'modifiers.dart';
 import 'photometry.dart';
 import 'plan_grip.dart';
@@ -362,9 +363,13 @@ class SceneLight {
     var candela = 0.0;
     var mired = 0.0;
     var status = first.source.status;
+    final mix = LightMix();
+    var colored = false;
     for (final part in parts) {
       candela += part.source.candela;
       mired += part.source.candela * 1e6 / part.source.cct;
+      mix.add(part.source.candela, part.source.cct, part.source.rgb);
+      colored = colored || part.source.rgb != null;
       // La suma es tan fiable como la menos fiable de sus partes.
       if (part.source.status.index > status.index) status = part.source.status;
     }
@@ -373,6 +378,7 @@ class SceneLight {
       source: first.source.copyWith(
         candela: candela,
         cct: 1e6 / (mired / candela),
+        rgb: colored ? mix.rgb : null,
         status: status,
       ),
       position: first.position,
@@ -396,7 +402,10 @@ class LightContribution {
   /// Temperatura de color con la que llega, tras lo que atraviesa.
   final double cct;
 
-  const LightContribution(this.light, this.lux, this.cct);
+  /// Color con el que llega, si es de un aparato RGB.
+  final int? rgb;
+
+  const LightContribution(this.light, this.lux, this.cct, [this.rgb]);
 }
 
 /// La planta vista por la luz: las fuentes, lo que las tapa y la escala.
@@ -433,6 +442,9 @@ class LightScene {
   final List<GripPanel> panels;
 
   /// Lomas: lo que da cota al suelo.
+  /// Si alguna fuente emite color (RGB).
+  late final bool hasColor = lights.any((l) => l.source.rgb != null);
+
   late final List<LightBlocker> hills = [
     for (final b in blockers)
       if (b.domeRadius != null) b,
@@ -1474,7 +1486,7 @@ class LightScene {
   /// Lux con los que una fuente ilumina una superficie en [centre] con
   /// normal [normal] (orientada hacia la fuente), sin contar la propia
   /// superficie como tope.
-  ({double lux, double cct})? _incident(
+  ({double lux, double cct, int? rgb})? _incident(
     SceneLight light,
     Offset centre,
     Offset normal,
@@ -1503,7 +1515,11 @@ class LightScene {
         passed.transmission *
         cos;
     if (lux < 0.5) return null;
-    return (lux: lux, cct: _shift(light.source.cct, passed.miredShift));
+    return (
+      lux: lux,
+      cct: _shift(light.source.cct, passed.miredShift),
+      rgb: light.source.rgb,
+    );
   }
 
   static double _shift(double kelvin, double mired) {
@@ -1625,6 +1641,7 @@ class LightScene {
               beamDeg: beamDeg,
               sizeM: lengthUnits * metersPerUnit,
               cct: _shift(incident.cct, mired),
+              rgb: incident.rgb,
               status: light.source.status,
               lambertian: matte,
             ),
@@ -1723,7 +1740,8 @@ class LightScene {
       final cx = p.centre.dx * m, cy = p.centre.dy * m, cz = p.centreZ;
 
       void out(double lux, double kelvin, PhotometryStatus status,
-          (double, double, double) lit, String from, {double? fromM}) {
+          (double, double, double) lit, String from,
+          {double? fromM, int? rgb}) {
         final flux =
             lux *
             (fromM == null ? areaM2 : _gatherM2(areaM2, beamDeg, fromM)) *
@@ -1742,6 +1760,7 @@ class LightScene {
               beamDeg: beamDeg,
               sizeM: math.max(p.widthUnits * m, p.heightM),
               cct: _shift(kelvin, mired),
+              rgb: rgb,
               status: status,
               lambertian: matte,
             ),
@@ -1811,6 +1830,7 @@ class LightScene {
           lit,
           light.label,
           fromM: dist,
+          rgb: light.source.rgb,
         );
       }
 
@@ -2574,17 +2594,20 @@ class LightScene {
   /// sombras salen con penumbra. El sol se mide a [sunHeightM] del suelo
   /// (en el suelo, por defecto: es donde se ve su mancha). Lo que aporta
   /// menos de [cutoff] lux ni se comprueba si está tapado.
-  ({double lux, double cct}) sampleAt(
+  ({double lux, double cct, int? rgb}) sampleAt(
     Offset point, {
     double cutoff = 0,
     double sunHeightM = 0,
   }) {
     var total = 0.0;
     var mired = 0.0;
-    void add(double lux, double kelvin) {
+    // Solo se mezclan colores si hay alguno: es lo que más cuesta aquí.
+    final mix = hasColor ? LightMix() : null;
+    void add(double lux, double kelvin, [int? rgb]) {
       if (lux <= 0) return;
       total += lux;
       mired += lux * 1e6 / (kelvin <= 0 ? 5600 : kelvin);
+      mix?.add(lux, kelvin, rgb);
     }
 
     final face = _faceAt(point);
@@ -2643,7 +2666,7 @@ class LightScene {
         }
       }
       if (keep <= 0) continue;
-      add(raw * keep, _shift(source.cct, shift));
+      add(raw * keep, _shift(source.cct, shift), source.rgb);
     }
 
     final env = ambient;
@@ -2659,7 +2682,11 @@ class LightScene {
         add(env.skyLux * _openSky(point), env.skyCct);
       }
     }
-    return (lux: total, cct: total <= 0 ? 0 : 1e6 / (mired / total));
+    return (
+      lux: total,
+      cct: total <= 0 ? 0 : 1e6 / (mired / total),
+      rgb: mix?.rgb,
+    );
   }
 
   /// Lux por debajo de los que una fuente no cuenta en el fotómetro.
@@ -2710,6 +2737,7 @@ class LightScene {
               part,
               share,
               _shift(part.source.cct, passed.miredShift),
+              part.source.rgb,
             ),
           );
         }

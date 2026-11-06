@@ -55,6 +55,7 @@ class PlanEquipment {
         PlanLight.techKey: LightTechInfo.fromCatalogType(light.lightType).name,
         PlanLight.sizeKey: kind.format.sizeM,
         LightBeam.cctKey: cct,
+        PlanLight.rgbCapableKey: isRgb(light),
         LightBeam.spreadKey: beam,
         if (focusable) ...{
           PlanLight.spotKey: spot,
@@ -76,6 +77,19 @@ class PlanEquipment {
     el.lukaCompatible = light.isLukaCompatible;
     el.lukaFixtureId = light.lukaFixtureId;
     return el;
+  }
+
+  /// Si un aparato del catálogo da color. El Excel aún no lo dice: se
+  /// deduce del modelo y de que llegue a 10 000 K, que en LED es de RGB
+  /// (y es lo que guarda el alta rápida). El STORM x llega y es bicolor.
+  static bool isRgb(Light light) {
+    if (LightKind.parse(light.lightType).technology != LightTechnology.led) {
+      return false;
+    }
+    final model = light.model.toLowerCase();
+    if (model.contains('storm')) return false;
+    return light.colorTempMax >= 10000 ||
+        RegExp(r'rgb|infinibar|[-/\d]c$').hasMatch(model);
   }
 
   /// Pone en una cámara de planta la cámara del proyecto: su sensor, para

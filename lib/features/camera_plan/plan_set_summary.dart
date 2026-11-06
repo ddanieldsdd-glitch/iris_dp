@@ -112,11 +112,10 @@ class SetSummary {
   /// «Tubo 5600K»: su nombre (o modelo, o tipo) y su temperatura.
   static String lightName(PlanElement light) {
     final base = light.customName ?? light.model ?? light.lightType?.label;
-    final source = PlanLight.of(light)?.source;
-    final kelvin = source == null ? null : (source.cct / 50).round() * 50;
+    final tone = PlanLight.of(light)?.colorLabel;
     return [
       if (base != null && base.isNotEmpty) base else 'Luz',
-      if (kelvin != null && kelvin > 0) '${kelvin}K',
+      ?tone,
     ].join(' ');
   }
 }

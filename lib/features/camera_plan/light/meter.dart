@@ -68,6 +68,9 @@ class MeterReading {
 
   /// Temperatura de color de la mezcla; `null` si no llega luz.
   final double? cct;
+
+  /// Parte de la luz viene de aparatos en color: [cct] no la describe.
+  final bool colored;
   final List<LightContribution> parts;
 
   /// Luz por la izquierda y la derecha de cámara, y por detrás del sujeto.
@@ -88,6 +91,7 @@ class MeterReading {
     required this.stopsOverTarget,
     required this.targetStop,
     required this.cct,
+    this.colored = false,
     required this.parts,
     required this.left,
     required this.right,
@@ -136,6 +140,7 @@ class MeterReading {
 
     var total = 0.0;
     var mired = 0.0;
+    var coloredLux = 0.0;
     var left = 0.0, right = 0.0, back = 0.0;
     var leftEst = false, rightEst = false, backEst = false;
     var estimated = false;
@@ -147,6 +152,7 @@ class MeterReading {
     for (final part in parts) {
       total += part.lux;
       mired += part.lux * 1e6 / part.cct;
+      if (part.rgb != null) coloredLux += part.lux;
       final est = part.light.source.status == PhotometryStatus.estimated;
       estimated = estimated || est;
       final toSource = part.light.position - point;
@@ -188,6 +194,7 @@ class MeterReading {
       stopsOverTarget: total <= 0 ? 0 : stopsBetweenApertures(stop, target),
       targetStop: target,
       cct: total <= 0 ? null : 1e6 / (mired / total),
+      colored: total > 0 && coloredLux >= total * 0.1,
       parts: parts,
       left: MeterSide(left, estimated: leftEst),
       right: MeterSide(right, estimated: rightEst),
