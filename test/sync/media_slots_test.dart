@@ -193,6 +193,52 @@ void main() {
     expect(shot.storyboardImagePath, isNull);
   });
 
+  test(
+    'un dibujo subido desde aquí y quitado no vuelve, aunque siga en disco',
+    () async {
+      // Es lo que pasaba: al quitarlo, el archivo sigue en disco y la cola
+      // recuerda que se subió desde ahí, así que se volvía a colocar.
+      final dir = await Directory.systemTemp.createTemp('quitado');
+      addTearDown(() => dir.delete(recursive: true));
+      final drawing = File('${dir.path}/dibujo.jpg')..writeAsBytesSync([1]);
+      final uid = await shotUid(storyboard: null);
+      final publicId = 'iris/ws/p/shot_storyboard/$uid';
+      await db
+          .into(db.pendingMediaUploads)
+          .insert(
+            PendingMediaUploadsCompanion.insert(
+              projectId: projectId,
+              entityType: MediaEntityType.shotStoryboard,
+              entityKey: mediaSlotKey(uid),
+              localPath: drawing.path,
+              publicId: Value(publicId),
+              status: const Value('done'),
+            ),
+          );
+      final hydrate = MediaHydrateService(
+        db,
+        _FakeCloud(
+          assets: [
+            {
+              'entity_type': MediaEntityType.shotStoryboard,
+              'entity_key': mediaSlotKey(uid),
+              'delivery_url': 'https://res.cloudinary.com/x/sb',
+              'public_id': publicId,
+            },
+          ],
+        ),
+      );
+
+      await hydrate.hydrateProject(projectId, 'cloud-1');
+      await hydrate.hydrateProject(projectId, 'cloud-1');
+
+      final shot = await (db.select(
+        db.shots,
+      )..where((s) => s.uid.equals(uid))).getSingle();
+      expect(shot.storyboardImagePath, isNull);
+    },
+  );
+
   test('al bajar, cada archivo va a su fila por el uid', () async {
     // La ruta llega del otro equipo y aquí aún no existe el archivo.
     final uid = await shotUid(storyboard: '/Users/otro/no-existe/sb.png');
