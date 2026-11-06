@@ -317,7 +317,7 @@ class TechnicalScriptScreen extends ConsumerWidget {
                   }
                   return ScriptSheet(
                     theme: theme,
-                    child: _PlanDataScope(
+                    child: PlanDataScope(
                       data: data,
                       child: _ScriptTable(data: data, settings: settings),
                     ),
@@ -441,20 +441,6 @@ Future<void> _stepHistory(
         ),
       ),
     );
-}
-
-/// Datos de plantas del proyecto, al alcance de la celda de planta sin
-/// obligar a repintar la fila entera cuando cambian.
-class _PlanDataScope extends InheritedWidget {
-  final PlanProjectData data;
-
-  const _PlanDataScope({required this.data, required super.child});
-
-  static PlanProjectData of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<_PlanDataScope>()!.data;
-
-  @override
-  bool updateShouldNotify(_PlanDataScope oldWidget) => oldWidget.data != data;
 }
 
 /// Barra de formato del guion técnico: vista, tipografía, columnas y color
@@ -2537,7 +2523,7 @@ class _PlanCell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sheet = ScriptSheet.of(context);
-    final data = _PlanDataScope.of(context);
+    final data = PlanDataScope.of(context);
     final setId = shot.locationBasePlanId ?? scene.locationId;
     final own = [...data.lightOfShot(shot), ...data.ownOfShot(shot)];
     final base = data.baseOfShot(shot);
@@ -2613,7 +2599,8 @@ class _PlanCell extends ConsumerWidget {
             elements: own,
             inherited: base,
             drawings: drawings,
-            focus: data.zoneOf(data.set(setId)),
+            focus: data.framingOf(shot).focus,
+            crop: data.framingOf(shot).crop,
             emptyIcon: Icons.videocam_outlined,
           ),
         ),
@@ -2826,7 +2813,7 @@ class _MoveAllShotsButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final others = [
-      for (final s in _PlanDataScope.of(context).scenes)
+      for (final s in PlanDataScope.of(context).scenes)
         if (s.id != scene.id && !s.offScript) s,
     ];
     return PopupMenuButton<int>(
@@ -2867,7 +2854,7 @@ class _MoveShotButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
-    final scenes = _PlanDataScope.of(context).scenes;
+    final scenes = PlanDataScope.of(context).scenes;
     final others = [
       for (final s in scenes)
         if (s.id != shot.sceneId) s,

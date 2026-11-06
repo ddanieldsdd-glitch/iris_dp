@@ -179,7 +179,7 @@ class _ShotImagePasteTargetState extends ConsumerState<ShotImagePasteTarget> {
       ShotImageTarget.reference =>
         referenceImagesOf(
               shot,
-              await db.watchReferencesForShot(shot.id).first,
+              await db.getReferencesForShot(shot.id),
             ).firstOrNull ??
             referenceImageOf(shot),
     };
@@ -534,7 +534,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
             await removeShotPlanSketch(db: _db, shot: shot, path: editing!);
           }
         case ShotImageTarget.reference:
-          final before = await _db.watchReferencesForShot(shot.id).first;
+          final before = await _db.getReferencesForShot(shot.id);
           final old = before.where((r) => r.imagePath == editing).firstOrNull;
           stored = await importShotReferenceImage(
             db: _db,
@@ -545,7 +545,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
             keepPrimary: true,
           );
           if (old != null) {
-            final after = await _db.watchReferencesForShot(shot.id).first;
+            final after = await _db.getReferencesForShot(shot.id);
             final fresh = after.where((r) => r.imagePath == stored).firstOrNull;
             if (fresh != null) {
               await reorderShotReference(

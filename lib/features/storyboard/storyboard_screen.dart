@@ -12,6 +12,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/utils/clipboard_image_reader.dart';
 import '../../core/utils/photo_source_picker.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_format.dart';
@@ -36,8 +37,13 @@ import 'storyboard_prefs.dart';
 import '../../core/settings/app_prefs.dart';
 import '../settings/settings_launcher.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../shared/history/edit_history.dart';
+import '../../shared/history/shot_edits.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
+import '../camera_plan/plan_data.dart';
+import '../camera_plan/plan_view_picker.dart';
+import '../camera_plan/shot_plan_preview.dart';
 import '../shots/shot_params_editor.dart';
 
 enum _StoryboardLayout { linear, grid, list }
@@ -71,7 +77,16 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
   AppPrefs get _prefs => AppPrefs.instance;
   bool _exporting = false;
 
-  Future<void> _exportPdf(BuildContext context) async {
+  /// Planos elegidos para exportar. Nulo: no se está seleccionando.
+  final _selection = ValueNotifier<Set<int>?>(null);
+
+  @override
+  void dispose() {
+    _selection.dispose();
+    super.dispose();
+  }
+
+  Future<void> _exportPdf(BuildContext context, {Set<int>? only}) async {
     if (_exporting) return;
     final db = ref.read(databaseProvider);
 
@@ -91,7 +106,10 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
 
       final shotsByScene = <int, List<Shot>>{};
       for (final scene in scenes) {
-        shotsByScene[scene.id] = await db.watchShotsForScene(scene.id).first;
+        final shots = await db.watchShotsForScene(scene.id).first;
+        shotsByScene[scene.id] = only == null
+            ? shots
+            : shots.where((s) => only.contains(s.id)).toList();
       }
 
       final hasShots = shotsByScene.values.any((s) => s.isNotEmpty);
@@ -188,6 +206,20 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
             onPressed: () =>
                 importFromArtemis(context, projectId: widget.projectId),
           ),
+          ValueListenableBuilder<Set<int>?>(
+            valueListenable: _selection,
+            builder: (context, selected, _) => IconButton(
+              tooltip: selected == null
+                  ? 'Elegir planos'
+                  : 'Dejar de elegir planos',
+              icon: Icon(
+                selected == null ? Icons.checklist : Icons.close,
+                color: palette.accent,
+              ),
+              onPressed: () =>
+                  _selection.value = selected == null ? <int>{} : null,
+            ),
+          ),
           IconButton(
             tooltip: 'Exportar PDF',
             icon: _exporting
@@ -267,13 +299,26 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
                         ),
                       ),
                       Expanded(
-                        child: _StoryboardBody(
+                        child: PlanDataBuilder(
                           projectId: widget.projectId,
-                          scenes: scenes,
-                          colors: colors,
-                          layout: _layout,
-                          filter: _filter,
+                          builder: (context, plans) => PlanDataScope(
+                            data: plans,
+                            child: _SelectionScope(
+                              notifier: _selection,
+                              child: _StoryboardBody(
+                                projectId: widget.projectId,
+                                scenes: scenes,
+                                colors: colors,
+                                layout: _layout,
+                                filter: _filter,
+                              ),
+                            ),
+                          ),
                         ),
+                      ),
+                      _SelectionBar(
+                        selection: _selection,
+                        onExport: (only) => _exportPdf(context, only: only),
                       ),
                     ],
                   );
@@ -283,6 +328,71 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
           );
         },
       ),
+    );
+  }
+}
+
+/// Planos elegidos, al alcance de cada tarjeta.
+class _SelectionScope extends InheritedNotifier<ValueNotifier<Set<int>?>> {
+  const _SelectionScope({required super.notifier, required super.child});
+
+  static ValueNotifier<Set<int>?> of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_SelectionScope>()!.notifier!;
+}
+
+/// Barra inferior mientras se eligen planos.
+class _SelectionBar extends StatelessWidget {
+  final ValueNotifier<Set<int>?> selection;
+  final void Function(Set<int> only) onExport;
+
+  const _SelectionBar({required this.selection, required this.onExport});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return ValueListenableBuilder<Set<int>?>(
+      valueListenable: selection,
+      builder: (context, selected, _) {
+        if (selected == null) return const SizedBox.shrink();
+        final count = selected.length;
+        return Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            color: palette.surfaceElevated,
+            border: Border(top: BorderSide(color: palette.divider)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    count == 0
+                        ? 'Toca los planos que quieres exportar'
+                        : '$count plano${count == 1 ? '' : 's'} elegido'
+                              '${count == 1 ? '' : 's'}',
+                    style: AppTypography.bodyMedium(palette),
+                  ),
+                ),
+                if (count > 0)
+                  TextButton(
+                    onPressed: () => selection.value = <int>{},
+                    child: const Text('Vaciar'),
+                  ),
+                const SizedBox(width: AppSpacing.sm),
+                FilledButton.icon(
+                  onPressed: count == 0 ? null : () => onExport(selected),
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                  label: const Text('Exportar selección'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -583,10 +693,9 @@ class _StoryboardContinuousGrid extends ConsumerWidget {
         final entries = <_GridShotEntry>[];
 
         for (final scene in scenes) {
-          final shots =
-              allShots
-                  .where((s) => s.sceneId == scene.id && _passesFilter(s))
-                  .toList();
+          final shots = allShots
+              .where((s) => s.sceneId == scene.id && _passesFilter(s))
+              .toList();
 
           for (var i = 0; i < shots.length; i++) {
             entries.add(
@@ -763,10 +872,9 @@ class _StoryboardLinearStrip extends ConsumerWidget {
         final children = <Widget>[];
 
         for (final scene in scenes) {
-          final shots =
-              allShots
-                  .where((s) => s.sceneId == scene.id && _passesFilter(s))
-                  .toList();
+          final shots = allShots
+              .where((s) => s.sceneId == scene.id && _passesFilter(s))
+              .toList();
           if (shots.isEmpty) continue;
 
           children.add(
@@ -776,7 +884,7 @@ class _StoryboardLinearStrip extends ConsumerWidget {
           for (final shot in shots) {
             children.add(
               SizedBox(
-                width: 220,
+                width: 280,
                 child: _StoryboardFrame(
                   scene: scene,
                   shot: shot,
@@ -1030,6 +1138,113 @@ class _StoryboardFrame extends ConsumerWidget {
     ].whereType<String>().join(' · ');
   }
 
+  /// Datos del plano en píldoras, para leerlos de un vistazo.
+  Widget _metaChips(BuildContext context) {
+    final palette = context.palette;
+    final items = [
+      shot.lens,
+      shot.movement,
+      shot.angle,
+      if (shot.fStop?.isNotEmpty == true) 'T${shot.fStop}',
+    ].where((v) => v != null && v.isNotEmpty).cast<String>();
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (final item in items)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: palette.surfaceOverlay,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              item,
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textPrimary, fontSize: 11),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Cambios en la imagen o los datos: si otro equipo edita el plano, se
+  /// espera a que termine.
+  bool _free(BuildContext context, WidgetRef ref) {
+    final holder = ref.read(liveEditingProvider).holderOf(shot.uid);
+    if (holder == null) return true;
+    AppSnackBar.show(
+      context,
+      'Lo está editando ${holder.device}. Podrás cambiarlo en cuanto termine.',
+    );
+    return false;
+  }
+
+  Future<void> _frameAction(
+    BuildContext context,
+    WidgetRef ref,
+    String action,
+    String? image,
+    PlanProjectData plans,
+  ) async {
+    final db = ref.read(databaseProvider);
+    switch (action) {
+      case 'image':
+        if (!_free(context, ref)) return;
+        await showShotImageMenu(
+          context,
+          shot,
+          target: ShotImageTarget.storyboard,
+        );
+      case 'copy':
+        final done =
+            image != null && await ClipboardImageReader.copyImageFile(image);
+        if (!context.mounted) return;
+        AppSnackBar.show(
+          context,
+          done
+              ? 'Imagen copiada. Pégala en otra casilla.'
+              : 'No se ha podido copiar la imagen.',
+        );
+      case 'paste':
+        if (!_free(context, ref)) return;
+        final problem = await recordShotImages(
+          db,
+          ref.read(editHistoryProvider),
+          shot.id,
+          () => pasteShotImageFromClipboard(
+            db,
+            shot,
+            target: ShotImageTarget.storyboard,
+          ),
+        );
+        if (problem != null && context.mounted) {
+          AppSnackBar.showError(context, problem);
+        }
+      case 'remove':
+        if (image == null || !_free(context, ref)) return;
+        await recordShotImages(
+          db,
+          ref.read(editHistoryProvider),
+          shot.id,
+          () async => removeVisibleShotImage(
+            db: db,
+            shot: await db.getShotById(shot.id) ?? shot,
+            path: image,
+          ),
+          label: 'quitar imagen del plano',
+        );
+      case 'params':
+        if (!_free(context, ref)) return;
+        await showShotParamsSheet(context, shot);
+      case 'section':
+        await showPlanViewPicker(context, data: plans, shot: shot);
+      case 'export':
+        await _exportFrame(context, ref);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
@@ -1037,6 +1252,16 @@ class _StoryboardFrame extends ConsumerWidget {
     final path = storyboardImageOf(shot);
     final hasImage = path != null && File(path).existsSync();
     final meta = _metaLine();
+    final plans = PlanDataScope.of(context);
+    final selection = _SelectionScope.of(context);
+    final selecting = selection.value != null;
+    final selected = selection.value?.contains(shot.id) ?? false;
+    void toggle() {
+      final next = {...?selection.value};
+      if (!next.remove(shot.id)) next.add(shot.id);
+      selection.value = next;
+    }
+
     final showSceneStrip = gridLayout && sceneStart && !sceneHeaderAbove;
     final sceneLocation = locationFromCanonical(scene.locationCanonical);
     final showSceneBadge = gridLayout || linearLayout || hasImage;
@@ -1087,6 +1312,31 @@ class _StoryboardFrame extends ConsumerWidget {
                   color: sceneColor,
                 ),
               ),
+            if (selecting)
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: Icon(
+                  selected ? Icons.check_circle : Icons.circle_outlined,
+                  color: selected ? palette.accent : Colors.white,
+                  size: 24,
+                ),
+              )
+            else
+              Positioned(
+                right: 2,
+                bottom: 2,
+                child: _FrameMenu(
+                  hasImage: hasImage,
+                  onSelected: (action) => _frameAction(
+                    context,
+                    ref,
+                    action,
+                    hasImage ? path : null,
+                    plans,
+                  ),
+                ),
+              ),
             if (hasImage)
               StreamBuilder<List<ShotReference>>(
                 stream: db.watchReferencesForShot(shot.id),
@@ -1118,11 +1368,13 @@ class _StoryboardFrame extends ConsumerWidget {
     final interactiveImage = Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => showStoryboardViewer(
-          context,
-          projectId: scene.projectId,
-          shot: shot,
-        ),
+        onTap: selecting
+            ? toggle
+            : () => showStoryboardViewer(
+                context,
+                projectId: scene.projectId,
+                shot: shot,
+              ),
         borderRadius: BorderRadius.circular(8),
         child: ShotImagePasteTarget(
           shot: shot,
@@ -1132,52 +1384,151 @@ class _StoryboardFrame extends ConsumerWidget {
       ),
     );
 
-    if (listLayout) {
-      return AppCard(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(width: 160, child: interactiveImage),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: InkWell(
-                onTap: () => _openFrameSheet(context, ref),
-                borderRadius: BorderRadius.circular(8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_title(), style: AppTypography.titleMedium(palette)),
-                    if (meta.isNotEmpty)
-                      Text(meta, style: AppTypography.bodyMedium(palette)),
-                    if (shot.action?.isNotEmpty == true) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        scriptMarkupToPlain(shot.action),
-                        style: AppTypography.caption(palette),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+    final planPreview = ShotPlanPreview(
+      shot: shot,
+      label: 'Esc ${scene.label} · Plano ${shot.number}',
+    );
+
+    Widget details({int actionLines = 3}) => InkWell(
+      onTap: selecting ? toggle : () => _openFrameSheet(context, ref),
+      borderRadius: BorderRadius.circular(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _title(),
+            style: AppTypography.titleMedium(palette),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (meta.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _metaChips(context),
+          ],
+          if (shot.action?.isNotEmpty == true) ...[
+            const SizedBox(height: 6),
+            Text(
+              scriptMarkupToPlain(shot.action),
+              style: AppTypography.bodyMedium(palette),
+              maxLines: actionLines,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
+        ],
+      ),
+    );
+
+    Widget outlined(Widget card) => selected
+        ? DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(
+              border: Border.all(color: palette.accent, width: 2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: card,
+          )
+        : card;
+
+    if (listLayout) {
+      return outlined(
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final wide = box.maxWidth >= 640;
+              if (!wide) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 3, child: interactiveImage),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          flex: 2,
+                          child: AspectRatio(
+                            aspectRatio: 4 / 3,
+                            child: planPreview,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    details(),
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 240, child: interactiveImage),
+                  const SizedBox(width: AppSpacing.sm),
+                  SizedBox(width: 180, height: 135, child: planPreview),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: details(actionLines: 4)),
+                ],
+              );
+            },
+          ),
         ),
       );
     }
 
     if (linearLayout) {
-      return AppCard(
+      return outlined(
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                interactiveImage,
+                const SizedBox(height: AppSpacing.sm),
+                SizedBox(height: 120, child: planPreview),
+                const SizedBox(height: AppSpacing.sm),
+                details(),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return outlined(
+      AppCard(
         padding: const EdgeInsets.all(AppSpacing.sm),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (showSceneStrip)
+              Container(
+                margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: sceneColor.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: sceneColor.withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  'Esc ${scene.label} · $sceneLocation',
+                  style: AppTypography.caption(palette).copyWith(
+                    color: sceneColor,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             interactiveImage,
             const SizedBox(height: AppSpacing.sm),
             InkWell(
-              onTap: () => _openFrameSheet(context, ref),
+              onTap: selecting ? toggle : () => _openFrameSheet(context, ref),
               borderRadius: BorderRadius.circular(8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1195,78 +1546,57 @@ class _StoryboardFrame extends ConsumerWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  if (shot.action?.isNotEmpty == true) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      scriptMarkupToPlain(shot.action),
-                      style: AppTypography.caption(
-                        palette,
-                      ).copyWith(color: palette.textSecondary),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
                 ],
               ),
             ),
           ],
         ),
-      );
-    }
+      ),
+    );
+  }
+}
 
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (showSceneStrip)
-            Container(
-              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: sceneColor.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: sceneColor.withValues(alpha: 0.4)),
-              ),
-              child: Text(
-                'Esc ${scene.label} · $sceneLocation',
-                style: AppTypography.caption(palette).copyWith(
-                  color: sceneColor,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 10,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          interactiveImage,
-          const SizedBox(height: AppSpacing.sm),
-          InkWell(
-            onTap: () => _openFrameSheet(context, ref),
-            borderRadius: BorderRadius.circular(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  _title(),
-                  style: AppTypography.label(palette),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (meta.isNotEmpty)
-                  Text(
-                    meta,
-                    style: AppTypography.caption(palette),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
+/// Acciones de un plano sobre su imagen.
+class _FrameMenu extends StatelessWidget {
+  final bool hasImage;
+  final ValueChanged<String> onSelected;
+
+  const _FrameMenu({required this.hasImage, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    PopupMenuItem<String> item(String value, IconData icon, String label) =>
+        PopupMenuItem(
+          value: value,
+          child: Row(
+            children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: AppSpacing.sm),
+              Text(label),
+            ],
           ),
-        ],
+        );
+
+    return PopupMenuButton<String>(
+      tooltip: 'Acciones del plano',
+      onSelected: onSelected,
+      itemBuilder: (_) => [
+        item('params', Icons.tune, 'Datos del plano'),
+        item('image', Icons.image_outlined, 'Elegir imagen…'),
+        if (hasImage) item('copy', Icons.content_copy, 'Copiar imagen'),
+        item('paste', Icons.content_paste, 'Pegar imagen'),
+        if (hasImage) item('remove', Icons.delete_outline, 'Quitar imagen'),
+        item('section', Icons.crop_free, 'Sección de la planta'),
+        item('export', Icons.ios_share_outlined, 'Exportar plano'),
+      ],
+      child: Container(
+        margin: const EdgeInsets.all(4),
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.55),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.more_horiz, size: 18, color: Colors.white),
       ),
     );
   }

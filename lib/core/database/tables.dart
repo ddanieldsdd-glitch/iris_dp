@@ -173,6 +173,9 @@ class Shots extends Table {
   // 'reference' (schemaVersion 60). Nula = el storyboard y, sin él, la
   // referencia.
   TextColumn get coverImage => text().nullable()();
+  // Sección de la planta que representa al plano, en coordenadas de la
+  // planta: {"x","y","w","h"} (schemaVersion 62). Nula = la zona de su set.
+  TextColumn get planViewJson => text().nullable()();
 }
 
 /// Documento de rodaje (Plani, jornada, referencia en set).
@@ -191,6 +194,9 @@ class ShootDocuments extends Table {
       boolean().withDefault(const Constant(true))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+  // Posición de la jornada en el plan de rodaje (schemaVersion 62). Nula =
+  // aún no se ha ordenado: va detrás, por fecha.
+  IntColumn get dayOrder => integer().nullable()();
   // Jornada de rodaje (schemaVersion 46). `technical_day` = guion técnico
   // de rodaje: fecha, lugar, orden de planos y meteorología.
   TextColumn get kind => text().withDefault(const Constant('freeform'))();

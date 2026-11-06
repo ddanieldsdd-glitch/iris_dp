@@ -1,3 +1,4 @@
+import 'shot_plan_view.dart';
 import 'floor_plan_repository.dart';
 import 'shot_route.dart';
 import 'package:flutter/material.dart';
@@ -566,6 +567,13 @@ class PlanProjectData {
 
   Rect? zoneOf(LocationBasePlan? set) => SetZone.decode(set?.sitePlacementJson);
 
+  /// Encuadre del plano en su planta: la sección elegida o, sin ella, la
+  /// zona de su set. Toda pantalla y export sale de aquí.
+  ({Rect? focus, Rect? crop}) framingOf(Shot shot) => (
+    focus: zoneOf(set(setIdOfShot(shot))),
+    crop: decodeShotPlanView(shot.planViewJson),
+  );
+
   /// Zonas marcadas sobre el plano maestro de una localización.
   List<PlanZone> zonesOfSite(int siteId) => [
     for (final set in setsOfSite(siteId))
@@ -621,6 +629,20 @@ enum SetOrderMode {
     'manual' => manual,
     _ => group,
   };
+}
+
+/// Datos de plantas del proyecto, al alcance de cada celda o tarjeta de plano
+/// sin obligar a repintar la fila entera cuando cambian.
+class PlanDataScope extends InheritedWidget {
+  final PlanProjectData data;
+
+  const PlanDataScope({super.key, required this.data, required super.child});
+
+  static PlanProjectData of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<PlanDataScope>()!.data;
+
+  @override
+  bool updateShouldNotify(PlanDataScope oldWidget) => oldWidget.data != data;
 }
 
 /// Escucha localizaciones, sets, esquemas, escenas y planos de un proyecto.

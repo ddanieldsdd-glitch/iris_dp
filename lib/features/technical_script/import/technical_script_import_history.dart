@@ -133,7 +133,7 @@ Future<int> removeDuplicateReferences(AppDatabase db, int projectId) async {
   var removed = 0;
   final shots = await db.getShotsForProject(projectId);
   for (final shot in shots) {
-    final refs = await db.watchReferencesForShot(shot.id).first;
+    final refs = await db.getReferencesForShot(shot.id);
     if (refs.length < 2) continue;
     final prints = <ShotReference, String>{};
     for (final ref in refs) {

@@ -116,7 +116,7 @@ Future<List<ShotReference>> ensureShotReferencesSynced({
   required AppDatabase db,
   required Shot shot,
 }) async {
-  var refs = await db.watchReferencesForShot(shot.id).first;
+  var refs = await db.getReferencesForShot(shot.id);
   final path = shot.referenceImagePath;
   if (path == null || !File(path).existsSync()) return refs;
   if (refs.any((r) => r.imagePath == path)) return refs;
@@ -129,7 +129,7 @@ Future<List<ShotReference>> ensureShotReferencesSynced({
       sortOrder: Value(refs.length),
     ),
   );
-  return db.watchReferencesForShot(shot.id).first;
+  return db.getReferencesForShot(shot.id);
 }
 
 /// Marca una referencia existente como imagen principal del plano.
@@ -138,7 +138,7 @@ Future<void> setPrimaryShotReference({
   required Shot shot,
   required String imagePath,
 }) async {
-  final refs = await db.watchReferencesForShot(shot.id).first;
+  final refs = await db.getReferencesForShot(shot.id);
   if (!refs.any((r) => r.imagePath == imagePath)) return;
   if (shot.referenceImagePath == imagePath) return;
   await db.updateShotFields(
@@ -157,7 +157,7 @@ Future<void> deleteShotReferenceEntry({
 
   if (shot.referenceImagePath != reference.imagePath) return;
 
-  final remaining = await db.watchReferencesForShot(shot.id).first;
+  final remaining = await db.getReferencesForShot(shot.id);
   await db.updateShotFields(
     shot.id,
     ShotsCompanion(referenceImagePath: Value(remaining.firstOrNull?.imagePath)),
@@ -178,7 +178,7 @@ Future<void> removeVisibleShotImage({
     );
     return;
   }
-  final references = await db.watchReferencesForShot(shot.id).first;
+  final references = await db.getReferencesForShot(shot.id);
   final reference = references.where((r) => r.imagePath == path).firstOrNull;
   if (reference != null) {
     await deleteShotReferenceEntry(db: db, shot: shot, reference: reference);
@@ -416,7 +416,7 @@ Future<void> reorderShotReference({
   required ShotReference reference,
   required int to,
 }) async {
-  final refs = await db.watchReferencesForShot(shot.id).first;
+  final refs = await db.getReferencesForShot(shot.id);
   final ordered = [...refs]..removeWhere((r) => r.id == reference.id);
   if (ordered.length == refs.length) return;
   ordered.insert(to.clamp(0, ordered.length), reference);

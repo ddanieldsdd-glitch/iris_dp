@@ -146,7 +146,7 @@ Future<ScriptDocRow> _docRow(
   // Todas las referencias propias; sin ninguna, la heredada del storyboard.
   final own = referenceImagesOf(
     shot,
-    await db.watchReferencesForShot(shot.id).first,
+    await db.getReferencesForShot(shot.id),
   );
   final images = <Uint8List>[];
   for (final path in !references
@@ -227,7 +227,8 @@ Future<List<Uint8List>> _planImages(
       elements: own,
       inherited: plans.baseOfShot(shot),
       drawings: drawings,
-      focus: plans.zoneOf(plans.set(plans.setIdOfShot(shot))),
+      focus: plans.framingOf(shot).focus,
+      crop: plans.framingOf(shot).crop,
     );
     if (png != null) images.add(png);
   }

@@ -314,7 +314,8 @@ class ShotSheetData {
         elements: own,
         inherited: base,
         drawings: drawings,
-        focus: plans.zoneOf(plans.set(plans.setIdOfShot(shot))),
+        focus: plans.framingOf(shot).focus,
+        crop: plans.framingOf(shot).crop,
         size: const Size(900, 640),
       );
     } catch (_) {

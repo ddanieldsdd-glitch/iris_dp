@@ -658,6 +658,8 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 300));
     });
     await settle(tester);
+    // También son dos escrituras: la de la principal sale tras repintar.
+    await flush(tester);
     // El menú sigue abierto con las que quedan.
     expect(find.byTooltip('Quitar esta imagen'), findsNWidgets(2));
     late List<ShotReference> left;

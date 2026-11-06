@@ -750,6 +750,7 @@ class ProjectContentBundle {
           if (shot.exportLayoutJson != null)
             'exportLayoutJson': shot.exportLayoutJson,
           if (shot.coverImage != null) 'coverImage': shot.coverImage,
+          if (shot.planViewJson != null) 'planViewJson': shot.planViewJson,
           if (shot.cameraPlanImagePath != null)
             'cameraPlanImagePath': _sketchLinksOut(
               shot.cameraPlanImagePath!,
@@ -796,6 +797,7 @@ class ProjectContentBundle {
               'shootToTime': d.shootToTime,
               'weatherOptionsJson': d.weatherOptionsJson,
               'weatherSnapshotJson': d.weatherSnapshotJson,
+              if (d.dayOrder != null) 'dayOrder': d.dayOrder,
             },
           )
           .toList(),
@@ -1879,6 +1881,7 @@ class ProjectContentBundle {
           ),
           cellStylesJson: Value(m['cellStylesJson'] as String?),
           exportLayoutJson: Value(m['exportLayoutJson'] as String?),
+          planViewJson: Value(m['planViewJson'] as String?),
           coverImage: Value(m['coverImage'] as String?),
           locationBasePlanId: Value(setKeyToId[m['shotSetKey']]),
           routeJson: Value(
@@ -1999,6 +2002,7 @@ class ProjectContentBundle {
           shootToTime: Value(m['shootToTime'] as String?),
           weatherOptionsJson: Value(m['weatherOptionsJson'] as String?),
           weatherSnapshotJson: Value(m['weatherSnapshotJson'] as String?),
+          dayOrder: Value(m['dayOrder'] as int?),
         ),
       );
       docKeyToId[m['documentKey'] as String] = id;

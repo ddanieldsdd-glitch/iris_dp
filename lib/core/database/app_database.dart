@@ -597,6 +597,11 @@ class AppDatabase extends _$AppDatabase {
         await add(lightSetups, lightSetups.shootOrder);
         await add(locationSites, locationSites.setOrderMode);
       }
+      if (from < 62) {
+        // Sección de planta por plano y orden de las jornadas.
+        await add(shots, shots.planViewJson);
+        await add(shootDocuments, shootDocuments.dayOrder);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -3391,6 +3396,14 @@ class AppDatabase extends _$AppDatabase {
             ..orderBy([(r) => OrderingTerm.asc(r.sortOrder)]))
           .watch();
 
+  /// Consulta directa: `watch…().first` puede devolver el último resultado
+  /// en caché si alguien más escucha, sin lo que se acaba de escribir.
+  Future<List<ShotReference>> getReferencesForShot(int shotId) =>
+      (select(shotReferences)
+            ..where((r) => r.shotId.equals(shotId))
+            ..orderBy([(r) => OrderingTerm.asc(r.sortOrder)]))
+          .get();
+
   Future<int> insertShotReference(ShotReferencesCompanion ref) =>
       into(shotReferences).insert(ref);
 
@@ -4952,7 +4965,7 @@ extension SceneLabel on Scene {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
-const kSchemaVersion = 61;
+const kSchemaVersion = 62;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

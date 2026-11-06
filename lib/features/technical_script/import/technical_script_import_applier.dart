@@ -36,7 +36,7 @@ Future<TechnicalScriptImportPlan> prepareTechnicalScriptImport({
     final shots = await db.watchShotsForScene(scene.id).first;
     shotsByScene[scene.id] = shots;
     for (final shot in shots) {
-      final refs = await db.watchReferencesForShot(shot.id).first;
+      final refs = await db.getReferencesForShot(shot.id);
       referenceHashes[shot.id] = {
         for (final path in referenceImagesOf(shot, refs)) ...[
           if (await _hashOf(path) case final hash?) hash,
@@ -434,7 +434,7 @@ Future<int> _applyReferences(
 ) async {
   if (images.isEmpty || mode == ReferenceMode.skip) return 0;
   if (mode == ReferenceMode.replace) {
-    for (final ref in await db.watchReferencesForShot(shot.id).first) {
+    for (final ref in await db.getReferencesForShot(shot.id)) {
       await db.deleteShotReference(ref.id);
     }
     await db.updateShotFields(
@@ -459,7 +459,7 @@ Future<int> _applyReferences(
   }
   if (mode == ReferenceMode.front) {
     // Las del documento delante, en su orden; las nuestras, detrás.
-    final refs = await db.watchReferencesForShot(shot.id).first;
+    final refs = await db.getReferencesForShot(shot.id);
     final ordered = [
       for (final path in added) ...refs.where((r) => r.imagePath == path),
       ...refs.where((r) => !added.contains(r.imagePath)),

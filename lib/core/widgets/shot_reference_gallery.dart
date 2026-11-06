@@ -317,7 +317,7 @@ class _ShotReferenceViewerPageState
         reference: reference,
       );
 
-      final remaining = await db.watchReferencesForShot(widget.shot.id).first;
+      final remaining = await db.getReferencesForShot(widget.shot.id);
       if (!mounted) return;
       if (remaining.isEmpty) {
         Navigator.of(context).pop();

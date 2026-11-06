@@ -138,6 +138,7 @@ void main() {
       'camera_plan_image_path',
       'export_layout_json',
       'cover_image',
+      'plan_view_json',
     };
     for (final column in db.shots.$columns) {
       if (shotColumnsAsKeys.contains(column.name)) continue;

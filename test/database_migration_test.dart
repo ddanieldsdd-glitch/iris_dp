@@ -85,6 +85,48 @@ void main() {
     final version = await reopened
         .customSelect('PRAGMA user_version')
         .getSingle();
-    expect(version.read<int>('user_version'), 61);
+    expect(version.read<int>('user_version'), kSchemaVersion);
   });
+
+  test(
+    'la migración 61 → 62 añade sección de planta y orden de jornada',
+    () async {
+      final dir = Directory.systemTemp.createTempSync('iris_ex_migration');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final file = File('${dir.path}/iris_dp.db');
+
+      final fresh = AppDatabase.forTesting(NativeDatabase(file));
+      final pid = await fresh.insertProject(
+        ProjectsCompanion.insert(name: 'Kebab'),
+      );
+      final docId = await fresh
+          .into(fresh.shootDocuments)
+          .insert(
+            ShootDocumentsCompanion.insert(projectId: pid, name: 'Jornada 1'),
+          );
+      await fresh.customStatement(
+        'ALTER TABLE shots DROP COLUMN plan_view_json',
+      );
+      await fresh.customStatement(
+        'ALTER TABLE shoot_documents DROP COLUMN day_order',
+      );
+      await fresh.close();
+
+      final reopened = AppDatabase.forTesting(
+        NativeDatabase(
+          file,
+          setup: (raw) => raw.execute('PRAGMA user_version = 61'),
+        ),
+      );
+      addTearDown(reopened.close);
+
+      final doc = await reopened.getShootDocument(docId);
+      expect(doc?.name, 'Jornada 1');
+      expect(doc?.dayOrder, isNull);
+      final version = await reopened
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      expect(version.read<int>('user_version'), kSchemaVersion);
+    },
+  );
 }

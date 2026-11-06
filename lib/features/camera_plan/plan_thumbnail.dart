@@ -21,6 +21,10 @@ class PlanThumbnail extends StatelessWidget {
   /// Zona del plano que se encuadra. Sin ella, se encuadra todo.
   final Rect? focus;
 
+  /// Sección exacta que se ve, elegida a mano: manda sobre [focus] y puede
+  /// acercar la planta tanto como haga falta.
+  final Rect? crop;
+
   /// Zonas de los sets, para el plano maestro.
   final List<PlanZone> zones;
 
@@ -40,6 +44,7 @@ class PlanThumbnail extends StatelessWidget {
     this.inherited = const [],
     this.emptyIcon = Icons.grid_on_outlined,
     this.focus,
+    this.crop,
     this.zones = const [],
     this.inheritedOpacity = 0.55,
     this.routes = const [],
@@ -86,14 +91,28 @@ class PlanThumbnail extends StatelessWidget {
     return bounds;
   }
 
+  /// Mayor acercamiento de una sección elegida a mano.
+  static const double _maxCropScale = 4;
+
   /// Escala y desplazamiento para que todo quepa en [size].
-  static ({double scale, Offset offset}) _frame(
+  static ({double scale, Offset offset}) frame(
     Size size, {
     required List<PlanElement> all,
     required Rect? focus,
     required List<PlanZone> zones,
     required Rect? drawn,
+    Rect? crop,
   }) {
+    if (crop != null) {
+      final scale = math.min(
+        _maxCropScale,
+        math.min(size.width / crop.width, size.height / crop.height),
+      );
+      return (
+        scale: scale,
+        offset: size.center(Offset.zero) - crop.center * scale,
+      );
+    }
     var bounds =
         focus ??
         (all.isNotEmpty
@@ -140,17 +159,19 @@ class PlanThumbnail extends StatelessWidget {
     List<PlanElement> inherited = const [],
     List<AnnotationDocument> drawings = const [],
     Rect? focus,
+    Rect? crop,
     Size size = const Size(640, 420),
   }) async {
     final all = [...inherited, ...elements];
     final drawn = drawingBounds(drawings);
     if (all.isEmpty && drawn == null) return null;
-    final (:scale, :offset) = _frame(
+    final (:scale, :offset) = frame(
       size,
       all: all,
       focus: focus,
       zones: const [],
       drawn: drawn,
+      crop: crop,
     );
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder, Offset.zero & size);
@@ -201,12 +222,13 @@ class PlanThumbnail extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
-        final (:scale, :offset) = _frame(
+        final (:scale, :offset) = frame(
           size,
           all: all,
           focus: focus,
           zones: zones,
           drawn: drawn,
+          crop: crop,
         );
 
         final plan = CustomPaint(

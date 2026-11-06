@@ -53,7 +53,7 @@ class _ShotFramesExportDialogState
   Future<void> _load() async {
     final db = ref.read(databaseProvider);
     final shot = await db.getShotById(widget.shot.id) ?? widget.shot;
-    final refs = await db.watchReferencesForShot(shot.id).first;
+    final refs = await db.getReferencesForShot(shot.id);
     final images = shotLayoutImages(shot, refs);
     final saved = ShotExportLayout.decode(shot.exportLayoutJson);
     if (!mounted) return;

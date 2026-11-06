@@ -1125,7 +1125,7 @@ class _OurReferences extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseProvider);
     return FutureBuilder<List<ShotReference>>(
-      future: db.watchReferencesForShot(shot.id).first,
+      future: db.getReferencesForShot(shot.id),
       builder: (context, snap) {
         final paths = referenceImagesOf(shot, snap.data ?? const []);
         if (paths.isEmpty) return const SizedBox.shrink();

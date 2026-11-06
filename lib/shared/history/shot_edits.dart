@@ -72,7 +72,7 @@ class ShotImagesSnapshot {
       reference: shot.referenceImagePath,
       storyboard: shot.storyboardImagePath,
       planSketches: shot.cameraPlanImagePath,
-      references: await db.watchReferencesForShot(shotId).first,
+      references: await db.getReferencesForShot(shotId),
     );
   }
 

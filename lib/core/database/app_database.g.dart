@@ -6819,6 +6819,17 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _planViewJsonMeta = const VerificationMeta(
+    'planViewJson',
+  );
+  @override
+  late final GeneratedColumn<String> planViewJson = GeneratedColumn<String>(
+    'plan_view_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -6852,6 +6863,7 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
     cellStylesJson,
     exportLayoutJson,
     coverImage,
+    planViewJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -7099,6 +7111,15 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         coverImage.isAcceptableOrUnknown(data['cover_image']!, _coverImageMeta),
       );
     }
+    if (data.containsKey('plan_view_json')) {
+      context.handle(
+        _planViewJsonMeta,
+        planViewJson.isAcceptableOrUnknown(
+          data['plan_view_json']!,
+          _planViewJsonMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -7232,6 +7253,10 @@ class $ShotsTable extends Shots with TableInfo<$ShotsTable, Shot> {
         DriftSqlType.string,
         data['${effectivePrefix}cover_image'],
       ),
+      planViewJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}plan_view_json'],
+      ),
     );
   }
 
@@ -7275,6 +7300,7 @@ class Shot extends DataClass implements Insertable<Shot> {
   final String? cellStylesJson;
   final String? exportLayoutJson;
   final String? coverImage;
+  final String? planViewJson;
   const Shot({
     required this.id,
     this.uid,
@@ -7307,6 +7333,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     this.cellStylesJson,
     this.exportLayoutJson,
     this.coverImage,
+    this.planViewJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -7392,6 +7419,9 @@ class Shot extends DataClass implements Insertable<Shot> {
     if (!nullToAbsent || coverImage != null) {
       map['cover_image'] = Variable<String>(coverImage);
     }
+    if (!nullToAbsent || planViewJson != null) {
+      map['plan_view_json'] = Variable<String>(planViewJson);
+    }
     return map;
   }
 
@@ -7472,6 +7502,9 @@ class Shot extends DataClass implements Insertable<Shot> {
       coverImage: coverImage == null && nullToAbsent
           ? const Value.absent()
           : Value(coverImage),
+      planViewJson: planViewJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(planViewJson),
     );
   }
 
@@ -7520,6 +7553,7 @@ class Shot extends DataClass implements Insertable<Shot> {
       cellStylesJson: serializer.fromJson<String?>(json['cellStylesJson']),
       exportLayoutJson: serializer.fromJson<String?>(json['exportLayoutJson']),
       coverImage: serializer.fromJson<String?>(json['coverImage']),
+      planViewJson: serializer.fromJson<String?>(json['planViewJson']),
     );
   }
   @override
@@ -7557,6 +7591,7 @@ class Shot extends DataClass implements Insertable<Shot> {
       'cellStylesJson': serializer.toJson<String?>(cellStylesJson),
       'exportLayoutJson': serializer.toJson<String?>(exportLayoutJson),
       'coverImage': serializer.toJson<String?>(coverImage),
+      'planViewJson': serializer.toJson<String?>(planViewJson),
     };
   }
 
@@ -7592,6 +7627,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     Value<String?> cellStylesJson = const Value.absent(),
     Value<String?> exportLayoutJson = const Value.absent(),
     Value<String?> coverImage = const Value.absent(),
+    Value<String?> planViewJson = const Value.absent(),
   }) => Shot(
     id: id ?? this.id,
     uid: uid.present ? uid.value : this.uid,
@@ -7646,6 +7682,7 @@ class Shot extends DataClass implements Insertable<Shot> {
         ? exportLayoutJson.value
         : this.exportLayoutJson,
     coverImage: coverImage.present ? coverImage.value : this.coverImage,
+    planViewJson: planViewJson.present ? planViewJson.value : this.planViewJson,
   );
   Shot copyWithCompanion(ShotsCompanion data) {
     return Shot(
@@ -7712,6 +7749,9 @@ class Shot extends DataClass implements Insertable<Shot> {
       coverImage: data.coverImage.present
           ? data.coverImage.value
           : this.coverImage,
+      planViewJson: data.planViewJson.present
+          ? data.planViewJson.value
+          : this.planViewJson,
     );
   }
 
@@ -7748,7 +7788,8 @@ class Shot extends DataClass implements Insertable<Shot> {
           ..write('storyboardImagePath: $storyboardImagePath, ')
           ..write('cellStylesJson: $cellStylesJson, ')
           ..write('exportLayoutJson: $exportLayoutJson, ')
-          ..write('coverImage: $coverImage')
+          ..write('coverImage: $coverImage, ')
+          ..write('planViewJson: $planViewJson')
           ..write(')'))
         .toString();
   }
@@ -7786,6 +7827,7 @@ class Shot extends DataClass implements Insertable<Shot> {
     cellStylesJson,
     exportLayoutJson,
     coverImage,
+    planViewJson,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -7821,7 +7863,8 @@ class Shot extends DataClass implements Insertable<Shot> {
           other.storyboardImagePath == this.storyboardImagePath &&
           other.cellStylesJson == this.cellStylesJson &&
           other.exportLayoutJson == this.exportLayoutJson &&
-          other.coverImage == this.coverImage);
+          other.coverImage == this.coverImage &&
+          other.planViewJson == this.planViewJson);
 }
 
 class ShotsCompanion extends UpdateCompanion<Shot> {
@@ -7856,6 +7899,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
   final Value<String?> cellStylesJson;
   final Value<String?> exportLayoutJson;
   final Value<String?> coverImage;
+  final Value<String?> planViewJson;
   const ShotsCompanion({
     this.id = const Value.absent(),
     this.uid = const Value.absent(),
@@ -7888,6 +7932,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.cellStylesJson = const Value.absent(),
     this.exportLayoutJson = const Value.absent(),
     this.coverImage = const Value.absent(),
+    this.planViewJson = const Value.absent(),
   });
   ShotsCompanion.insert({
     this.id = const Value.absent(),
@@ -7921,6 +7966,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     this.cellStylesJson = const Value.absent(),
     this.exportLayoutJson = const Value.absent(),
     this.coverImage = const Value.absent(),
+    this.planViewJson = const Value.absent(),
   }) : sceneId = Value(sceneId),
        projectId = Value(projectId),
        number = Value(number);
@@ -7956,6 +8002,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Expression<String>? cellStylesJson,
     Expression<String>? exportLayoutJson,
     Expression<String>? coverImage,
+    Expression<String>? planViewJson,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -7994,6 +8041,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
       if (cellStylesJson != null) 'cell_styles_json': cellStylesJson,
       if (exportLayoutJson != null) 'export_layout_json': exportLayoutJson,
       if (coverImage != null) 'cover_image': coverImage,
+      if (planViewJson != null) 'plan_view_json': planViewJson,
     });
   }
 
@@ -8029,6 +8077,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     Value<String?>? cellStylesJson,
     Value<String?>? exportLayoutJson,
     Value<String?>? coverImage,
+    Value<String?>? planViewJson,
   }) {
     return ShotsCompanion(
       id: id ?? this.id,
@@ -8062,6 +8111,7 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
       cellStylesJson: cellStylesJson ?? this.cellStylesJson,
       exportLayoutJson: exportLayoutJson ?? this.exportLayoutJson,
       coverImage: coverImage ?? this.coverImage,
+      planViewJson: planViewJson ?? this.planViewJson,
     );
   }
 
@@ -8165,6 +8215,9 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
     if (coverImage.present) {
       map['cover_image'] = Variable<String>(coverImage.value);
     }
+    if (planViewJson.present) {
+      map['plan_view_json'] = Variable<String>(planViewJson.value);
+    }
     return map;
   }
 
@@ -8201,7 +8254,8 @@ class ShotsCompanion extends UpdateCompanion<Shot> {
           ..write('storyboardImagePath: $storyboardImagePath, ')
           ..write('cellStylesJson: $cellStylesJson, ')
           ..write('exportLayoutJson: $exportLayoutJson, ')
-          ..write('coverImage: $coverImage')
+          ..write('coverImage: $coverImage, ')
+          ..write('planViewJson: $planViewJson')
           ..write(')'))
         .toString();
   }
@@ -8348,6 +8402,17 @@ class $ShootDocumentsTable extends ShootDocuments
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _dayOrderMeta = const VerificationMeta(
+    'dayOrder',
+  );
+  @override
+  late final GeneratedColumn<int> dayOrder = GeneratedColumn<int>(
+    'day_order',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _kindMeta = const VerificationMeta('kind');
   @override
   late final GeneratedColumn<String> kind = GeneratedColumn<String>(
@@ -8429,6 +8494,7 @@ class $ShootDocumentsTable extends ShootDocuments
     includeCoverInPdf,
     createdAt,
     updatedAt,
+    dayOrder,
     kind,
     locationSiteId,
     shootFromTime,
@@ -8528,6 +8594,12 @@ class $ShootDocumentsTable extends ShootDocuments
       context.handle(
         _updatedAtMeta,
         updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('day_order')) {
+      context.handle(
+        _dayOrderMeta,
+        dayOrder.isAcceptableOrUnknown(data['day_order']!, _dayOrderMeta),
       );
     }
     if (data.containsKey('kind')) {
@@ -8634,6 +8706,10 @@ class $ShootDocumentsTable extends ShootDocuments
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
       )!,
+      dayOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}day_order'],
+      ),
       kind: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}kind'],
@@ -8679,6 +8755,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
   final bool includeCoverInPdf;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int? dayOrder;
   final String kind;
   final int? locationSiteId;
   final String? shootFromTime;
@@ -8697,6 +8774,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     required this.includeCoverInPdf,
     required this.createdAt,
     required this.updatedAt,
+    this.dayOrder,
     required this.kind,
     this.locationSiteId,
     this.shootFromTime,
@@ -8724,6 +8802,9 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     map['include_cover_in_pdf'] = Variable<bool>(includeCoverInPdf);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || dayOrder != null) {
+      map['day_order'] = Variable<int>(dayOrder);
+    }
     map['kind'] = Variable<String>(kind);
     if (!nullToAbsent || locationSiteId != null) {
       map['location_site_id'] = Variable<int>(locationSiteId);
@@ -8762,6 +8843,9 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
       includeCoverInPdf: Value(includeCoverInPdf),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      dayOrder: dayOrder == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dayOrder),
       kind: Value(kind),
       locationSiteId: locationSiteId == null && nullToAbsent
           ? const Value.absent()
@@ -8800,6 +8884,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
       includeCoverInPdf: serializer.fromJson<bool>(json['includeCoverInPdf']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      dayOrder: serializer.fromJson<int?>(json['dayOrder']),
       kind: serializer.fromJson<String>(json['kind']),
       locationSiteId: serializer.fromJson<int?>(json['locationSiteId']),
       shootFromTime: serializer.fromJson<String?>(json['shootFromTime']),
@@ -8829,6 +8914,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
       'includeCoverInPdf': serializer.toJson<bool>(includeCoverInPdf),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'dayOrder': serializer.toJson<int?>(dayOrder),
       'kind': serializer.toJson<String>(kind),
       'locationSiteId': serializer.toJson<int?>(locationSiteId),
       'shootFromTime': serializer.toJson<String?>(shootFromTime),
@@ -8850,6 +8936,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     bool? includeCoverInPdf,
     DateTime? createdAt,
     DateTime? updatedAt,
+    Value<int?> dayOrder = const Value.absent(),
     String? kind,
     Value<int?> locationSiteId = const Value.absent(),
     Value<String?> shootFromTime = const Value.absent(),
@@ -8870,6 +8957,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     includeCoverInPdf: includeCoverInPdf ?? this.includeCoverInPdf,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    dayOrder: dayOrder.present ? dayOrder.value : this.dayOrder,
     kind: kind ?? this.kind,
     locationSiteId: locationSiteId.present
         ? locationSiteId.value
@@ -8908,6 +8996,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
           : this.includeCoverInPdf,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      dayOrder: data.dayOrder.present ? data.dayOrder.value : this.dayOrder,
       kind: data.kind.present ? data.kind.value : this.kind,
       locationSiteId: data.locationSiteId.present
           ? data.locationSiteId.value
@@ -8941,6 +9030,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
           ..write('includeCoverInPdf: $includeCoverInPdf, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('dayOrder: $dayOrder, ')
           ..write('kind: $kind, ')
           ..write('locationSiteId: $locationSiteId, ')
           ..write('shootFromTime: $shootFromTime, ')
@@ -8964,6 +9054,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     includeCoverInPdf,
     createdAt,
     updatedAt,
+    dayOrder,
     kind,
     locationSiteId,
     shootFromTime,
@@ -8986,6 +9077,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
           other.includeCoverInPdf == this.includeCoverInPdf &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
+          other.dayOrder == this.dayOrder &&
           other.kind == this.kind &&
           other.locationSiteId == this.locationSiteId &&
           other.shootFromTime == this.shootFromTime &&
@@ -9006,6 +9098,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
   final Value<bool> includeCoverInPdf;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<int?> dayOrder;
   final Value<String> kind;
   final Value<int?> locationSiteId;
   final Value<String?> shootFromTime;
@@ -9024,6 +9117,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
     this.includeCoverInPdf = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.dayOrder = const Value.absent(),
     this.kind = const Value.absent(),
     this.locationSiteId = const Value.absent(),
     this.shootFromTime = const Value.absent(),
@@ -9043,6 +9137,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
     this.includeCoverInPdf = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.dayOrder = const Value.absent(),
     this.kind = const Value.absent(),
     this.locationSiteId = const Value.absent(),
     this.shootFromTime = const Value.absent(),
@@ -9063,6 +9158,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
     Expression<bool>? includeCoverInPdf,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
+    Expression<int>? dayOrder,
     Expression<String>? kind,
     Expression<int>? locationSiteId,
     Expression<String>? shootFromTime,
@@ -9083,6 +9179,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
       if (includeCoverInPdf != null) 'include_cover_in_pdf': includeCoverInPdf,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (dayOrder != null) 'day_order': dayOrder,
       if (kind != null) 'kind': kind,
       if (locationSiteId != null) 'location_site_id': locationSiteId,
       if (shootFromTime != null) 'shoot_from_time': shootFromTime,
@@ -9106,6 +9203,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
     Value<bool>? includeCoverInPdf,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<int?>? dayOrder,
     Value<String>? kind,
     Value<int?>? locationSiteId,
     Value<String?>? shootFromTime,
@@ -9126,6 +9224,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
       includeCoverInPdf: includeCoverInPdf ?? this.includeCoverInPdf,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      dayOrder: dayOrder ?? this.dayOrder,
       kind: kind ?? this.kind,
       locationSiteId: locationSiteId ?? this.locationSiteId,
       shootFromTime: shootFromTime ?? this.shootFromTime,
@@ -9173,6 +9272,9 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (dayOrder.present) {
+      map['day_order'] = Variable<int>(dayOrder.value);
+    }
     if (kind.present) {
       map['kind'] = Variable<String>(kind.value);
     }
@@ -9210,6 +9312,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
           ..write('includeCoverInPdf: $includeCoverInPdf, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('dayOrder: $dayOrder, ')
           ..write('kind: $kind, ')
           ..write('locationSiteId: $locationSiteId, ')
           ..write('shootFromTime: $shootFromTime, ')
@@ -47152,6 +47255,7 @@ typedef $$ShotsTableCreateCompanionBuilder =
       Value<String?> cellStylesJson,
       Value<String?> exportLayoutJson,
       Value<String?> coverImage,
+      Value<String?> planViewJson,
     });
 typedef $$ShotsTableUpdateCompanionBuilder =
     ShotsCompanion Function({
@@ -47186,6 +47290,7 @@ typedef $$ShotsTableUpdateCompanionBuilder =
       Value<String?> cellStylesJson,
       Value<String?> exportLayoutJson,
       Value<String?> coverImage,
+      Value<String?> planViewJson,
     });
 
 final class $$ShotsTableReferences
@@ -47478,6 +47583,11 @@ class $$ShotsTableFilterComposer extends Composer<_$AppDatabase, $ShotsTable> {
 
   ColumnFilters<String> get coverImage => $composableBuilder(
     column: $table.coverImage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get planViewJson => $composableBuilder(
+    column: $table.planViewJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -47793,6 +47903,11 @@ class $$ShotsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get planViewJson => $composableBuilder(
+    column: $table.planViewJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ScenesTableOrderingComposer get sceneId {
     final $$ScenesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -48001,6 +48116,11 @@ class $$ShotsTableAnnotationComposer
 
   GeneratedColumn<String> get coverImage => $composableBuilder(
     column: $table.coverImage,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get planViewJson => $composableBuilder(
+    column: $table.planViewJson,
     builder: (column) => column,
   );
 
@@ -48242,6 +48362,7 @@ class $$ShotsTableTableManager
                 Value<String?> cellStylesJson = const Value.absent(),
                 Value<String?> exportLayoutJson = const Value.absent(),
                 Value<String?> coverImage = const Value.absent(),
+                Value<String?> planViewJson = const Value.absent(),
               }) => ShotsCompanion(
                 id: id,
                 uid: uid,
@@ -48274,6 +48395,7 @@ class $$ShotsTableTableManager
                 cellStylesJson: cellStylesJson,
                 exportLayoutJson: exportLayoutJson,
                 coverImage: coverImage,
+                planViewJson: planViewJson,
               ),
           createCompanionCallback:
               ({
@@ -48308,6 +48430,7 @@ class $$ShotsTableTableManager
                 Value<String?> cellStylesJson = const Value.absent(),
                 Value<String?> exportLayoutJson = const Value.absent(),
                 Value<String?> coverImage = const Value.absent(),
+                Value<String?> planViewJson = const Value.absent(),
               }) => ShotsCompanion.insert(
                 id: id,
                 uid: uid,
@@ -48340,6 +48463,7 @@ class $$ShotsTableTableManager
                 cellStylesJson: cellStylesJson,
                 exportLayoutJson: exportLayoutJson,
                 coverImage: coverImage,
+                planViewJson: planViewJson,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -48543,6 +48667,7 @@ typedef $$ShootDocumentsTableCreateCompanionBuilder =
       Value<bool> includeCoverInPdf,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<int?> dayOrder,
       Value<String> kind,
       Value<int?> locationSiteId,
       Value<String?> shootFromTime,
@@ -48563,6 +48688,7 @@ typedef $$ShootDocumentsTableUpdateCompanionBuilder =
       Value<bool> includeCoverInPdf,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<int?> dayOrder,
       Value<String> kind,
       Value<int?> locationSiteId,
       Value<String?> shootFromTime,
@@ -48704,6 +48830,11 @@ class $$ShootDocumentsTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get dayOrder => $composableBuilder(
+    column: $table.dayOrder,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -48863,6 +48994,11 @@ class $$ShootDocumentsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get dayOrder => $composableBuilder(
+    column: $table.dayOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get kind => $composableBuilder(
     column: $table.kind,
     builder: (column) => ColumnOrderings(column),
@@ -48983,6 +49119,9 @@ class $$ShootDocumentsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get dayOrder =>
+      $composableBuilder(column: $table.dayOrder, builder: (column) => column);
 
   GeneratedColumn<String> get kind =>
       $composableBuilder(column: $table.kind, builder: (column) => column);
@@ -49125,6 +49264,7 @@ class $$ShootDocumentsTableTableManager
                 Value<bool> includeCoverInPdf = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<int?> dayOrder = const Value.absent(),
                 Value<String> kind = const Value.absent(),
                 Value<int?> locationSiteId = const Value.absent(),
                 Value<String?> shootFromTime = const Value.absent(),
@@ -49143,6 +49283,7 @@ class $$ShootDocumentsTableTableManager
                 includeCoverInPdf: includeCoverInPdf,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                dayOrder: dayOrder,
                 kind: kind,
                 locationSiteId: locationSiteId,
                 shootFromTime: shootFromTime,
@@ -49163,6 +49304,7 @@ class $$ShootDocumentsTableTableManager
                 Value<bool> includeCoverInPdf = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<int?> dayOrder = const Value.absent(),
                 Value<String> kind = const Value.absent(),
                 Value<int?> locationSiteId = const Value.absent(),
                 Value<String?> shootFromTime = const Value.absent(),
@@ -49181,6 +49323,7 @@ class $$ShootDocumentsTableTableManager
                 includeCoverInPdf: includeCoverInPdf,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                dayOrder: dayOrder,
                 kind: kind,
                 locationSiteId: locationSiteId,
                 shootFromTime: shootFromTime,
