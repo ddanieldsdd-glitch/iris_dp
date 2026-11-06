@@ -61,6 +61,21 @@ class PlanProjectData {
          scenes: scenes,
        );
 
+  /// Todas las plantas del proyecto, de una vez, para los documentos.
+  static Future<PlanProjectData> load(AppDatabase db, int projectId) async =>
+      PlanProjectData(
+        sites: await db.watchSitesForProject(projectId).first,
+        sets: await db.watchLocationsForProject(projectId).first,
+        setups: await db.getLightSetupsForProject(projectId),
+        scenes: await db.watchScenesForProject(projectId).first,
+        shots: await db.getShotsForProject(projectId),
+        groups: await db.watchSetGroupsForProject(projectId).first,
+        elementRows: await db
+            .watchCameraPlanElementsForProject(projectId)
+            .first,
+        drawingRows: await db.watchPlanAnnotationDocuments(projectId).first,
+      );
+
   bool get isEmpty => sites.isEmpty && sets.isEmpty && setups.isEmpty;
 
   LocationSite? site(int? id) {

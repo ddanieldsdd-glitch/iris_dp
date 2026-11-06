@@ -9,6 +9,7 @@ import '../../shared/annotations/annotation_canvas.dart';
 import '../../shared/annotations/annotation_document.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
+import 'plan_images.dart';
 import 'plan_segment.dart';
 
 /// Miniatura de una planta, pintada con el mismo painter del editor y
@@ -161,20 +162,39 @@ class PlanThumbnail extends StatelessWidget {
     Rect? focus,
     Rect? crop,
     Size size = const Size(640, 420),
+    List<PlanZone> zones = const [],
+    List<List<Offset>> routes = const [],
+    List<PlanImageDraw> images = const [],
+    ui.Image? background,
+    Rect? backgroundRect,
+    double backgroundOpacity = 0.85,
+    double pixelRatio = 1,
   }) async {
     final all = [...inherited, ...elements];
-    final drawn = drawingBounds(drawings);
-    if (all.isEmpty && drawn == null) return null;
+    var drawn = drawingBounds(drawings);
+    if (all.isEmpty && zones.isEmpty && drawn == null) {
+      // Solo hay imágenes: son ellas las que se encuadran.
+      for (final image in images) {
+        drawn = drawn == null ? image.rect : drawn.expandToInclude(image.rect);
+      }
+      if (background != null && backgroundRect != null) {
+        drawn = drawn == null
+            ? backgroundRect
+            : drawn.expandToInclude(backgroundRect);
+      }
+    }
+    if (all.isEmpty && zones.isEmpty && drawn == null) return null;
     final (:scale, :offset) = frame(
       size,
       all: all,
       focus: focus,
-      zones: const [],
+      zones: zones,
       drawn: drawn,
       crop: crop,
     );
     final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder, Offset.zero & size);
+    final canvas = Canvas(recorder, Offset.zero & (size * pixelRatio));
+    canvas.scale(pixelRatio);
     canvas.drawRect(Offset.zero & size, Paint()..color = Colors.white);
     canvas.clipRect(Offset.zero & size);
     CameraPlanPainter(
@@ -185,6 +205,11 @@ class PlanThumbnail extends StatelessWidget {
       palette: AppPalette.light,
       scale: scale,
       offset: offset,
+      zones: zones,
+      images: images,
+      backgroundImage: background,
+      backgroundRect: backgroundRect,
+      backgroundOpacity: backgroundOpacity,
     ).paint(canvas, size);
     for (final drawing in drawings) {
       AnnotationPainter(
@@ -196,9 +221,17 @@ class PlanThumbnail extends StatelessWidget {
         ),
       ).paint(canvas, size);
     }
+    if (routes.isNotEmpty) {
+      _RoutePainter(
+        routes: routes,
+        scale: scale,
+        offset: offset,
+        color: AppPalette.light.accent,
+      ).paint(canvas, size);
+    }
     final image = await recorder.endRecording().toImage(
-      size.width.round(),
-      size.height.round(),
+      (size.width * pixelRatio).round(),
+      (size.height * pixelRatio).round(),
     );
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();

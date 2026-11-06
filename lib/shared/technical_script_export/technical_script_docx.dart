@@ -217,12 +217,34 @@ class TechnicalScriptDocxExporter {
         '${_runs('ÍNDICE', size: 18, markup: false)}</w:p>',
       );
       for (final (i, section) in doc.sections.indexed) {
+        if (section.dayHeading != null) {
+          body.write(
+            _paragraph(
+              _runs(section.dayHeading!, size: 11, bold: true, markup: false),
+            ),
+          );
+        }
         body.write(_indexLine(i, section.indexText, pages[i], contentWidth));
       }
       body.write('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
     }
 
     for (final (sectionIndex, section) in doc.sections.indexed) {
+      if (section.dayHeading != null) {
+        if (sectionIndex > 0) {
+          body.write('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
+        }
+        body.write(
+          _paragraph(
+            _runs(section.dayHeading!, size: 14, bold: true, markup: false),
+          ),
+        );
+        if (section.dayDetail != null) {
+          body.write(
+            _paragraph(_runs(section.dayDetail!, size: 9, markup: false)),
+          );
+        }
+      }
       // El encabezado va con su tabla y es el destino de su línea del índice.
       final heading = _runs(section.title, size: 11, bold: true, markup: false);
       final name = _bookmark(sectionIndex);

@@ -223,10 +223,43 @@ class TechnicalScriptPdfExporter {
               style: const pw.TextStyle(fontSize: 18, color: _ink),
             ),
             pw.SizedBox(height: 6),
-            for (var i = 0; i < doc.sections.length; i++) indexLine(i),
+            for (final (i, section) in doc.sections.indexed) ...[
+              if (section.dayHeading != null)
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(top: 8, bottom: 2),
+                  child: pw.Text(
+                    section.dayHeading!,
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                      color: _ink,
+                    ),
+                  ),
+                ),
+              indexLine(i),
+            ],
             pw.NewPage(),
           ],
           for (final (i, section) in doc.sections.indexed) ...[
+            if (section.dayHeading != null) ...[
+              if (i > 0) pw.NewPage(),
+              pw.Text(
+                section.dayHeading!,
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: _ink,
+                ),
+              ),
+              if (section.dayDetail != null) ...[
+                pw.SizedBox(height: 3),
+                pw.Text(
+                  section.dayDetail!,
+                  style: const pw.TextStyle(fontSize: 9, color: _ink),
+                ),
+              ],
+              pw.SizedBox(height: 10),
+            ],
             heading(i),
             pw.SizedBox(height: 4),
             pw.Table(

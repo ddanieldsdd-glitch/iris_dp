@@ -14,6 +14,7 @@ import '../../core/weather/weather_models.dart';
 import '../../core/weather/weather_service.dart';
 import '../../core/weather/weather_summary.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
+import '../export_center/export_selection.dart';
 import '../camera_plan/plan_data.dart';
 import '../camera_plan/plan_thumbnail.dart';
 import '../shoot_documents/shoot_day_on_set.dart';
@@ -201,15 +202,7 @@ Future<PlanProjectData?> _loadPlans(
   Set<String> hidden,
 ) async {
   if (hidden.contains('planta')) return null;
-  return PlanProjectData(
-    sites: await db.watchSitesForProject(projectId).first,
-    sets: await db.watchLocationsForProject(projectId).first,
-    setups: await db.getLightSetupsForProject(projectId),
-    scenes: await db.watchScenesForProject(projectId).first,
-    shots: await db.getShotsForProject(projectId),
-    elementRows: await db.watchCameraPlanElementsForProject(projectId).first,
-    drawingRows: await db.watchPlanAnnotationDocuments(projectId).first,
-  );
+  return PlanProjectData.load(db, projectId);
 }
 
 /// Lo que sale en la celda de planta de un plano: su planta dibujada, si
@@ -343,109 +336,166 @@ Future<TechnicalScriptDoc?> buildShootDayScriptDoc(
   TechnicalScriptSettings settings, {
   Set<String>? hiddenColumns,
 }) async {
-  final hidden = hiddenColumns ?? _screenHidden(settings);
   final day = await db.getShootDocument(documentId);
   if (day == null) return null;
-  final project = await db.getProject(day.projectId);
-  final blocks = await db.getBlocksForShootDocument(documentId);
-  final scenes = await db.watchScenesForProject(day.projectId).first;
-  final shots = await db.getShotsForProject(day.projectId);
-  final sites = await db.watchSitesForProject(day.projectId).first;
-  final sets = await db.watchLocationsForProject(day.projectId).first;
+  final source = await ExportSource.load(db, day.projectId);
+  if (source == null) return null;
+  final sections = resolveExportSections(
+    source,
+    ExportSelection(
+      scope: ExportScope.days,
+      blockIds: {
+        for (final b
+            in source.plan.blocksByDay[documentId] ??
+                const <ShootDocumentBlock>[])
+          b.id,
+      },
+    ),
+  );
+  return buildScriptDocFor(
+    db,
+    source,
+    sections.isEmpty ? [ExportDaySection(day, const [])] : sections,
+    settings,
+    hiddenColumns: hiddenColumns,
+  );
+}
+
+/// Guion técnico de lo resuelto en el centro de exportación.
+///
+/// Con jornadas lleva la columna ORDEN y cada día empieza en su página; una
+/// sola jornada pone sus datos arriba, como su documento.
+Future<TechnicalScriptDoc?> buildScriptDocFor(
+  AppDatabase db,
+  ExportSource source,
+  List<ExportDaySection> sections,
+  TechnicalScriptSettings settings, {
+  Set<String>? hiddenColumns,
+}) async {
+  final hidden = hiddenColumns ?? _screenHidden(settings);
+  final projectId = source.project.id;
+  final sites = await db.watchSitesForProject(projectId).first;
+  final sets = await db.watchLocationsForProject(projectId).first;
   final colors = ProjectColorScheme.resolve(
     sites: sites,
     sets: sets,
-    scenes: scenes,
+    scenes: source.scenes,
   );
+  // El documento es siempre en hoja blanca, se vea como se vea la pantalla.
   final sheet = ScriptSheetTheme.resolve(
     settings.copyWith(view: ScriptView.sheet),
     AppPalette.dark,
   );
-  final plans = await _loadPlans(db, day.projectId, hidden);
-  final sceneById = {for (final s in scenes) s.id: s};
-  final shotById = {for (final s in shots) s.id: s};
-  final site = sites.where((s) => s.id == day.locationSiteId).firstOrNull;
+  final plans = await _loadPlans(db, projectId, hidden);
+  final byDays = sections.any((s) => s.day != null);
+  final oneDay = byDays && sections.length == 1;
 
-  final sections = <ScriptDocSection>[];
-  Scene? current;
-  var rows = <ScriptDocRow>[];
-  var tract = <Shot>[];
-  var order = 0;
-  void close() {
-    final scene = current;
-    if (scene == null || rows.isEmpty) return;
-    sections.add(
-      ScriptDocSection(
-        title: '${scene.label}. ${scene.locationCanonical}',
-        indexLabel: _indexLabel(scene, tract),
-        headerFill: _rgb(sheet.headerFill(colors.sceneColor(scene))),
-        rows: rows,
-      ),
-    );
-    rows = <ScriptDocRow>[];
-    tract = <Shot>[];
-  }
-
-  for (final block in blocks) {
-    final shot = shotById[block.shotId];
-    if (shot == null) continue;
-    final scene = sceneById[shot.sceneId];
-    if (scene == null) continue;
-    if (current?.id != scene.id) {
-      close();
-      current = scene;
-    }
-    order++;
-    tract.add(shot);
-    rows.add(
-      await _docRow(
-        db,
-        scene,
-        shot,
-        sheet,
-        order: order,
-        orderNote: switch (OnSetMark.of(block).status) {
-          OnSetStatus.done => '**HECHO**',
-          OnSetStatus.dropped => 'DESCART.',
-          OnSetStatus.pending => null,
-        },
-        plans: plans,
-        planView: settings.planView,
-        storyboard: !hidden.contains('story'),
-        references: !hidden.contains('ref'),
-      ),
-    );
-  }
-  close();
-
-  final weather = shootDayWeather(day, site);
-  final place = [
-    if (site != null) site.name,
-    if (site?.placeLabel != null && site!.placeLabel!.trim().isNotEmpty)
-      site.placeLabel!,
-  ].join(' · ');
-  final window = day.shootFromTime != null && day.shootToTime != null
-      ? 'de ${day.shootFromTime} a ${day.shootToTime}'
-      : null;
-
-  return TechnicalScriptDoc(
-    title: 'GUION TÉCNICO DE RODAJE · ${(project?.name ?? '').toUpperCase()}',
-    subtitle: [
-      [
+  ({String heading, String detail}) dayLines(ShootDocument day) {
+    final site = sites.where((s) => s.id == day.locationSiteId).firstOrNull;
+    final place = [
+      if (site != null) site.name,
+      if (site?.placeLabel != null && site!.placeLabel!.trim().isNotEmpty)
+        site.placeLabel!,
+    ].join(' · ');
+    final window = day.shootFromTime != null && day.shootToTime != null
+        ? 'de ${day.shootFromTime} a ${day.shootToTime}'
+        : null;
+    return (
+      heading: [
         day.name,
         if (day.shootDate != null) formatShootDate(day.shootDate),
         if (window != null) window,
       ].join(' · '),
-      if (place.isNotEmpty) place,
-      ...weather.lines,
-    ].join('\n'),
+      detail: [
+        if (place.isNotEmpty) place,
+        ...shootDayWeather(day, site).lines,
+      ].join('\n'),
+    );
+  }
+
+  final docSections = <ScriptDocSection>[];
+  for (final daySection in sections) {
+    final day = daySection.day;
+    final lines = day == null || oneDay ? null : dayLines(day);
+    for (final (i, tract) in daySection.scenes.indexed) {
+      final scene = tract.scene;
+      final rows = await Future.wait([
+        for (final item in tract.shots)
+          _docRow(
+            db,
+            scene,
+            item.shot,
+            sheet,
+            order: item.order,
+            orderNote: _orderNote(item),
+            plans: plans,
+            planView: settings.planView,
+            storyboard: !hidden.contains('story'),
+            references: !hidden.contains('ref'),
+          ),
+      ]);
+      final whole =
+          tract.shots.length == source.shotsOfScene(scene.id).length;
+      docSections.add(
+        ScriptDocSection(
+          title:
+              '${scene.label}. ${scene.locationCanonical}'
+              '${!byDays && scene.offScript ? ' (fuera del guion)' : ''}',
+          indexLabel: !byDays && whole
+              ? _indexLabel(scene)
+              : _indexLabel(scene, tract.plainShots),
+          headerFill: _rgb(sheet.headerFill(colors.sceneColor(scene))),
+          rows: rows,
+          dayHeading: i == 0 ? lines?.heading : null,
+          dayDetail: i == 0 && lines != null && lines.detail.isNotEmpty
+              ? lines.detail
+              : null,
+        ),
+      );
+    }
+  }
+
+  final name = source.project.name;
+  final director = source.project.director;
+  final String? subtitle;
+  if (oneDay) {
+    final lines = dayLines(sections.single.day!);
+    subtitle = [
+      lines.heading,
+      if (lines.detail.isNotEmpty) lines.detail,
+    ].join('\n');
+  } else if (byDays) {
+    subtitle = sections.map((s) => s.day!.name).join(' · ');
+  } else {
+    subtitle = director == null || director.trim().isEmpty
+        ? null
+        : 'Dirección: $director';
+  }
+
+  return TechnicalScriptDoc(
+    title: byDays
+        ? 'GUION TÉCNICO DE RODAJE · ${name.toUpperCase()}'
+        : 'GUION TÉCNICO ${name.toUpperCase()}',
+    subtitle: subtitle,
     columns: [
-      const ScriptDocColumn('orden', 'ORDEN', 760, centered: true),
+      if (byDays) const ScriptDocColumn('orden', 'ORDEN', 760, centered: true),
       ...scriptDocColumns(hidden: hidden),
     ],
-    sections: sections,
+    sections: docSections,
     fontFamily: settings.fontFamily,
   );
+}
+
+/// Marca bajo el número de orden: hecho, descartado o repetido en otro día.
+String? _orderNote(ExportShot item) {
+  final block = item.block;
+  final status = block == null ? null : OnSetMark.of(block).status;
+  final notes = [
+    if (status == OnSetStatus.done) '**HECHO**',
+    if (status == OnSetStatus.dropped) 'DESCART.',
+    if (item.alsoIn.isNotEmpty) 'También en ${item.alsoIn.join(', ')}',
+  ];
+  return notes.isEmpty ? null : notes.join('\n');
 }
 
 /// Nombre de archivo del guion técnico de un proyecto, sin extensión.

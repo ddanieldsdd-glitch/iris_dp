@@ -124,11 +124,20 @@ class ScriptDocSection {
   final int headerFill;
   final List<ScriptDocRow> rows;
 
+  /// «Jornada 2 · lunes 12 de octubre» en la primera sección de cada día de
+  /// un documento de varias jornadas: abre página nueva.
+  final String? dayHeading;
+
+  /// Lugar, horario y previsión bajo [dayHeading].
+  final String? dayDetail;
+
   const ScriptDocSection({
     required this.title,
     required this.headerFill,
     required this.rows,
     this.indexLabel,
+    this.dayHeading,
+    this.dayDetail,
   });
 
   String get indexText => indexLabel ?? title;

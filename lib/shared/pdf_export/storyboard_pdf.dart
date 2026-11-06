@@ -12,6 +12,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../core/database/app_database.dart';
 import '../../core/utils/shot_technical_options.dart';
 import '../../features/camera_plan/camera_plan_grouping.dart';
+import '../../features/camera_plan/plan_renderer.dart';
 import '../../features/storyboard/storyboard_export_helpers.dart';
 import '../../features/storyboard/storyboard_export_style.dart';
 import '../../features/storyboard/storyboard_group_export_options.dart';
@@ -22,6 +23,26 @@ import '../rich_text/script_markup.dart';
 import '../../core/utils/shot_reference_import.dart';
 
 /// PDF de storyboard con estilos CLEAN / BASIC / DETAIL / SHOT PLAN.
+/// Un tramo del PDF: una escena con sus planos ya ordenados. En un export
+/// por jornadas, una misma escena puede salir en varios tramos.
+class StoryboardPart {
+  final Scene scene;
+  final List<Shot> shots;
+
+  /// «Jornada 2 · 12/10/2026» en la cabecera de cada página.
+  final String? dayLabel;
+
+  /// Jornada de la que sale, para el sol de la hoja SHOT PLAN.
+  final int? dayDocumentId;
+
+  const StoryboardPart(
+    this.scene,
+    this.shots, {
+    this.dayLabel,
+    this.dayDocumentId,
+  });
+}
+
 class StoryboardPdfExporter {
   static const _columns = 3;
   static const _shotListRowsPerPage = 4;
@@ -66,14 +87,21 @@ class StoryboardPdfExporter {
     StoryboardGroupExportChoice? groupChoice,
     StoryboardExportStyle style = StoryboardExportStyle.detail,
     AppDatabase? db,
-  }) => _buildPdf(
-    project,
-    scenes,
-    shotsByScene,
+  }) => buildParts(
+    project: project,
+    parts: _partsOf(scenes, shotsByScene),
     groupChoice: groupChoice,
     style: style,
     db: db,
   );
+
+  static List<StoryboardPart> _partsOf(
+    List<Scene> scenes,
+    Map<int, List<Shot>> shotsByScene,
+  ) => [
+    for (final scene in scenesInScriptOrder(scenes))
+      StoryboardPart(scene, _orderedShots(shotsByScene[scene.id] ?? [])),
+  ];
 
   static Future<String?> exportAndSave({
     required Project project,
@@ -97,10 +125,9 @@ class StoryboardPdfExporter {
         dialogTitle: 'Exportar storyboard',
         fileName: filename,
         extension: 'pdf',
-        build: () => _buildPdf(
-          project,
-          [scene],
-          {scene.id: shots},
+        build: () => buildParts(
+          project: project,
+          parts: [StoryboardPart(scene, shots)],
           groupChoice: groupChoice,
           db: db,
         ),
@@ -116,10 +143,9 @@ class StoryboardPdfExporter {
     try {
       for (final scene in scenesWithShots) {
         final shots = _orderedShots(shotsByScene[scene.id] ?? []);
-        final bytes = await _buildPdf(
-          project,
-          [scene],
-          {scene.id: shots},
+        final bytes = await buildParts(
+          project: project,
+          parts: [StoryboardPart(scene, shots)],
           groupChoice: groupChoice,
           db: db,
         );
@@ -151,15 +177,15 @@ class StoryboardPdfExporter {
     return '${base}_Sc${scene.label}_$tag.pdf';
   }
 
-  static Future<Uint8List> _buildPdf(
-    Project project,
-    List<Scene> scenes,
-    Map<int, List<Shot>> shotsByScene, {
+  /// El PDF de [parts], en ese orden y con los planos tal como vienen: el
+  /// plan de rodaje manda sobre el orden del guion.
+  static Future<Uint8List> buildParts({
+    required Project project,
+    required List<StoryboardPart> parts,
     StoryboardGroupExportChoice? groupChoice,
     StoryboardExportStyle style = StoryboardExportStyle.detail,
     AppDatabase? db,
   }) async {
-    final orderedScenes = scenesInScriptOrder(scenes);
     final doc = pw.Document();
     var hasPages = false;
 
@@ -168,7 +194,7 @@ class StoryboardPdfExporter {
       regular: fonts.regular,
       bold: fonts.bold,
     );
-    final imageCache = await _preloadShotImages(shotsByScene);
+    final imageCache = await _preloadShotImages(parts);
 
     final effectiveStyle =
         groupChoice?.mode == StoryboardGroupExportMode.asShots
@@ -177,8 +203,9 @@ class StoryboardPdfExporter {
     final sequenceLayout = groupChoice?.sequenceLayout;
 
     if (sequenceLayout == StoryboardSequenceLayout.shotList) {
-      for (final scene in orderedScenes) {
-        final shots = _orderedShots(shotsByScene[scene.id] ?? []);
+      for (final part in parts) {
+        final scene = part.scene;
+        final shots = part.shots;
         if (shots.isEmpty) continue;
 
         for (
@@ -205,6 +232,7 @@ class StoryboardPdfExporter {
                     first,
                     shots.length,
                     layout: StoryboardSequenceLayout.shotList,
+                    dayLabel: part.dayLabel,
                   ),
                   pw.SizedBox(height: _headerGap),
                   pw.Expanded(
@@ -219,16 +247,23 @@ class StoryboardPdfExporter {
     } else if (groupChoice?.mode == StoryboardGroupExportMode.asShots &&
         db != null) {
       // Cada plano en su hoja, en el nivel elegido, todo en un PDF.
-      for (final scene in orderedScenes) {
-        for (final shot in _orderedShots(shotsByScene[scene.id] ?? [])) {
+      final withPlan = effectiveStyle == StoryboardExportStyle.shotPlan;
+      final renderer = withPlan
+          ? await PlanRenderer.load(db, project.id)
+          : null;
+      for (final part in parts) {
+        final scene = part.scene;
+        for (final shot in part.shots) {
           hasPages = true;
           final data = await ShotSheetData.resolve(
             db: db,
             project: project,
             scene: scene,
             shot: shot,
+            dayDocumentId: part.dayDocumentId,
             imageSource: groupChoice!.imageSource,
-            withPlanAndSun: effectiveStyle == StoryboardExportStyle.shotPlan,
+            withPlanAndSun: withPlan,
+            renderer: renderer,
           );
           await StoryboardShotSheetPdf.addPage(doc, data, effectiveStyle);
         }
@@ -242,8 +277,9 @@ class StoryboardPdfExporter {
       final density = groupChoice?.gridDensity ?? StoryboardGridDensity.six;
       final perPage = density.rows * _columns;
 
-      for (final scene in orderedScenes) {
-        final shots = _orderedShots(shotsByScene[scene.id] ?? []);
+      for (final part in parts) {
+        final scene = part.scene;
+        final shots = part.shots;
         if (shots.isEmpty) continue;
 
         for (var start = 0; start < shots.length; start += perPage) {
@@ -268,6 +304,7 @@ class StoryboardPdfExporter {
                     layout: isSequenceSb
                         ? StoryboardSequenceLayout.storyboard
                         : null,
+                    dayLabel: part.dayLabel,
                   ),
                   pw.SizedBox(height: _headerGap),
                   pw.Expanded(
@@ -300,11 +337,12 @@ class StoryboardPdfExporter {
   }
 
   static Future<Map<int, Uint8List>> _preloadShotImages(
-    Map<int, List<Shot>> shotsByScene,
+    List<StoryboardPart> parts,
   ) async {
     final cache = <int, Uint8List>{};
-    for (final shots in shotsByScene.values) {
-      for (final shot in shots) {
+    for (final part in parts) {
+      for (final shot in part.shots) {
+        if (cache.containsKey(shot.id)) continue;
         final bytes = await PdfSafeImage.loadFromPathMaxEdge(
           storyboardImageOf(shot),
         );
@@ -330,6 +368,7 @@ class StoryboardPdfExporter {
     int firstIndex,
     int totalShots, {
     StoryboardSequenceLayout? layout,
+    String? dayLabel,
   }) {
     final slug = scene.locationCanonical.trim().isNotEmpty
         ? scene.locationCanonical
@@ -356,7 +395,7 @@ class StoryboardPdfExporter {
                 ),
               ),
               pw.Text(
-                tag,
+                dayLabel == null ? tag : '$dayLabel  ·  $tag',
                 style: const pw.TextStyle(
                   fontSize: 9,
                   color: PdfColors.grey700,

@@ -10,8 +10,7 @@ import '../../core/utils/shot_reference_import.dart';
 import '../../core/weather/sun_calculator.dart';
 import '../../core/weather/weather_models.dart';
 import '../../shared/rich_text/script_markup.dart';
-import '../camera_plan/plan_data.dart';
-import '../camera_plan/plan_thumbnail.dart';
+import '../camera_plan/plan_renderer.dart';
 import '../luka_export/unreal_coords.dart';
 import 'storyboard_export_helpers.dart';
 import 'storyboard_image_palette.dart';
@@ -191,6 +190,7 @@ class ShotSheetData {
     bool withPlanAndSun = false,
     DateTime? today,
     int? dayDocumentId,
+    PlanRenderer? renderer,
   }) async {
     final shots = await db.getShotsForScene(scene.id);
     shots.sort((a, b) => a.number.compareTo(b.number));
@@ -251,7 +251,9 @@ class ShotSheetData {
       action: _plain(shot.action),
       notes: _plain(shot.notes),
       stop: _plain(shot.fStop),
-      planPng: withPlanAndSun ? await _planPng(db, project.id, shot) : null,
+      planPng: withPlanAndSun
+          ? await _planPng(db, project.id, shot, renderer)
+          : null,
       hasPlanPlace: set != null,
       sun: withPlanAndSun
           ? await _sun(db, shot, site, today, dayDocumentId)
@@ -287,37 +289,16 @@ class ShotSheetData {
     }
   }
 
-  /// La planta del plano (luz, cámaras, actores y bocetos sobre su set);
-  /// si el plano no tiene nada propio, la del set de su escena.
+  /// La planta del plano, tal como se ve en el editor.
   static Future<Uint8List?> _planPng(
     AppDatabase db,
     int projectId,
     Shot shot,
+    PlanRenderer? renderer,
   ) async {
     try {
-      final plans = PlanProjectData(
-        sites: await db.watchSitesForProject(projectId).first,
-        sets: await db.watchLocationsForProject(projectId).first,
-        setups: await db.getLightSetupsForProject(projectId),
-        scenes: await db.watchScenesForProject(projectId).first,
-        shots: await db.getShotsForProject(projectId),
-        elementRows: await db
-            .watchCameraPlanElementsForProject(projectId)
-            .first,
-        drawingRows: await db.watchPlanAnnotationDocuments(projectId).first,
-      );
-      final own = [...plans.lightOfShot(shot), ...plans.ownOfShot(shot)];
-      final base = plans.baseOfShot(shot);
-      final drawings = plans.drawingsOfShot(shot);
-      if (own.isEmpty && base.isEmpty && drawings.isEmpty) return null;
-      return PlanThumbnail.renderPng(
-        elements: own,
-        inherited: base,
-        drawings: drawings,
-        focus: plans.framingOf(shot).focus,
-        crop: plans.framingOf(shot).crop,
-        size: const Size(900, 640),
-      );
+      final own = renderer ?? await PlanRenderer.load(db, projectId);
+      return own.shot(shot, size: const Size(900, 640));
     } catch (_) {
       return null;
     }
