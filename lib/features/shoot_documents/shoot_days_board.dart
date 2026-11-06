@@ -15,6 +15,8 @@ import '../../shared/rich_text/script_markup.dart';
 import '../camera_plan/shot_cover.dart';
 import 'shoot_day_order.dart';
 import 'shoot_day_screen.dart';
+import '../export_center/export_center_screen.dart';
+import '../export_center/export_selection.dart';
 import 'shoot_plan.dart';
 
 /// Lo que se arrastra por el tablero.
@@ -68,6 +70,15 @@ class ShootDaysBoardScreen extends ConsumerWidget {
             tooltip: 'Deshacer',
             icon: const Icon(Icons.undo),
             onPressed: history.canUndo ? history.undo : null,
+          ),
+          IconButton(
+            tooltip: 'Exportar',
+            icon: const Icon(Icons.ios_share),
+            onPressed: () => ExportCenterScreen.open(
+              context,
+              projectId: projectId,
+              document: ExportDocument.shootingPlan,
+            ),
           ),
           TextButton.icon(
             onPressed: () => service.addDay(projectId),

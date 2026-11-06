@@ -27,11 +27,10 @@ import '../look_bible/look_bible_model.dart';
 import '../../shared/pdf_export/storyboard_pdf.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
 import '../artemis_import/artemis_import_screen.dart';
+import '../export_center/export_center_screen.dart';
+import '../export_center/export_selection.dart';
 import '../technical_script/technical_script_screen.dart';
 import 'storyboard_export_options_sheet.dart';
-import '../../core/utils/share_origin.dart';
-import 'shot_sheet_data.dart';
-import 'storyboard_shot_export_service.dart';
 import 'storyboard_viewer.dart';
 import 'storyboard_prefs.dart';
 import '../../core/settings/app_prefs.dart';
@@ -75,7 +74,6 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
   );
 
   AppPrefs get _prefs => AppPrefs.instance;
-  bool _exporting = false;
 
   /// Planos elegidos para exportar. Nulo: no se está seleccionando.
   final _selection = ValueNotifier<Set<int>?>(null);
@@ -86,74 +84,12 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
     super.dispose();
   }
 
-  Future<void> _exportPdf(BuildContext context, {Set<int>? only}) async {
-    if (_exporting) return;
-    final db = ref.read(databaseProvider);
-
-    setState(() => _exporting = true);
-    try {
-      final project = await db.getProject(widget.projectId);
-      if (project == null) return;
-
-      final scenes = scenesInScriptOrder(
-        await db.watchScenesForProject(widget.projectId).first,
-      );
-      if (scenes.isEmpty) {
-        if (!context.mounted) return;
-        AppSnackBar.show(context, 'No hay escenas para exportar.');
-        return;
-      }
-
-      final shotsByScene = <int, List<Shot>>{};
-      for (final scene in scenes) {
-        final shots = await db.watchShotsForScene(scene.id).first;
-        shotsByScene[scene.id] = only == null
-            ? shots
-            : shots.where((s) => only.contains(s.id)).toList();
-      }
-
-      final hasShots = shotsByScene.values.any((s) => s.isNotEmpty);
-      if (!hasShots) {
-        if (!context.mounted) return;
-        AppSnackBar.show(
-          context,
-          'Añade planos en el guion técnico antes de exportar.',
-        );
-        return;
-      }
-
-      if (!context.mounted) return;
-      if (mounted) setState(() => _exporting = false);
-      final choice = await showStoryboardGroupExportOptionsSheet(context);
-      if (choice == null) return;
-      if (mounted) setState(() => _exporting = true);
-
-      final path = await StoryboardPdfExporter.exportAndSave(
-        project: project,
-        scenes: scenes,
-        shotsByScene: shotsByScene,
-        groupChoice: choice,
-        db: db,
-      );
-
-      if (!context.mounted) return;
-      if (path != null) {
-        final isDir = Directory(path).existsSync();
-        AppSnackBar.show(
-          context,
-          isDir
-              ? 'PDFs exportados en $path (un archivo _SB/_SL por escena)'
-              : 'Storyboard exportado en $path',
-        );
-      }
-    } catch (e, st) {
-      if (kDebugMode) debugPrint('Storyboard export error: $e\n$st');
-      if (!context.mounted) return;
-      AppSnackBar.showError(context, userFriendlyError(e));
-    } finally {
-      if (mounted) setState(() => _exporting = false);
-    }
-  }
+  void _openExport({Set<int>? only}) => ExportCenterScreen.open(
+    context,
+    projectId: widget.projectId,
+    document: ExportDocument.storyboard,
+    shotIds: only,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -221,18 +157,9 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
             ),
           ),
           IconButton(
-            tooltip: 'Exportar PDF',
-            icon: _exporting
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: palette.accent,
-                    ),
-                  )
-                : Icon(Icons.picture_as_pdf_outlined, color: palette.accent),
-            onPressed: _exporting ? null : () => _exportPdf(context),
+            tooltip: 'Exportar',
+            icon: Icon(Icons.ios_share, color: palette.accent),
+            onPressed: _openExport,
           ),
           IconButton(
             tooltip: 'Guion técnico',
@@ -318,7 +245,7 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
                       ),
                       _SelectionBar(
                         selection: _selection,
-                        onExport: (only) => _exportPdf(context, only: only),
+                        onExport: (only) => _openExport(only: only),
                       ),
                     ],
                   );
@@ -1093,35 +1020,13 @@ class _StoryboardFrame extends ConsumerWidget {
     );
   }
 
-  Future<void> _exportFrame(BuildContext context, WidgetRef ref) async {
-    final db = ref.read(databaseProvider);
-    final choice = await showStoryboardExportOptionsSheet(
-      context,
-      showImageChoice: shotHasBothImages(shot),
-    );
-    if (choice == null) return;
-
-    try {
-      final project = await db.getProject(scene.projectId);
-      if (project == null) return;
-      if (!context.mounted) return;
-      final path = await StoryboardShotExportService.exportSingle(
-        project: project,
-        scene: scene,
-        shot: shot,
-        style: choice.style,
-        imageSource: choice.imageSource,
-        db: db,
-        shareOrigin: shareOrigin(context),
+  Future<void> _exportFrame(BuildContext context, WidgetRef ref) =>
+      ExportCenterScreen.open(
+        context,
+        projectId: scene.projectId,
+        document: ExportDocument.storyboard,
+        shotIds: {shot.id},
       );
-      if (!context.mounted || path == null) return;
-      AppSnackBar.show(context, 'Plano exportado en $path');
-    } catch (e, st) {
-      if (kDebugMode) debugPrint('Single shot export error: $e\n$st');
-      if (!context.mounted) return;
-      AppSnackBar.showError(context, userFriendlyError(e));
-    }
-  }
 
   /// «Plano 2 · PP de ALI»: el número y el título (su encuadre).
   String _title() {

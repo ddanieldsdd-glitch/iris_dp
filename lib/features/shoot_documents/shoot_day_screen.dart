@@ -13,14 +13,12 @@ import '../../core/weather/weather_models.dart';
 import '../../core/weather/weather_service.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../core/widgets/safe_reorderable_column.dart';
-import '../../shared/pdf_export/technical_script_pdf.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
-import '../../shared/technical_script_export/technical_script_docx.dart';
 import '../locations/locations_screen.dart';
-import '../technical_script/script_export_dialog.dart';
+import '../export_center/export_center_screen.dart';
+import '../export_center/export_selection.dart';
 import '../technical_script/technical_script_export.dart';
-import '../technical_script/technical_script_settings.dart';
 import 'shoot_day_on_set.dart';
 import 'shoot_day_order.dart';
 import 'shoot_document_block_types.dart';
@@ -28,50 +26,6 @@ import 'shoot_document_script_picker.dart';
 
 export 'shoot_plan.dart' show kShootDayKind;
 
-
-/// Exporta el guion técnico de la jornada [documentId] a PDF o Word, con o
-/// sin índice, y avisa de dónde se guardó.
-Future<void> exportShootDayDocument(
-  BuildContext context,
-  AppDatabase db,
-  TechnicalScriptSettings settings,
-  int documentId,
-  ScriptExportOptions choice,
-) async {
-  final word = choice.word;
-  try {
-    final built = await buildShootDayScriptDoc(
-      db,
-      documentId,
-      settings,
-      hiddenColumns: choice.hiddenColumns,
-    );
-    final doc = built == null ? null : choice.applyTo(built);
-    if (!context.mounted) return;
-    if (doc == null || doc.sections.isEmpty) {
-      AppSnackBar.show(context, 'Añade planos a la jornada para exportarla.');
-      return;
-    }
-    final day = await db.getShootDocument(documentId);
-    final name = (day?.name ?? 'jornada')
-        .replaceAll(RegExp(r'[^\w\s-]'), '')
-        .trim();
-    final fileName = name.isEmpty ? 'jornada' : name;
-    final path = word
-        ? await TechnicalScriptDocxExporter.exportAndSave(
-            doc,
-            fileName: fileName,
-          )
-        : await TechnicalScriptPdfExporter.exportAndSave(
-            doc,
-            fileName: fileName,
-          );
-    if (!context.mounted || path == null) return;
-    AppSnackBar.show(context, '${word ? 'Word' : 'PDF'} guardado en $path');
-  } catch (e) {
-    if (context.mounted) AppSnackBar.showError(context, userFriendlyError(e));
-  }
-}
 
 /// Guion técnico de rodaje de una jornada: fecha, lugar, meteorología y los
 /// planos del guion técnico en el orden en que se van a rodar.
@@ -197,21 +151,12 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
     title: day.name,
   );
 
-  Future<void> _export() async {
-    final choice = await showScriptExportDialog(
-      context,
-      screen: ref.read(technicalScriptSettingsProvider),
-      title: 'Exportar la jornada',
-    );
-    if (choice == null || !mounted) return;
-    await exportShootDayDocument(
-      context,
-      _db,
-      ref.read(technicalScriptSettingsProvider),
-      widget.documentId,
-      choice,
-    );
-  }
+  void _export() => ExportCenterScreen.open(
+    context,
+    projectId: widget.projectId,
+    document: ExportDocument.technicalScript,
+    dayId: widget.documentId,
+  );
 
   @override
   Widget build(BuildContext context) {

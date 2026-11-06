@@ -46,48 +46,6 @@ class StoryboardShotExportService {
     return StoryboardShotSheetPdf.buildBytes(data, style);
   }
 
-  /// Guarda el PDF (Mac: «Guardar como…»; iPad/iPhone: hoja de compartir,
-  /// que necesita [shareOrigin] para salir como globo en iPad). Devuelve la
-  /// ruta guardada o nulo si se canceló o se compartió.
-  static Future<String?> exportSingle({
-    required AppDatabase db,
-    required Project project,
-    required Scene scene,
-    required Shot shot,
-    required StoryboardExportStyle style,
-    ShotImageSource imageSource = ShotImageSource.storyboard,
-    Rect? shareOrigin,
-  }) async {
-    final name = fileName(project, scene, shot, style);
-    Future<Uint8List> build() => buildBytes(
-      db: db,
-      project: project,
-      scene: scene,
-      shot: shot,
-      style: style,
-      imageSource: imageSource,
-    );
-
-    if (Platform.isIOS) {
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/$name.pdf');
-      await file.writeAsBytes(await build(), flush: true);
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/pdf')],
-        subject: 'Plano ${shot.number} · ${style.title}',
-        sharePositionOrigin: shareOrigin,
-      );
-      return null;
-    }
-
-    return ExportFileSaver.saveGenerated(
-      dialogTitle: 'Exportar plano ${shot.number}',
-      fileName: name,
-      extension: 'pdf',
-      build: build,
-    );
-  }
-
   /// La hoja del plano con sus imágenes según [layout]: encuadres en orden
   /// y refuerzos más pequeños.
   static Future<Uint8List> buildWithImagesBytes({
@@ -138,7 +96,9 @@ class StoryboardShotExportService {
     );
   }
 
-  /// Guarda o comparte la hoja con imágenes (como [exportSingle]).
+  /// Guarda el PDF (Mac: «Guardar como…»; iPad/iPhone: hoja de compartir,
+  /// que necesita [shareOrigin] para salir como globo en iPad). Devuelve la
+  /// ruta guardada o nulo si se canceló o se compartió.
   static Future<String?> exportWithImages({
     required AppDatabase db,
     required Project project,

@@ -20,13 +20,9 @@ import '../../core/theme/app_layout.dart';
 import '../settings/settings_launcher.dart';
 import 'shoot_days_board.dart';
 import 'shoot_plan.dart';
-import '../../core/utils/user_error.dart';
-import '../../core/widgets/app_snackbar.dart';
-import '../../shared/pdf_export/technical_script_pdf.dart';
-import '../../shared/technical_script_export/technical_script_docx.dart';
-import '../technical_script/script_export_dialog.dart';
+import '../export_center/export_center_screen.dart';
+import '../export_center/export_selection.dart';
 import '../technical_script/technical_script_export.dart';
-import '../technical_script/technical_script_settings.dart';
 
 /// Hub de documentos para el rodaje — referencia principal en set.
 class ShootDocumentsScreen extends ConsumerStatefulWidget {
@@ -150,7 +146,7 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
                           description:
                               'Todo el guion técnico en orden de guion, con '
                               'índice. En PDF o Word.',
-                          onTap: () => _exportFullScript(context),
+                          onTap: () => _openExport(context),
                         ),
                         _CreateCard(
                           icon: Icons.dashboard_customize_outlined,
@@ -275,23 +271,11 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
                                 scenes: scenes,
                                 onTap: () => _openEditor(context, doc),
                                 onExport: doc.kind == kShootDayKind
-                                    ? (word) async {
-                                        final settings = ref.read(
-                                          technicalScriptSettingsProvider,
-                                        );
-                                        final saved =
-                                            await savedScriptExportOptions(
-                                              settings,
-                                            );
-                                        if (!context.mounted) return;
-                                        await exportShootDayDocument(
-                                          context,
-                                          db,
-                                          settings,
-                                          doc.id,
-                                          saved.copyWith(word: word),
-                                        );
-                                      }
+                                    ? (word) => _openExport(
+                                        context,
+                                        dayId: doc.id,
+                                        word: word,
+                                      )
                                     : null,
                                 onSetPrimary: () => db.setPrimaryShootDocument(
                                   widget.projectId,
@@ -327,44 +311,15 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
     return date == null ? iso : '${date.day}/${date.month}';
   }
 
-  /// Exporta el guion técnico entero, en orden de guion.
-  Future<void> _exportFullScript(BuildContext context) async {
-    final settings = ref.read(technicalScriptSettingsProvider);
-    final choice = await showScriptExportDialog(context, screen: settings);
-    if (choice == null || !context.mounted) return;
-    final db = ref.read(databaseProvider);
-    try {
-      final built = await buildNarrativeScriptDoc(
-        db,
-        widget.projectId,
-        settings,
-        hiddenColumns: choice.hiddenColumns,
-      );
-      final doc = built == null ? null : choice.applyTo(built);
-      if (!context.mounted) return;
-      if (doc == null || doc.sections.isEmpty) {
-        AppSnackBar.show(context, 'El guion técnico aún no tiene escenas.');
-        return;
-      }
-      final fileName = technicalScriptFileName(widget.projectName);
-      final path = choice.word
-          ? await TechnicalScriptDocxExporter.exportAndSave(
-              doc,
-              fileName: fileName,
-            )
-          : await TechnicalScriptPdfExporter.exportAndSave(
-              doc,
-              fileName: fileName,
-            );
-      if (!context.mounted || path == null) return;
-      AppSnackBar.show(
+  /// El centro de exportación, con el documento de partida.
+  void _openExport(BuildContext context, {int? dayId, bool? word}) =>
+      ExportCenterScreen.open(
         context,
-        '${choice.word ? 'Word' : 'PDF'} guardado en $path',
+        projectId: widget.projectId,
+        document: ExportDocument.technicalScript,
+        dayId: dayId,
+        word: word,
       );
-    } catch (e) {
-      if (context.mounted) AppSnackBar.showError(context, userFriendlyError(e));
-    }
-  }
 
   Future<void> _createDocument(BuildContext context) async {
     final db = ref.read(databaseProvider);

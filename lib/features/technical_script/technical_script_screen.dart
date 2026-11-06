@@ -36,14 +36,14 @@ import '../../shared/pdf_export/technical_script_pdf.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
-import '../../shared/technical_script_export/technical_script_docx.dart';
 import '../locations/location_picker.dart';
 import '../locations/where_field.dart';
 import 'scene_form_sheet.dart';
 import 'table/editable_cell.dart';
 import 'table/script_sheet_theme.dart';
 import 'import/technical_script_import_action.dart';
-import 'script_export_dialog.dart';
+import '../export_center/export_center_screen.dart';
+import '../export_center/export_selection.dart';
 import 'technical_script_export.dart';
 import 'technical_script_settings.dart';
 import '../../core/utils/shot_technical_options.dart';
@@ -226,7 +226,7 @@ class TechnicalScriptScreen extends ConsumerWidget {
           IconButton(
             tooltip: 'Exportar el guion técnico',
             icon: Icon(Icons.ios_share, color: palette.accent),
-            onPressed: () => _export(context, ref),
+            onPressed: () => _export(context),
           ),
           PopupMenuButton<String>(
             tooltip: 'Importar guion técnico',
@@ -332,48 +332,11 @@ class TechnicalScriptScreen extends ConsumerWidget {
     ));
   }
 
-  Future<void> _export(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
-    final settings = ref.read(technicalScriptSettingsProvider);
-    final choice = await showScriptExportDialog(context, screen: settings);
-    if (choice == null || !context.mounted) return;
-    final word = choice.word;
-    final db = ref.read(databaseProvider);
-    try {
-      final built = await buildNarrativeScriptDoc(
-        db,
-        projectId,
-        settings,
-        hiddenColumns: choice.hiddenColumns,
-      );
-      final doc = built == null ? null : choice.applyTo(built);
-      if (!context.mounted) return;
-      if (doc == null || doc.sections.isEmpty) {
-        AppSnackBar.show(context, 'No hay escenas para exportar.');
-        return;
-      }
-      final project = await db.getProject(projectId);
-      final fileName = technicalScriptFileName(project?.name ?? '');
-      final path = word
-          ? await TechnicalScriptDocxExporter.exportAndSave(
-              doc,
-              fileName: fileName,
-            )
-          : await TechnicalScriptPdfExporter.exportAndSave(
-              doc,
-              fileName: fileName,
-            );
-      if (!context.mounted) return;
-      if (path != null) {
-        AppSnackBar.show(context, '${word ? 'Word' : 'PDF'} guardado en $path');
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      AppSnackBar.show(context, userFriendlyError(e));
-    }
-  }
+  void _export(BuildContext context) => ExportCenterScreen.open(
+    context,
+    projectId: projectId,
+    document: ExportDocument.technicalScript,
+  );
 }
 
 /// ⌘Z deshace y ⇧⌘Z rehace el último cambio de la tabla. Dentro de una
