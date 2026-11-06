@@ -613,18 +613,22 @@ class _DayColumn extends StatelessWidget {
     );
 
     if (compact) return column;
+    // Toda la columna acepta: lo que se suelta fuera de un hueco va al final.
     return DragTarget<_BoardDrag>(
       onWillAcceptWithDetails: (d) =>
-          d.data is _DayDrag && (d.data as _DayDrag).dayId != day.id,
-      onAcceptWithDetails: (d) =>
-          board.moveDay((d.data as _DayDrag).dayId, index),
+          d.data is! _DayDrag || (d.data as _DayDrag).dayId != day.id,
+      onAcceptWithDetails: (d) => d.data is _DayDrag
+          ? board.moveDay((d.data as _DayDrag).dayId, index)
+          : board.drop(d.data, day.id, null),
       builder: (context, hovering, _) => DecoratedBox(
         position: DecorationPosition.foreground,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
           border: hovering.isEmpty
               ? null
-              : Border(left: BorderSide(color: palette.accent, width: 3)),
+              : hovering.first is _DayDrag
+              ? Border(left: BorderSide(color: palette.accent, width: 3))
+              : Border.all(color: palette.accent, width: 1.5),
         ),
         child: column,
       ),

@@ -196,10 +196,7 @@ void main() {
     expect(doc.sections[0].dayHeading, 'Jornada 1');
     expect(doc.sections[1].dayHeading, isNull);
     expect(doc.sections[2].dayHeading, 'Jornada 2');
-    expect(
-      doc.sections[0].rows.single.cells['orden'],
-      contains('También en Jornada 2'),
-    );
+    expect(doc.sections[0].rows.single.cells['orden'], contains('Repite'));
     expect(doc.sections[3].rows.single.cells['orden'], startsWith('3'));
   });
 }

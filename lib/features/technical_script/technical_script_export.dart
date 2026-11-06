@@ -478,7 +478,7 @@ Future<TechnicalScriptDoc?> buildScriptDocFor(
         : 'GUION TÉCNICO ${name.toUpperCase()}',
     subtitle: subtitle,
     columns: [
-      if (byDays) const ScriptDocColumn('orden', 'ORDEN', 760, centered: true),
+      if (byDays) const ScriptDocColumn('orden', 'ORDEN', 900, centered: true),
       ...scriptDocColumns(hidden: hidden),
     ],
     sections: docSections,
@@ -493,7 +493,7 @@ String? _orderNote(ExportShot item) {
   final notes = [
     if (status == OnSetStatus.done) '**HECHO**',
     if (status == OnSetStatus.dropped) 'DESCART.',
-    if (item.alsoIn.isNotEmpty) 'También en ${item.alsoIn.join(', ')}',
+    if (item.alsoIn.isNotEmpty) 'Repite',
   ];
   return notes.isEmpty ? null : notes.join('\n');
 }

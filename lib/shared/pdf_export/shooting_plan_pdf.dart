@@ -245,8 +245,12 @@ class ShootingPlanPdf {
     return 'Orden de grabación · Esc $head';
   }
 
+  /// Sin marcas de formato. Los saltos sueltos del guion son del ancho de su
+  /// columna: aquí se quitan y solo quedan los de párrafo.
   static String? _plain(String? raw) {
-    final text = scriptMarkupToPlain(raw).trim();
+    final text = scriptMarkupToPlain(
+      raw,
+    ).trim().replaceAll(RegExp(r'(?<!\n)\n(?!\n)'), ' ');
     return text.isEmpty ? null : text;
   }
 
@@ -289,7 +293,7 @@ class ShootingPlanPdf {
       plan: await renderer.shot(
         shot,
         light: withLight,
-        size: const Size(_planWidth, 244),
+        size: Size(_planWidth, _blockHeight),
         pixelRatio: 2.5,
       ),
       frame: await PdfSafeImage.loadFromPathMaxEdge(
@@ -332,7 +336,7 @@ class ShootingPlanPdf {
             plan: await renderer.setup(
               setup,
               light: withLight,
-              size: const Size(793, 450),
+              size: Size(_bodyWidth, _bodyHeight - 22),
               pixelRatio: 2,
             ),
           ),
