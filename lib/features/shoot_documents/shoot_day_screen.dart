@@ -28,7 +28,6 @@ import 'shoot_document_script_picker.dart';
 
 export 'shoot_plan.dart' show kShootDayKind;
 
-/// Tipo de documento de rodaje que es una jornada con su guion técnico.
 
 /// Exporta el guion técnico de la jornada [documentId] a PDF o Word, con o
 /// sin índice, y avisa de dónde se guardó.
