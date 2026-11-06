@@ -1889,6 +1889,8 @@ class AppDatabase extends _$AppDatabase {
             .write(ShootDocumentBlocksCompanion(sortOrder: Value(i)));
       }
     });
+    final doc = await getShootDocument(documentId);
+    if (doc != null) await touchProjectContent(doc.projectId);
   }
 
   // ── Localizaciones (contenedores) ───────────

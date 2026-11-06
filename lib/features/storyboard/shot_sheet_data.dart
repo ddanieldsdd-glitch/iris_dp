@@ -107,6 +107,7 @@ class ShotSheetSun {
 /// Lo que no se sabe queda nulo: la hoja deja el hueco, no se lo inventa.
 class ShotSheetData {
   final String projectName;
+
   /// Número de la escena con su letra: «13A».
   final String sceneNumber;
   final String sceneTitle;
@@ -189,6 +190,7 @@ class ShotSheetData {
     ShotImageSource imageSource = ShotImageSource.storyboard,
     bool withPlanAndSun = false,
     DateTime? today,
+    int? dayDocumentId,
   }) async {
     final shots = await db.getShotsForScene(scene.id);
     shots.sort((a, b) => a.number.compareTo(b.number));
@@ -251,7 +253,9 @@ class ShotSheetData {
       stop: _plain(shot.fStop),
       planPng: withPlanAndSun ? await _planPng(db, project.id, shot) : null,
       hasPlanPlace: set != null,
-      sun: withPlanAndSun ? await _sun(db, shot, site, today) : null,
+      sun: withPlanAndSun
+          ? await _sun(db, shot, site, today, dayDocumentId)
+          : null,
     );
   }
 
@@ -323,6 +327,7 @@ class ShotSheetData {
     Shot shot,
     LocationSite? site,
     DateTime? today,
+    int? dayDocumentId,
   ) async {
     final lat = site?.latitude;
     final lon = site?.longitude;
@@ -335,14 +340,21 @@ class ShotSheetData {
         db.shootDocuments.id.equalsExp(db.shootDocumentBlocks.documentId),
       ),
     ])..where(db.shootDocumentBlocks.shotId.equals(shot.id))).get();
-    ShootDocument? day;
-    for (final row in rows) {
-      final doc = row.readTable(db.shootDocuments);
-      if (doc.shootDate != null && DateTime.tryParse(doc.shootDate!) != null) {
-        day = doc;
-        break;
-      }
-    }
+    // Un plano puede estar en varias jornadas: manda la que se exporta y, si
+    // no se exporta ninguna, la primera por fecha.
+    final dated =
+        rows
+            .map((row) => row.readTable(db.shootDocuments))
+            .where(
+              (doc) =>
+                  doc.shootDate != null &&
+                  DateTime.tryParse(doc.shootDate!) != null,
+            )
+            .toList()
+          ..sort((a, b) => a.shootDate!.compareTo(b.shootDate!));
+    final day =
+        dated.where((doc) => doc.id == dayDocumentId).firstOrNull ??
+        dated.firstOrNull;
     final now = today ?? DateTime.now();
     final date = day != null
         ? DateTime.parse(day.shootDate!)

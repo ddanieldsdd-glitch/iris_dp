@@ -13,11 +13,24 @@ enum StoryboardGroupExportMode {
 
 /// Layout PDF al exportar secuencias.
 enum StoryboardSequenceLayout {
-  /// Apaisado 3×3, estilo storyboard clásico.
+  /// Apaisado en rejilla de tres columnas, estilo storyboard clásico.
   storyboard,
 
   /// Vertical 4 planos/página con datos completos de cámara y notas.
   shotList,
+}
+
+/// Planos por página de la rejilla de storyboard.
+enum StoryboardGridDensity {
+  /// Viñeta grande a todo el ancho de la columna.
+  six(2),
+
+  /// Viñeta más pequeña para que quepan tres filas.
+  nine(3);
+
+  const StoryboardGridDensity(this.rows);
+
+  final int rows;
 }
 
 extension StoryboardGroupExportModeX on StoryboardGroupExportMode {
@@ -35,7 +48,7 @@ extension StoryboardSequenceLayoutX on StoryboardSequenceLayout {
 
   String get description => switch (this) {
     StoryboardSequenceLayout.storyboard =>
-      'PDF apaisado estilo storyboard (SB), 9 planos por página.',
+      'PDF apaisado estilo storyboard (SB), 6 planos por página.',
     StoryboardSequenceLayout.shotList =>
       'PDF vertical shot list (SL), 4 planos por página con datos '
           'completos de cámara, óptica y notas.',
@@ -63,18 +76,24 @@ class StoryboardGroupExportChoice {
   /// Imagen que representa cada plano al exportarlo como hoja.
   final ShotImageSource imageSource;
 
+  /// Planos por página cuando el layout es storyboard.
+  final StoryboardGridDensity gridDensity;
+
   const StoryboardGroupExportChoice._({
     required this.mode,
     this.sequenceLayout,
     this.shotStyle,
     this.imageSource = ShotImageSource.storyboard,
+    this.gridDensity = StoryboardGridDensity.six,
   });
 
   factory StoryboardGroupExportChoice.sequences(
-    StoryboardSequenceLayout layout,
-  ) => StoryboardGroupExportChoice._(
+    StoryboardSequenceLayout layout, {
+    StoryboardGridDensity density = StoryboardGridDensity.six,
+  }) => StoryboardGroupExportChoice._(
     mode: StoryboardGroupExportMode.sequences,
     sequenceLayout: layout,
+    gridDensity: density,
   );
 
   factory StoryboardGroupExportChoice.asShots(

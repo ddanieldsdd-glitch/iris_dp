@@ -584,8 +584,7 @@ class _StoryboardContinuousGrid extends ConsumerWidget {
           final shots =
               allShots
                   .where((s) => s.sceneId == scene.id && _passesFilter(s))
-                  .toList()
-                ..sort((a, b) => a.number.compareTo(b.number));
+                  .toList();
 
           for (var i = 0; i < shots.length; i++) {
             entries.add(
@@ -765,8 +764,7 @@ class _StoryboardLinearStrip extends ConsumerWidget {
           final shots =
               allShots
                   .where((s) => s.sceneId == scene.id && _passesFilter(s))
-                  .toList()
-                ..sort((a, b) => a.number.compareTo(b.number));
+                  .toList();
           if (shots.isEmpty) continue;
 
           children.add(

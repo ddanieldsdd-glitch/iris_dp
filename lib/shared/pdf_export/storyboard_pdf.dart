@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/pdf_export_fonts.dart';
 import '../../core/utils/pdf_safe_image.dart';
@@ -22,10 +24,40 @@ import '../../core/utils/shot_reference_import.dart';
 /// PDF de storyboard con estilos CLEAN / BASIC / DETAIL / SHOT PLAN.
 class StoryboardPdfExporter {
   static const _columns = 3;
-  static const _rows = 3;
-  static const _shotsPerPage = _columns * _rows;
   static const _shotListRowsPerPage = 4;
   static const _frameAspect = 16 / 9;
+  static const _gridMargin = 20.0;
+  static const _listMargin = 24.0;
+  static const _gridGap = 8.0;
+  static const _gridCaption = 48.0;
+
+  /// Alto fijo de la cabecera: las filas se calculan contando con él, así
+  /// que un título largo no puede empujar la última fila fuera de la página.
+  static const _headerHeight = 52.0;
+  static const _headerGap = 10.0;
+  static const _listSeparator = 17.0;
+
+  /// Planos pintados de verdad en el PDF, en orden. Solo para tests: el
+  /// paquete `pdf` descarta sin error lo que no cabe en una columna.
+  @visibleForTesting
+  static List<int>? debugPaintedShots;
+
+  /// Medidas reales de la rejilla: `availableHeight` del formato cuenta los
+  /// márgenes por defecto, no los de la página, y por eso no sirve aquí.
+  static ({double colWidth, double rowHeight, double imageHeight}) _gridMetrics(
+    StoryboardGridDensity density,
+  ) {
+    final page = PdfPageFormat.a4.landscape;
+    final width = page.width - _gridMargin * 2;
+    final height = page.height - _gridMargin * 2 - _headerHeight - _headerGap;
+    final colWidth = (width - _gridGap * (_columns - 1)) / _columns;
+    final rowHeight = (height - _gridGap * (density.rows - 1)) / density.rows;
+    final imageHeight = math.min(
+      colWidth / _frameAspect,
+      rowHeight - _gridCaption,
+    );
+    return (colWidth: colWidth, rowHeight: rowHeight, imageHeight: imageHeight);
+  }
 
   static Future<Uint8List> buildBytes({
     required Project project,
@@ -156,12 +188,13 @@ class StoryboardPdfExporter {
         ) {
           final end = (start + _shotListRowsPerPage).clamp(0, shots.length);
           final chunk = shots.sublist(start, end);
+          final first = start + 1;
           hasPages = true;
           doc.addPage(
             pw.Page(
               theme: pdfTheme,
               pageFormat: PdfPageFormat.a4,
-              margin: const pw.EdgeInsets.all(24),
+              margin: const pw.EdgeInsets.all(_listMargin),
               build: (context) => pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                 children: [
@@ -169,18 +202,13 @@ class StoryboardPdfExporter {
                     project,
                     scene,
                     chunk,
+                    first,
                     shots.length,
                     layout: StoryboardSequenceLayout.shotList,
                   ),
-                  pw.SizedBox(height: 10),
+                  pw.SizedBox(height: _headerGap),
                   pw.Expanded(
-                    child: _shotListPage(
-                      context,
-                      scene,
-                      chunk,
-                      shots.length,
-                      imageCache: imageCache,
-                    ),
+                    child: _shotListPage(scene, chunk, imageCache: imageCache),
                   ),
                 ],
               ),
@@ -211,20 +239,23 @@ class StoryboardPdfExporter {
       final gridStyle = isSequenceSb
           ? StoryboardExportStyle.clean
           : effectiveStyle;
+      final density = groupChoice?.gridDensity ?? StoryboardGridDensity.six;
+      final perPage = density.rows * _columns;
 
       for (final scene in orderedScenes) {
         final shots = _orderedShots(shotsByScene[scene.id] ?? []);
         if (shots.isEmpty) continue;
 
-        for (var start = 0; start < shots.length; start += _shotsPerPage) {
-          final end = (start + _shotsPerPage).clamp(0, shots.length);
+        for (var start = 0; start < shots.length; start += perPage) {
+          final end = (start + perPage).clamp(0, shots.length);
           final chunk = shots.sublist(start, end);
+          final first = start + 1;
           hasPages = true;
           doc.addPage(
             pw.Page(
               theme: pdfTheme,
               pageFormat: PdfPageFormat.a4.landscape,
-              margin: const pw.EdgeInsets.all(20),
+              margin: const pw.EdgeInsets.all(_gridMargin),
               build: (context) => pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                 children: [
@@ -232,16 +263,17 @@ class StoryboardPdfExporter {
                     project,
                     scene,
                     chunk,
+                    first,
                     shots.length,
                     layout: isSequenceSb
                         ? StoryboardSequenceLayout.storyboard
                         : null,
                   ),
-                  pw.SizedBox(height: 10),
+                  pw.SizedBox(height: _headerGap),
                   pw.Expanded(
                     child: _shotGrid(
                       chunk,
-                      context,
+                      density,
                       gridStyle,
                       sequenceStoryboard: isSequenceSb,
                       imageCache: imageCache,
@@ -284,7 +316,10 @@ class StoryboardPdfExporter {
 
   static List<Shot> _orderedShots(List<Shot> shots) {
     final copy = List<Shot>.from(shots);
-    copy.sort((a, b) => a.number.compareTo(b.number));
+    copy.sort((a, b) {
+      final byOrder = a.sortOrder.compareTo(b.sortOrder);
+      return byOrder != 0 ? byOrder : a.number.compareTo(b.number);
+    });
     return copy;
   }
 
@@ -292,81 +327,90 @@ class StoryboardPdfExporter {
     Project project,
     Scene scene,
     List<Shot> chunk,
+    int firstIndex,
     int totalShots, {
     StoryboardSequenceLayout? layout,
   }) {
     final slug = scene.locationCanonical.trim().isNotEmpty
         ? scene.locationCanonical
         : scene.name;
-    final first = chunk.first.number;
-    final last = chunk.last.number;
+    final last = firstIndex + chunk.length - 1;
     final range = chunk.length == 1
-        ? 'Shot $first of $totalShots'
-        : 'Shots $first – $last of $totalShots';
+        ? 'Shot $firstIndex of $totalShots'
+        : 'Shots $firstIndex – $last of $totalShots';
     final tag = layout?.artemisFileSuffix ?? 'SB';
 
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
-            pw.Text(
-              project.name,
-              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.Text(
-              tag,
-              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
-            ),
-          ],
-        ),
-        pw.SizedBox(height: 4),
-        pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.end,
-          children: [
-            pw.Text(
-              'Sc. ${scene.label}',
-              style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.Spacer(),
-            pw.Text(
-              range,
-              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
-            ),
-          ],
-        ),
-        pw.SizedBox(height: 2),
-        pw.Text(
-          slug,
-          style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
-        ),
-      ],
+    return pw.SizedBox(
+      height: _headerHeight,
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                project.name,
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.Text(
+                tag,
+                style: const pw.TextStyle(
+                  fontSize: 9,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 4),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: [
+              pw.Expanded(
+                child: pw.Text(
+                  'Sc. ${scene.label}',
+                  maxLines: 1,
+                  style: pw.TextStyle(
+                    fontSize: 15,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+              pw.Text(
+                range,
+                style: const pw.TextStyle(
+                  fontSize: 9,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            slug,
+            maxLines: 1,
+            style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
+          ),
+        ],
+      ),
     );
   }
 
   static pw.Widget _shotGrid(
     List<Shot> shots,
-    pw.Context context,
+    StoryboardGridDensity density,
     StoryboardExportStyle style, {
     bool sequenceStoryboard = false,
     Map<int, Uint8List> imageCache = const {},
   }) {
-    final pageWidth = context.page.pageFormat.availableWidth;
-    const gap = 8.0;
-    final colWidth = (pageWidth - gap * (_columns - 1)) / _columns;
-    final imageHeight = colWidth / _frameAspect;
-    final captionHeight = sequenceStoryboard
-        ? 48.0
-        : switch (style) {
-            StoryboardExportStyle.clean => 0.0,
-            StoryboardExportStyle.basic => 8.0,
-            _ => 52.0,
-          };
-    final rowHeight = imageHeight + captionHeight;
+    const gap = _gridGap;
+    final (:colWidth, :rowHeight, :imageHeight) = _gridMetrics(density);
+    final imageWidth = imageHeight * _frameAspect;
 
     final rows = <pw.Widget>[];
-    for (var r = 0; r < _rows; r++) {
+    for (var r = 0; r < density.rows; r++) {
       final rowStart = r * _columns;
       if (rowStart >= shots.length) break;
       final rowShots = shots.sublist(
@@ -387,13 +431,19 @@ class StoryboardPdfExporter {
                           padding: pw.EdgeInsets.only(
                             right: c < _columns - 1 ? gap : 0,
                           ),
-                          child: _frameCell(
-                            rowShots[c],
-                            colWidth: colWidth,
-                            imageHeight: imageHeight,
-                            style: style,
-                            sequenceStoryboard: sequenceStoryboard,
-                            imageCache: imageCache,
+                          child: pw.Align(
+                            alignment: pw.Alignment.topCenter,
+                            child: pw.SizedBox(
+                              width: imageWidth,
+                              child: _frameCell(
+                                rowShots[c],
+                                colWidth: imageWidth,
+                                imageHeight: imageHeight,
+                                style: style,
+                                sequenceStoryboard: sequenceStoryboard,
+                                imageCache: imageCache,
+                              ),
+                            ),
                           ),
                         )
                       : pw.SizedBox(width: colWidth),
@@ -402,7 +452,7 @@ class StoryboardPdfExporter {
           ),
         ),
       );
-      if (r < _rows - 1 && rowStart + _columns < shots.length) {
+      if (r < density.rows - 1 && rowStart + _columns < shots.length) {
         rows.add(pw.SizedBox(height: gap));
       }
     }
@@ -411,20 +461,20 @@ class StoryboardPdfExporter {
   }
 
   static pw.Widget _shotListPage(
-    pw.Context context,
     Scene scene,
-    List<Shot> shots,
-    int totalShotsInScene, {
+    List<Shot> shots, {
     Map<int, Uint8List> imageCache = const {},
   }) {
-    final pageHeight = context.page.pageFormat.availableHeight;
-    const gap = 8.0;
-    final rowHeight =
-        (pageHeight - gap * (_shotListRowsPerPage - 1)) / _shotListRowsPerPage;
-    final pageWidth = context.page.pageFormat.availableWidth;
+    const page = PdfPageFormat.a4;
+    const gap = (_listSeparator - 1) / 2;
+    final bodyHeight =
+        page.height - _listMargin * 2 - _headerHeight - _headerGap;
+    final contentHeight =
+        (bodyHeight - _listSeparator * (_shotListRowsPerPage - 1)) /
+        _shotListRowsPerPage;
+    final pageWidth = page.width - _listMargin * 2;
     final imageWidth = pageWidth * 0.34;
     final imageHeight = imageWidth / _frameAspect;
-    final contentHeight = math.max(rowHeight, imageHeight + 24);
 
     final rows = <pw.Widget>[];
     for (var i = 0; i < shots.length; i++) {
@@ -432,8 +482,6 @@ class StoryboardPdfExporter {
         _shotListRow(
           scene: scene,
           shot: shots[i],
-          shotIndex: shots[i].number,
-          totalShots: totalShotsInScene,
           rowHeight: contentHeight,
           imageWidth: imageWidth,
           imageHeight: imageHeight,
@@ -457,8 +505,6 @@ class StoryboardPdfExporter {
   static pw.Widget _shotListRow({
     required Scene scene,
     required Shot shot,
-    required int shotIndex,
-    required int totalShots,
     required double rowHeight,
     required double imageWidth,
     required double imageHeight,
@@ -486,7 +532,7 @@ class StoryboardPdfExporter {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  'Shot $shotIndex of $totalShots',
+                  'Shot ${shot.number}',
                   style: pw.TextStyle(
                     fontSize: 11,
                     fontWeight: pw.FontWeight.bold,
@@ -537,6 +583,7 @@ class StoryboardPdfExporter {
                     maxLines: 4,
                   ),
                 ],
+                _ShotPaintProbe(shot.id),
               ],
             ),
           ),
@@ -606,6 +653,7 @@ class StoryboardPdfExporter {
               textAlign: pw.TextAlign.center,
             ),
         ],
+        _ShotPaintProbe(shot.id),
       ],
     );
   }
@@ -743,5 +791,27 @@ class StoryboardPdfExporter {
         style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
       ),
     );
+  }
+}
+
+/// Marca sin tamaño: solo se pinta si el plano ha cabido en la página.
+class _ShotPaintProbe extends pw.Widget {
+  _ShotPaintProbe(this.shotId);
+
+  final int shotId;
+
+  @override
+  void layout(
+    pw.Context context,
+    pw.BoxConstraints constraints, {
+    bool parentUsesSize = false,
+  }) {
+    box = PdfRect.zero;
+  }
+
+  @override
+  void paint(pw.Context context) {
+    super.paint(context);
+    StoryboardPdfExporter.debugPaintedShots?.add(shotId);
   }
 }

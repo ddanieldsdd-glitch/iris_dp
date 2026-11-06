@@ -62,6 +62,8 @@ class GoodNotesPdfActions extends ConsumerWidget {
     try {
       if (action == 'share') {
         final bytes = await buildPdfBytes();
+        // Lista vacía: el usuario canceló las opciones del export.
+        if (bytes.isEmpty) return;
         await GoodNotesExportService.shareForAnnotation(
           pdfBytes: bytes,
           filename: filenameBase,
