@@ -45,7 +45,8 @@ class OnSetMark {
       final m = decoded is Map ? decoded[_key] : null;
       if (m is! Map) return const OnSetMark();
       return OnSetMark(
-        status: OnSetStatus.values
+        status:
+            OnSetStatus.values
                 .where((s) => s.name == m['status'])
                 .firstOrNull ??
             OnSetStatus.pending,
@@ -116,7 +117,10 @@ class ShootDayOnSetScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: palette.surface,
-        title: Text('En set · $title', style: AppTypography.titleMedium(palette)),
+        title: Text(
+          'En set · $title',
+          style: AppTypography.titleMedium(palette),
+        ),
       ),
       body: StreamBuilder<List<Scene>>(
         stream: db.watchScenesForProject(projectId),
@@ -193,10 +197,9 @@ class OnSetList extends StatelessWidget {
     final done = marks.where((m) => m.status == OnSetStatus.done).length;
     final dropped = marks.where((m) => m.status == OnSetStatus.dropped).length;
     final byId = {for (final b in blocks) b.id: b};
-    final tracts = groupShootTracts(
-      [for (final b in blocks) b.id],
-      (id) => shots[byId[id]!.shotId]!.sceneId,
-    );
+    final tracts = groupShootTracts([
+      for (final b in blocks) b.id,
+    ], (id) => shots[byId[id]!.shotId]!.sceneId);
     final gutter = AppLayout.gutter(context);
     var order = 0;
     return ListView(
@@ -351,38 +354,40 @@ class OnSetShotCard extends StatelessWidget {
                 Text('Nota de set: ${mark.note}', style: caption),
               ],
               if (onMark case final onMark?) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  FilterChip(
-                    avatar: const Icon(Icons.check, size: 16),
-                    label: const Text('Hecho'),
-                    selected: done,
-                    onSelected: (on) => onMark(
-                      mark.copyWith(
-                        status: on ? OnSetStatus.done : OnSetStatus.pending,
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    FilterChip(
+                      avatar: const Icon(Icons.check, size: 16),
+                      label: const Text('Hecho'),
+                      selected: done,
+                      onSelected: (on) => onMark(
+                        mark.copyWith(
+                          status: on ? OnSetStatus.done : OnSetStatus.pending,
+                        ),
                       ),
                     ),
-                  ),
-                  FilterChip(
-                    avatar: const Icon(Icons.block, size: 16),
-                    label: const Text('Descartar'),
-                    selected: dropped,
-                    onSelected: (on) => onMark(
-                      mark.copyWith(
-                        status: on ? OnSetStatus.dropped : OnSetStatus.pending,
+                    FilterChip(
+                      avatar: const Icon(Icons.block, size: 16),
+                      label: const Text('Descartar'),
+                      selected: dropped,
+                      onSelected: (on) => onMark(
+                        mark.copyWith(
+                          status: on
+                              ? OnSetStatus.dropped
+                              : OnSetStatus.pending,
+                        ),
                       ),
                     ),
-                  ),
-                  ActionChip(
-                    avatar: const Icon(Icons.edit_note, size: 16),
-                    label: Text(mark.note.isEmpty ? 'Nota' : 'Editar nota'),
-                    onPressed: () => _editNote(context, onMark),
-                  ),
-                ],
-              ),
+                    ActionChip(
+                      avatar: const Icon(Icons.edit_note, size: 16),
+                      label: Text(mark.note.isEmpty ? 'Nota' : 'Editar nota'),
+                      onPressed: () => _editNote(context, onMark),
+                    ),
+                  ],
+                ),
               ],
             ],
           ),

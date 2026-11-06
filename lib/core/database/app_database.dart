@@ -114,12 +114,20 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 3) {
         await _addColumnIfMissing(m, scenes, scenes.locationId);
-        await _addColumnIfMissing(m, locationBasePlans, locationBasePlans.description);
+        await _addColumnIfMissing(
+          m,
+          locationBasePlans,
+          locationBasePlans.description,
+        );
         await m.createTable(locationImages);
       }
       if (from < 4) {
         await m.createTable(locationSites);
-        await _addColumnIfMissing(m, locationBasePlans, locationBasePlans.siteId);
+        await _addColumnIfMissing(
+          m,
+          locationBasePlans,
+          locationBasePlans.siteId,
+        );
       }
       if (from < 5) {
         await _addColumnIfMissing(m, scenes, scenes.locationSiteId);
@@ -133,8 +141,16 @@ class AppDatabase extends _$AppDatabase {
         await _ensureDefaultSetsForAllSites();
       }
       if (from < 8) {
-        await _addColumnIfMissing(m, locationSites, locationSites.floorPlanJson);
-        await _addColumnIfMissing(m, locationBasePlans, locationBasePlans.floorPlanJson);
+        await _addColumnIfMissing(
+          m,
+          locationSites,
+          locationSites.floorPlanJson,
+        );
+        await _addColumnIfMissing(
+          m,
+          locationBasePlans,
+          locationBasePlans.floorPlanJson,
+        );
       }
       if (from < 9) {
         await m.createTable(cameras);
@@ -146,16 +162,30 @@ class AppDatabase extends _$AppDatabase {
       if (from < 10) {
         await _addColumnIfMissing(m, locationSites, locationSites.scanPath);
         await _addColumnIfMissing(m, locationSites, locationSites.scanSource);
-        await _addColumnIfMissing(m, locationSites, locationSites.scanMetadataJson);
-        await _addColumnIfMissing(m, locationBasePlans, locationBasePlans.scanPath);
-        await _addColumnIfMissing(m, locationBasePlans, locationBasePlans.scanSource);
-        await _addColumnIfMissing(m, 
+        await _addColumnIfMissing(
+          m,
+          locationSites,
+          locationSites.scanMetadataJson,
+        );
+        await _addColumnIfMissing(
+          m,
+          locationBasePlans,
+          locationBasePlans.scanPath,
+        );
+        await _addColumnIfMissing(
+          m,
+          locationBasePlans,
+          locationBasePlans.scanSource,
+        );
+        await _addColumnIfMissing(
+          m,
           locationBasePlans,
           locationBasePlans.scanMetadataJson,
         );
       }
       if (from < 11) {
-        await _addColumnIfMissing(m, 
+        await _addColumnIfMissing(
+          m,
           cameraPlanElements,
           cameraPlanElements.externalMappingJson,
         );
@@ -176,47 +206,131 @@ class AppDatabase extends _$AppDatabase {
         await _addColumnIfMissing(m, cameras, cameras.colorScience);
         await _addColumnIfMissing(m, cameras, cameras.nativeIso);
         await _addColumnIfMissing(m, cameras, cameras.logFormats);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.primaryCameraId);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.recordingFormat);
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.primaryCameraId,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.recordingFormat,
+        );
         await _addColumnIfMissing(m, visualBibles, visualBibles.codec);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.resolutionNotes);
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.resolutionNotes,
+        );
         await _addColumnIfMissing(m, visualBibles, visualBibles.frameRateNotes);
         await _addColumnIfMissing(m, visualBibles, visualBibles.nativeIso);
         await _addColumnIfMissing(m, visualBibles, visualBibles.defaultTStop);
         await _addColumnIfMissing(m, visualBibles, visualBibles.ndNotes);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.deliveryColorSpace);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.captureResolution);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.deliveryResolution);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.workflowPipeline);
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.deliveryColorSpace,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.captureResolution,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.deliveryResolution,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.workflowPipeline,
+        );
         await _addColumnIfMissing(m, visualBibles, visualBibles.diffusionNotes);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.sensorShadowBehavior);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.colorScienceNotes);
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.sensorShadowBehavior,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.colorScienceNotes,
+        );
         await _addColumnIfMissing(m, visualBibles, visualBibles.lowLightNotes);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.opticCharacterNotes);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.filtrationNotes);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.cameraMovementsJson);
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.opticCharacterNotes,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.filtrationNotes,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.cameraMovementsJson,
+        );
         await _addColumnIfMissing(m, visualBibles, visualBibles.actVisualNotes);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.cameraNarrativeIntent);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.opticsNarrativeIntent);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.exposureNarrativeIntent);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.lightingNarrativeIntent);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.colorNarrativeIntent);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.formatNarrativeIntent);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.textureNarrativeIntent);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.conceptNarrativeIntent);
-        await _addColumnIfMissing(m, 
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.cameraNarrativeIntent,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.opticsNarrativeIntent,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.exposureNarrativeIntent,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.lightingNarrativeIntent,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.colorNarrativeIntent,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.formatNarrativeIntent,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.textureNarrativeIntent,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.conceptNarrativeIntent,
+        );
+        await _addColumnIfMissing(
+          m,
           visualBibleLocationRefs,
           visualBibleLocationRefs.solarOrientation,
         );
-        await _addColumnIfMissing(m, 
+        await _addColumnIfMissing(
+          m,
           visualBibleLocationRefs,
           visualBibleLocationRefs.availableLightHours,
         );
-        await _addColumnIfMissing(m, 
+        await _addColumnIfMissing(
+          m,
           visualBibleLocationRefs,
           visualBibleLocationRefs.existingPracticals,
         );
-        await _addColumnIfMissing(m, 
+        await _addColumnIfMissing(
+          m,
           visualBibleLocationRefs,
           visualBibleLocationRefs.estimatedColorTempKelvin,
         );
@@ -257,7 +371,11 @@ class AppDatabase extends _$AppDatabase {
         await _addColumnIfMissing(m, lights, lights.externalId);
         await _addColumnIfMissing(m, lights, lights.catalogVersion);
         await _addColumnIfMissing(m, lights, lights.isCustom);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.opticsConfigJson);
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.opticsConfigJson,
+        );
         await m.createTable(catalogSyncMeta);
         await m.createTable(bibleSectionEvidence);
         await _importEmbeddedCatalogIfNeeded();
@@ -285,12 +403,29 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 18) {
         await _addColumnIfMissing(m, visualBibles, visualBibles.tone);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.creativeIntention);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.stagingApproach);
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.creativeIntention,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.stagingApproach,
+        );
         await _addColumnIfMissing(m, visualBibles, visualBibles.pointOfView);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.directionNarrativeIntent);
-        await _addColumnIfMissing(m, visualBibles, visualBibles.depthOfFieldNotes);
-        await _addColumnIfMissing(m, 
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.directionNarrativeIntent,
+        );
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.depthOfFieldNotes,
+        );
+        await _addColumnIfMissing(
+          m,
           visualBibleLocationRefs,
           visualBibleLocationRefs.stagingNote,
         );
@@ -309,10 +444,18 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(opticsLabSamples);
       }
       if (from < 21) {
-        await _addColumnIfMissing(m, projectEquipment, projectEquipment.sortOrder);
+        await _addColumnIfMissing(
+          m,
+          projectEquipment,
+          projectEquipment.sortOrder,
+        );
       }
       if (from < 22) {
-        await _addColumnIfMissing(m, moodboardImages, moodboardImages.assignedSections);
+        await _addColumnIfMissing(
+          m,
+          moodboardImages,
+          moodboardImages.assignedSections,
+        );
       }
       if (from < 23) {
         await m.createTable(moodboardGroups);
@@ -327,15 +470,18 @@ class AppDatabase extends _$AppDatabase {
         await _seedBibleSectionDefinitionsForExistingBibles();
       }
       if (from < 26) {
-        await _addColumnIfMissing(m, 
+        await _addColumnIfMissing(
+          m,
           visualBibleLocationRefs,
           visualBibleLocationRefs.locationSiteId,
         );
-        await _addColumnIfMissing(m, 
+        await _addColumnIfMissing(
+          m,
           visualBibleLocationRefs,
           visualBibleLocationRefs.locationBasePlanId,
         );
-        await _addColumnIfMissing(m, 
+        await _addColumnIfMissing(
+          m,
           moodboardImages,
           moodboardImages.linkedLocationBasePlanId,
         );
@@ -376,7 +522,11 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(visualBibleDocuments);
       }
       if (from < 35) {
-        await _addColumnIfMissing(m, visualBibles, visualBibles.structureInitialized);
+        await _addColumnIfMissing(
+          m,
+          visualBibles,
+          visualBibles.structureInitialized,
+        );
         await customStatement(
           'UPDATE visual_bibles SET structure_initialized = 1 '
           'WHERE id IN (SELECT DISTINCT bible_id FROM bible_section_groups)',
@@ -389,14 +539,26 @@ class AppDatabase extends _$AppDatabase {
         await _addColumnIfMissing(m, visualBibles, visualBibles.engineVersion);
       }
       if (from < 38) {
-        await _addColumnIfMissing(m, lightingSetups, lightingSetups.locationBasePlanId);
-        await _addColumnIfMissing(m, lightingSetups, lightingSetups.locationSiteId);
+        await _addColumnIfMissing(
+          m,
+          lightingSetups,
+          lightingSetups.locationBasePlanId,
+        );
+        await _addColumnIfMissing(
+          m,
+          lightingSetups,
+          lightingSetups.locationSiteId,
+        );
       }
       if (from < 39) {
         await _addColumnIfMissing(m, moodboardImages, moodboardImages.metaJson);
       }
       if (from < 40) {
-        await _addColumnIfMissing(m, moodboardImages, moodboardImages.assignedCardIds);
+        await _addColumnIfMissing(
+          m,
+          moodboardImages,
+          moodboardImages.assignedCardIds,
+        );
         await m.createTable(visualBibleNarrativeCards);
       }
       if (from < 41) {
@@ -435,12 +597,21 @@ class AppDatabase extends _$AppDatabase {
         // Planta por capas: esquemas de luz compartidos entre planos.
         await m.createTable(lightSetups);
         await _addColumnIfMissing(m, shots, shots.lightSetupId);
-        await _addColumnIfMissing(m, cameraPlanElements, cameraPlanElements.propsJson);
-        await _addColumnIfMissing(m, 
+        await _addColumnIfMissing(
+          m,
+          cameraPlanElements,
+          cameraPlanElements.propsJson,
+        );
+        await _addColumnIfMissing(
+          m,
           locationBasePlans,
           locationBasePlans.sitePlacementJson,
         );
-        await _addColumnIfMissing(m, lightingSetups, lightingSetups.planSetupId);
+        await _addColumnIfMissing(
+          m,
+          lightingSetups,
+          lightingSetups.planSetupId,
+        );
         await PlanLayerMigration(this).run();
       }
       if (from < 43) {
@@ -1528,9 +1699,11 @@ class AppDatabase extends _$AppDatabase {
           await (delete(
             shootDocumentBlocks,
           )..where((b) => b.sceneId.equals(old.id))).go();
-          await (update(moodboardImages)
-                ..where((m) => m.linkedSceneId.equals(old.id)))
-              .write(const MoodboardImagesCompanion(linkedSceneId: Value(null)));
+          await (update(
+            moodboardImages,
+          )..where((m) => m.linkedSceneId.equals(old.id))).write(
+            const MoodboardImagesCompanion(linkedSceneId: Value(null)),
+          );
           await (delete(scenes)..where((sc) => sc.id.equals(old.id))).go();
         } else {
           offOrder++;
@@ -1648,15 +1821,16 @@ class AppDatabase extends _$AppDatabase {
       await deleteCameraPlanElement(el.id);
     }
     await (delete(shotReferences)..where((r) => r.shotId.equals(id))).go();
-    await (delete(
-      shootDocumentBlocks,
-    )..where((b) => b.shotId.equals(id))).go();
+    await (delete(shootDocumentBlocks)..where((b) => b.shotId.equals(id))).go();
     return (delete(shots)..where((s) => s.id.equals(id))).go();
   }
 
   /// Guarda el orden de los planos de una escena. El número de plano sigue al
   /// orden, salvo en los planos con numeración manual.
-  Future<void> reorderShotsInScene(int sceneId, List<int> shotIdsInOrder) async {
+  Future<void> reorderShotsInScene(
+    int sceneId,
+    List<int> shotIdsInOrder,
+  ) async {
     final scene = await getSceneById(sceneId);
     await transaction(() async {
       for (var i = 0; i < shotIdsInOrder.length; i++) {
@@ -1750,8 +1924,7 @@ class AppDatabase extends _$AppDatabase {
           ShotsCompanion(sortOrder: Value(i)),
         );
       }
-      await (update(shootDocumentBlocks)
-            ..where((b) => b.shotId.equals(shotId)))
+      await (update(shootDocumentBlocks)..where((b) => b.shotId.equals(shotId)))
           .write(ShootDocumentBlocksCompanion(sceneId: Value(targetSceneId)));
       await _renumberShotsInScene(targetSceneId);
       await _renumberShotsInScene(sourceSceneId);
@@ -1797,6 +1970,97 @@ class AppDatabase extends _$AppDatabase {
               (d) => OrderingTerm.desc(d.updatedAt),
             ]))
           .watch();
+
+  Future<List<ShootDocument>> getShootDocumentsForProject(int projectId) =>
+      (select(
+        shootDocuments,
+      )..where((d) => d.projectId.equals(projectId))).get();
+
+  /// Bloques de todas las jornadas de un proyecto.
+  JoinedSelectStatement<HasResultSet, dynamic> _shootDayBlocksQuery(
+    int projectId,
+  ) =>
+      select(shootDocumentBlocks).join([
+          innerJoin(
+            shootDocuments,
+            shootDocuments.id.equalsExp(shootDocumentBlocks.documentId),
+          ),
+        ])
+        ..where(
+          shootDocuments.projectId.equals(projectId) &
+              shootDocuments.kind.equals('technical_day'),
+        )
+        ..orderBy([OrderingTerm.asc(shootDocumentBlocks.sortOrder)]);
+
+  Stream<List<ShootDocumentBlock>> watchShootDayBlocks(int projectId) =>
+      _shootDayBlocksQuery(projectId).watch().map(
+        (rows) => [for (final r in rows) r.readTable(shootDocumentBlocks)],
+      );
+
+  Future<List<ShootDocumentBlock>> getShootDayBlocks(int projectId) async => [
+    for (final r in await _shootDayBlocksQuery(projectId).get())
+      r.readTable(shootDocumentBlocks),
+  ];
+
+  /// Pone [blockIds] en la jornada [dayId], antes de [beforeBlockId] o al
+  /// final, y deja el orden de esa jornada numerado de nuevo.
+  Future<void> arrangeShootDayBlocks(
+    int dayId,
+    List<int> blockIds,
+    int? beforeBlockId,
+  ) async {
+    await transaction(() async {
+      final rest =
+          await (select(shootDocumentBlocks)
+                ..where(
+                  (b) => b.documentId.equals(dayId) & b.id.isNotIn(blockIds),
+                )
+                ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)]))
+              .get();
+      final order = [for (final b in rest) b.id];
+      final at = beforeBlockId == null ? -1 : order.indexOf(beforeBlockId);
+      order.insertAll(at < 0 ? order.length : at, blockIds);
+      for (final (i, id) in order.indexed) {
+        await (update(
+          shootDocumentBlocks,
+        )..where((b) => b.id.equals(id))).write(
+          ShootDocumentBlocksCompanion(
+            documentId: Value(dayId),
+            sortOrder: Value(i),
+          ),
+        );
+      }
+    });
+    final doc = await getShootDocument(dayId);
+    if (doc != null) await touchProjectContent(doc.projectId);
+  }
+
+  /// Deja los bloques de las jornadas como estaban en [blocks].
+  Future<void> restoreShootDayBlocks(
+    int projectId,
+    List<ShootDocumentBlock> blocks,
+  ) async {
+    await transaction(() async {
+      final current = await getShootDayBlocks(projectId);
+      await (delete(
+        shootDocumentBlocks,
+      )..where((b) => b.id.isIn([for (final c in current) c.id]))).go();
+      for (final block in blocks) {
+        await into(shootDocumentBlocks).insert(block);
+      }
+    });
+    await touchProjectContent(projectId);
+  }
+
+  Future<void> setShootDayOrder(List<int> dayIds) async {
+    await transaction(() async {
+      for (final (i, id) in dayIds.indexed) {
+        await (update(shootDocuments)..where((d) => d.id.equals(id))).write(
+          ShootDocumentsCompanion(dayOrder: Value(i)),
+        );
+      }
+    });
+  }
 
   Future<ShootDocument?> getShootDocument(int id) =>
       (select(shootDocuments)..where((d) => d.id.equals(id))).getSingleOrNull();
@@ -1941,9 +2205,11 @@ class AppDatabase extends _$AppDatabase {
           placeLabel: Value(placeLabel),
         ),
       );
-      await (update(shootDocuments)
-            ..where((d) => d.locationSiteId.equals(siteId)))
-          .write(const ShootDocumentsCompanion(weatherSnapshotJson: Value(null)));
+      await (update(
+        shootDocuments,
+      )..where((d) => d.locationSiteId.equals(siteId))).write(
+        const ShootDocumentsCompanion(weatherSnapshotJson: Value(null)),
+      );
     });
     await touchProjectContent(site.projectId);
   }

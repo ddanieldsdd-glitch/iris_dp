@@ -26,8 +26,9 @@ import 'shoot_day_order.dart';
 import 'shoot_document_block_types.dart';
 import 'shoot_document_script_picker.dart';
 
+export 'shoot_plan.dart' show kShootDayKind;
+
 /// Tipo de documento de rodaje que es una jornada con su guion técnico.
-const kShootDayKind = 'technical_day';
 
 /// Exporta el guion técnico de la jornada [documentId] a PDF o Word, con o
 /// sin índice, y avisa de dónde se guardó.
@@ -580,8 +581,7 @@ class _OrderListState extends ConsumerState<_OrderList> {
       context,
       'Orden de rodaje cambiado.',
       actionLabel: 'Deshacer',
-      onAction: () =>
-          db.reorderShootDocumentBlocks(widget.documentId, before),
+      onAction: () => db.reorderShootDocumentBlocks(widget.documentId, before),
     );
   }
 
@@ -720,12 +720,18 @@ class _OrderListState extends ConsumerState<_OrderList> {
                         segments: [
                           ButtonSegment(
                             value: true,
-                            icon: const Icon(Icons.view_agenda_outlined, size: 16),
+                            icon: const Icon(
+                              Icons.view_agenda_outlined,
+                              size: 16,
+                            ),
                             label: Text('Escenas (${tracts.length})'),
                           ),
                           ButtonSegment(
                             value: false,
-                            icon: const Icon(Icons.format_list_numbered, size: 16),
+                            icon: const Icon(
+                              Icons.format_list_numbered,
+                              size: 16,
+                            ),
                             label: Text('Planos (${rows.length})'),
                           ),
                         ],
@@ -757,7 +763,8 @@ class _OrderListState extends ConsumerState<_OrderList> {
                           horizontal: AppSpacing.lg,
                         ),
                         itemCount: tracts.length,
-                        keyOf: (i) => ValueKey('tract-${tracts[i].blockIds.first}'),
+                        keyOf: (i) =>
+                            ValueKey('tract-${tracts[i].blockIds.first}'),
                         dragLabel: (i) =>
                             'Escena ${scenes[tracts[i].sceneId]?.label ?? '—'}',
                         onReorder: (from, to) =>
@@ -783,10 +790,10 @@ class _OrderListState extends ConsumerState<_OrderList> {
                                 content: Text(
                                   n == 1
                                       ? 'Se quita 1 plano de este documento. '
-                                          'El plano sigue en el guion técnico.'
+                                            'El plano sigue en el guion técnico.'
                                       : 'Se quitan $n planos de este '
-                                          'documento. Siguen en el guion '
-                                          'técnico.',
+                                            'documento. Siguen en el guion '
+                                            'técnico.',
                                 ),
                                 actions: [
                                   TextButton(

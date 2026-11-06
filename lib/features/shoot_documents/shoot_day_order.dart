@@ -31,9 +31,7 @@ List<ShootTract> groupShootTracts(
 List<int> moveShootTract(List<ShootTract> tracts, int from, int to) {
   final next = [...tracts];
   next.insert(to, next.removeAt(from));
-  return [
-    for (final t in next) ...t.blockIds,
-  ];
+  return [for (final t in next) ...t.blockIds];
 }
 
 /// Los bloques en el orden del guion: por el puesto de su escena y, dentro

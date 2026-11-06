@@ -18,6 +18,8 @@ import 'shoot_day_on_set.dart';
 import 'shoot_day_screen.dart';
 import '../../core/theme/app_layout.dart';
 import '../settings/settings_launcher.dart';
+import 'shoot_days_board.dart';
+import 'shoot_plan.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
@@ -122,12 +124,24 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
                       const SizedBox(height: AppSpacing.sm),
                       grid([
                         _CreateCard(
+                          icon: Icons.view_week_outlined,
+                          title: 'Plan de rodaje',
+                          description:
+                              'Reparte las escenas por días y ordénalas. De '
+                              'ahí salen el guion técnico, la planta y el '
+                              'storyboard de cada jornada.',
+                          highlighted: true,
+                          onTap: () => ShootDaysBoardScreen.open(
+                            context,
+                            projectId: widget.projectId,
+                          ),
+                        ),
+                        _CreateCard(
                           icon: Icons.event_note,
                           title: 'Guion técnico de rodaje',
                           description:
                               'Una jornada: escenas en el orden en que se '
                               'ruedan, con índice, sol y previsión.',
-                          highlighted: true,
                           onTap: () => _createShootDay(context),
                         ),
                         _CreateCard(
@@ -437,11 +451,10 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
     final existing = await db
         .watchShootDocumentsForProject(widget.projectId)
         .first;
-    final days = existing.where((d) => d.kind == kShootDayKind).length;
     final id = await db.insertShootDocument(
       ShootDocumentsCompanion.insert(
         projectId: widget.projectId,
-        name: 'Jornada ${days + 1}',
+        name: nextShootDayName(existing.where((d) => d.kind == kShootDayKind)),
         kind: const Value(kShootDayKind),
       ),
     );
@@ -466,10 +479,8 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
       Navigator.push<void>(
         context,
         MaterialPageRoute<void>(
-          builder: (_) => ShootDayScreen(
-            projectId: widget.projectId,
-            documentId: doc.id,
-          ),
+          builder: (_) =>
+              ShootDayScreen(projectId: widget.projectId, documentId: doc.id),
         ),
       );
       return;

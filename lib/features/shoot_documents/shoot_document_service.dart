@@ -45,9 +45,7 @@ abstract final class ShootDocumentService {
         template: template,
       );
       for (final c in companions) {
-        await db.insertShootDocumentBlock(
-          c.copyWith(documentId: Value(docId)),
-        );
+        await db.insertShootDocumentBlock(c.copyWith(documentId: Value(docId)));
       }
     }
 
@@ -58,8 +56,7 @@ abstract final class ShootDocumentService {
     AppDatabase db,
     int documentId,
     List<int> blockIdsInOrder,
-  ) =>
-      db.reorderShootDocumentBlocks(documentId, blockIdsInOrder);
+  ) => db.reorderShootDocumentBlocks(documentId, blockIdsInOrder);
 
   static Future<ShootDocumentBlock> duplicateBlock(
     AppDatabase db,
@@ -67,16 +64,18 @@ abstract final class ShootDocumentService {
     int documentId,
   ) async {
     final blocks = await db.getBlocksForShootDocument(documentId);
-    final nextOrder =
-        blocks.isEmpty ? 0 : blocks.map((b) => b.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
+    final nextOrder = blocks.isEmpty
+        ? 0
+        : blocks.map((b) => b.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
     final companion = ShootDocumentComposer.duplicateBlock(
       block,
       documentId,
       nextOrder,
     );
     final id = await db.insertShootDocumentBlock(companion);
-    return (await db.getBlocksForShootDocument(documentId))
-        .firstWhere((b) => b.id == id);
+    return (await db.getBlocksForShootDocument(
+      documentId,
+    )).firstWhere((b) => b.id == id);
   }
 
   static Future<int> nextSortOrder(AppDatabase db, int documentId) async {

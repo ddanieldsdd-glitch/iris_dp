@@ -16,12 +16,19 @@ abstract final class ShootDocumentComposer {
   }) async {
     return switch (template) {
       ShootDocumentTemplate.empty => [],
-      ShootDocumentTemplate.narrativeScenes =>
-        _fromScenes(db, projectId, selectedSceneIds, narrative: true),
-      ShootDocumentTemplate.shootingOrderScenes =>
-        _fromScenes(db, projectId, selectedSceneIds, narrative: false),
-      ShootDocumentTemplate.fullTechnical =>
-        _fromFullTechnical(db, projectId),
+      ShootDocumentTemplate.narrativeScenes => _fromScenes(
+        db,
+        projectId,
+        selectedSceneIds,
+        narrative: true,
+      ),
+      ShootDocumentTemplate.shootingOrderScenes => _fromScenes(
+        db,
+        projectId,
+        selectedSceneIds,
+        narrative: false,
+      ),
+      ShootDocumentTemplate.fullTechnical => _fromFullTechnical(db, projectId),
     };
   }
 
@@ -31,9 +38,9 @@ abstract final class ShootDocumentComposer {
     List<int>? selectedSceneIds, {
     required bool narrative,
   }) async {
-    var scenes = await (db.select(db.scenes)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get();
+    var scenes = await (db.select(
+      db.scenes,
+    )..where((s) => s.projectId.equals(projectId))).get();
     if (selectedSceneIds != null && selectedSceneIds.isNotEmpty) {
       final idSet = selectedSceneIds.toSet();
       scenes = scenes.where((s) => idSet.contains(s.id)).toList();
@@ -75,10 +82,11 @@ abstract final class ShootDocumentComposer {
           ),
         );
       }
-      final shots = await (db.select(db.shots)
-            ..where((s) => s.sceneId.equals(scene.id))
-            ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-          .get();
+      final shots =
+          await (db.select(db.shots)
+                ..where((s) => s.sceneId.equals(scene.id))
+                ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+              .get();
       for (final shot in shots) {
         blocks.add(
           ShootDocumentBlocksCompanion.insert(
@@ -99,10 +107,12 @@ abstract final class ShootDocumentComposer {
   static Future<List<ShootDocumentBlocksCompanion>> _fromFullTechnical(
     AppDatabase db,
     int projectId,
-  ) =>
-      _fromScenes(db, projectId, null, narrative: true);
+  ) => _fromScenes(db, projectId, null, narrative: true);
 
-  static ShootDocumentBlocksCompanion _sceneHeaderBlock(Scene scene, int order) {
+  static ShootDocumentBlocksCompanion _sceneHeaderBlock(
+    Scene scene,
+    int order,
+  ) {
     return ShootDocumentBlocksCompanion.insert(
       documentId: 0,
       sortOrder: Value(order),
@@ -144,21 +154,20 @@ enum ShootDocumentTemplate {
 
 extension ShootDocumentTemplateX on ShootDocumentTemplate {
   String get label => switch (this) {
-        ShootDocumentTemplate.empty => 'Documento vacío',
-        ShootDocumentTemplate.narrativeScenes => 'Escenas (orden narrativo)',
-        ShootDocumentTemplate.shootingOrderScenes =>
-          'Escenas (orden de rodaje)',
-        ShootDocumentTemplate.fullTechnical => 'Guion técnico completo',
-      };
+    ShootDocumentTemplate.empty => 'Documento vacío',
+    ShootDocumentTemplate.narrativeScenes => 'Escenas (orden narrativo)',
+    ShootDocumentTemplate.shootingOrderScenes => 'Escenas (orden de rodaje)',
+    ShootDocumentTemplate.fullTechnical => 'Guion técnico completo',
+  };
 
   String get description => switch (this) {
-        ShootDocumentTemplate.empty =>
-          'Empieza con bloques en blanco y compón libremente.',
-        ShootDocumentTemplate.narrativeScenes =>
-          'Genera cabeceras, personajes y planos por escena en orden del guion.',
-        ShootDocumentTemplate.shootingOrderScenes =>
-          'Agrupa por localización y día/noche; editable después.',
-        ShootDocumentTemplate.fullTechnical =>
-          'Todas las escenas y planos del proyecto como borrador.',
-      };
+    ShootDocumentTemplate.empty =>
+      'Empieza con bloques en blanco y compón libremente.',
+    ShootDocumentTemplate.narrativeScenes =>
+      'Genera cabeceras, personajes y planos por escena en orden del guion.',
+    ShootDocumentTemplate.shootingOrderScenes =>
+      'Agrupa por localización y día/noche; editable después.',
+    ShootDocumentTemplate.fullTechnical =>
+      'Todas las escenas y planos del proyecto como borrador.',
+  };
 }

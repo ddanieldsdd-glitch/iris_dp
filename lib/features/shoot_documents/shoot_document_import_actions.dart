@@ -38,12 +38,19 @@ abstract final class ShootDocumentImportActions {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: Text('Cancelar', style: AppTypography.bodyMedium(palette)),
+                child: Text(
+                  'Cancelar',
+                  style: AppTypography.bodyMedium(palette),
+                ),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: Text('Crear', style: AppTypography.bodyMedium(palette)
-                    .copyWith(color: palette.accent)),
+                child: Text(
+                  'Crear',
+                  style: AppTypography.bodyMedium(
+                    palette,
+                  ).copyWith(color: palette.accent),
+                ),
               ),
             ],
           );
@@ -97,10 +104,7 @@ abstract final class ShootDocumentImportActions {
     var order = await ShootDocumentService.nextSortOrder(db, doc.id);
     for (final c in companions) {
       await db.insertShootDocumentBlock(
-        c.copyWith(
-          documentId: Value(doc.id),
-          sortOrder: Value(order++),
-        ),
+        c.copyWith(documentId: Value(doc.id), sortOrder: Value(order++)),
       );
     }
 

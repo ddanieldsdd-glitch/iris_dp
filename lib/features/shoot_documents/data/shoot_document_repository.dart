@@ -12,13 +12,12 @@ class ShootDocumentRepository {
     required int projectId,
     required String name,
     ShootDocumentTemplate template = ShootDocumentTemplate.empty,
-  }) =>
-      ShootDocumentService.createDocument(
-        db: _db,
-        projectId: projectId,
-        name: name,
-        template: template,
-      );
+  }) => ShootDocumentService.createDocument(
+    db: _db,
+    projectId: projectId,
+    name: name,
+    template: template,
+  );
 
   Future<ShootDocument?> primaryDocument(int projectId) =>
       ShootDocumentService.primaryDocument(_db, projectId);

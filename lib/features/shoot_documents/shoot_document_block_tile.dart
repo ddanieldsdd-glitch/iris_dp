@@ -44,14 +44,18 @@ class ShootDocumentBlockTile extends StatelessWidget {
             Row(
               children: [
                 if (editing)
-                  Icon(Icons.drag_handle, color: palette.textTertiary, size: 20),
+                  Icon(
+                    Icons.drag_handle,
+                    color: palette.textTertiary,
+                    size: 20,
+                  ),
                 if (editing) const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
                     resolved.title,
-                    style: AppTypography.label(palette).copyWith(
-                      color: palette.accent,
-                    ),
+                    style: AppTypography.label(
+                      palette,
+                    ).copyWith(color: palette.accent),
                   ),
                 ),
                 if (editing)
@@ -79,7 +83,8 @@ class ShootDocumentBlockTile extends StatelessWidget {
 
   Widget _bodyForType(String blockType, ShootBlockVisibility vis) {
     return switch (blockType) {
-      ShootBlockType.sectionHeader || ShootBlockType.sceneHeader => _headerBody(),
+      ShootBlockType.sectionHeader ||
+      ShootBlockType.sceneHeader => _headerBody(),
       ShootBlockType.characterList => _charactersBody(vis),
       ShootBlockType.scriptExcerpt => _scriptBody(),
       ShootBlockType.shot => _shotBody(vis),
@@ -108,9 +113,8 @@ class ShootDocumentBlockTile extends StatelessWidget {
   }
 
   Widget _scriptBody() {
-    final text = resolved.block.scriptExcerpt ??
-        resolved.scene?.actionText ??
-        '';
+    final text =
+        resolved.block.scriptExcerpt ?? resolved.scene?.actionText ?? '';
     if (text.isEmpty) return const SizedBox.shrink();
     return Text(text, style: AppTypography.bodyMedium(palette));
   }
@@ -130,7 +134,8 @@ class ShootDocumentBlockTile extends StatelessWidget {
               fit: BoxFit.cover,
             ),
           ),
-        if (vis.showThumbnail && path != null) const SizedBox(height: AppSpacing.sm),
+        if (vis.showThumbnail && path != null)
+          const SizedBox(height: AppSpacing.sm),
         if (vis.showCamera)
           Text(
             [
@@ -149,7 +154,10 @@ class ShootDocumentBlockTile extends StatelessWidget {
         ],
         if (vis.showCharacters && resolved.characters.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
-          SceneCharacterChips(characters: resolved.characters, palette: palette),
+          SceneCharacterChips(
+            characters: resolved.characters,
+            palette: palette,
+          ),
         ],
         if (vis.showAction &&
             resolved.action != null &&
@@ -185,7 +193,10 @@ class ShootDocumentBlockTile extends StatelessWidget {
         Expanded(child: Divider(color: palette.divider)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-          child: Text('— Salto de página —', style: AppTypography.caption(palette)),
+          child: Text(
+            '— Salto de página —',
+            style: AppTypography.caption(palette),
+          ),
         ),
         Expanded(child: Divider(color: palette.divider)),
       ],
