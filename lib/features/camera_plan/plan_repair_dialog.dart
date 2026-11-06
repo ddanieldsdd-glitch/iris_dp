@@ -47,6 +47,7 @@ class _PlanRepairDialogState extends State<_PlanRepairDialog> {
     for (final z in widget.report.zones)
       if (z.alone) z,
   };
+  late final _envLights = {for (final e in widget.report.envLights) e};
   bool _busy = false;
 
   Future<void> _apply() async {
@@ -59,6 +60,9 @@ class _PlanRepairDialogState extends State<_PlanRepairDialog> {
     }
     for (final z in _zones) {
       await widget.repair.foldZone(z.zone.id);
+    }
+    for (final e in _envLights) {
+      await widget.repair.moveLightsToEnvironment(e.setup.id);
     }
     if (mounted) Navigator.pop(context, true);
   }
@@ -138,6 +142,20 @@ class _PlanRepairDialogState extends State<_PlanRepairDialog> {
                           '${z.alone ? '' : ' Hay otras zonas dibujadas: '
                                     'revisa que no se pisen.'}',
                     ),
+                  for (final e in report.envLights)
+                    item(
+                      value: _envLights.contains(e),
+                      onChanged: (v) =>
+                          v ? _envLights.add(e) : _envLights.remove(e),
+                      title:
+                          '${e.site.name}: pasar las luces de '
+                          '«${e.setup.name}» al entorno',
+                      detail:
+                          '${e.lights} luz${e.lights == 1 ? '' : 'es'} '
+                          'pasan al entorno de la localización: las ven todos '
+                          'sus sets, y cada set o plano puede apagarlas. Las '
+                          'cámaras y actores se quedan en «${e.setup.name}».',
+                    ),
                 ],
               ),
       ),
@@ -149,7 +167,11 @@ class _PlanRepairDialogState extends State<_PlanRepairDialog> {
         if (!report.isEmpty)
           FilledButton(
             onPressed:
-                _busy || (_merges.isEmpty && _assigns.isEmpty && _zones.isEmpty)
+                _busy ||
+                    (_merges.isEmpty &&
+                        _assigns.isEmpty &&
+                        _zones.isEmpty &&
+                        _envLights.isEmpty)
                 ? null
                 : _apply,
             child: Text(_busy ? 'Ordenando…' : 'Ordenar'),
