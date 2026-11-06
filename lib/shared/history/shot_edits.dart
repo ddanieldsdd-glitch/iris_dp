@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show Value;
 
 import '../../core/database/app_database.dart';
+import '../../features/camera_plan/camera_links.dart';
 import 'edit_history.dart';
 
 /// Escribe columnas de un plano y lo apunta en el historial, para poder
@@ -22,6 +23,27 @@ Future<void> writeShotFields(
       redo: () => db.updateShotFields(shotId, fields),
     ),
   );
+}
+
+/// Guarda parámetros de un plano desde cualquier pantalla: los apunta en el
+/// historial y hace llegar la focal y el movimiento a las cámaras de la
+/// planta (SG.4). Las demás pantallas se enteran solas por la base.
+Future<void> saveShotFields(
+  AppDatabase db,
+  EditHistory history,
+  Shot before,
+  ShotsCompanion fields,
+) async {
+  await writeShotFields(
+    db,
+    history,
+    before.id,
+    fields,
+    label: 'plano ${before.number}',
+  );
+  if (fields.lens.present || fields.movement.present) {
+    await CameraLinks(db).followShot(before.id, before);
+  }
 }
 
 /// Las imágenes de un plano en un momento dado: referencias, storyboard y

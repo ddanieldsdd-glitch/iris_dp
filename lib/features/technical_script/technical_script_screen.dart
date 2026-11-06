@@ -24,7 +24,6 @@ import '../../core/utils/scene_format.dart';
 import '../../core/utils/scene_characters.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
-import '../camera_plan/camera_links.dart';
 import '../camera_plan/camera_plan_status_cell.dart';
 import '../../shared/history/edit_history.dart';
 import '../../shared/history/shot_edits.dart';
@@ -2247,19 +2246,8 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
       liveColor: _kPeerColor,
     );
 
-    Future<void> write(ShotsCompanion fields) async {
-      await writeShotFields(
-        db,
-        ref.read(editHistoryProvider),
-        shot.id,
-        fields,
-        label: 'plano ${shot.number}',
-      );
-      // La focal y el movimiento llegan a las cámaras de la planta (SG.4).
-      if (fields.lens.present || fields.movement.present) {
-        await CameraLinks(db).followShot(shot.id, shot);
-      }
-    }
+    Future<void> write(ShotsCompanion fields) =>
+        saveShotFields(db, ref.read(editHistoryProvider), shot, fields);
 
     Widget side(Widget child) => ValueListenableBuilder<bool>(
       valueListenable: _hovered,

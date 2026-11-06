@@ -24,6 +24,7 @@ import '../../shared/history/shot_edits.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
 import '../camera_plan/camera_plan_grouping.dart';
+import '../shots/shot_params_editor.dart';
 import 'shot_frames_export_sheet.dart';
 
 /// Abre el visor del storyboard en [shot]: los planos del proyecto uno a
@@ -294,6 +295,13 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
                           ),
                         ],
                         TextButton.icon(
+                          onPressed: lockedBy != null
+                              ? null
+                              : () => showShotParamsSheet(context, shot),
+                          icon: const Icon(Icons.tune, size: 18),
+                          label: const Text('Datos'),
+                        ),
+                        TextButton.icon(
                           onPressed: () => showShotFramesExportSheet(
                             context,
                             scene: scene,
@@ -412,6 +420,8 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
               switch (v) {
                 case 'image':
                   await _openImageMenu(shot);
+                case 'params':
+                  await showShotParamsSheet(context, shot);
                 case 'export':
                   await showShotFramesExportSheet(
                     context,
@@ -425,6 +435,8 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
               }
             },
             itemBuilder: (_) => [
+              if (lockedBy == null)
+                const PopupMenuItem(value: 'params', child: Text('Datos')),
               if (lockedBy == null)
                 const PopupMenuItem(value: 'image', child: Text('Imagen')),
               const PopupMenuItem(value: 'export', child: Text('Exportar')),

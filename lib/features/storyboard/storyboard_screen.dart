@@ -38,6 +38,7 @@ import '../settings/settings_launcher.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
+import '../shots/shot_params_editor.dart';
 
 enum _StoryboardLayout { linear, grid, list }
 
@@ -336,7 +337,8 @@ class _StoryboardToolbar extends StatelessWidget {
         if (!compact) ...[
           Text(
             'Modo storyboard con datos del guion técnico. '
-            'Edita aquí o en la tabla: los cambios se sincronizan al instante.',
+            'Edita un plano aquí o en la tabla: los cambios llegan a todas '
+            'las pantallas al instante.',
             style: AppTypography.bodyMedium(palette),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -1319,7 +1321,7 @@ class _FrameDetailSheet extends ConsumerWidget {
 
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.65,
+      initialChildSize: 0.8,
       minChildSize: 0.4,
       maxChildSize: 0.92,
       builder: (_, scrollCtrl) => Padding(
@@ -1332,6 +1334,8 @@ class _FrameDetailSheet extends ConsumerWidget {
               style: AppTypography.titleLarge(palette),
             ),
             Text(location, style: AppTypography.bodyMedium(palette)),
+            const SizedBox(height: AppSpacing.lg),
+            ShotParamsEditor(shotId: shot.id),
             const SizedBox(height: AppSpacing.lg),
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.lg),
