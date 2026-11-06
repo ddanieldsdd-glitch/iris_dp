@@ -124,7 +124,10 @@ class PlanMeterPanel extends StatelessWidget {
               '${exposure.fps.round()} fps',
               if (exposure.ndStops > 0)
                 'ND ${exposure.ndStops.toStringAsFixed(1)}',
-              if (r.cct != null) '${(r.cct! / 50).round() * 50} K',
+              if (r.colored)
+                'luz de color'
+              else if (r.cct != null)
+                '${(r.cct! / 50).round() * 50} K',
             ].join(' · '),
             style: dim,
           ),

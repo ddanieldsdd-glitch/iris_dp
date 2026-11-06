@@ -66,6 +66,7 @@ import 'set_environment.dart';
 import 'plan_equipment.dart';
 import 'light/light_scene.dart';
 import 'light/meter.dart';
+import 'plan_light_color_control.dart';
 import 'plan_light_controls.dart';
 import 'plan_meter_panel.dart';
 import 'plan_opening.dart';
@@ -7556,17 +7557,24 @@ class _ElementPanelState extends State<_ElementPanel> {
                           0,
                           100,
                         ),
-                        _beamSlider(
-                          'Temperatura de color',
-                          '${beam.cct.round()} K',
-                          LightBeam.cctKey,
-                          beam.cct,
-                          1800,
-                          10000,
-                          step: 100,
-                        ),
+                        if (PlanLight.canColor(element))
+                          PlanLightColorControl(
+                            element: element,
+                            onPreview: widget.onPreview,
+                            onUpdate: widget.onUpdate,
+                          ),
+                        if (beam.rgb == null)
+                          _beamSlider(
+                            'Temperatura de color',
+                            '${beam.cct.round()} K',
+                            LightBeam.cctKey,
+                            beam.cct,
+                            1800,
+                            10000,
+                            step: 100,
+                          ),
                         // Lo que suele haber en la calle (CA.5).
-                        if (StreetLamp.isOn(element))
+                        if (beam.rgb == null && StreetLamp.isOn(element))
                           Wrap(
                             spacing: 6,
                             children: [

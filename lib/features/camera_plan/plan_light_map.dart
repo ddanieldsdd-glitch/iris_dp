@@ -53,6 +53,10 @@ class PlanLightMap {
   /// Temperatura de color de la mezcla en cada cruce.
   final Float32List cct;
 
+  /// Color de la mezcla en cada cruce, con opacidad para distinguirlo de
+  /// la nada. `null` si ninguna fuente de la planta va en color.
+  final Int32List? tint;
+
   /// Lux que se pintan con todo el brillo: lo más iluminado de la planta.
   final double keyLux;
 
@@ -77,6 +81,7 @@ class PlanLightMap {
     required this.rows,
     required this.lux,
     required this.cct,
+    this.tint,
     required this.keyLux,
     required this.indoorKeyLux,
     required this.indoor,
@@ -158,6 +163,12 @@ class PlanLightMap {
 
   double luxAt(int column, int row) => lux[row * (columns + 1) + column];
 
+  /// Color 0xRRGGBB del cruce [i], si la luz que le llega lleva color.
+  int? rgbAt(int i) {
+    final packed = tint?[i] ?? 0;
+    return packed == 0 ? null : packed & 0xFFFFFF;
+  }
+
   /// Puntos que tiene la rejilla como poco: con menos, lo más iluminado de
   /// la planta saldría a saltos.
   static const int minPoints = 200;
@@ -198,6 +209,7 @@ class PlanLightMap {
     final count = (columns + 1) * (rows + 1);
     final lux = Float32List(count);
     final cct = Float32List(count);
+    final tint = scene.hasColor ? Int32List(count) : null;
     final indoor = Uint8List(count);
 
     // Lo que se da por nada: muy por debajo de la fuente más fuerte.
@@ -220,6 +232,9 @@ class PlanLightMap {
         if (scene.isRoofed(at)) indoor[i] = 1;
         lux[i] = sample.lux;
         cct[i] = sample.cct;
+        if (tint != null && sample.rgb != null) {
+          tint[i] = 0xFF000000 | sample.rgb!;
+        }
       }
     }
 
@@ -249,6 +264,7 @@ class PlanLightMap {
       rows: rows,
       lux: lux,
       cct: cct,
+      tint: tint,
       keyLux: key,
       indoorKeyLux: math.max(indoorKey, 1e-3),
       indoor: indoor,
@@ -264,12 +280,13 @@ class PlanLightMap {
     double keyLux,
     bool exposed, [
     double strength = 1,
+    int? rgb,
   ]) {
     final b = exposed
         ? exposedBrightness(lux, keyLux)
         : brightnessFor(lux, keyLux);
     if (b <= 0.002) return 0;
-    var tint = LightBeam.colorForCct(cct <= 0 ? 5600 : cct);
+    var tint = LightBeam.colorOf(cct <= 0 ? 5600 : cct, rgb);
     if (exposed) {
       // Lo quemado se va a blanco: se ve que sobra, no solo que hay luz.
       final burn = burnFor(lux, keyLux);
@@ -327,6 +344,8 @@ class PlanLightMap {
           cct[i],
           exposureKeyLux ?? (indoor[i] == 1 ? indoorKeyLux : keyLux),
           exposed,
+          1,
+          rgbAt(i),
         );
       }
     }

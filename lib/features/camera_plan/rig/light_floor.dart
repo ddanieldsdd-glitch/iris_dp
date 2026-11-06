@@ -73,7 +73,7 @@ class LightFloor {
         final i = r * w + c;
         final key = map.indoor[i] == 1 ? map.indoorKeyLux : map.keyLux;
         final b = PlanLightMap.brightnessFor(map.lux[i], key);
-        final color = LightBeam.colorForCct(map.cct[i]);
+        final color = LightBeam.colorOf(map.cct[i], map.rgbAt(i));
         image.setPixelRgba(
           c,
           r,

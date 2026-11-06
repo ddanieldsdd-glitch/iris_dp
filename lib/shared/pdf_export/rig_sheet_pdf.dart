@@ -512,7 +512,7 @@ class _Sheet {
     // Focos: un círculo del color de su luz, con su eje.
     for (final f in _list('fixtures')) {
       final c = pm(f['pos'] as List), aim = pm(f['aim'] as List);
-      final color = _cct((f['cct'] as num).toDouble());
+      final color = _cct((f['cct'] as num).toDouble(), f['rgb'] as int?);
       final dx = aim.$1 - c.$1, dy = aim.$2 - c.$2;
       final len = math.sqrt(dx * dx + dy * dy);
       if (len > 1) {
@@ -649,7 +649,7 @@ class _Sheet {
           rect(g, x, y, w, h, fill: PdfColors.white, width: 0.25);
         case ElevationKind.light:
           final c = at(item.centre, (item.bottom + item.top) / 2);
-          final color = _cct(item.cct);
+          final color = _cct(item.cct, item.rgb);
           final aim = item.aim;
           if (aim != null && item.beamDeg < 179) {
             final half = item.beamDeg / 2 * math.pi / 180;
@@ -817,7 +817,7 @@ class _Sheet {
       );
     y += 5;
     for (final row in legend.rows.take(10)) {
-      _legendRows.add((y - 1, _cct(_cctOf(row))));
+      _legendRows.add((y - 1, _colorOf(row)));
       labels
         ..add(_Label(x + 8, y, row.name, size: 6.5, width: 74))
         ..add(
@@ -1011,16 +1011,19 @@ class _Sheet {
       );
   }
 
-  double _cctOf(LightLegendRow row) {
+  PdfColor _colorOf(LightLegendRow row) {
     for (final (el, _) in units.entries.map((e) => (e.key, e.value))) {
       final name = (el.props['name'] as String?) ?? el.lightType?.label;
-      if (name == row.name) return LightBeam.of(el)?.cct ?? 3200;
+      if (name == row.name) {
+        final beam = LightBeam.of(el);
+        return _cct(beam?.cct ?? 3200, beam?.rgb);
+      }
     }
-    return 3200;
+    return _cct(3200);
   }
 
-  static PdfColor _cct(double kelvin) {
-    final c = LightBeam.colorForCct(kelvin);
+  static PdfColor _cct(double kelvin, [int? rgb]) {
+    final c = LightBeam.colorOf(kelvin, rgb);
     // Un poco más saturado que la luz real, para que se lea en papel.
     return PdfColor(
       (c.r * 0.85).clamp(0, 1),

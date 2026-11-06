@@ -80,6 +80,9 @@ class ElevationItem {
   final double reachM;
   final double cct;
 
+  /// Color de un aparato RGB; `null` = blanco.
+  final int? rgb;
+
   /// Tela: el borde de arriba y el bajo a lo ancho, punto a punto
   /// (`across`, `top`, `bottom`).
   final List<(double, double, double)> profile;
@@ -97,6 +100,7 @@ class ElevationItem {
     this.beamDeg = 0,
     this.reachM = 0,
     this.cct = 5600,
+    this.rgb,
     this.profile = const [],
   });
 
@@ -328,6 +332,7 @@ class PlanElevation {
               beamDeg: beam.spread,
               reachM: light.source.distanceFor(20).clamp(0.5, 8.0),
               cct: beam.cct,
+              rgb: beam.rgb,
             ),
           );
         case ElementType.actor:
@@ -488,7 +493,7 @@ class PlanElevationPainter extends CustomPainter {
                 c.dy - r * math.sin(aim + half),
               )
               ..close();
-            final tint = LightBeam.colorForCct(item.cct);
+            final tint = LightBeam.colorOf(item.cct, item.rgb);
             // La luz no pasa del suelo.
             canvas.save();
             canvas.clipRect(
@@ -510,8 +515,9 @@ class PlanElevationPainter extends CustomPainter {
               c,
               0.6 * scale,
               Paint()
-                ..color = LightBeam.colorForCct(
+                ..color = LightBeam.colorOf(
                   item.cct,
+                  item.rgb,
                 ).withValues(alpha: 0.18 * alpha),
             );
           }

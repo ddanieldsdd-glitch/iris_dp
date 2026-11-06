@@ -1174,6 +1174,7 @@ class CameraPlanPainter extends CustomPainter {
         source.beamDeg,
         source.sizeM,
         source.cct,
+        source.rgb,
         source.lambertian,
       ),
       scene.obstacleKey,
@@ -2051,7 +2052,7 @@ class CameraPlanPainter extends CustomPainter {
           if (beam.off)
             'apagada'
           else
-            '${(light.source.cct / 50).round() * 50}K · '
+            '${light.colorLabel} · '
                 '${beam.spread >= 359 ? 'omni' : '${beam.spread.round()}°'} · '
                 '${beam.intensity.round()}%',
           if (filters.isNotEmpty) filters,
@@ -2071,7 +2072,7 @@ class CameraPlanPainter extends CustomPainter {
         : [
             base,
             if (filters.isNotEmpty) filters,
-            '${(light.source.cct / 50).round() * 50}K · '
+            '${light.colorLabel} · '
                 '${beam.intensity.round()}%',
             if (PlanLight.isOverhead(el))
               'techo · ${PlanLight.heightOf(el).toStringAsFixed(1)} m',
@@ -2330,7 +2331,7 @@ class CameraPlanPainter extends CustomPainter {
         : keyLux / math.pow(2, PlanLightMap.rangeStops);
     final mpu = scene.metersPerUnit;
     final drop = light.overheadM;
-    final color = LightBeam.colorForCct(source.cct);
+    final color = LightBeam.colorOf(source.cct, source.rgb);
 
     // Lux a una distancia sobre el plano y, colgada del techo, a lo que eso
     // equivale en diagonal y en ángulo.

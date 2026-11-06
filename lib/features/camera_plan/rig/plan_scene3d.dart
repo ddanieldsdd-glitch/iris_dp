@@ -870,6 +870,7 @@ class PlanScene3d {
       'aim': [_r(p[0] + dx * t), _r(p[1] + dy * t), _r(z + dz * t)],
       'beamDeg': beam?.spread ?? 360,
       'cct': beam?.cct ?? 3200,
+      'rgb': ?beam?.rgb,
       'watts': ?light?.watts,
       'on': beam != null && !beam.off,
       // Lo que llega a la escena, con regulación, difusiones y gelatinas:

@@ -19,6 +19,10 @@ class LightBeam {
 
   /// Temperatura de color en kelvin.
   final double cct;
+
+  /// Color de un aparato RGB, 0xRRGGBB. `null` = blanco, a temperatura
+  /// [cct].
+  final int? rgb;
   final bool off;
 
   const LightBeam({
@@ -26,6 +30,7 @@ class LightBeam {
     required this.reach,
     required this.intensity,
     required this.cct,
+    this.rgb,
     required this.off,
   });
 
@@ -33,6 +38,7 @@ class LightBeam {
   static const reachKey = 'throw';
   static const intensityKey = 'intensity';
   static const cctKey = 'cct';
+  static const rgbKey = 'rgb';
   static const offKey = 'off';
 
   /// Grip y accesorios: modifican la luz, no la emiten.
@@ -84,11 +90,19 @@ class LightBeam {
       reach: read(reachKey, d.reach).clamp(20, 2000),
       intensity: read(intensityKey, 75).clamp(0, 100),
       cct: read(cctKey, d.cct).clamp(1800, 12000),
+      rgb: switch (el.props[rgbKey]) {
+        final num v => v.toInt() & 0xFFFFFF,
+        _ => null,
+      },
       off: el.props[offKey] == true,
     );
   }
 
-  Color get color => colorForCct(cct);
+  Color get color => colorOf(cct, rgb);
+
+  /// Color de una luz: el suyo si es RGB; si no, el de su temperatura.
+  static Color colorOf(double kelvin, int? rgb) =>
+      rgb != null ? Color(0xFF000000 | rgb) : colorForCct(kelvin);
 
   /// Color aproximado de una fuente a esa temperatura (Tanner Helland).
   static Color colorForCct(double kelvin) {

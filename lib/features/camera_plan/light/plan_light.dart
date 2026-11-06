@@ -5,6 +5,7 @@ import '../../../shared/equipment/light_optics.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light_beam.dart';
+import 'light_color.dart';
 import 'modifiers.dart';
 import 'photometry.dart';
 
@@ -35,6 +36,10 @@ class PlanLight {
   // Claves en `PlanElement.props`.
   static const wattsKey = 'watts';
   static const techKey = 'tech';
+
+  /// Si el aparato puede dar color. Lo pone la ficha del catálogo; sin
+  /// ella, vale cualquier LED.
+  static const rgbCapableKey = 'rgbCapable';
   static const measuredLuxKey = 'measuredLux';
   static const measuredMetersKey = 'measuredMeters';
   static const modifiersKey = 'modifiers';
@@ -119,6 +124,21 @@ class PlanLight {
   /// techo; `null` si va en trípode.
   static double? overheadDrop(PlanElement el) =>
       isOverhead(el) ? (heightOf(el) - subjectHeightM).clamp(0.3, 50.0) : null;
+
+  /// Si a este elemento se le puede poner color.
+  static bool canColor(PlanElement el) {
+    if (el.lightType == LightType.sun) return false;
+    final light = of(el);
+    if (light == null) return false;
+    if (el.props[LightBeam.rgbKey] != null) return true;
+    final said = el.props[rgbCapableKey];
+    return said is bool ? said : light.tech == LightTech.led;
+  }
+
+  /// «5600K», o «RGB» si la luz va en color.
+  String get colorLabel => source.rgb != null
+      ? 'RGB'
+      : '${(source.cct / 50).round() * 50}K';
 
   /// «manufacturer» si el dato medido viene del catálogo y no del set.
   static const photometrySourceKey = 'photometrySource';
@@ -246,7 +266,7 @@ class PlanLight {
     final fromSet = el.props[photometrySourceKey] !=
         PhotometryStatus.manufacturer.name;
     final curve = opticsOf(el).candelaAt(beam.spread);
-    final bare = curve != null && !(fromSet && measuredLux != null)
+    final emitted = curve != null && !(fromSet && measuredLux != null)
         ? LightSource(
             candela: curve,
             beamDeg: beam.spread,
@@ -276,6 +296,15 @@ class PlanLight {
             beamDeg: beam.spread,
             sizeM: sizeM,
             cct: beam.cct,
+          );
+
+    // Un color saturado sale con menos luz que el blanco del mismo aparato.
+    final rgb = beam.rgb;
+    final bare = rgb == null
+        ? emitted
+        : emitted.copyWith(
+            candela: emitted.candela * LightMix.relativeOutput(rgb),
+            rgb: rgb,
           );
 
     final modifiers = [
