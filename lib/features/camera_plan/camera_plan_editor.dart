@@ -755,20 +755,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       );
     } else if (_setupPicked) {
       lightSetup = setupById(_pickedSetupId);
-    } else if (lightSetup == null) {
-      for (final s in projectSetups) {
-        if (LightSetupKind.isSketch(s)) continue;
-        final matches = linkedSet != null
-            ? s.locationBasePlanId == linkedSet.id
-            : linkedSite != null &&
-                  s.locationBasePlanId == null &&
-                  s.locationSiteId == linkedSite.id;
-        if (matches) {
-          lightSetup = s;
-          break;
-        }
-      }
     }
+    // La localización y la zona enseñan su entorno, sin la luz de ningún
+    // set: lo que se pone ahí lo heredan todos sus sets (EN).
 
     // Un solo lienzo: las cuatro capas, todas editables.
     final elements = <PlanElement>[];
@@ -818,13 +807,29 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         zoneElements = const [];
       }
     }
-    addLayer(PlanLayer.environment, siteElements);
-    addLayer(PlanLayer.set, zoneElements);
+    final originals = <String, PlanElement>{};
+    final overrides = LightOverrides.decode(shot?.lightOverridesJson);
+    // Las luces del entorno, también con los ajustes propios del plano
+    // (apagar una solo en este plano, EN).
+    List<PlanElement> withShotOverrides(List<PlanElement> list) => [
+      for (final el in list)
+        if (el.type == ElementType.light &&
+            overrides[LightOverrides.uidOf(el)] != null)
+          () {
+            final uid = LightOverrides.uidOf(el)!;
+            originals[uid] = el;
+            return overrides[uid]!
+              ..props[LightOverrides.uidKey] = uid
+              ..shotOverride = true;
+          }()
+        else
+          el,
+    ];
+    addLayer(PlanLayer.environment, withShotOverrides(siteElements));
+    addLayer(PlanLayer.set, withShotOverrides(zoneElements));
     // La luz del esquema. Si el plano tiene ajustes propios, se ve con
     // ellos y se recuerda cómo es en el esquema.
     final setupLights = FloorPlanJson.decode(lightSetup?.planJson);
-    final originals = <String, PlanElement>{};
-    final overrides = LightOverrides.decode(shot?.lightOverridesJson);
     // La luz del grupo, como la ve este set, y con los ajustes del plano.
     final group = lightSetup?.groupId != null
         ? await db.getSetGroupById(lightSetup!.groupId!)
@@ -887,11 +892,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final unsaved = {
       for (final el in LightOverrides.ensureUids(elements)) el.layer,
     };
-    final envBaseline = _baselineOf(
-      elements.where(
-        (e) => e.layer == PlanLayer.environment || e.layer == PlanLayer.set,
-      ),
-    );
+    // El entorno como es en el set, sin los ajustes propios del plano.
+    final envBaseline = _baselineOf([
+      for (final e in elements)
+        if (e.layer == PlanLayer.environment || e.layer == PlanLayer.set)
+          e.shotOverride
+              ? originals[LightOverrides.uidOf(e)] ?? e
+              : e,
+    ]);
     final groupBaseline = _baselineOf(
       elements.where((e) => e.layer == PlanLayer.groupLight),
     );
@@ -1443,6 +1451,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Future<PlanLayer> _layerForNew(ElementType type) async {
     switch (type) {
       case ElementType.light:
+        // En la localización (o en su zona) sin un set abierto, la luz es
+        // del entorno: la ven todos sus sets (EN).
+        if (_shot == null && _lightSetup == null) {
+          if (_linkedSet != null && !_wallsToEnvironment) return PlanLayer.set;
+          if (_linkedSite != null) return PlanLayer.environment;
+          if (_linkedSet != null) return PlanLayer.set;
+        }
         await _ensureLightSetup();
         return PlanLayer.light;
       case ElementType.camera || ElementType.actor:
@@ -1518,15 +1533,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       case PlanLayer.environment:
         await _repo.saveElements(
           scope: FloorPlanScope.site,
-          elements: list,
+          elements: _sharedVersions(list),
           siteId: _linkedSite!.id,
         );
+        await _saveShotOverrides();
       case PlanLayer.set:
         await _repo.saveElements(
           scope: FloorPlanScope.set,
-          elements: list,
+          elements: _sharedVersions(list),
           setId: _linkedSet!.id,
         );
+        await _saveShotOverrides();
       case PlanLayer.groupLight:
         await _saveGroupLight(list);
       case PlanLayer.light:
@@ -1559,14 +1576,22 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         el,
   ];
 
-  /// Los ajustes propios del plano, de la luz del set y de la del grupo.
+  /// Lo que un plano puede ajustar solo para él: la luz del set, la del
+  /// grupo y las luces del entorno (EN).
+  static bool _canShotOverride(PlanElement el) => switch (el.layer) {
+    PlanLayer.light || PlanLayer.groupLight => true,
+    PlanLayer.environment || PlanLayer.set => el.type == ElementType.light,
+    PlanLayer.shot => false,
+  };
+
+  /// Los ajustes propios del plano: de la luz del set, de la del grupo y de
+  /// la del entorno.
   Future<void> _saveShotOverrides() async {
     final shot = _shot;
     if (shot == null) return;
     final own = <String, PlanElement>{
       for (final el in _elements)
-        if ((el.layer == PlanLayer.light ||
-                el.layer == PlanLayer.groupLight) &&
+        if (_canShotOverride(el) &&
             el.shotOverride &&
             _setupOriginals[LightOverrides.uidOf(el)] != null)
           LightOverrides.uidOf(el)!: el,
@@ -1675,11 +1700,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Future<void> _saveEnvironmentOfSet() async {
     final setup = _lightSetup!;
     final site = _linkedSite!;
-    final list = [
+    // Lo ajustado solo en este plano no cambia el entorno del set.
+    final list = _sharedVersions([
       ..._layerElements(PlanLayer.environment),
       ..._layerElements(PlanLayer.set),
-    ];
+    ]);
     LightOverrides.ensureUids(list);
+    await _saveShotOverrides();
     final diff = _diff(_envBaseline, list);
     if (diff.changed.isEmpty && diff.removed.isEmpty) return;
     final others = [
@@ -1789,10 +1816,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Hace que una luz del esquema se ajuste solo en este plano, o la
   /// devuelve a como está en el esquema.
   Future<void> _setShotOverride(PlanElement el, bool own) async {
-    if (_shot == null ||
-        (el.layer != PlanLayer.light && el.layer != PlanLayer.groupLight)) {
-      return;
-    }
+    if (_shot == null || !_canShotOverride(el)) return;
     LightOverrides.ensureUids([el]);
     final uid = LightOverrides.uidOf(el)!;
     if (own) {
@@ -2341,18 +2365,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (mounted) setState(() {});
   }
 
-  /// Luces, cámaras y actores guardados en el entorno o en el set.
+  /// Cámaras y actores guardados en el entorno o en el set. Las luces sí
+  /// pueden ser del entorno: las ven todos los sets de la localización.
   List<PlanElement> get _misplaced => _elements
       .where(
         (e) =>
             (e.layer == PlanLayer.environment || e.layer == PlanLayer.set) &&
-            (e.type == ElementType.light ||
-                e.type == ElementType.camera ||
-                e.type == ElementType.actor),
+            (e.type == ElementType.camera || e.type == ElementType.actor),
       )
       .toList();
 
-  /// Pasa las luces a un esquema de luz y las cámaras y actores al plano.
+  /// Pasa las cámaras y actores al plano o a un esquema de luz.
   Future<void> _tidyLayers() async {
     final misplaced = _misplaced;
     if (misplaced.isEmpty) return;
@@ -3606,10 +3629,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (camera != null) el.props['sensorWidthMm'] = camera.sensorWidthMm;
   }
 
-  /// Material de la planta abierta: la luz del esquema y la cámara del plano.
+  /// Material de la planta abierta: la luz del esquema, la del grupo, las
+  /// luces del entorno encendidas (EN) y la cámara del plano.
   GearList get _gearList => GearList.from(
     _elements.where(
-      (e) => e.layer == PlanLayer.light || e.layer == PlanLayer.shot,
+      (e) => switch (e.layer) {
+        PlanLayer.light || PlanLayer.shot || PlanLayer.groupLight => true,
+        PlanLayer.environment || PlanLayer.set =>
+          e.type == ElementType.light && LightBeam.of(e)?.off != true,
+      },
     ),
     // Lo oculto con el ojo sigue colgado: cuenta en la carga.
     rigging: RigReport.rigging(_layerElementsShown, _metersPerUnit),
@@ -5889,8 +5917,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                           palette: palette,
                           icon: Icons.layers_outlined,
                           text:
-                              'Hay luces o cámaras guardadas en el entorno o en el '
-                              'set. Pásalas a su capa para poder compartirlas.',
+                              'Hay cámaras o actores guardados en el entorno. '
+                              'Pásalos a su capa para vincularlos a planos.',
                           actionLabel: 'Ordenar capas',
                           onAction: _tidyLayers,
                         )
@@ -6367,9 +6395,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 gear: _gear,
                                 canOverride:
                                     _shot != null &&
-                                    (_selected!.layer == PlanLayer.light ||
-                                        _selected!.layer ==
-                                            PlanLayer.groupLight),
+                                    _canShotOverride(_selected!),
                                 onOverride: (own) =>
                                     _setShotOverride(_selected!, own),
                                 onLinkShots: _canLinkShots(_selected!)

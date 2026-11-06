@@ -8,6 +8,7 @@ import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../shared/annotations/annotation_document.dart';
+import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
 import 'camera_plan_grouping.dart';
@@ -449,13 +450,29 @@ class PlanProjectData {
 
   /// Lo que se ve debajo de un plano, sin la luz: entorno y set.
   List<PlanElement> baseOfShot(Shot shot) {
+    // Con su set: el entorno como lo ve el set (lo que apaga o quita) y lo
+    // que el plano ajusta solo para él (EN).
+    final own = setup(shot.lightSetupId);
+    if (own != null && siteIdOfSetup(own) != null) {
+      return LightOverrides.apply(
+        inheritedOfSetup(own),
+        shot.lightOverridesJson,
+      );
+    }
     final sc = scene(shot.sceneId);
     final owner = set(setIdOfShot(shot));
-    return [
+    return LightOverrides.apply([
       ...environmentOf(owner?.siteId ?? sc?.locationSiteId),
       if (owner != null) ...ownOfSet(owner),
-    ];
+    ], shot.lightOverridesJson);
   }
+
+  /// Las luces del entorno que ve un set: las de su localización y su
+  /// zona, con lo que el set apaga o quita (EN).
+  List<PlanElement> environmentLightsOfSetup(LightSetup setup) => [
+    for (final e in inheritedOfSetup(setup))
+      if (e.type == ElementType.light) e,
+  ];
 
   // ── Tablero de una escena ────────────────────────────────────────────────
 

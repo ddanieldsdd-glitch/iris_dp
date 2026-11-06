@@ -2,13 +2,17 @@ import '../../core/database/app_database.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/plan_light.dart';
+import 'light_beam.dart';
 import 'plan_data.dart';
 
 /// Lo que dice de un vistazo qué set es (SV): sus luces, sus cámaras y
 /// cuándo se rueda (INT/EXT, DÍA/NOCHE).
 class SetSummary {
-  /// Luces del set (las suyas y las de su grupo).
+  /// Luces del set: las suyas, las de su grupo y las del entorno.
   final int lights;
+
+  /// De ellas, las del entorno de la localización (EN).
+  final int environmentLights;
 
   /// Las principales, agrupadas: «Tubo 5600K ×2».
   final List<String> mainLights;
@@ -25,6 +29,7 @@ class SetSummary {
 
   const SetSummary({
     required this.lights,
+    this.environmentLights = 0,
     required this.mainLights,
     required this.cameras,
     required this.when,
@@ -32,10 +37,15 @@ class SetSummary {
     required this.shotsWithoutCamera,
   });
 
-  /// «3 luces · Tubo 5600K ×2, Nanlite 60B», o «sin luz».
+  /// «5 luces (3 del entorno) · Tubo 5600K ×2, Nanlite 60B», o «sin luz».
   String get lightText {
     if (lights == 0) return 'sin luz';
-    final count = lights == 1 ? '1 luz' : '$lights luces';
+    var count = lights == 1 ? '1 luz' : '$lights luces';
+    if (environmentLights > 0) {
+      count += environmentLights == lights
+          ? ' del entorno'
+          : ' ($environmentLights del entorno)';
+    }
     return mainLights.isEmpty ? count : '$count · ${mainLights.join(', ')}';
   }
 
@@ -47,9 +57,15 @@ class SetSummary {
 
   static SetSummary of(PlanProjectData data, LightSetup setup) {
     final elements = [...data.groupLightOf(setup), ...data.ownOfSetup(setup)];
+    // Las del entorno cuentan si están encendidas en este set.
+    final environment = [
+      for (final e in data.environmentLightsOfSetup(setup))
+        if (LightBeam.of(e)?.off != true) e,
+    ];
     final lights = [
       for (final e in elements)
         if (e.type == ElementType.light) e,
+      ...environment,
     ];
     final names = <String, int>{};
     for (final l in lights) {
@@ -79,6 +95,7 @@ class SetSummary {
     ].whereType<String>().join(' · ');
     return SetSummary(
       lights: lights.length,
+      environmentLights: environment.length,
       mainLights: [
         for (final e in sorted.take(3))
           e.value > 1 ? '${e.key} ×${e.value}' : e.key,

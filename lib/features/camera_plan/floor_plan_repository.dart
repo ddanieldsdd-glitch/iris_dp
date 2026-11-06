@@ -360,8 +360,12 @@ class FloorPlanRepository {
     final own = await _shotElements(shot.id);
     final legIndex = route.isEmpty ? null : (leg ?? 0);
     return PlanLayers(
-      environment: base.environment,
-      set: base.set,
+      // El entorno, con lo que este plano apaga o ajusta solo para él (EN).
+      environment: LightOverrides.apply(
+        base.environment,
+        shot.lightOverridesJson,
+      ),
+      set: LightOverrides.apply(base.set, shot.lightOverridesJson),
       // La luz compartida del grupo, también con los ajustes del plano.
       groupLight: LightOverrides.apply(
         GroupLight.visible(group?.planJson, setup?.planJson),

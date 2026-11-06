@@ -663,8 +663,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     });
 
-    testWidgets('«Ordenar capas» pasa la luz a un esquema y la cámara al '
-        'plano', (tester) async {
+    testWidgets('«Ordenar capas» pasa la cámara al plano y deja la luz en el '
+        'entorno', (tester) async {
       await seed(
         tester,
         siteJson:
@@ -689,29 +689,19 @@ void main() {
       await settle(tester);
 
       final site = await tester.runAsync(() => db.getSiteById(siteId));
+      // La luz es del entorno: se queda ahí y no hace falta ningún esquema.
       expect(FloorPlanJson.decode(site!.floorPlanJson).map((e) => e.type), [
         ElementType.wall,
+        ElementType.light,
       ]);
       final setups = await tester.runAsync(
         () => db.getLightSetupsForProject(projectId),
       );
-      expect(setups!.single.name, 'Setup A');
-      expect(setups.single.locationBasePlanId, setId);
-      expect(
-        FloorPlanJson.decode(setups.single.planJson).single.lightType,
-        LightType.hmi,
-      );
-      final shot = await tester.runAsync(
-        () => (db.select(
-          db.shots,
-        )..where((s) => s.id.equals(shotId))).getSingle(),
-      );
-      expect(shot!.lightSetupId, setups.single.id);
+      expect(setups, isEmpty);
       final rows = await tester.runAsync(
         () => db.getCameraPlanElementsForShot(shotId),
       );
       expect(rows!.map((r) => r.type), ['camera']);
-      expect(find.text('Luz: Setup A'), findsOneWidget);
       expect(find.text('Ordenar capas'), findsNothing);
       expect(tester.takeException(), isNull);
 

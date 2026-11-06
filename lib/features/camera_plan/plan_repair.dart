@@ -62,18 +62,36 @@ class ZoneSuggestion {
   });
 }
 
+/// Un esquema de la localización que no usa ningún plano y tiene luces: se
+/// crearon al poner luces en la localización. Se propone pasarlas al entorno,
+/// que ven todos sus sets (EN).
+class EnvLightSuggestion {
+  final LocationSite site;
+  final LightSetup setup;
+  final int lights;
+
+  const EnvLightSuggestion({
+    required this.site,
+    required this.setup,
+    required this.lights,
+  });
+}
+
 class PlanRepairReport {
   final List<MergeSuggestion> merges;
   final List<AssignSuggestion> assigns;
   final List<ZoneSuggestion> zones;
+  final List<EnvLightSuggestion> envLights;
 
   const PlanRepairReport({
     this.merges = const [],
     this.assigns = const [],
     this.zones = const [],
+    this.envLights = const [],
   });
 
-  bool get isEmpty => merges.isEmpty && assigns.isEmpty && zones.isEmpty;
+  bool get isEmpty =>
+      merges.isEmpty && assigns.isEmpty && zones.isEmpty && envLights.isEmpty;
 }
 
 /// «Ordenar la planta» (SG.6): encuentra el lío de esquemas (uno por plano,
@@ -116,6 +134,7 @@ class PlanRepair {
     final merges = <MergeSuggestion>[];
     final assigns = <AssignSuggestion>[];
     final zones = <ZoneSuggestion>[];
+    final envLights = <EnvLightSuggestion>[];
     for (final site in sites) {
       final drawn = [
         for (final zone in sets)
@@ -152,6 +171,18 @@ class PlanRepair {
           lightSetupId: s.id,
         );
         lights[s.id] = els.where((e) => e.type == ElementType.light).length;
+      }
+
+      // Luces puestas en la localización, en un esquema que no usa nadie.
+      for (final s in own) {
+        if (s.locationBasePlanId == null &&
+            s.groupId == null &&
+            users[s.id] == 0 &&
+            lights[s.id]! > 0) {
+          envLights.add(
+            EnvLightSuggestion(site: site, setup: s, lights: lights[s.id]!),
+          );
+        }
       }
 
       // Uno por plano: esquemas con un plano (o ninguno) y casi nada.
@@ -198,7 +229,61 @@ class PlanRepair {
         );
       }
     }
-    return PlanRepairReport(merges: merges, assigns: assigns, zones: zones);
+    return PlanRepairReport(
+      merges: merges,
+      assigns: assigns,
+      zones: zones,
+      envLights: envLights,
+    );
+  }
+
+  /// Las luces del esquema pasan al entorno de su localización y las ven
+  /// todos sus sets. Sus cámaras y actores se quedan en él; si no le queda
+  /// nada y ningún plano lo usa, va a la papelera.
+  Future<void> moveLightsToEnvironment(int setupId) async {
+    final setup = await db.getLightSetupById(setupId);
+    final siteId = setup?.locationSiteId;
+    if (setup == null || siteId == null) return;
+    final repo = FloorPlanRepository(db);
+    final elements = await repo.loadElements(
+      scope: FloorPlanScope.lightSetup,
+      lightSetupId: setupId,
+    );
+    final moving = [
+      for (final e in elements)
+        if (e.type == ElementType.light) e,
+    ];
+    if (moving.isEmpty) return;
+    final rest = [
+      for (final e in elements)
+        if (e.type != ElementType.light) e,
+    ];
+    final env = [
+      ...await repo.loadElements(scope: FloorPlanScope.site, siteId: siteId),
+    ];
+    LightOverrides.ensureUids([...env, ...moving]);
+    final uids = {for (final e in env) LightOverrides.uidOf(e)};
+    for (final e in moving) {
+      if (uids.contains(LightOverrides.uidOf(e))) LightOverrides.renewUids([e]);
+      e.layer = PlanLayer.environment;
+      env.add(e);
+    }
+    await repo.saveElements(
+      scope: FloorPlanScope.site,
+      siteId: siteId,
+      elements: env,
+    );
+    await repo.saveElements(
+      scope: FloorPlanScope.lightSetup,
+      lightSetupId: setupId,
+      elements: rest,
+    );
+    final used = await (db.select(
+      db.shots,
+    )..where((s) => s.lightSetupId.equals(setupId))).get();
+    if (rest.isEmpty && used.isEmpty) {
+      await PlanTrashService(db).deleteLightSetup(setupId);
+    }
   }
 
   /// Junta [sources] en [targetId]: sus luces, cámaras y actores pasan a la
