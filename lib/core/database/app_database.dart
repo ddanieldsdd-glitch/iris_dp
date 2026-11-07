@@ -779,8 +779,24 @@ class AppDatabase extends _$AppDatabase {
     // paso de arriba ya no vuelve a correr. Crearlas es idempotente.
     beforeOpen: (details) async {
       if (!details.wasCreated) await SyncMergeTables.create(this);
+      await _createQueryIndexes();
     },
   );
+
+  /// Índices de las consultas de cada pantalla: sin ellos, cada consulta por
+  /// proyecto, escena o plano recorre la tabla entera. Cada escritura repite
+  /// las consultas que la miran, así que se nota en todo el proyecto.
+  ///
+  /// Van aquí y no en una migración porque no cambian los datos: crearlos es
+  /// idempotente, y solo cuesta la primera vez.
+  Future<void> _createQueryIndexes() async {
+    for (final (table, columns) in kQueryIndexes) {
+      final name = 'idx_${table}_${columns.replaceAll(', ', '_')}';
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS $name ON $table ($columns)',
+      );
+    }
+  }
 
   /// Añade la columna solo si no existe. `createTable` crea las tablas con
   /// todas las columnas de hoy, así que los pasos posteriores de una base
@@ -5231,6 +5247,22 @@ extension SceneLabel on Scene {
 }
 
 /// Versión del esquema de la base. Subirla aquí al añadir una migración.
+/// Tabla y columnas de cada índice. La última columna de los que llevan
+/// `sort_order` evita además ordenar el resultado.
+const kQueryIndexes = [
+  ('scenes', 'project_id, sort_order'),
+  ('shots', 'project_id, sort_order'),
+  ('shots', 'scene_id, sort_order'),
+  ('camera_plan_elements', 'shot_id, sort_order'),
+  ('camera_path_points', 'element_id'),
+  ('shot_references', 'shot_id'),
+  ('location_sites', 'project_id'),
+  ('location_base_plans', 'project_id'),
+  ('light_setups', 'project_id'),
+  ('set_groups', 'project_id'),
+  ('project_annotation_documents', 'project_id'),
+];
+
 const kSchemaVersion = 62;
 
 /// Copias `antes-de-esquema-…` que se conservan.
