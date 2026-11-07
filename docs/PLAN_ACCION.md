@@ -191,6 +191,23 @@ Los Excel viven en `Desktop/LISTA DE MATERIAL TECNICO/`:
 - [ ] Look Bible antiguo: mover `GoodNotesModuleType` y borrar pantalla y PDF propios.
 - [ ] Borrar `BibleV2Host`, el flag huérfano, los stubs `features/shots` y `features/scenes`, y el wrapper `daily_pdf`.
 
+## Fase R — Rendimiento de planta, guion técnico y storyboard
+
+Banco de pruebas: proyecto de 30 escenas, 210 planos y planta de 60 elementos, medido en test (más lento que en perfil, pero comparable entre sí).
+
+| Pantalla | Abrir, antes | Abrir, ahora | Editar un plano, antes | Editar un plano, ahora |
+|---|---|---|---|---|
+| Guion técnico | 13,9 s | 2,7 s | 6,2 s | 0,10 s |
+| Storyboard | 7,1 s | 1,1 s | 3,3 s | 0,08 s |
+
+- [x] **R1. Datos sin cascadas.** `PlanDataBuilder` crea sus consultas una vez y no reconstruye si nada cambia; `PlanProjectData` guarda búsquedas y plantas leídas.
+- [x] **R2. Índices.** Se crean al abrir la base, sin migración (`kQueryIndexes`).
+- [x] **R3. Miniaturas e imágenes.** `PlanThumbnailCache`, y `SizedFileImage` para decodificar al tamaño al que se ve.
+- [x] **R4. Listas por plano.** Guion y storyboard construyen solo las filas que se ven.
+- [ ] **R5. Lienzo de planta.** Mover y hacer zoom sin reconstruir el editor, contenido en un `ui.Picture`, descarte de lo que queda fuera y caché de textos. Va en su propia rama.
+- [ ] **R6. WAL.** Escribir pasa de 17 ms a 0,1 ms, pero la base puede estar en una carpeta elegida a mano (unidad externa, de red o sincronizada) y `migrateToCurrentStorage` copia el `.db` sin su `-wal`. Antes hay que resolver las dos cosas.
+- [ ] **R7. Medir en perfil.** Repetir las medidas con `scripts/run_windows.ps1 -Perfil` y en el iPad.
+
 ## Fuera de este plan
 
 Motor de decisión técnica, trabajo nuevo en V2, Unreal/LUKA de ida y vuelta, permisos por módulo.

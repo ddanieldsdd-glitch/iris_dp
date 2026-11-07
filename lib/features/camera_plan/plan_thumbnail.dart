@@ -10,7 +10,67 @@ import '../../shared/annotations/annotation_document.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
 import 'plan_images.dart';
+import 'plan_light_map.dart';
 import 'plan_segment.dart';
+
+/// Miniaturas ya pintadas, por lo que enseñan.
+///
+/// Pintar una planta es caro: el pintor calcula la luz de toda la escena. En
+/// una lista de planos eso se repetía por miniatura cada vez que se repintaba
+/// algo cerca. Aquí se pinta una vez y luego solo se copia la imagen.
+abstract final class PlanThumbnailCache {
+  /// Por memoria y no por número: una miniatura del tablero ocupa mucho más
+  /// que una celda del guion.
+  static const maxBytes = 64 * 1024 * 1024;
+
+  static final _images = <int, ui.Image>{};
+  static var _bytes = 0;
+
+  static int get length => _images.length;
+
+  static int _size(ui.Image image) => image.width * image.height * 4;
+
+  /// La imagen de [key], pintándola con [paint] si no está. Quien la enseña
+  /// se queda con su propia referencia: salir de aquí no la borra de la
+  /// pantalla.
+  static ui.Image image(
+    int key,
+    Size size,
+    double pixelRatio,
+    void Function(Canvas canvas, Size size) paint,
+  ) {
+    final kept = _images.remove(key);
+    if (kept != null) return _images[key] = kept;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder)..scale(pixelRatio);
+    paint(canvas, size);
+    final picture = recorder.endRecording();
+    final image = picture.toImageSync(
+      (size.width * pixelRatio).ceil(),
+      (size.height * pixelRatio).ceil(),
+    );
+    picture.dispose();
+
+    _images[key] = image;
+    _bytes += _size(image);
+    while (_bytes > maxBytes && _images.length > 1) {
+      final oldest = _images.keys.first;
+      final dropped = _images.remove(oldest)!;
+      _bytes -= _size(dropped);
+      dropped.dispose();
+    }
+    return image;
+  }
+
+  static void clear() {
+    for (final image in _images.values) {
+      image.dispose();
+    }
+    _images.clear();
+    _bytes = 0;
+  }
+}
 
 /// Miniatura de una planta, pintada con el mismo painter del editor y
 /// encuadrada a lo que contiene.
@@ -264,6 +324,17 @@ class PlanThumbnail extends StatelessWidget {
           crop: crop,
         );
 
+        final painter = CameraPlanPainter(
+          elements: elements,
+          inheritedElements: inherited,
+          inheritedOpacity: inheritedOpacity,
+          showGrid: false,
+          zones: zones,
+          palette: palette,
+          scale: scale,
+          offset: offset,
+        );
+        final pixelRatio = MediaQuery.devicePixelRatioOf(context);
         final plan = CustomPaint(
           size: size,
           foregroundPainter: routes.isEmpty
@@ -274,16 +345,39 @@ class PlanThumbnail extends StatelessWidget {
                   offset: offset,
                   color: palette.accent,
                 ),
-          painter: CameraPlanPainter(
-            elements: elements,
-            inheritedElements: inherited,
-            inheritedOpacity: inheritedOpacity,
-            showGrid: false,
-            zones: zones,
-            palette: palette,
-            scale: scale,
-            offset: offset,
-          ),
+          painter: size.isFinite && !size.isEmpty ? null : painter,
+          child: size.isFinite && !size.isEmpty
+              ? RawImage(
+                  image: PlanThumbnailCache.image(
+                    Object.hash(
+                      PlanLightKey.drawing(elements),
+                      PlanLightKey.drawing(inherited),
+                      inheritedOpacity,
+                      Object.hashAll([
+                        for (final zone in zones)
+                          Object.hash(
+                            zone.rect,
+                            zone.color,
+                            zone.label,
+                            zone.active,
+                          ),
+                      ]),
+                      identityHashCode(palette),
+                      size,
+                      pixelRatio,
+                      scale,
+                      offset,
+                    ),
+                    size,
+                    pixelRatio,
+                    painter.paint,
+                  ),
+                  width: size.width,
+                  height: size.height,
+                  fit: BoxFit.fill,
+                  filterQuality: FilterQuality.medium,
+                )
+              : null,
         );
         if (drawn == null) return ClipRect(child: plan);
         return ClipRect(

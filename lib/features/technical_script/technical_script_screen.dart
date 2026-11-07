@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:drift/drift.dart' show Value;
@@ -24,6 +23,8 @@ import '../../core/utils/scene_format.dart';
 import '../../core/utils/scene_characters.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
+import '../../core/widgets/sized_file_image.dart';
+import '../../core/widgets/stable_stream_builder.dart';
 import '../camera_plan/camera_plan_status_cell.dart';
 import '../../shared/history/edit_history.dart';
 import '../../shared/history/shot_edits.dart';
@@ -958,40 +959,52 @@ class _ScriptReadList extends ConsumerWidget {
     final palette = context.palette;
     final db = ref.watch(databaseProvider);
     final gutter = AppLayout.gutter(context);
-    return StreamBuilder<List<Scene>>(
-      stream: db.watchScenesForProject(projectId),
-      builder: (context, sceneSnap) => StreamBuilder<List<Shot>>(
-        stream: db.watchShotsForProject(projectId),
+    return StableStreamBuilder<List<Scene>>(
+      streamKey: (db, projectId),
+      stream: () => db.watchScenesForProject(projectId),
+      builder: (context, sceneSnap) => StableStreamBuilder<List<Shot>>(
+        streamKey: (db, projectId),
+        stream: () => db.watchShotsForProject(projectId),
         builder: (context, shotSnap) {
           final scenes = sceneSnap.data ?? const <Scene>[];
           final byScene = <int, List<Shot>>{};
           for (final shot in shotSnap.data ?? const <Shot>[]) {
             byScene.putIfAbsent(shot.sceneId, () => []).add(shot);
           }
-          return ListView(
-            padding: EdgeInsets.fromLTRB(gutter, 0, gutter, 40),
-            children: [
-              for (final scene in scenes) ...[
-                Padding(
-                  padding: const EdgeInsets.only(
-                    top: AppSpacing.lg,
-                    bottom: 6,
-                  ),
-                  child: Text(
-                    'ESC ${scene.label} · ${scene.locationCanonical}',
-                    style: AppTypography.titleMedium(palette),
-                  ),
+          // Una tarjeta por elemento: las que no se ven ni se crean.
+          final items = <WidgetBuilder>[];
+          for (final scene in scenes) {
+            final shots = byScene[scene.id] ?? const <Shot>[];
+            items.add(
+              (_) => Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: 6),
+                child: Text(
+                  'ESC ${scene.label} · ${scene.locationCanonical}',
+                  style: AppTypography.titleMedium(palette),
                 ),
-                if ((byScene[scene.id] ?? const []).isEmpty)
-                  Text('Sin planos.', style: AppTypography.caption(palette)),
-                for (final shot in byScene[scene.id] ?? const <Shot>[])
-                  OnSetShotCard(
-                    order: shot.number,
-                    shot: shot,
-                    scene: scene,
-                  ),
-              ],
-            ],
+              ),
+            );
+            if (shots.isEmpty) {
+              items.add(
+                (_) =>
+                    Text('Sin planos.', style: AppTypography.caption(palette)),
+              );
+            }
+            for (final shot in shots) {
+              items.add(
+                (_) => OnSetShotCard(
+                  key: ValueKey(shot.id),
+                  order: shot.number,
+                  shot: shot,
+                  scene: scene,
+                ),
+              );
+            }
+          }
+          return ListView.builder(
+            padding: EdgeInsets.fromLTRB(gutter, 0, gutter, 40),
+            itemCount: items.length,
+            itemBuilder: (context, i) => items[i](context),
           );
         },
       ),
@@ -999,52 +1012,214 @@ class _ScriptReadList extends ConsumerWidget {
   }
 }
 
-class _ScriptTable extends StatelessWidget {
+class _ScriptTable extends ConsumerStatefulWidget {
   final PlanProjectData data;
   final TechnicalScriptSettings settings;
 
   const _ScriptTable({required this.data, required this.settings});
 
   @override
-  Widget build(BuildContext context) {
-    final shotsByScene = <int, List<Shot>>{};
-    for (final shot in data.shots) {
-      shotsByScene.putIfAbsent(shot.sceneId, () => []).add(shot);
+  ConsumerState<_ScriptTable> createState() => _ScriptTableState();
+}
+
+class _ScriptTableState extends ConsumerState<_ScriptTable> {
+  /// Orden recién soltado en cada escena, mientras la base de datos no lo
+  /// devuelve.
+  final _pendingOrders = <int, List<int>>{};
+
+  @override
+  void didUpdateWidget(_ScriptTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _pendingOrders.removeWhere((sceneId, pending) {
+      final shots = widget.data.shotsByScene[sceneId] ?? const <Shot>[];
+      final ids = [for (final s in shots) s.id];
+      return listEquals(ids, pending) || ids.length != pending.length;
+    });
+  }
+
+  List<Shot> _orderedShots(int sceneId) {
+    final shots = widget.data.shotsByScene[sceneId] ?? const <Shot>[];
+    final pending = _pendingOrders[sceneId];
+    if (pending == null) return shots;
+    final byId = {for (final s in shots) s.id: s};
+    if (pending.any((id) => !byId.containsKey(id))) return shots;
+    return [for (final id in pending) byId[id]!];
+  }
+
+  /// Filas ya construidas. Devolver el mismo widget cuando ni el plano, ni la
+  /// escena, ni las columnas han cambiado hace que Flutter no repinte esa
+  /// fila aunque cambie otra cosa del proyecto.
+  final _rows = <int, _ShotRow>{};
+
+  _ShotRow _rowFor(Shot shot, Scene scene, _Cols cols) {
+    final cached = _rows[shot.id];
+    if (cached != null &&
+        cached.shot == shot &&
+        cached.scene == scene &&
+        cached.cols == cols) {
+      return cached;
     }
+    return _rows[shot.id] = _ShotRow(shot: shot, scene: scene, cols: cols);
+  }
+
+  /// Un plano soltado en una escena: si es de ella cambia de sitio; si viene
+  /// de otra, se pasa a esta.
+  void _dropBefore(
+    Scene scene,
+    List<Shot> shots,
+    _ShotDrag drag,
+    int beforeIndex,
+  ) {
+    if (drag.sceneId == scene.id) {
+      _moveBefore(scene.id, shots, drag.shotId, beforeIndex);
+      return;
+    }
+    ref
+        .read(databaseProvider)
+        .moveShotToScene(drag.shotId, scene.id, beforeIndex: beforeIndex);
+  }
+
+  /// Coloca el plano arrastrado delante del que ocupa [beforeIndex]
+  /// (`shots.length` = al final).
+  void _moveBefore(
+    int sceneId,
+    List<Shot> shots,
+    int draggedId,
+    int beforeIndex,
+  ) {
+    final ids = [for (final s in shots) s.id];
+    final from = ids.indexOf(draggedId);
+    if (from < 0) return;
+    final to = beforeIndex > from ? beforeIndex - 1 : beforeIndex;
+    if (to == from) return;
+    final before = [...ids];
+    ids.insert(to, ids.removeAt(from));
+    setState(() => _pendingOrders[sceneId] = ids);
+    final db = ref.read(databaseProvider);
+    db.reorderShotsInScene(sceneId, ids);
+    ref
+        .read(editHistoryProvider)
+        .record(
+          EditStep(
+            label: 'orden de los planos',
+            undo: () => db.reorderShotsInScene(sceneId, before),
+            redo: () => db.reorderShotsInScene(sceneId, ids),
+          ),
+        );
+  }
+
+  /// La tabla como lista plana: cada fila es un elemento, y las que no se
+  /// ven ni se construyen ni se pintan. Cada una lleva su clave: al cambiar
+  /// el orden se mueven sin desmontarse, y lo que tengan a medias (foco,
+  /// avisos, menús) sigue en su sitio.
+  List<({Key key, WidgetBuilder build})> _items(_Cols cols) {
+    final db = ref.read(databaseProvider);
+    final data = widget.data;
+    final items = <({Key key, WidgetBuilder build})>[];
+    final shown = <int>{};
+    for (final scene in data.scenes) {
+      final shots = _orderedShots(scene.id);
+      final sceneColor = data.colors.sceneColor(scene);
+      items.add((
+        key: ValueKey<String>('head-${scene.id}'),
+        build: (context) => Column(
+          key: ValueKey<String>('head-${scene.id}'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _SceneHeader(
+              scene: scene,
+              shotCount: shots.length,
+              colors: data.colors,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _TableHeader(cols: cols, sceneColor: sceneColor),
+          ],
+        ),
+      ));
+      for (var i = 0; i < shots.length; i++) {
+        final shot = shots[i];
+        shown.add(shot.id);
+        final key = ValueKey<int>(shot.id);
+        items.add((
+          key: key,
+          build: (context) => _ShotDropTarget(
+            key: key,
+            sceneId: scene.id,
+            shotId: shot.id,
+            onDrop: (drag) => _dropBefore(scene, shots, drag, i),
+            child: _rowFor(shot, scene, cols),
+          ),
+        ));
+      }
+      items.add((
+        key: ValueKey<String>('add-${scene.id}'),
+        build: (context) {
+          final palette = context.palette;
+          return Padding(
+            key: ValueKey<String>('add-${scene.id}'),
+            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+            child: _ShotDropTarget(
+              sceneId: scene.id,
+              shotId: null,
+              onDrop: (drag) => _dropBefore(scene, shots, drag, shots.length),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => db.insertShot(
+                    ShotsCompanion.insert(
+                      sceneId: scene.id,
+                      projectId: scene.projectId,
+                      number: shots.length + 1,
+                      sortOrder: Value(shots.length),
+                    ),
+                  ),
+                  icon: Icon(Icons.add, color: palette.accent, size: 16),
+                  label: Text(
+                    'Añadir plano',
+                    style: AppTypography.label(
+                      palette,
+                    ).copyWith(color: palette.accent),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ));
+    }
+    _rows.removeWhere((id, _) => !shown.contains(id));
     final scenes = data.scenes;
+    items.add((
+      key: _newSceneKey,
+      build: (context) => _NewSceneRow(
+        key: _newSceneKey,
+        projectId: scenes.first.projectId,
+        last: scenes.last,
+      ),
+    ));
+    return items;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = widget.settings;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final minWidth = _Cols.minWidth(settings);
         final width = math.max(constraints.maxWidth, minWidth);
         final cols = _Cols.forWidth(width, settings);
+        final items = _items(cols);
+        final indexOf = {for (final (i, item) in items.indexed) item.key: i};
         final table = ListView.builder(
           padding: const EdgeInsets.only(bottom: AppSpacing.xl),
-          itemCount: scenes.length + 1,
-          // Al crear o borrar una escena las demás cambian de índice: con
-          // esto conservan su estado (y la fila de nueva escena sigue
-          // abierta para la siguiente).
-          findChildIndexCallback: (key) {
-            if (key == _newSceneKey) return scenes.length;
-            if (key is ValueKey<int>) {
-              final i = scenes.indexWhere((s) => s.id == key.value);
-              return i < 0 ? null : i;
-            }
-            return null;
-          },
-          itemBuilder: (context, i) => i == scenes.length
-              ? _NewSceneRow(
-                  key: _newSceneKey,
-                  projectId: scenes.first.projectId,
-                  last: scenes.last,
-                )
-              : _SceneSection(
-                  key: ValueKey(scenes[i].id),
-                  scene: scenes[i],
-                  shots: shotsByScene[scenes[i].id] ?? const [],
-                  colors: data.colors,
-                  cols: cols,
-                ),
+          cacheExtent: 500,
+          itemCount: items.length,
+          // Al crear o borrar algo los demás cambian de índice: con esto
+          // conservan su estado (y la fila de nueva escena sigue abierta
+          // para la siguiente).
+          findChildIndexCallback: (key) => indexOf[key],
+          itemBuilder: (context, i) => items[i].build(context),
         );
         if (width <= constraints.maxWidth) return table;
         return SingleChildScrollView(
@@ -1308,171 +1483,6 @@ Future<bool> _confirmDelete(
     ),
   );
   return ok ?? false;
-}
-
-class _SceneSection extends ConsumerStatefulWidget {
-  final Scene scene;
-  final List<Shot> shots;
-  final ProjectColorScheme colors;
-  final _Cols cols;
-
-  const _SceneSection({
-    super.key,
-    required this.scene,
-    required this.shots,
-    required this.colors,
-    required this.cols,
-  });
-
-  @override
-  ConsumerState<_SceneSection> createState() => _SceneSectionState();
-}
-
-class _SceneSectionState extends ConsumerState<_SceneSection> {
-  /// Orden recién soltado, mientras la base de datos no lo devuelve.
-  List<int>? _pendingOrder;
-
-  @override
-  void didUpdateWidget(_SceneSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final pending = _pendingOrder;
-    if (pending == null) return;
-    final ids = [for (final s in widget.shots) s.id];
-    if (listEquals(ids, pending) || ids.length != pending.length) {
-      _pendingOrder = null;
-    }
-  }
-
-  List<Shot> get _orderedShots {
-    final pending = _pendingOrder;
-    if (pending == null) return widget.shots;
-    final byId = {for (final s in widget.shots) s.id: s};
-    if (pending.any((id) => !byId.containsKey(id))) return widget.shots;
-    return [for (final id in pending) byId[id]!];
-  }
-
-  /// Filas ya construidas. Devolver el mismo widget cuando ni el plano, ni la
-  /// escena, ni las columnas han cambiado hace que Flutter no repinte esa
-  /// fila aunque cambie otra cosa del proyecto.
-  final _rows = <int, _ShotRow>{};
-
-  _ShotRow _rowFor(Shot shot) {
-    final cached = _rows[shot.id];
-    if (cached != null &&
-        cached.shot == shot &&
-        cached.scene == widget.scene &&
-        cached.cols == widget.cols) {
-      return cached;
-    }
-    return _rows[shot.id] = _ShotRow(
-      shot: shot,
-      scene: widget.scene,
-      cols: widget.cols,
-    );
-  }
-
-  /// Un plano soltado aquí: si es de esta escena cambia de sitio; si viene
-  /// de otra, se pasa a esta.
-  void _dropBefore(List<Shot> shots, _ShotDrag drag, int beforeIndex) {
-    if (drag.sceneId == widget.scene.id) {
-      _moveBefore(shots, drag.shotId, beforeIndex);
-      return;
-    }
-    ref
-        .read(databaseProvider)
-        .moveShotToScene(
-          drag.shotId,
-          widget.scene.id,
-          beforeIndex: beforeIndex,
-        );
-  }
-
-  /// Coloca el plano arrastrado delante del que ocupa [beforeIndex]
-  /// (`shots.length` = al final).
-  void _moveBefore(List<Shot> shots, int draggedId, int beforeIndex) {
-    final ids = [for (final s in shots) s.id];
-    final from = ids.indexOf(draggedId);
-    if (from < 0) return;
-    final to = beforeIndex > from ? beforeIndex - 1 : beforeIndex;
-    if (to == from) return;
-    final before = [...ids];
-    ids.insert(to, ids.removeAt(from));
-    setState(() => _pendingOrder = ids);
-    final db = ref.read(databaseProvider);
-    final sceneId = widget.scene.id;
-    db.reorderShotsInScene(sceneId, ids);
-    ref
-        .read(editHistoryProvider)
-        .record(
-          EditStep(
-            label: 'orden de los planos',
-            undo: () => db.reorderShotsInScene(sceneId, before),
-            redo: () => db.reorderShotsInScene(sceneId, ids),
-          ),
-        );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final db = ref.read(databaseProvider);
-    final palette = context.palette;
-    final scene = widget.scene;
-    final shots = _orderedShots;
-    _rows.removeWhere((id, _) => !shots.any((s) => s.id == id));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SceneHeader(
-          scene: scene,
-          shotCount: shots.length,
-          colors: widget.colors,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        _TableHeader(
-          cols: widget.cols,
-          sceneColor: widget.colors.sceneColor(scene),
-        ),
-        // Columna con claves y no una lista reordenable: al cambiar el orden
-        // las filas se mueven sin desmontarse, y lo que tengan a medias (foco,
-        // avisos, menús) sigue en su sitio.
-        for (var i = 0; i < shots.length; i++)
-          _ShotDropTarget(
-            key: ValueKey(shots[i].id),
-            sceneId: scene.id,
-            shotId: shots[i].id,
-            onDrop: (drag) => _dropBefore(shots, drag, i),
-            child: _rowFor(shots[i]),
-          ),
-        _ShotDropTarget(
-          sceneId: scene.id,
-          shotId: null,
-          onDrop: (drag) => _dropBefore(shots, drag, shots.length),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => db.insertShot(
-                ShotsCompanion.insert(
-                  sceneId: scene.id,
-                  projectId: scene.projectId,
-                  number: shots.length + 1,
-                  sortOrder: Value(shots.length),
-                ),
-              ),
-              icon: Icon(Icons.add, color: palette.accent, size: 16),
-              label: Text(
-                'Añadir plano',
-                style: AppTypography.label(
-                  palette,
-                ).copyWith(color: palette.accent),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-      ],
-    );
-  }
 }
 
 /// Título de la escena con sus tres datos cambiables al toque: INT/EXT,
@@ -2669,7 +2679,7 @@ class _PlanCell extends ConsumerWidget {
                       data: data,
                       setup: data.setup(id)!,
                     ),
-                    null => Image.file(File(sketch), fit: BoxFit.contain),
+                    null => SizedFileImage(sketch),
                   },
                 ),
               ),
@@ -2903,10 +2913,11 @@ class _ShotImageCell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sheet = ScriptSheet.of(context);
+    final db = ref.watch(databaseProvider);
     final story = target == ShotImageTarget.storyboard;
     final own = story ? shot.storyboardImagePath : shot.referenceImagePath;
     final path = story ? storyboardImageOf(shot) : referenceImageOf(shot);
-    final hasImage = path != null && File(path).existsSync();
+    final hasImage = path != null && FileExistsCache.exists(path);
     // Sin imagen propia se enseña la del otro uso, con su rótulo.
     final inherited = hasImage && own == null;
     final single = _body(context, sheet, story, path, hasImage, inherited);
@@ -2918,10 +2929,9 @@ class _ShotImageCell extends ConsumerWidget {
       // enseñan todas, una debajo de otra.
       child: story
           ? single
-          : StreamBuilder<List<ShotReference>>(
-              stream: ref
-                  .watch(databaseProvider)
-                  .watchReferencesForShot(shot.id),
+          : StableStreamBuilder<List<ShotReference>>(
+              streamKey: (db, shot.id),
+              stream: () => db.watchReferencesForShot(shot.id),
               builder: (context, snap) {
                 final paths = referenceImagesOf(shot, snap.data ?? const []);
                 if (paths.length < 2) return single;
@@ -2937,7 +2947,7 @@ class _ShotImageCell extends ConsumerWidget {
                           child: SizedBox(
                             height: 84,
                             width: double.infinity,
-                            child: Image.file(File(image), fit: BoxFit.contain),
+                            child: SizedFileImage(image),
                           ),
                         ),
                       ],
@@ -2971,7 +2981,7 @@ class _ShotImageCell extends ConsumerWidget {
             ? Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.file(File(path!), fit: BoxFit.contain),
+                  SizedFileImage(path!),
                   if (inherited)
                     Positioned(
                       left: 0,
