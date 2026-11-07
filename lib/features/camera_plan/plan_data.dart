@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'shot_plan_view.dart';
 import 'floor_plan_repository.dart';
 import 'shot_route.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -79,26 +82,65 @@ class PlanProjectData {
 
   bool get isEmpty => sites.isEmpty && sets.isEmpty && setups.isEmpty;
 
-  LocationSite? site(int? id) {
-    for (final s in sites) {
-      if (s.id == id) return s;
+  // Una instancia no cambia: lo calculado sobre ella vale mientras viva. Cada
+  // celda y miniatura pregunta lo mismo varias veces por fotograma.
+  late final _siteById = {for (final s in sites) s.id: s};
+  late final _setById = {for (final s in sets) s.id: s};
+  late final _sceneById = {for (final s in scenes) s.id: s};
+  late final _setupById = {for (final s in setups) s.id: s};
+  late final _groupById = {for (final g in groups) g.id: g};
+
+  /// Planos de cada escena, en su orden.
+  late final Map<int, List<Shot>> shotsByScene = () {
+    final map = <int, List<Shot>>{};
+    for (final shot in shots) {
+      map.putIfAbsent(shot.sceneId, () => []).add(shot);
     }
-    return null;
+    return map;
+  }();
+
+  /// Filas de planta de cada plano, en el orden en que llegan.
+  late final Map<int, List<CameraPlanElement>> _rowsByShot = () {
+    final map = <int, List<CameraPlanElement>>{};
+    for (final row in elementRows) {
+      map.putIfAbsent(row.shotId, () => []).add(row);
+    }
+    return map;
+  }();
+
+  late final Map<int, int> _sceneOrder = {
+    for (final (i, s) in scenesInScriptOrder(scenes).indexed) s.id: i,
+  };
+
+  /// Plantas ya leídas, por su JSON. Se guardan entre instancias: casi todo
+  /// sigue igual tras cada cambio del proyecto, y las plantas son lo más
+  /// caro de leer. Son de solo lectura: quien edita lee las suyas.
+  static const _decodedKept = 128;
+  static final _decoded = <String, List<PlanElement>>{};
+
+  static List<PlanElement> _decode(String? json) {
+    if (json == null || json.isEmpty) return const [];
+    final kept = _decoded.remove(json);
+    if (kept != null) return _decoded[json] = kept;
+    final list = List<PlanElement>.unmodifiable(FloorPlanJson.decode(json));
+    _decoded[json] = list;
+    while (_decoded.length > _decodedKept) {
+      _decoded.remove(_decoded.keys.first);
+    }
+    return list;
   }
 
-  LocationBasePlan? set(int? id) {
-    for (final s in sets) {
-      if (s.id == id) return s;
-    }
-    return null;
-  }
+  final _ownOfShot = <int, List<PlanElement>>{};
+  final _lightOfShot = <(int, int?, String?), List<PlanElement>>{};
+  final _baseOfShot = <(int, int?, int?, String?), List<PlanElement>>{};
+  final _groupLight = <int, List<PlanElement>>{};
+  final _inheritedOfSetup = <int, List<PlanElement>>{};
 
-  Scene? scene(int? id) {
-    for (final s in scenes) {
-      if (s.id == id) return s;
-    }
-    return null;
-  }
+  LocationSite? site(int? id) => _siteById[id];
+
+  LocationBasePlan? set(int? id) => _setById[id];
+
+  Scene? scene(int? id) => _sceneById[id];
 
   List<LocationBasePlan> setsOfSite(int siteId) =>
       sets.where((s) => s.siteId == siteId).toList();
@@ -159,11 +201,10 @@ class PlanProjectData {
   }
 
   List<Shot> _inScriptOrder(Iterable<Shot> list) {
-    final order = {
-      for (final (i, s) in scenesInScriptOrder(scenes).indexed) s.id: i,
-    };
     return list.toList()..sort((a, b) {
-      final byScene = (order[a.sceneId] ?? 0).compareTo(order[b.sceneId] ?? 0);
+      final byScene = (_sceneOrder[a.sceneId] ?? 0).compareTo(
+        _sceneOrder[b.sceneId] ?? 0,
+      );
       return byScene != 0 ? byScene : a.number.compareTo(b.number);
     });
   }
@@ -177,12 +218,7 @@ class PlanProjectData {
 
   // ── Sets de una localización (SG.2) ───────────────────────────────────────
 
-  SetGroup? group(int? id) {
-    for (final g in groups) {
-      if (g.id == id) return g;
-    }
-    return null;
-  }
+  SetGroup? group(int? id) => _groupById[id];
 
   /// Todos los sets de una localización, estén o no en una zona.
   List<LightSetup> lightSetsOfSite(int siteId) => [
@@ -217,12 +253,9 @@ class PlanProjectData {
 
   /// Posición en el guion del primer plano del set; sin planos, al final.
   int _narrativeIndex(LightSetup setup) {
-    final order = {
-      for (final (i, s) in scenesInScriptOrder(scenes).indexed) s.id: i,
-    };
     var best = 1 << 30;
     for (final shot in shotsOfSetup(setup.id)) {
-      final i = (order[shot.sceneId] ?? 0) * 10000 + shot.number;
+      final i = (_sceneOrder[shot.sceneId] ?? 0) * 10000 + shot.number;
       if (i < best) best = i;
     }
     return best;
@@ -283,12 +316,7 @@ class PlanProjectData {
 
   // ── Esquema de cada plano ─────────────────────────────────────────────────
 
-  LightSetup? setup(int? id) {
-    for (final s in setups) {
-      if (s.id == id) return s;
-    }
-    return null;
-  }
+  LightSetup? setup(int? id) => _setupById[id];
 
   /// Esquemas con el mismo dueño (set, localización o ninguno).
   List<LightSetup> siblingsOf(LightSetup setup) => setups
@@ -335,24 +363,29 @@ class PlanProjectData {
   /// Lo propio de un plano: cámaras y actores. Con [tagged], cada cámara
   /// lleva el rótulo de su plano («1·3»), para verlas juntas en una planta.
   List<PlanElement> ownOfShot(Shot shot, {bool tagged = false}) {
+    final rows = _rowsByShot[shot.id] ?? const <CameraPlanElement>[];
+    if (!tagged) {
+      return _ownOfShot[shot.id] ??= List.unmodifiable([
+        for (final row in rows) PlanElement.fromDb(row),
+      ]);
+    }
     final sceneNumber = scene(shot.sceneId)?.number;
     return [
-      for (final row in elementRows)
-        if (row.shotId == shot.id)
-          PlanElement.fromDb(row)
-            ..props.addAll({
-              if (tagged && row.type == 'camera')
-                'shotTag': sceneNumber == null
-                    ? 'P${shot.number}'
-                    : '$sceneNumber·${shot.number}',
-            }),
+      for (final row in rows)
+        PlanElement.fromDb(row)
+          ..props.addAll({
+            if (row.type == 'camera')
+              'shotTag': sceneNumber == null
+                  ? 'P${shot.number}'
+                  : '$sceneNumber·${shot.number}',
+          }),
     ];
   }
 
   /// Letras de las cámaras de un plano (A, B…), sin repetir.
   List<String> camerasOfShot(Shot shot) => {
-    for (final row in elementRows)
-      if (row.shotId == shot.id && row.type == 'camera') row.cameraLetter,
+    for (final row in _rowsByShot[shot.id] ?? const <CameraPlanElement>[])
+      if (row.type == 'camera') row.cameraLetter,
   }.toList()..sort();
 
   /// Planos de las escenas de una localización que aún no están en ninguno
@@ -425,7 +458,13 @@ class PlanProjectData {
   List<PlanElement> lightOfShot(Shot shot) {
     final own = setup(shot.lightSetupId);
     if (own == null) return const [];
-    return LightOverrides.apply(ownOfSetup(own), shot.lightOverridesJson);
+    return _lightOfShot[(
+      shot.id,
+      shot.lightSetupId,
+      shot.lightOverridesJson,
+    )] ??= List.unmodifiable(
+      LightOverrides.apply(ownOfSetup(own), shot.lightOverridesJson),
+    );
   }
 
   /// ¿Tiene el plano ajustes de luz propios sobre su esquema?
@@ -449,7 +488,14 @@ class PlanProjectData {
   }
 
   /// Lo que se ve debajo de un plano, sin la luz: entorno y set.
-  List<PlanElement> baseOfShot(Shot shot) {
+  List<PlanElement> baseOfShot(Shot shot) => _baseOfShot[(
+    shot.id,
+    shot.lightSetupId,
+    shot.locationBasePlanId,
+    shot.lightOverridesJson,
+  )] ??= List.unmodifiable(_resolveBaseOfShot(shot));
+
+  List<PlanElement> _resolveBaseOfShot(Shot shot) {
     // Con su set: el entorno como lo ve el set (lo que apaga o quita) y lo
     // que el plano ajusta solo para él (EN).
     final own = setup(shot.lightSetupId);
@@ -620,20 +666,26 @@ class PlanProjectData {
   // ── Capas, para miniaturas ────────────────────────────────────────────────
 
   List<PlanElement> environmentOf(int? siteId) =>
-      FloorPlanJson.decode(site(siteId)?.floorPlanJson);
+      _decode(site(siteId)?.floorPlanJson);
 
   List<PlanElement> ownOfSet(LocationBasePlan set) =>
-      FloorPlanJson.decode(set.floorPlanJson);
+      _decode(set.floorPlanJson);
 
-  List<PlanElement> ownOfSetup(LightSetup setup) =>
-      FloorPlanJson.decode(setup.planJson);
+  List<PlanElement> ownOfSetup(LightSetup setup) => _decode(setup.planJson);
 
   /// La luz compartida del grupo del set (SG.1).
   List<PlanElement> groupLightOf(LightSetup setup) =>
-      GroupLight.visible(group(setup.groupId)?.planJson, setup.planJson);
+      _groupLight[setup.id] ??= List.unmodifiable(
+        GroupLight.visible(group(setup.groupId)?.planJson, setup.planJson),
+      );
 
   /// Lo que un esquema ve debajo: entorno de la localización y set.
-  List<PlanElement> inheritedOfSetup(LightSetup setup) {
+  List<PlanElement> inheritedOfSetup(LightSetup setup) =>
+      _inheritedOfSetup[setup.id] ??= List.unmodifiable(
+        _resolveInheritedOfSetup(setup),
+      );
+
+  List<PlanElement> _resolveInheritedOfSetup(LightSetup setup) {
     final owner = set(setup.locationBasePlanId);
     // Con los cambios de entorno propios del set (SG.3).
     final resolved = EnvOverrides.apply(
@@ -674,11 +726,12 @@ class PlanDataScope extends InheritedWidget {
       context.dependOnInheritedWidgetOfExactType<PlanDataScope>()!.data;
 
   @override
-  bool updateShouldNotify(PlanDataScope oldWidget) => oldWidget.data != data;
+  bool updateShouldNotify(PlanDataScope oldWidget) =>
+      !identical(oldWidget.data, data);
 }
 
 /// Escucha localizaciones, sets, esquemas, escenas y planos de un proyecto.
-class PlanDataBuilder extends ConsumerWidget {
+class PlanDataBuilder extends ConsumerStatefulWidget {
   final int projectId;
   final Widget Function(BuildContext context, PlanProjectData data) builder;
 
@@ -689,61 +742,164 @@ class PlanDataBuilder extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(databaseProvider);
-    Widget loading() => const Center(child: CircularProgressIndicator());
+  ConsumerState<PlanDataBuilder> createState() => _PlanDataBuilderState();
+}
 
-    return StreamBuilder<List<LocationSite>>(
-      stream: db.watchSitesForProject(projectId),
-      builder: (context, sites) => StreamBuilder<List<LocationBasePlan>>(
-        stream: db.watchLocationsForProject(projectId),
-        builder: (context, sets) => StreamBuilder<List<LightSetup>>(
-          stream: db.watchLightSetupsForProject(projectId),
-          builder: (context, setups) => StreamBuilder<List<Scene>>(
-            stream: db.watchScenesForProject(projectId),
-            builder: (context, scenes) => StreamBuilder<List<Shot>>(
-              stream: db.watchShotsForProject(projectId),
-              builder: (context, shots) =>
-                  StreamBuilder<List<CameraPlanElement>>(
-                    stream: db.watchCameraPlanElementsForProject(projectId),
-                    builder: (context, elements) =>
-                        StreamBuilder<List<ProjectAnnotationDocument>>(
-                          stream: db.watchPlanAnnotationDocuments(projectId),
-                          builder: (context, drawings) =>
-                              StreamBuilder<List<SetGroup>>(
-                                stream: db.watchSetGroupsForProject(projectId),
-                                builder: (context, groups) {
-                                  if (!groups.hasData ||
-                                      !sites.hasData ||
-                                      !sets.hasData ||
-                                      !setups.hasData ||
-                                      !scenes.hasData ||
-                                      !shots.hasData ||
-                                      !elements.hasData ||
-                                      !drawings.hasData) {
-                                    return loading();
-                                  }
-                                  return builder(
-                                    context,
-                                    PlanProjectData(
-                                      sites: sites.data!,
-                                      sets: sets.data!,
-                                      setups: setups.data!,
-                                      scenes: scenes.data!,
-                                      shots: shots.data!,
-                                      groups: groups.data!,
-                                      elementRows: elements.data!,
-                                      drawingRows: drawings.data!,
-                                    ),
-                                  );
-                                },
-                              ),
-                        ),
-                  ),
-            ),
-          ),
-        ),
+class _PlanDataBuilderState extends ConsumerState<PlanDataBuilder> {
+  AppDatabase? _db;
+  int? _projectId;
+  var _subscriptions = <StreamSubscription<Object?>>[];
+
+  List<LocationSite>? _sites;
+  List<LocationBasePlan>? _sets;
+  List<LightSetup>? _setups;
+  List<Scene>? _scenes;
+  List<Shot>? _shots;
+  List<CameraPlanElement>? _elements;
+  List<ProjectAnnotationDocument>? _drawings;
+  List<SetGroup>? _groups;
+
+  /// El último resultado: mientras nada cambie es el mismo objeto, y quien
+  /// depende de [PlanDataScope] no se reconstruye.
+  PlanProjectData? _data;
+  var _stale = true;
+
+  /// Las consultas viven aquí y no en el árbol: un stream de Drift es nuevo
+  /// en cada `watch()`, y creado en un `build` se suscribe otra vez cada vez
+  /// que se reconstruye lo que tiene encima.
+  void _subscribe(AppDatabase db, int projectId) {
+    _cancel();
+    _db = db;
+    _projectId = projectId;
+    _sites = null;
+    _sets = null;
+    _setups = null;
+    _scenes = null;
+    _shots = null;
+    _elements = null;
+    _drawings = null;
+    _groups = null;
+    _data = null;
+    _stale = true;
+    _subscriptions = [
+      _follow(
+        db.watchSitesForProject(projectId),
+        () => _sites,
+        (rows) => _sites = rows,
       ),
+      _follow(
+        db.watchLocationsForProject(projectId),
+        () => _sets,
+        (rows) => _sets = rows,
+      ),
+      _follow(
+        db.watchLightSetupsForProject(projectId),
+        () => _setups,
+        (rows) => _setups = rows,
+      ),
+      _follow(
+        db.watchScenesForProject(projectId),
+        () => _scenes,
+        (rows) => _scenes = rows,
+      ),
+      _follow(
+        db.watchShotsForProject(projectId),
+        () => _shots,
+        (rows) => _shots = rows,
+      ),
+      _follow(
+        db.watchCameraPlanElementsForProject(projectId),
+        () => _elements,
+        (rows) => _elements = rows,
+      ),
+      _follow(
+        db.watchPlanAnnotationDocuments(projectId),
+        () => _drawings,
+        (rows) => _drawings = rows,
+      ),
+      _follow(
+        db.watchSetGroupsForProject(projectId),
+        () => _groups,
+        (rows) => _groups = rows,
+      ),
+    ];
+  }
+
+  /// Sigue una consulta. Si devuelve lo mismo que tenía (Drift avisa por
+  /// tabla, no por fila), no pasa nada. Varias respuestas en un mismo
+  /// fotograma se quedan en una reconstrucción.
+  StreamSubscription<List<T>> _follow<T>(
+    Stream<List<T>> stream,
+    List<T>? Function() current,
+    void Function(List<T>) store,
+  ) => stream.listen(
+    (rows) {
+      if (listEquals(current(), rows)) return;
+      store(rows);
+      _stale = true;
+      if (mounted) setState(() {});
+    },
+    // Como un StreamBuilder: se sigue enseñando lo último que llegó.
+    onError: (Object error, StackTrace stack) =>
+        debugPrint('PlanDataBuilder: $error'),
+  );
+
+  void _cancel() {
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    _subscriptions = [];
+  }
+
+  PlanProjectData? _current() {
+    if (!_stale) return _data;
+    final (sites, sets, setups, scenes, shots, elements, drawings, groups) = (
+      _sites,
+      _sets,
+      _setups,
+      _scenes,
+      _shots,
+      _elements,
+      _drawings,
+      _groups,
     );
+    if (sites == null ||
+        sets == null ||
+        setups == null ||
+        scenes == null ||
+        shots == null ||
+        elements == null ||
+        drawings == null ||
+        groups == null) {
+      return null;
+    }
+    _stale = false;
+    return _data = PlanProjectData(
+      sites: sites,
+      sets: sets,
+      setups: setups,
+      scenes: scenes,
+      shots: shots,
+      groups: groups,
+      elementRows: elements,
+      drawingRows: drawings,
+    );
+  }
+
+  @override
+  void dispose() {
+    _cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final db = ref.watch(databaseProvider);
+    if (!identical(db, _db) || widget.projectId != _projectId) {
+      _subscribe(db, widget.projectId);
+    }
+    final data = _current();
+    if (data == null) return const Center(child: CircularProgressIndicator());
+    return widget.builder(context, data);
   }
 }

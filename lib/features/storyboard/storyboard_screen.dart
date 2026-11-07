@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +18,8 @@ import '../../core/utils/shot_reference_import.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/sized_file_image.dart';
+import '../../core/widgets/stable_stream_builder.dart';
 import '../../core/widgets/shot_reference_gallery.dart';
 import '../camera_plan/camera_plan_grouping.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
@@ -94,7 +94,6 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final db = ref.watch(databaseProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -174,14 +173,10 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List<Scene>>(
-        stream: db.watchScenesForProject(widget.projectId),
-        builder: (context, sceneSnap) {
-          if (!sceneSnap.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final scenes = scenesInScriptOrder(sceneSnap.data!);
+      body: PlanDataBuilder(
+        projectId: widget.projectId,
+        builder: (context, plans) {
+          final scenes = scenesInScriptOrder(plans.scenes);
           if (scenes.isEmpty) {
             return Center(
               child: Padding(
@@ -196,62 +191,48 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
             );
           }
 
-          return StreamBuilder<List<LocationSite>>(
-            stream: db.watchSitesForProject(widget.projectId),
-            builder: (context, siteSnap) {
-              return StreamBuilder<List<LocationBasePlan>>(
-                stream: db.watchLocationsForProject(widget.projectId),
-                builder: (context, setSnap) {
-                  final colors = ProjectColorScheme.resolve(
-                    sites: siteSnap.data ?? [],
-                    sets: setSnap.data ?? [],
-                    scenes: scenes,
-                  );
+          final colors = ProjectColorScheme.resolve(
+            sites: plans.sites,
+            sets: plans.sets,
+            scenes: scenes,
+          );
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.lg,
-                          AppSpacing.md,
-                          AppSpacing.lg,
-                          0,
-                        ),
-                        child: _StoryboardToolbar(
-                          layout: _layout,
-                          filter: _filter,
-                          onLayoutChanged: (l) => setState(() => _layout = l),
-                          onFilterChanged: (f) => setState(() => _filter = f),
-                        ),
-                      ),
-                      Expanded(
-                        child: PlanDataBuilder(
-                          projectId: widget.projectId,
-                          builder: (context, plans) => PlanDataScope(
-                            data: plans,
-                            child: _SelectionScope(
-                              notifier: _selection,
-                              child: _StoryboardBody(
-                                projectId: widget.projectId,
-                                scenes: scenes,
-                                colors: colors,
-                                layout: _layout,
-                                filter: _filter,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      _SelectionBar(
-                        selection: _selection,
-                        onExport: (only) => _openExport(only: only),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                  0,
+                ),
+                child: _StoryboardToolbar(
+                  layout: _layout,
+                  filter: _filter,
+                  onLayoutChanged: (l) => setState(() => _layout = l),
+                  onFilterChanged: (f) => setState(() => _filter = f),
+                ),
+              ),
+              Expanded(
+                child: PlanDataScope(
+                  data: plans,
+                  child: _SelectionScope(
+                    notifier: _selection,
+                    child: _StoryboardBody(
+                      scenes: scenes,
+                      colors: colors,
+                      layout: _layout,
+                      filter: _filter,
+                    ),
+                  ),
+                ),
+              ),
+              _SelectionBar(
+                selection: _selection,
+                onExport: (only) => _openExport(only: only),
+              ),
+            ],
           );
         },
       ),
@@ -259,7 +240,6 @@ class _StoryboardScreenState extends ConsumerState<StoryboardScreen> {
   }
 }
 
-/// Planos elegidos, al alcance de cada tarjeta.
 class _SelectionScope extends InheritedNotifier<ValueNotifier<Set<int>?>> {
   const _SelectionScope({required super.notifier, required super.child});
 
@@ -423,36 +403,97 @@ class _StoryboardToolbar extends StatelessWidget {
   }
 }
 
+/// Si un plano entra en el filtro. Con «todos» ni se mira el disco.
+bool _passesFilter(Shot shot, _StoryboardFilter filter) {
+  if (filter == _StoryboardFilter.all) return true;
+  final path = storyboardImageOf(shot);
+  final hasImage = path != null && FileExistsCache.exists(path);
+  return filter == _StoryboardFilter.withImage ? hasImage : !hasImage;
+}
+
 class _StoryboardBody extends ConsumerWidget {
-  final int projectId;
   final List<Scene> scenes;
   final ProjectColorScheme colors;
   final _StoryboardLayout layout;
   final _StoryboardFilter filter;
 
   const _StoryboardBody({
-    required this.projectId,
     required this.scenes,
     required this.colors,
     required this.layout,
     required this.filter,
   });
 
-  bool _passesFilter(Shot shot) {
-    final path = storyboardImageOf(shot);
-    final hasImage = path != null && File(path).existsSync();
-    return switch (filter) {
-      _StoryboardFilter.all => true,
-      _StoryboardFilter.withImage => hasImage,
-      _StoryboardFilter.missing => !hasImage,
-    };
+  Widget _sceneHeader(
+    BuildContext context,
+    Scene scene,
+    Color sceneColor,
+    int shotCount,
+  ) {
+    final palette = context.palette;
+    final location = locationFromCanonical(scene.locationCanonical);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: sceneColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Esc ${scene.label} · $location',
+              style: AppTypography.titleMedium(
+                palette,
+              ).copyWith(color: sceneColor),
+            ),
+          ),
+          Text(
+            '$shotCount plano${shotCount == 1 ? '' : 's'}',
+            style: AppTypography.caption(palette),
+          ),
+        ],
+      ),
+    );
   }
+
+  Widget _newShotButton(
+    BuildContext context,
+    WidgetRef ref,
+    Scene scene,
+    List<Shot> allShots,
+  ) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: () async {
+          final db = ref.read(databaseProvider);
+          final id = await createStoryboardShot(db, scene, allShots);
+          final shot = await db.getShotById(id);
+          if (shot == null || !context.mounted) return;
+          // Se abre ya en el visor: título, y elegir o dibujar su imagen.
+          await showStoryboardViewer(
+            context,
+            projectId: scene.projectId,
+            shot: shot,
+          );
+        },
+        icon: const Icon(Icons.add, size: 16),
+        label: const Text('Plano nuevo'),
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (layout == _StoryboardLayout.linear) {
       return _StoryboardLinearStrip(
-        projectId: projectId,
         scenes: scenes,
         colors: colors,
         filter: filter,
@@ -461,103 +502,50 @@ class _StoryboardBody extends ConsumerWidget {
 
     if (layout == _StoryboardLayout.grid) {
       return _StoryboardContinuousGrid(
-        projectId: projectId,
         scenes: scenes,
         colors: colors,
         filter: filter,
       );
     }
 
-    final palette = context.palette;
-    final db = ref.watch(databaseProvider);
+    final plans = PlanDataScope.of(context);
+
+    // Cada plano es un elemento de la lista: los que no se ven ni se crean.
+    final items = <WidgetBuilder>[];
+    for (final scene in scenes) {
+      final sceneColor = colors.sceneColor(scene);
+      final allShots = plans.shotsByScene[scene.id] ?? const <Shot>[];
+      final shots = [
+        for (final shot in allShots)
+          if (_passesFilter(shot, filter)) shot,
+      ];
+      // Una escena aún sin planos se queda a la vista: desde aquí se le pone
+      // el primero.
+      if (shots.isEmpty && allShots.isNotEmpty) continue;
+      items.add(
+        (context) => _sceneHeader(context, scene, sceneColor, shots.length),
+      );
+      for (final shot in shots) {
+        items.add(
+          (context) => Padding(
+            key: ValueKey(shot.id),
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: _StoryboardFrame(
+              scene: scene,
+              shot: shot,
+              sceneColor: sceneColor,
+              listLayout: true,
+            ),
+          ),
+        );
+      }
+      items.add((context) => _newShotButton(context, ref, scene, allShots));
+    }
 
     return ListView.builder(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      itemCount: scenes.length,
-      itemBuilder: (context, sceneIndex) {
-        final scene = scenes[sceneIndex];
-        final sceneColor = colors.sceneColor(scene);
-        final location = locationFromCanonical(scene.locationCanonical);
-
-        return StreamBuilder<List<Shot>>(
-          stream: db.watchShotsForScene(scene.id),
-          builder: (context, shotSnap) {
-            final allShots = shotSnap.data ?? [];
-            final shots = allShots.where(_passesFilter).toList();
-            // Una escena aún sin planos se queda a la vista: desde aquí se
-            // le pone el primero.
-            if (shots.isEmpty && allShots.isNotEmpty) {
-              return const SizedBox.shrink();
-            }
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.xl),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: sceneColor,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          'Esc ${scene.label} · $location',
-                          style: AppTypography.titleMedium(
-                            palette,
-                          ).copyWith(color: sceneColor),
-                        ),
-                      ),
-                      Text(
-                        '${shots.length} plano${shots.length == 1 ? '' : 's'}',
-                        style: AppTypography.caption(palette),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  ...shots.map(
-                    (shot) => Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: _StoryboardFrame(
-                        scene: scene,
-                        shot: shot,
-                        sceneColor: sceneColor,
-                        listLayout: true,
-                      ),
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: () async {
-                      final id = await createStoryboardShot(
-                        db,
-                        scene,
-                        allShots,
-                      );
-                      final shot = await db.getShotById(id);
-                      if (shot == null || !context.mounted) return;
-                      // Se abre ya en el visor: título, y elegir o dibujar
-                      // su imagen.
-                      await showStoryboardViewer(
-                        context,
-                        projectId: scene.projectId,
-                        shot: shot,
-                      );
-                    },
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Plano nuevo'),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      itemCount: items.length,
+      itemBuilder: (context, i) => items[i](context),
     );
   }
 }
@@ -575,28 +563,16 @@ class _GridShotEntry {
 }
 
 /// Rejilla continua: planos en orden de guion, 3 columnas sin huecos entre escenas.
-class _StoryboardContinuousGrid extends ConsumerWidget {
-  final int projectId;
+class _StoryboardContinuousGrid extends StatelessWidget {
   final List<Scene> scenes;
   final ProjectColorScheme colors;
   final _StoryboardFilter filter;
 
   const _StoryboardContinuousGrid({
-    required this.projectId,
     required this.scenes,
     required this.colors,
     required this.filter,
   });
-
-  bool _passesFilter(Shot shot) {
-    final path = storyboardImageOf(shot);
-    final hasImage = path != null && File(path).existsSync();
-    return switch (filter) {
-      _StoryboardFilter.all => true,
-      _StoryboardFilter.withImage => hasImage,
-      _StoryboardFilter.missing => !hasImage,
-    };
-  }
 
   int _crossAxisCount(double width) {
     if (width >= AppLayout.wideBreakpoint) return 3;
@@ -605,109 +581,91 @@ class _StoryboardContinuousGrid extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final palette = context.palette;
-    final db = ref.watch(databaseProvider);
+    final plans = PlanDataScope.of(context);
+    final entries = <_GridShotEntry>[];
 
-    return StreamBuilder<List<Shot>>(
-      stream: db.watchShotsForProject(projectId),
-      builder: (context, shotSnap) {
-        if (!shotSnap.hasData) {
-          return const Center(child: CircularProgressIndicator());
+    for (final scene in scenes) {
+      final shots = [
+        for (final shot in plans.shotsByScene[scene.id] ?? const <Shot>[])
+          if (_passesFilter(shot, filter)) shot,
+      ];
+
+      for (var i = 0; i < shots.length; i++) {
+        entries.add(
+          _GridShotEntry(scene: scene, shot: shots[i], isFirstInScene: i == 0),
+        );
+      }
+    }
+
+    if (entries.isEmpty) {
+      return Center(
+        child: Text(
+          'No hay planos que coincidan con el filtro.',
+          style: AppTypography.bodyMedium(palette),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = _crossAxisCount(constraints.maxWidth);
+        final rows = <List<_GridShotEntry>>[];
+        for (var i = 0; i < entries.length; i += crossAxisCount) {
+          final end = (i + crossAxisCount).clamp(0, entries.length);
+          rows.add(entries.sublist(i, end));
         }
 
-        final allShots = shotSnap.data!;
-        final entries = <_GridShotEntry>[];
+        return ListView.separated(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          itemCount: rows.length,
+          separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+          itemBuilder: (context, rowIndex) {
+            final row = rows[rowIndex];
+            final showRowSceneHeader = row.first.isFirstInScene;
 
-        for (final scene in scenes) {
-          final shots = allShots
-              .where((s) => s.sceneId == scene.id && _passesFilter(s))
-              .toList();
-
-          for (var i = 0; i < shots.length; i++) {
-            entries.add(
-              _GridShotEntry(
-                scene: scene,
-                shot: shots[i],
-                isFirstInScene: i == 0,
-              ),
-            );
-          }
-        }
-
-        if (entries.isEmpty) {
-          return Center(
-            child: Text(
-              'No hay planos que coincidan con el filtro.',
-              style: AppTypography.bodyMedium(palette),
-            ),
-          );
-        }
-
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final crossAxisCount = _crossAxisCount(constraints.maxWidth);
-            final rows = <List<_GridShotEntry>>[];
-            for (var i = 0; i < entries.length; i += crossAxisCount) {
-              final end = (i + crossAxisCount).clamp(0, entries.length);
-              rows.add(entries.sublist(i, end));
-            }
-
-            return ListView.separated(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              itemCount: rows.length,
-              separatorBuilder: (_, __) =>
-                  const SizedBox(height: AppSpacing.md),
-              itemBuilder: (context, rowIndex) {
-                final row = rows[rowIndex];
-                final showRowSceneHeader = row.first.isFirstInScene;
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (showRowSceneHeader) ...[
-                      _SceneGridBreakHeader(
-                        scene: row.first.scene,
-                        color: colors.sceneColor(row.first.scene),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                    ],
-                    IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (var col = 0; col < row.length; col++)
-                            Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.only(
-                                  left:
-                                      col > 0 &&
-                                          row[col].isFirstInScene &&
-                                          !showRowSceneHeader
-                                      ? AppSpacing.sm
-                                      : 0,
-                                  right: col < row.length - 1
-                                      ? AppSpacing.md
-                                      : 0,
-                                ),
-                                child: _StoryboardFrame(
-                                  scene: row[col].scene,
-                                  shot: row[col].shot,
-                                  sceneColor: colors.sceneColor(row[col].scene),
-                                  gridLayout: true,
-                                  sceneStart: row[col].isFirstInScene,
-                                  sceneHeaderAbove:
-                                      showRowSceneHeader &&
-                                      row[col].isFirstInScene,
-                                ),
-                              ),
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (showRowSceneHeader) ...[
+                  _SceneGridBreakHeader(
+                    scene: row.first.scene,
+                    color: colors.sceneColor(row.first.scene),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var col = 0; col < row.length; col++)
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              left:
+                                  col > 0 &&
+                                      row[col].isFirstInScene &&
+                                      !showRowSceneHeader
+                                  ? AppSpacing.sm
+                                  : 0,
+                              right: col < row.length - 1 ? AppSpacing.md : 0,
                             ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
+                            child: _StoryboardFrame(
+                              scene: row[col].scene,
+                              shot: row[col].shot,
+                              sceneColor: colors.sceneColor(row[col].scene),
+                              gridLayout: true,
+                              sceneStart: row[col].isFirstInScene,
+                              sceneHeaderAbove:
+                                  showRowSceneHeader && row[col].isFirstInScene,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             );
           },
         );
@@ -760,106 +718,83 @@ class _SceneGridBreakHeader extends StatelessWidget {
 }
 
 /// Tira horizontal: todos los planos en orden de guion, con marcas de escena.
-class _StoryboardLinearStrip extends ConsumerWidget {
-  final int projectId;
+class _StoryboardLinearStrip extends StatelessWidget {
   final List<Scene> scenes;
   final ProjectColorScheme colors;
   final _StoryboardFilter filter;
 
   const _StoryboardLinearStrip({
-    required this.projectId,
     required this.scenes,
     required this.colors,
     required this.filter,
   });
 
-  bool _passesFilter(Shot shot) {
-    final path = storyboardImageOf(shot);
-    final hasImage = path != null && File(path).existsSync();
-    return switch (filter) {
-      _StoryboardFilter.all => true,
-      _StoryboardFilter.withImage => hasImage,
-      _StoryboardFilter.missing => !hasImage,
-    };
-  }
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final palette = context.palette;
-    final db = ref.watch(databaseProvider);
+    final plans = PlanDataScope.of(context);
+    final children = <Widget>[];
 
-    return StreamBuilder<List<Shot>>(
-      stream: db.watchShotsForProject(projectId),
-      builder: (context, shotSnap) {
-        if (!shotSnap.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    for (final scene in scenes) {
+      final shots = [
+        for (final shot in plans.shotsByScene[scene.id] ?? const <Shot>[])
+          if (_passesFilter(shot, filter)) shot,
+      ];
+      if (shots.isEmpty) continue;
 
-        final allShots = shotSnap.data!;
-        final children = <Widget>[];
+      children.add(
+        _SceneBreakMarker(scene: scene, color: colors.sceneColor(scene)),
+      );
 
-        for (final scene in scenes) {
-          final shots = allShots
-              .where((s) => s.sceneId == scene.id && _passesFilter(s))
-              .toList();
-          if (shots.isEmpty) continue;
-
-          children.add(
-            _SceneBreakMarker(scene: scene, color: colors.sceneColor(scene)),
-          );
-
-          for (final shot in shots) {
-            children.add(
-              SizedBox(
-                width: 280,
-                child: _StoryboardFrame(
-                  scene: scene,
-                  shot: shot,
-                  sceneColor: colors.sceneColor(scene),
-                  linearLayout: true,
-                ),
-              ),
-            );
-          }
-        }
-
-        if (children.isEmpty) {
-          return Center(
-            child: Text(
-              'No hay planos que coincidan con el filtro.',
-              style: AppTypography.bodyMedium(palette),
+      for (final shot in shots) {
+        children.add(
+          SizedBox(
+            width: 280,
+            child: _StoryboardFrame(
+              scene: scene,
+              shot: shot,
+              sceneColor: colors.sceneColor(scene),
+              linearLayout: true,
             ),
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.lg,
-                0,
-              ),
-              child: Text(
-                'Secuencia completa en orden de guion · desliza horizontalmente',
-                style: AppTypography.caption(palette),
-              ),
-            ),
-            Expanded(
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                itemCount: children.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(width: AppSpacing.md),
-                itemBuilder: (_, i) => children[i],
-              ),
-            ),
-          ],
+          ),
         );
-      },
+      }
+    }
+
+    if (children.isEmpty) {
+      return Center(
+        child: Text(
+          'No hay planos que coincidan con el filtro.',
+          style: AppTypography.bodyMedium(palette),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            0,
+          ),
+          child: Text(
+            'Secuencia completa en orden de guion · desliza horizontalmente',
+            style: AppTypography.caption(palette),
+          ),
+        ),
+        Expanded(
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            itemCount: children.length,
+            separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+            itemBuilder: (_, i) => children[i],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1155,7 +1090,7 @@ class _StoryboardFrame extends ConsumerWidget {
     final palette = context.palette;
     final db = ref.watch(databaseProvider);
     final path = storyboardImageOf(shot);
-    final hasImage = path != null && File(path).existsSync();
+    final hasImage = path != null && FileExistsCache.exists(path);
     final meta = _metaLine();
     final plans = PlanDataScope.of(context);
     final selection = _SelectionScope.of(context);
@@ -1189,7 +1124,7 @@ class _StoryboardFrame extends ConsumerWidget {
           fit: StackFit.expand,
           children: [
             if (hasImage)
-              Image.file(File(path), fit: BoxFit.cover)
+              SizedFileImage(path, fit: BoxFit.cover)
             else
               Center(
                 child: Column(
@@ -1243,8 +1178,9 @@ class _StoryboardFrame extends ConsumerWidget {
                 ),
               ),
             if (hasImage)
-              StreamBuilder<List<ShotReference>>(
-                stream: db.watchReferencesForShot(shot.id),
+              StableStreamBuilder<List<ShotReference>>(
+                streamKey: (db, shot.id),
+                stream: () => db.watchReferencesForShot(shot.id),
                 builder: (context, refSnap) {
                   final count = refSnap.data?.length ?? 0;
                   if (count <= 1) return const SizedBox.shrink();
