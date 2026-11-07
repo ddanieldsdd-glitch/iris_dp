@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -44,6 +45,48 @@ class _CanvasColors {
 }
 
 /// Zona de un set sobre el plano maestro de la localización.
+/// Desde dónde se mira la planta. Va aparte del editor para que mover la
+/// vista o hacer zoom repinte el lienzo sin reconstruir la pantalla.
+class PlanCanvasView extends ChangeNotifier {
+  Offset _offset = Offset.zero;
+  double _scale = 1.0;
+  Timer? _zoomEnd;
+
+  /// Mientras se hace zoom se reutiliza lo ya pintado; al parar se afina.
+  static const zoomSettle = Duration(milliseconds: 160);
+
+  Offset get offset => _offset;
+  double get scale => _scale;
+  bool get zooming => _zoomEnd?.isActive ?? false;
+
+  set offset(Offset value) {
+    if (value == _offset) return;
+    _offset = value;
+    notifyListeners();
+  }
+
+  set scale(double value) {
+    if (value == _scale) return;
+    _scale = value;
+    notifyListeners();
+  }
+
+  /// Zoom en curso, de un gesto o de la rueda.
+  void zoomTo(double scale, Offset offset) {
+    _scale = scale;
+    _offset = offset;
+    _zoomEnd?.cancel();
+    _zoomEnd = Timer(zoomSettle, notifyListeners);
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _zoomEnd?.cancel();
+    super.dispose();
+  }
+}
+
 class PlanZone {
   final Rect rect;
   final Color color;
@@ -146,8 +189,15 @@ class CameraPlanPainter extends CustomPainter {
   /// Se está girando el seleccionado: se rotulan sus grados.
   final bool rotating;
   final int? selectedPathIndex;
-  final double scale;
-  final Offset offset;
+  final double _fixedScale;
+  final Offset _fixedOffset;
+
+  /// Vista viva del editor. Sin ella (miniaturas, exports), la de [scale] y
+  /// [offset] al crear el pintor.
+  final PlanCanvasView? view;
+
+  double get scale => view?.scale ?? _fixedScale;
+  Offset get offset => view?.offset ?? _fixedOffset;
   final AppPalette palette;
   final ui.Image? backgroundImage;
   final Rect? backgroundRect;
@@ -193,69 +243,91 @@ class CameraPlanPainter extends CustomPainter {
     this.selectedRoom,
     this.rotating = false,
     this.selectedPathIndex,
-    this.scale = 1.0,
-    this.offset = Offset.zero,
+    double scale = 1.0,
+    Offset offset = Offset.zero,
+    this.view,
     this.backgroundImage,
     this.backgroundRect,
     this.backgroundOpacity = 0.85,
     this.lightMap,
     this.images = const [],
     this.interacting = false,
-  }) : _contents = PlanLightKey.drawing([
+  }) : _fixedScale = scale,
+       _fixedOffset = offset,
+       _contents = PlanLightKey.drawing([
          ...inheritedElements,
          ...elements,
        ], alsoSelected),
-       super(repaint: lightMap);
+       super(
+         repaint: view == null || lightMap == null
+             ? view ?? lightMap
+             : Listenable.merge([view, lightMap]),
+       );
 
   /// Huella de lo que se dibuja, tomada al montar el pintor: los elementos
   /// se cambian en su sitio y las listas siguen siendo las mismas.
   final int _contents;
 
   /// Todo lo que entra en la luz: las capas de fondo y las de la planta.
-  List<PlanElement> get _lit => [...inheritedElements, ...elements];
+  late final List<PlanElement> _lit = [...inheritedElements, ...elements];
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    _drawCanvasBackground(canvas, size);
+  // Un pintor se crea cada vez que cambia algo; mover la vista solo lo vuelve
+  // a usar. Lo que no depende de la vista se calcula una vez por pintor.
+  late final int _lightKey = PlanLightKey.light(
+    _lit,
+    metersPerUnit: metersPerUnit ?? defaultMetersPerUnit,
+    ambient: ambient,
+  );
+  LightScene? _resolvedScene;
+  bool? _resolvedDraft;
 
-    canvas.save();
-    canvas.translate(offset.dx, offset.dy);
-    canvas.scale(scale);
+  /// Lo que va debajo y encima de la luz, ya pintado. Sirve mientras no
+  /// cambien la escala ni la escena: al mover la vista se reproduce tal cual.
+  ui.Picture? _under;
+  ui.Picture? _over;
+  double? _recordedScale;
+  LightScene? _recordedScene;
 
-    _drawBackgroundImage(canvas);
-    for (final image in images) {
-      if (!image.above) _drawPlanImage(canvas, image);
+  LightScene _sceneFor(bool draft) {
+    final kept = _resolvedScene;
+    if (kept != null && _resolvedDraft == draft) return kept;
+    final mpu = metersPerUnit ?? defaultMetersPerUnit;
+    _resolvedDraft = draft;
+    return _resolvedScene =
+        lightMap?.scene(_lit, metersPerUnit: mpu, ambient: ambient, draft: draft) ??
+        LightScene.from(_lit, metersPerUnit: mpu, ambient: ambient);
+  }
+
+  /// Asegura [_under] y [_over] para esta escala y [scene].
+  void _record(LightScene scene) {
+    final rough = view?.zooming ?? false;
+    if (_under != null &&
+        identical(_recordedScene, scene) &&
+        (rough || _recordedScale == scale)) {
+      return;
     }
-    if (showGrid) _drawGrid(canvas, size);
+    _under?.dispose();
+    _over?.dispose();
+    final under = ui.PictureRecorder();
+    _paintUnderLight(Canvas(under), scene);
+    _under = under.endRecording();
+    final over = ui.PictureRecorder();
+    _paintOverLight(Canvas(over));
+    _over = over.endRecording();
+    _recordedScale = scale;
+    _recordedScene = scene;
+  }
+
+  /// De la planta, lo que va debajo de la luz: zonas, recintos y lo heredado.
+  void _paintUnderLight(Canvas canvas, LightScene scene) {
     for (final zone in zones) {
       _drawZone(canvas, zone);
     }
-
-    // La planta vista por la luz: aparatos, rebotes, telas y paredes de
-    // todas las capas, con lo que las tapa.
-    final lit = _lit;
-    final mpu = metersPerUnit ?? defaultMetersPerUnit;
-    final cache = lightMap;
-    final lightKey = PlanLightKey.light(
-      lit,
-      metersPerUnit: mpu,
-      ambient: ambient,
-    );
-    // Mientras se arrastra, la luz va en borrador; se afina al parar.
-    final draft = cache?.draft(lightKey, interacting: interacting) ?? false;
-    final scene =
-        cache?.scene(lit, metersPerUnit: mpu, ambient: ambient, draft: draft) ??
-        LightScene.from(lit, metersPerUnit: mpu, ambient: ambient);
-    _scene = scene;
-    _units = gearLabels
-        ? lightUnitNumbers([...inheritedElements, ...elements])
-        : const {};
-    final dimmed = {...inheritedElements};
     _drawRooms(canvas, scene);
 
     // El suelo va debajo de todo: calles, taludes y colinas. La luz y las
     // sombras caen encima.
-    for (final el in [...inheritedElements, ...elements]) {
+    for (final el in _lit) {
       if (PlanTerrainPainter.isTerrain(el)) _drawTerrain(canvas, el);
     }
 
@@ -270,47 +342,11 @@ class CameraPlanPainter extends CustomPainter {
       }
       canvas.restore();
     }
+  }
 
-    if (exposureMap && exposure != null) {
-      _drawExposureMap(canvas, size, scene, lightKey);
-    }
-    final view = Rect.fromLTWH(
-      -offset.dx / scale,
-      -offset.dy / scale,
-      size.width / scale,
-      size.height / scale,
-    );
-    final mapped = !exposureMap && lightMap != null;
-    if (mapped) {
-      _drawLightLayer(canvas, scene, view, dimmed, lightKey, draft: draft);
-    }
-    if (!exposureMap && !mapped && (ambient?.hasSun ?? false)) {
-      PlanSunPainter.paint(
-        canvas,
-        scene,
-        ambient!,
-        Rect.fromLTWH(
-          -offset.dx / scale,
-          -offset.dy / scale,
-          size.width / scale,
-          size.height / scale,
-        ),
-      );
-    }
-    // Los haces van debajo de todo lo demás. Con el mapa de exposición no
-    // se pintan: el mapa ya dice cuánta luz hay en cada sitio.
-    for (final light
-        in exposureMap || mapped ? const <SceneLight>[] : scene.lights) {
-      _drawBeam(
-        canvas,
-        scene,
-        light,
-        strength: dimmed.contains(light.fixture?.element)
-            ? inheritedOpacity
-            : 1,
-      );
-    }
-
+  /// De la planta, lo que va encima de la luz: recorridos, elementos,
+  /// imágenes y nombres.
+  void _paintOverLight(Canvas canvas) {
     for (final el in elements.where(PlanMarks.supports)) {
       final isSelected = el.id == selectedElement?.id;
       _drawCameraPath(
@@ -356,6 +392,88 @@ class CameraPlanPainter extends CustomPainter {
       for (final el in ordered) {
         _drawNameTag(canvas, el);
       }
+    }
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _drawCanvasBackground(canvas, size);
+
+    canvas.save();
+    canvas.translate(offset.dx, offset.dy);
+    canvas.scale(scale);
+
+    _drawBackgroundImage(canvas);
+    for (final image in images) {
+      if (!image.above) _drawPlanImage(canvas, image);
+    }
+    if (showGrid) _drawGrid(canvas, size);
+
+    // La planta vista por la luz: aparatos, rebotes, telas y paredes de
+    // todas las capas, con lo que las tapa.
+    final cache = lightMap;
+    final lightKey = _lightKey;
+    // Mientras se arrastra, la luz va en borrador; se afina al parar.
+    final draft = cache?.draft(lightKey, interacting: interacting) ?? false;
+    final scene = _sceneFor(draft);
+    _scene = scene;
+    _units = gearLabels ? lightUnitNumbers(_lit) : const {};
+    final dimmed = {...inheritedElements};
+
+    // El editor (el que tiene vista viva) guarda lo pintado. Mientras se
+    // arrastra todo cambia en cada fotograma: guardarlo no serviría de nada.
+    final keep = view != null && !interacting;
+    if (keep) {
+      _record(scene);
+      canvas.drawPicture(_under!);
+    } else {
+      _paintUnderLight(canvas, scene);
+    }
+
+    if (exposureMap && exposure != null) {
+      _drawExposureMap(canvas, size, scene, lightKey);
+    }
+    final visible = Rect.fromLTWH(
+      -offset.dx / scale,
+      -offset.dy / scale,
+      size.width / scale,
+      size.height / scale,
+    );
+    final mapped = !exposureMap && lightMap != null;
+    if (mapped) {
+      _drawLightLayer(canvas, scene, visible, dimmed, lightKey, draft: draft);
+    }
+    if (!exposureMap && !mapped && (ambient?.hasSun ?? false)) {
+      PlanSunPainter.paint(
+        canvas,
+        scene,
+        ambient!,
+        Rect.fromLTWH(
+          -offset.dx / scale,
+          -offset.dy / scale,
+          size.width / scale,
+          size.height / scale,
+        ),
+      );
+    }
+    // Los haces van debajo de todo lo demás. Con el mapa de exposición no
+    // se pintan: el mapa ya dice cuánta luz hay en cada sitio.
+    for (final light
+        in exposureMap || mapped ? const <SceneLight>[] : scene.lights) {
+      _drawBeam(
+        canvas,
+        scene,
+        light,
+        strength: dimmed.contains(light.fixture?.element)
+            ? inheritedOpacity
+            : 1,
+      );
+    }
+
+    if (keep) {
+      canvas.drawPicture(_over!);
+    } else {
+      _paintOverLight(canvas);
     }
 
     _drawOverlays(canvas);
@@ -3279,6 +3397,7 @@ class CameraPlanPainter extends CustomPainter {
       old.thumbOf != thumbOf ||
       old.selectedElement?.id != selectedElement?.id ||
       old.selectedPathIndex != selectedPathIndex ||
+      old.view != view ||
       old.scale != scale ||
       old.offset != offset ||
       old.palette != palette ||
