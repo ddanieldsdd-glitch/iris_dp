@@ -41,6 +41,7 @@ import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
 import 'light_beam.dart';
 import 'plan_cast.dart';
+import 'plan_cast_sheet.dart';
 import 'plan_gear_list.dart';
 import 'plan_elevation_screen.dart';
 import 'plan_guide.dart';
@@ -331,6 +332,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Personajes del proyecto, con su color: el mismo en todas las plantas.
   Map<String, ({String name, Color color})> _cast = const {};
+
+  /// El reparto del proyecto, con lo que propone el guion y sus grupos.
+  CastRoster _roster = const CastRoster();
 
   /// Sol, cielo y rebote de paredes del esquema de luz abierto.
   PlanAmbient _ambient = const PlanAmbient();
@@ -740,6 +744,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final navTargets = await _loadNavTargets(db);
     final gear = await ProjectGear.load(db, widget.projectId);
     final cast = await PlanCast.load(db, widget.projectId);
+    final roster = await PlanCast.roster(db, widget.projectId);
 
     // Esquema de luz que se enseña: el del plano, el elegido a mano o, si
     // no, el primero del set o de la localización.
@@ -1102,6 +1107,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _setupColor = setupColor;
       _gear = gear;
       _cast = cast;
+      _roster = roster;
       _ambient = FloorPlanRepository.ambientOf(lightSetup);
       _setupOriginals
         ..clear()
@@ -3741,8 +3747,92 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (!PlanCast.isNamed(actor.label)) return;
     final db = ref.read(databaseProvider);
     await PlanCast.recolour(db, widget.projectId, actor.label!, color);
+    await _reloadCast();
+  }
+
+  Future<void> _reloadCast() async {
+    final db = ref.read(databaseProvider);
     final cast = await PlanCast.load(db, widget.projectId);
-    if (mounted) setState(() => _cast = cast);
+    final roster = await PlanCast.roster(db, widget.projectId);
+    if (mounted) {
+      setState(() {
+        _cast = cast;
+        _roster = roster;
+      });
+    }
+  }
+
+  /// Lo que ofrece la paleta: el reparto sin los ocultos y sin los quitados,
+  /// más quien esté en esta planta y aún no se haya guardado.
+  List<(String, Color)> get _paletteCast {
+    final settings = _roster.settings;
+    final seen = <String>{};
+    return [
+      for (final m in _roster.visible)
+        if (seen.add(m.key))
+          (_knownCast[m.key]?.name ?? m.name, _knownCast[m.key]?.color ?? m.color),
+      for (final entry in _knownCast.entries)
+        if (!settings.hidden.contains(entry.key) &&
+            !settings.removed.contains(entry.key) &&
+            seen.add(entry.key))
+          (entry.value.name, entry.value.color),
+    ];
+  }
+
+  /// Nombres de la paleta que solo propone el guion.
+  Set<String> get _scriptProposals => {
+    for (final m in _roster.visible)
+      if (!m.inPlans && !_knownCast.containsKey(m.key)) m.name,
+  };
+
+  /// Coloca a los sujetos del grupo que aún no estén en esta planta.
+  Future<void> _addCastGroup(String name) async {
+    final group = _roster.settings.groups
+        .where((g) => g.name == name)
+        .firstOrNull;
+    if (group == null) return;
+    final here = {
+      for (final el in _elements)
+        if (el.type == ElementType.actor) PlanCast.key(el.label),
+    };
+    for (final member in _roster.membersOf(group)) {
+      if (here.contains(member.key)) continue;
+      await _addActor(
+        _knownCast[member.key]?.color ?? member.color,
+        name: member.name,
+      );
+    }
+  }
+
+  /// Cambia el color desde el reparto, también en la planta abierta.
+  Future<void> _recolourFromCast(String name, Color color) async {
+    final key = PlanCast.key(name);
+    final same = [
+      for (final el in _elements)
+        if (el.type == ElementType.actor && PlanCast.key(el.label) == key) el,
+    ];
+    setState(() {
+      for (final el in same) {
+        el.actorColor = color;
+      }
+    });
+    await _persistMany(same);
+    await PlanCast.recolour(
+      ref.read(databaseProvider),
+      widget.projectId,
+      name,
+      color,
+    );
+    await _reloadCast();
+  }
+
+  Future<void> _manageCast() async {
+    await showPlanCastSheet(
+      context,
+      projectId: widget.projectId,
+      onRecolour: _recolourFromCast,
+    );
+    await _reloadCast();
   }
 
   Future<void> _addLight(LightType type) async {
@@ -5870,10 +5960,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                     onTool: _setTool,
                     onAddCamera: _addCamera,
                     onAddActor: () => _addActor(_nextActorColor),
-                    cast: [
-                      for (final c in _knownCast.values) (c.name, c.color),
-                    ],
+                    cast: _paletteCast,
                     onAddCast: (name, color) => _addActor(color, name: name),
+                    scriptProposals: _scriptProposals,
+                    castGroups: [
+                      for (final g in _roster.settings.groups)
+                        (
+                          g.name,
+                          [for (final m in _roster.membersOf(g)) m.color],
+                        ),
+                    ],
+                    onAddCastGroup: _addCastGroup,
+                    onManageCast: _manageCast,
                     onAddLight: _addLight,
                     onAddStreetLamp: _addStreetLamp,
                     onAddPalio: _addPalio,

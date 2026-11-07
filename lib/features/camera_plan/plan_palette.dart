@@ -67,6 +67,14 @@ class PlanPalette extends StatelessWidget {
   /// Personajes que ya existen en el proyecto, con su color.
   final List<(String, Color)> cast;
   final void Function(String name, Color color)? onAddCast;
+
+  /// Nombres del reparto que solo propone el guion: aún en ninguna planta.
+  final Set<String> scriptProposals;
+
+  /// Grupos del reparto, cada uno con el color de sus sujetos.
+  final List<(String, List<Color>)> castGroups;
+  final ValueChanged<String>? onAddCastGroup;
+  final VoidCallback? onManageCast;
   final ValueChanged<LightType> onAddLight;
 
   /// Una farola de la calle, de brazo o de báculo (CA.5).
@@ -106,6 +114,10 @@ class PlanPalette extends StatelessWidget {
     required this.onAddActor,
     this.cast = const [],
     this.onAddCast,
+    this.scriptProposals = const {},
+    this.castGroups = const [],
+    this.onAddCastGroup,
+    this.onManageCast,
     required this.onAddLight,
     this.onAddStreetLamp,
     this.onAddPalio,
@@ -185,15 +197,41 @@ class PlanPalette extends StatelessWidget {
               onTap: onAddCamera,
             ),
           ]),
+          if (onManageCast != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: onManageCast,
+                icon: const Icon(Icons.groups_outlined, size: 16),
+                label: const Text('Reparto'),
+              ),
+            ),
+          if (castGroups.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            grid([
+              for (final (name, colors) in castGroups)
+                _PaletteButton(
+                  icon: _GroupDots(colors: colors),
+                  label: name,
+                  tooltip: 'Colocar el grupo $name',
+                  onTap: () => onAddCastGroup?.call(name),
+                ),
+            ]),
+          ],
           if (cast.isNotEmpty) ...[
             const SizedBox(height: 6),
-            // El reparto: cada personaje vuelve con su nombre y su color.
+            // El reparto: cada personaje vuelve con su nombre y su color. Los
+            // que solo propone el guion van con el círculo hueco.
             grid([
               for (final (name, color) in cast)
                 _PaletteButton(
-                  icon: CircleAvatar(backgroundColor: color, radius: 6),
+                  icon: scriptProposals.contains(name)
+                      ? _HollowDot(color: color)
+                      : CircleAvatar(backgroundColor: color, radius: 6),
                   label: name,
-                  tooltip: 'Añadir a $name',
+                  tooltip: scriptProposals.contains(name)
+                      ? 'Propuesto por el guion. Añadir a $name'
+                      : 'Añadir a $name',
                   onTap: () => onAddCast?.call(name, color),
                 ),
             ]),
@@ -296,6 +334,48 @@ class PlanPalette extends StatelessWidget {
                     onTap: () => onAddBox!(shape),
                   ),
           ]),
+        ],
+      ),
+    );
+  }
+}
+
+class _HollowDot extends StatelessWidget {
+  final Color color;
+
+  const _HollowDot({required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 12,
+    height: 12,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      border: Border.all(color: color, width: 2),
+    ),
+  );
+}
+
+/// Los colores de un grupo, hasta tres.
+class _GroupDots extends StatelessWidget {
+  final List<Color> colors;
+
+  const _GroupDots({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    if (colors.isEmpty) return const Icon(Icons.group_outlined, size: 16);
+    final shown = colors.take(3).toList();
+    return SizedBox(
+      width: 12 + (shown.length - 1) * 6,
+      height: 12,
+      child: Stack(
+        children: [
+          for (var i = 0; i < shown.length; i++)
+            Positioned(
+              left: i * 6,
+              child: CircleAvatar(backgroundColor: shown[i], radius: 6),
+            ),
         ],
       ),
     );

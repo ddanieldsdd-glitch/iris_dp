@@ -28,6 +28,9 @@ class ScriptSceneIndexPanel extends StatelessWidget {
   final int? activeSceneIndex;
   final ValueChanged<ScriptSceneIndexEntry>? onSceneTap;
   final VoidCallback? onEditActiveScene;
+
+  /// Parte la escena activa en dos: 13A y 13B.
+  final VoidCallback? onSplitActiveScene;
   final bool compact;
 
   const ScriptSceneIndexPanel({
@@ -36,6 +39,7 @@ class ScriptSceneIndexPanel extends StatelessWidget {
     this.activeSceneIndex,
     this.onSceneTap,
     this.onEditActiveScene,
+    this.onSplitActiveScene,
     this.compact = false,
   });
 
@@ -65,6 +69,7 @@ class ScriptSceneIndexPanel extends StatelessWidget {
                 entry: active,
                 compact: compact,
                 onEdit: onEditActiveScene,
+                onSplit: onSplitActiveScene,
               ),
             ),
           ),
@@ -138,12 +143,14 @@ class _ActiveSceneBanner extends StatelessWidget {
   final ScriptSceneIndexEntry entry;
   final bool compact;
   final VoidCallback? onEdit;
+  final VoidCallback? onSplit;
 
   const _ActiveSceneBanner({
     required this.palette,
     required this.entry,
     required this.compact,
     this.onEdit,
+    this.onSplit,
   });
 
   @override
@@ -183,6 +190,14 @@ class _ActiveSceneBanner extends StatelessWidget {
                     icon: Icon(Icons.edit_outlined,
                         color: palette.accent, size: 18),
                     onPressed: onEdit,
+                  ),
+                if (onSplit != null)
+                  IconButton(
+                    tooltip: 'Dividir la escena (13A, 13B)',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(Icons.call_split,
+                        color: palette.accent, size: 18),
+                    onPressed: onSplit,
                   ),
               ],
             ),

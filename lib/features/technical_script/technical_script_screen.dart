@@ -20,6 +20,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_format.dart';
+import '../../core/utils/scene_text_parts.dart';
 import '../../core/utils/scene_characters.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_button.dart';
@@ -43,6 +44,8 @@ import 'scene_form_sheet.dart';
 import 'table/editable_cell.dart';
 import 'table/script_sheet_theme.dart';
 import 'import/technical_script_import_action.dart';
+import 'scene_action_picker.dart';
+import 'split_scene_sheet.dart';
 import '../export_center/export_center_screen.dart';
 import '../export_center/export_selection.dart';
 import 'technical_script_export.dart';
@@ -1650,6 +1653,38 @@ class _SceneTitle extends ConsumerWidget {
   }
 }
 
+/// Trae frases del guion literario a la acción del plano.
+class _ActionFromScriptButton extends StatelessWidget {
+  final Shot shot;
+  final ValueChanged<String> onPicked;
+
+  const _ActionFromScriptButton({required this.shot, required this.onPicked});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Tooltip(
+      message: 'Elegir del guion literario',
+      child: InkResponse(
+        radius: 14,
+        onTap: () async {
+          final text = await showSceneActionPicker(
+            context,
+            projectId: shot.projectId,
+            sceneId: shot.sceneId,
+          );
+          if (text != null) onPicked(text);
+        },
+        child: Icon(
+          Icons.subject,
+          size: 16,
+          color: palette.textSecondary.withValues(alpha: 0.7),
+        ),
+      ),
+    );
+  }
+}
+
 class _SceneHeader extends ConsumerWidget {
   final Scene scene;
   final int shotCount;
@@ -1801,6 +1836,15 @@ class _SceneHeader extends ConsumerWidget {
               projectId: scene.projectId,
               scene: scene,
             ),
+          ),
+          IconButton(
+            tooltip: 'Dividir la escena en ${scene.number}A y ${scene.number}B',
+            icon: Icon(
+              Icons.call_split,
+              color: palette.textSecondary,
+              size: 18,
+            ),
+            onPressed: () => showSplitSceneSheet(context, scene),
           ),
           IconButton(
             tooltip: 'Eliminar escena',
@@ -2351,13 +2395,32 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
                   width: cols.action,
                   shot: shot,
                   column: 'action',
-                  child: field(
-                    column: 'action',
-                    value: shot.action,
-                    hintText: 'Descripción de la acción...',
-                    rich: true,
-                    minLines: 3,
-                    onChanged: (v) => write(ShotsCompanion(action: Value(v))),
+                  child: Stack(
+                    children: [
+                      field(
+                        column: 'action',
+                        value: shot.action,
+                        hintText: 'Descripción de la acción...',
+                        rich: true,
+                        minLines: 3,
+                        onChanged: (v) =>
+                            write(ShotsCompanion(action: Value(v))),
+                      ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: _ActionFromScriptButton(
+                          shot: shot,
+                          onPicked: (text) => write(
+                            ShotsCompanion(
+                              action: Value(
+                                appendActionText(shot.action, text),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 _Cell(

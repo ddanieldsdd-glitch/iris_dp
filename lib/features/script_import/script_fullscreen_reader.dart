@@ -26,6 +26,7 @@ Future<void> showScriptFullscreenReader({
       onLineContextAction,
   ValueChanged<int>? onActiveSceneIndexChanged,
   ValueChanged<int>? onEditScene,
+  ValueChanged<int>? onSplitScene,
 }) {
   return Navigator.of(context, rootNavigator: true).push<void>(
     PageRouteBuilder<void>(
@@ -47,6 +48,7 @@ Future<void> showScriptFullscreenReader({
         onLineContextAction: onLineContextAction,
         onActiveSceneIndexChanged: onActiveSceneIndexChanged,
         onEditScene: onEditScene,
+        onSplitScene: onSplitScene,
       ),
       transitionsBuilder: (_, animation, __, child) => FadeTransition(
         opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
@@ -71,6 +73,7 @@ class _ScriptFullscreenReaderPage extends StatefulWidget {
       onLineContextAction;
   final ValueChanged<int>? onActiveSceneIndexChanged;
   final ValueChanged<int>? onEditScene;
+  final ValueChanged<int>? onSplitScene;
 
   const _ScriptFullscreenReaderPage({
     required this.controller,
@@ -86,6 +89,7 @@ class _ScriptFullscreenReaderPage extends StatefulWidget {
     this.onLineContextAction,
     this.onActiveSceneIndexChanged,
     this.onEditScene,
+    this.onSplitScene,
   });
 
   @override
@@ -208,6 +212,13 @@ class _ScriptFullscreenReaderPageState extends State<_ScriptFullscreenReaderPage
                   onEditActiveScene: widget.controller.activeSceneIndex != null
                       ? () => widget.onEditScene
                           ?.call(widget.controller.activeSceneIndex!)
+                      : null,
+                  onSplitActiveScene:
+                      widget.controller.activeSceneIndex != null &&
+                          widget.onSplitScene != null
+                      ? () => widget.onSplitScene!(
+                          widget.controller.activeSceneIndex!,
+                        )
                       : null,
                 ),
               ),
