@@ -281,6 +281,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
             _characterColors,
             manualCharacterLines: _manualCharacterLines,
             lineTextOverrides: _lineTextOverrides,
+            keepCastFrom: project.characterColorsJson,
           ),
         ),
         updatedAt: DateTime.now(),
