@@ -16,6 +16,8 @@ import '../../core/utils/shot_reference_import.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
+import '../camera_plan/plan_data.dart';
+import '../camera_plan/plan_view_picker.dart';
 import '../shoot_documents/shoot_days_board.dart';
 import '../storyboard/shot_sheet_data.dart';
 import '../technical_script/script_export_dialog.dart';
@@ -75,6 +77,7 @@ class ExportCenterScreen extends ConsumerStatefulWidget {
 
 class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
   ExportSource? _source;
+  PlanProjectData? _plans;
   ExportOptions _options = const ExportOptions();
   ExportSelection _selection = const ExportSelection();
   bool _ready = false;
@@ -120,6 +123,7 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
   Future<void> _load() async {
     final db = ref.read(databaseProvider);
     final source = await ExportSource.load(db, widget.projectId);
+    final plans = await PlanProjectData.load(db, widget.projectId);
     var options = await ExportOptions.load(widget.projectId, _settings);
     if (!mounted || source == null) return;
     if (widget.document != null) {
@@ -154,11 +158,64 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
     }
     setState(() {
       _source = source;
+      _plans = plans;
       _options = options;
       _selection = selection;
       _ready = true;
     });
     _schedulePreview();
+  }
+
+  /// El documento elegido enseña la planta de cada plano.
+  bool get _showsPlan => switch (_options.document) {
+    ExportDocument.shootingPlan || ExportDocument.technicalScript => true,
+    ExportDocument.storyboard => _options.look == StoryboardLook.shotPlan,
+  };
+
+  /// Vuelve a leer lo que ha podido cambiar al elegir una sección.
+  Future<void> _reloadPlans() async {
+    final db = ref.read(databaseProvider);
+    final source = await ExportSource.load(db, widget.projectId);
+    final plans = await PlanProjectData.load(db, widget.projectId);
+    if (!mounted || source == null) return;
+    setState(() {
+      _source = source;
+      _plans = plans;
+    });
+    _schedulePreview();
+  }
+
+  Future<void> _pickShotSection(Shot shot) async {
+    final plans = _plans;
+    if (plans == null) return;
+    await showPlanViewPicker(context, data: plans, shot: shot);
+    await _reloadPlans();
+  }
+
+  Future<void> _pickSetupSection(LightSetup setup) async {
+    final plans = _plans;
+    if (plans == null) return;
+    await showSetupViewPicker(
+      context,
+      db: ref.read(databaseProvider),
+      data: plans,
+      setup: setup,
+    );
+    await _reloadPlans();
+  }
+
+  /// Los esquemas de luz de lo elegido, una vez cada uno.
+  List<LightSetup> _chosenSetups() {
+    final plans = _plans;
+    if (plans == null) return const [];
+    final seen = <int>{};
+    return [
+      for (final section in _sections)
+        for (final tract in section.scenes)
+          for (final item in tract.shots)
+            if (plans.setup(item.shot.lightSetupId) case final setup?)
+              if (seen.add(setup.id)) setup,
+    ];
   }
 
   List<ExportDaySection> get _sections =>
@@ -570,6 +627,7 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
             _ShotItem(s, _selection.shotIds.contains(s.id), s.id),
         ],
         onTap: loose ? (id) => _toggleShots([id]) : null,
+        onSection: _showsPlan ? _pickShotSection : null,
       ),
     );
   }
@@ -663,12 +721,48 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
                         ),
                     ],
                     onTap: (id) => _toggleBlocks([id]),
+                    onSection: _showsPlan ? _pickShotSection : null,
                   ),
                 ],
               ],
             ),
     );
   }
+
+  /// Las plantas generales del final, con la sección de cada una.
+  List<Widget> _overviewRows(AppPalette palette) => [
+    for (final setup in _chosenSetups())
+      Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                setup.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodyMedium(palette),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _pickSetupSection(setup),
+              icon: Icon(
+                Icons.crop_free,
+                size: 16,
+                color: _plans?.documentViewOf(setup) == null
+                    ? null
+                    : palette.accent,
+              ),
+              label: Text(
+                _plans?.documentViewOf(setup) == null
+                    ? 'Elegir sección'
+                    : 'Cambiar sección',
+              ),
+            ),
+          ],
+        ),
+      ),
+  ];
 
   List<Widget> _format(AppPalette palette) {
     final canSplitDays = _selection.scope == ExportScope.days;
@@ -683,6 +777,17 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
           title: const Text('Con luz'),
           subtitle: const Text('Apágalo para una planta solo de cámara.'),
         ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _options.planOverviews,
+          onChanged: (v) => _setOptions(_options.copyWith(planOverviews: v)),
+          title: const Text('Plantas generales al final'),
+          subtitle: const Text(
+            'Una página por esquema. La sección también se aplica a los '
+            'planos que no tengan la suya.',
+          ),
+        ),
+        if (_options.planOverviews) ..._overviewRows(palette),
       ],
       ExportDocument.technicalScript => _scriptFormat(palette),
     };
@@ -1070,7 +1175,10 @@ class _ShotStrip extends StatelessWidget {
   final List<_ShotItem> shots;
   final ValueChanged<int>? onTap;
 
-  const _ShotStrip({required this.shots, this.onTap});
+  /// Elegir la parte de la planta del plano; sin él no hay botón.
+  final ValueChanged<Shot>? onSection;
+
+  const _ShotStrip({required this.shots, this.onTap, this.onSection});
 
   @override
   Widget build(BuildContext context) {
@@ -1128,6 +1236,29 @@ class _ShotStrip extends StatelessWidget {
                   right: 3,
                   top: 3,
                   child: Icon(Icons.repeat, size: 13, color: palette.warning),
+                ),
+              if (onSection != null)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Tooltip(
+                    message: 'Sección de la planta',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onSection!(shot),
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        color: Colors.black54,
+                        child: Icon(
+                          Icons.crop_free,
+                          size: 14,
+                          color: shot.planViewJson == null
+                              ? Colors.white
+                              : palette.accent,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
             ],
           ),

@@ -6,8 +6,10 @@ import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import 'plan_data.dart';
 import 'plan_item_actions.dart';
 import 'plan_target.dart';
+import 'plan_view_picker.dart';
 import '../../core/utils/platform_keys.dart';
 
 const kLightSetupStatuses = ['boceto', 'en_desarrollo', 'definitivo'];
@@ -84,9 +86,15 @@ class LightSetupMenuButton extends ConsumerWidget {
               PopupMenuItem(
                 value: 'status:$status',
                 child: Text(
-                  'Marcar como ${lightSetupStatusLabel(status).toLowerCase()}',
+                  status == 'definitivo'
+                      ? 'Hacer planta oficial (definitivo)'
+                      : 'Marcar como ${lightSetupStatusLabel(status).toLowerCase()}',
                 ),
               ),
+          const PopupMenuItem(
+            value: 'section',
+            child: Text('Sección para documentos…'),
+          ),
           const PopupMenuDivider(),
           PopupMenuItem(
             value: 'copy',
@@ -123,6 +131,10 @@ class LightSetupMenuButton extends ConsumerWidget {
       return;
     }
     switch (action) {
+      case 'section':
+        final data = await PlanProjectData.load(db, setup.projectId);
+        if (!context.mounted) return;
+        await showSetupViewPicker(context, db: db, data: data, setup: setup);
       case 'rename':
         final name = await askPlanName(
           context,

@@ -81,6 +81,9 @@ class ExportOptions {
   final StoryboardLook look;
   final ShotImageSource imageSource;
   final bool planWithLight;
+
+  /// La planta general de cada esquema al final del documento de planta.
+  final bool planOverviews;
   final ScriptExportOptions script;
 
   const ExportOptions({
@@ -90,6 +93,7 @@ class ExportOptions {
     this.look = StoryboardLook.grid6,
     this.imageSource = ShotImageSource.storyboard,
     this.planWithLight = true,
+    this.planOverviews = true,
     this.script = const ScriptExportOptions(),
   });
 
@@ -100,6 +104,7 @@ class ExportOptions {
     StoryboardLook? look,
     ShotImageSource? imageSource,
     bool? planWithLight,
+    bool? planOverviews,
     ScriptExportOptions? script,
   }) => ExportOptions(
     document: document ?? this.document,
@@ -108,6 +113,7 @@ class ExportOptions {
     look: look ?? this.look,
     imageSource: imageSource ?? this.imageSource,
     planWithLight: planWithLight ?? this.planWithLight,
+    planOverviews: planOverviews ?? this.planOverviews,
     script: script ?? this.script,
   );
 
@@ -118,6 +124,7 @@ class ExportOptions {
     'look': look.name,
     'imageSource': imageSource.name,
     'planWithLight': planWithLight,
+    'planOverviews': planOverviews,
     'script': script.toJson(),
   };
 
@@ -132,6 +139,7 @@ class ExportOptions {
       imageSource:
           _byName(ShotImageSource.values, json['imageSource']) ?? d.imageSource,
       planWithLight: json['planWithLight'] != false,
+      planOverviews: json['planOverviews'] != false,
       script: script is Map
           ? ScriptExportOptions.fromJson(Map<String, dynamic>.from(script))
           : d.script,

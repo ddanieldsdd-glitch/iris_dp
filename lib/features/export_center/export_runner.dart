@@ -71,6 +71,7 @@ class ExportRunner {
     project: source.project,
     sections: sections,
     withLight: options.planWithLight,
+    withOverviews: options.planOverviews,
   );
 
   Future<Uint8List> _script(

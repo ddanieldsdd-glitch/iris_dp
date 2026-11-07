@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -11,7 +12,9 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../shared/history/edit_history.dart';
 import '../../shared/history/shot_edits.dart';
+import 'floor_plan_repository.dart';
 import 'plan_data.dart';
+import 'plan_renderer.dart';
 import 'plan_thumbnail.dart';
 import 'shot_plan_view.dart';
 
@@ -20,16 +23,80 @@ Future<void> showPlanViewPicker(
   BuildContext context, {
   required PlanProjectData data,
   required Shot shot,
+}) {
+  final setup = data.setup(shot.lightSetupId);
+  final shared = data.documentViewOf(setup);
+  final (:focus, :crop) = data.framingOf(shot);
+  return showDialog<void>(
+    context: context,
+    builder: (dialog) => Consumer(
+      builder: (_, ref, _) => _PlanViewPicker(
+        projectId: shot.projectId,
+        title: 'Sección de la planta · Plano ${shot.number}',
+        hint:
+            'Arrastra para marcar la parte que importa. Lo que quede dentro '
+            'representa al plano en el storyboard, el guion técnico y los '
+            'PDF.',
+        note: shared == null
+            ? null
+            : 'Sin sección propia, usa la de «${setup!.name}».',
+        initial: crop,
+        zone: focus,
+        picture: (renderer) => renderer.shotPicture(shot),
+        onSave: (rect) => saveShotFields(
+          ref.read(databaseProvider),
+          ref.read(editHistoryProvider),
+          shot,
+          ShotsCompanion(planViewJson: Value(encodeShotPlanView(rect))),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Elige la sección de un esquema de luz o un boceto: la que sale en su
+/// planta general y en los planos que no tengan la suya.
+Future<void> showSetupViewPicker(
+  BuildContext context, {
+  required AppDatabase db,
+  required PlanProjectData data,
+  required LightSetup setup,
 }) => showDialog<void>(
   context: context,
-  builder: (_) => _PlanViewPicker(data: data, shot: shot),
+  builder: (_) => _PlanViewPicker(
+    projectId: setup.projectId,
+    title: 'Sección para documentos · ${setup.name}',
+    hint:
+        'Arrastra para marcar la parte que importa. Sale en los documentos '
+        'en lugar de la planta entera, también en los planos de este esquema '
+        'que no tengan una sección propia.',
+    initial: data.documentViewOf(setup),
+    zone: data.zoneOf(data.set(setup.locationBasePlanId)),
+    picture: (renderer) => renderer.setupPicture(setup),
+    onSave: (rect) => FloorPlanRepository(db).saveDocumentView(setup.id, rect),
+  ),
 );
 
 class _PlanViewPicker extends ConsumerStatefulWidget {
-  final PlanProjectData data;
-  final Shot shot;
+  final int projectId;
+  final String title;
+  final String hint;
+  final String? note;
+  final Rect? initial;
+  final Rect? zone;
+  final Future<PlanPicture> Function(PlanRenderer renderer) picture;
+  final Future<void> Function(Rect? rect) onSave;
 
-  const _PlanViewPicker({required this.data, required this.shot});
+  const _PlanViewPicker({
+    required this.projectId,
+    required this.title,
+    required this.hint,
+    required this.picture,
+    required this.onSave,
+    this.note,
+    this.initial,
+    this.zone,
+  });
 
   @override
   ConsumerState<_PlanViewPicker> createState() => _PlanViewPickerState();
@@ -38,33 +105,61 @@ class _PlanViewPicker extends ConsumerStatefulWidget {
 class _PlanViewPickerState extends ConsumerState<_PlanViewPicker> {
   static const _minSide = 80.0;
 
-  late final _own = [
-    ...widget.data.lightOfShot(widget.shot),
-    ...widget.data.ownOfShot(widget.shot),
-  ];
-  late final _base = widget.data.baseOfShot(widget.shot);
-  late final _drawings = widget.data.drawingsOfShot(widget.shot);
-  late final _zone = widget.data.framingOf(widget.shot).focus;
+  PlanRenderer? _renderer;
+  PlanPicture? _picture;
+  bool _loaded = false;
 
-  /// Sección que se está eligiendo, en coordenadas de la planta. Nula: la
-  /// planta entera, hasta saber lo que mide al pintarse.
-  late Rect? _rect = widget.data.framingOf(widget.shot).crop ?? _zone;
+  /// Lo que se ve de la planta, tal como sale en los documentos.
+  Uint8List? _png;
+  Rect? _view;
+  Size? _renderedFor;
 
-  /// La planta entera tal como se ve en el lienzo.
-  Rect? _whole;
+  /// Sección que se está eligiendo, en coordenadas de la planta. Nula: aún
+  /// no se ha tocado.
+  late Rect? _rect = widget.initial ?? widget.zone;
 
-  Rect _wholePlan(double scale, Offset offset, Size size) => Rect.fromPoints(
-    (Offset.zero - offset) / scale,
-    (size.bottomRight(Offset.zero) - offset) / scale,
-  );
+  /// La que se ve ahora en el lienzo.
+  Rect? _shown;
+  Offset? _dragStart;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final renderer = await PlanRenderer.load(
+      ref.read(databaseProvider),
+      widget.projectId,
+    );
+    final picture = await widget.picture(renderer);
+    if (!mounted) return;
+    setState(() {
+      _renderer = renderer;
+      _picture = picture;
+      _loaded = true;
+    });
+  }
+
+  Future<void> _render(Size size, double pixelRatio) async {
+    final view = _picture?.extent;
+    if (view == null || _renderer == null) return;
+    final png = await _renderer!.png(
+      _picture!,
+      size: size,
+      pixelRatio: pixelRatio,
+      view: view,
+    );
+    if (!mounted || size != _renderedFor) return;
+    setState(() {
+      _png = png;
+      _view = view;
+    });
+  }
 
   Future<void> _save(Rect? rect) async {
-    await saveShotFields(
-      ref.read(databaseProvider),
-      ref.read(editHistoryProvider),
-      widget.shot,
-      ShotsCompanion(planViewJson: Value(encodeShotPlanView(rect))),
-    );
+    await widget.onSave(rect);
     if (mounted) Navigator.pop(context);
   }
 
@@ -73,7 +168,8 @@ class _PlanViewPickerState extends ConsumerState<_PlanViewPicker> {
     final palette = context.palette;
     final screen = MediaQuery.sizeOf(context);
     final width = math.min(screen.width - 48, 960.0);
-    final height = math.min(screen.height - 220, 620.0);
+    // En un teléfono apaisado no cabe todo: el diálogo se desplaza.
+    final height = (screen.height - 300).clamp(220.0, 620.0);
 
     return Dialog(
       backgroundColor: palette.surfaceElevated,
@@ -81,21 +177,23 @@ class _PlanViewPickerState extends ConsumerState<_PlanViewPicker> {
         width: width,
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Sección de la planta · Plano ${widget.shot.number}',
-                style: AppTypography.titleMedium(palette),
-              ),
+              Text(widget.title, style: AppTypography.titleMedium(palette)),
               const SizedBox(height: 4),
-              Text(
-                'Arrastra el recuadro y sus esquinas. Lo que quede dentro '
-                'representa al plano en el storyboard, el guion técnico y los '
-                'PDF.',
-                style: AppTypography.caption(palette),
-              ),
+              Text(widget.hint, style: AppTypography.caption(palette)),
+              if (widget.note != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  widget.note!,
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.accent),
+                ),
+              ],
               const SizedBox(height: AppSpacing.md),
               SizedBox(
                 height: height,
@@ -105,34 +203,49 @@ class _PlanViewPickerState extends ConsumerState<_PlanViewPicker> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              Row(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.sm,
                 children: [
-                  TextButton(
-                    onPressed: () => _save(null),
-                    child: const Text('Quitar sección'),
+                  Wrap(
+                    children: [
+                      TextButton(
+                        onPressed: () => _save(null),
+                        child: const Text('Quitar sección'),
+                      ),
+                      TextButton(
+                        onPressed: _view == null
+                            ? null
+                            : () => setState(() => _rect = _view),
+                        child: const Text('Toda la planta'),
+                      ),
+                      if (widget.zone != null)
+                        TextButton(
+                          onPressed: () => setState(() => _rect = widget.zone),
+                          child: const Text('Zona del set'),
+                        ),
+                    ],
                   ),
-                  TextButton(
-                    onPressed: () => setState(() => _rect = _whole),
-                    child: const Text('Toda la planta'),
-                  ),
-                  if (_zone != null)
-                    TextButton(
-                      onPressed: () => setState(() => _rect = _zone),
-                      child: const Text('Zona del set'),
-                    ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancelar'),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  FilledButton(
-                    onPressed: _rect == null ? null : () => _save(_rect),
-                    child: const Text('Usar esta sección'),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancelar'),
+                      ),
+                      FilledButton(
+                        onPressed: _shown == null && _rect == null
+                            ? null
+                            : () => _save(_rect ?? _shown),
+                        child: const Text('Usar esta sección'),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ],
+            ),
           ),
         ),
       ),
@@ -142,38 +255,48 @@ class _PlanViewPickerState extends ConsumerState<_PlanViewPicker> {
   Widget _canvas(BuildContext context, BoxConstraints box) {
     final palette = context.palette;
     final size = box.biggest;
-    final all = [..._base, ..._own];
-    final drawn = PlanThumbnail.drawingBounds(_drawings);
-    if (all.isEmpty && drawn == null) {
+    if (!_loaded) return const Center(child: CircularProgressIndicator());
+    if (_picture?.extent == null) {
       return Center(
         child: Text(
-          'Este plano aún no tiene planta.',
+          'Aún no hay planta que recortar.',
           style: AppTypography.bodyMedium(palette),
         ),
       );
     }
+    if (_renderedFor != size) {
+      _renderedFor = size;
+      _render(size, MediaQuery.devicePixelRatioOf(context));
+    }
+    final whole = _view;
+    final png = _png;
+    if (whole == null || png == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
     final (:scale, :offset) = PlanThumbnail.frame(
       size,
-      all: all,
+      all: const [],
       focus: null,
       zones: const [],
-      drawn: drawn,
+      drawn: null,
+      crop: whole,
     );
-    final whole = _whole = _wholePlan(scale, offset, size);
     final rect = _rect ?? whole.deflate(whole.shortestSide * 0.1);
+    _shown = rect;
     final shown = Rect.fromPoints(
       rect.topLeft * scale + offset,
       rect.bottomRight * scale + offset,
     );
 
     void update(Rect next) => setState(() => _rect = next);
+    Offset toPlan(Offset local) => (local - offset) / scale;
 
     Widget corner(Alignment at) {
       return Positioned(
-        left: at.x < 0 ? shown.left - 12 : shown.right - 12,
-        top: at.y < 0 ? shown.top - 12 : shown.bottom - 12,
-        width: 24,
-        height: 24,
+        left: at.x < 0 ? shown.left - 14 : shown.right - 14,
+        top: at.y < 0 ? shown.top - 14 : shown.bottom - 14,
+        width: 28,
+        height: 28,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onPanUpdate: (d) {
@@ -209,11 +332,21 @@ class _PlanViewPickerState extends ConsumerState<_PlanViewPicker> {
 
     return Stack(
       children: [
+        // Fuera del recuadro, arrastrar marca una sección nueva.
         Positioned.fill(
-          child: PlanThumbnail(
-            elements: _own,
-            inherited: _base,
-            drawings: _drawings,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanStart: (d) => _dragStart = toPlan(d.localPosition),
+            onPanUpdate: (d) {
+              final start = _dragStart;
+              if (start == null) return;
+              final next = Rect.fromPoints(start, toPlan(d.localPosition));
+              if (next.width >= _minSide && next.height >= _minSide) {
+                update(next);
+              }
+            },
+            onPanEnd: (_) => _dragStart = null,
+            child: Image.memory(png, fit: BoxFit.fill, gaplessPlayback: true),
           ),
         ),
         Positioned.fill(

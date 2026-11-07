@@ -268,6 +268,15 @@ Esta rama lleva todo lo anterior. IRIS ya está abierto en el PC con ella.
   - Los conos siguen visibles para ver hacia dónde apunta cada foco.
 - [ ] **Al cambiar,** el 3D pasa de una a otra al momento; en Unreal no cambia nada.
 
+## 20 · Boceto oficial y sección para documentos (rama `plan/planta-boceto-oficial`)
+
+- [ ] **Boceto con elementos.** En un boceto, ⋯ → «Hacer planta oficial…»: elige set y planos. Desaparece de la tira de bocetos, aparece como set y esos planos ya están en él.
+- [ ] **Boceto a mano.** Lo mismo: al abrir la planta, el dibujo está de fondo y se pueden poner focos encima.
+- [ ] **Sección del esquema.** ⋮ del esquema → «Sección para documentos…»: se ve la cenital y las imágenes. Arrastra sobre la planta y guarda. La planta general del PDF sale con esa parte.
+- [ ] **Sección del plano.** En el tablero o en Exportar (icono en la miniatura): manda sobre la del esquema.
+- [ ] **Exportar.** Plantas → icono Exportar abre el centro en «Planta de cámara y luz». «Plantas generales al final» las quita del PDF.
+- [ ] **Boceto a mano en el guion.** Asócialo a un plano y exporta con la columna PLANTA: ahora sale.
+
 ## 8 · Pendiente (no está en estas ramas)
 
 - **F6.20 D3 · Tejidos y superficies:** materiales de Fab en paredes y suelo, en Unreal y en el 3D.

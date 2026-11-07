@@ -103,6 +103,10 @@ class FloorPlanDocument {
   /// Luces del grupo que este set no lleva (SG.3), por identificador.
   final List<String> hiddenGroupLights;
 
+  /// Sección de la planta que sale en los documentos (coordenadas del
+  /// lienzo). Nula: la planta entera. Un plano puede llevar la suya.
+  final Rect? documentView;
+
   const FloorPlanDocument({
     this.elements = const [],
     this.metersPerUnit,
@@ -110,9 +114,28 @@ class FloorPlanDocument {
     this.ambient,
     this.environment,
     this.hiddenGroupLights = const [],
+    this.documentView,
   });
 
   bool get isEmpty => elements.isEmpty && underlay == null;
+
+  /// Sirve para cambiar una parte sin perder el resto de la capa.
+  /// [documentView] va como función porque nula significa «quitarla».
+  FloorPlanDocument copyWith({
+    List<PlanElement>? elements,
+    Map<String, dynamic>? ambient,
+    Map<String, dynamic>? environment,
+    List<String>? hiddenGroupLights,
+    Rect? Function()? documentView,
+  }) => FloorPlanDocument(
+    elements: elements ?? this.elements,
+    metersPerUnit: metersPerUnit,
+    underlay: underlay,
+    ambient: ambient ?? this.ambient,
+    environment: environment ?? this.environment,
+    hiddenGroupLights: hiddenGroupLights ?? this.hiddenGroupLights,
+    documentView: documentView == null ? this.documentView : documentView(),
+  );
 }
 
 /// Serializa / deserializa las capas de planta guardadas como JSON
@@ -134,12 +157,32 @@ class FloorPlanJson {
       'environment': ?document.environment,
       if (document.hiddenGroupLights.isNotEmpty)
         'hiddenGroupLights': document.hiddenGroupLights,
+      if (document.documentView case final view?)
+        'documentView': {
+          'x': view.left,
+          'y': view.top,
+          'width': view.width,
+          'height': view.height,
+        },
       'elements': document.elements.map(_elementToJson).toList(),
     });
   }
 
   static List<PlanElement> decode(String? json) =>
       decodeDocument(json).elements;
+
+  static Rect? _rectFrom(Object? raw) {
+    if (raw is! Map) return null;
+    final x = raw['x'], y = raw['y'], w = raw['width'], h = raw['height'];
+    if (x is! num || y is! num || w is! num || h is! num) return null;
+    if (w <= 0 || h <= 0) return null;
+    return Rect.fromLTWH(
+      x.toDouble(),
+      y.toDouble(),
+      w.toDouble(),
+      h.toDouble(),
+    );
+  }
 
   static FloorPlanDocument decodeDocument(String? json) {
     if (json == null || json.isEmpty) return const FloorPlanDocument();
@@ -152,6 +195,7 @@ class FloorPlanJson {
             .toList(),
         metersPerUnit: (data['metersPerUnit'] as num?)?.toDouble(),
         underlay: FloorPlanUnderlay.fromJson(data['underlay']),
+        documentView: _rectFrom(data['documentView']),
         ambient: data['ambient'] is Map
             ? Map<String, dynamic>.from(data['ambient'] as Map)
             : null,

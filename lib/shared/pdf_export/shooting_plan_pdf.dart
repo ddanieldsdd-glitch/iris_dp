@@ -183,6 +183,7 @@ class ShootingPlanPdf {
     required Project project,
     required List<ExportDaySection> sections,
     bool withLight = true,
+    bool withOverviews = true,
   }) async {
     final renderer = await PlanRenderer.load(db, project.id);
     final days = <ShootingPlanDay>[];
@@ -224,7 +225,9 @@ class ShootingPlanPdf {
     return compose(
       projectName: project.name,
       days: days,
-      overviews: await _overviews(renderer, sections, withLight),
+      overviews: withOverviews
+          ? await _overviews(renderer, sections, withLight)
+          : const [],
       withLight: withLight,
     );
   }
