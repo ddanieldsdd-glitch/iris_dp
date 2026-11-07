@@ -14,6 +14,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/widgets/stable_stream_builder.dart';
 import '../../core/utils/clipboard_image_reader.dart';
 import '../../core/utils/platform_keys.dart';
 import '../../core/utils/scene_format.dart';
@@ -145,10 +146,12 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseProvider);
-    return StreamBuilder<List<Scene>>(
-      stream: db.watchScenesForProject(widget.projectId),
-      builder: (context, scenes) => StreamBuilder<List<Shot>>(
-        stream: db.watchShotsForProject(widget.projectId),
+    return StableStreamBuilder<List<Scene>>(
+      streamKey: (db, widget.projectId),
+      stream: () => db.watchScenesForProject(widget.projectId),
+      builder: (context, scenes) => StableStreamBuilder<List<Shot>>(
+        streamKey: (db, widget.projectId),
+        stream: () => db.watchShotsForProject(widget.projectId),
         builder: (context, shots) {
           if (!scenes.hasData || !shots.hasData) {
             return const Scaffold(
@@ -669,8 +672,9 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
   Widget _strip(Shot shot) {
     final palette = context.palette;
     final db = ref.read(databaseProvider);
-    return StreamBuilder<List<ShotReference>>(
-      stream: db.watchReferencesForShot(shot.id),
+    return StableStreamBuilder<List<ShotReference>>(
+      streamKey: (db, shot.id),
+      stream: () => db.watchReferencesForShot(shot.id),
       builder: (context, snap) {
         final paths = <String>{
           if (shot.storyboardImagePath case final own?)
