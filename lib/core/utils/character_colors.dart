@@ -10,6 +10,9 @@ String characterColorKey(String name) => name.trim().toUpperCase();
 const _manualCharacterLinesKey = '_manualCharacterLines';
 const _lineTextOverridesKey = '_lineTextOverrides';
 
+/// Grupos y sujetos ocultos del reparto: ver `project_cast_settings.dart`.
+const kCastSettingsKey = '_cast';
+
 Map<String, String> decodeCharacterColors(String? json) {
   if (json == null || json.trim().isEmpty) return {};
   try {
@@ -66,6 +69,10 @@ String? encodeCharacterColors(
   Map<String, String> colors, {
   Set<String>? manualCharacterLines,
   Map<String, String>? lineTextOverrides,
+
+  /// JSON guardado: de él se conservan los ajustes del reparto, que esta
+  /// pantalla no edita.
+  String? keepCastFrom,
 }) {
   final cleaned = <String, String>{};
   for (final entry in colors.entries) {
@@ -89,9 +96,20 @@ String? encodeCharacterColors(
     }
   });
 
-  if (cleaned.isEmpty && manual.isEmpty && overrides.isEmpty) return null;
+  Object? cast;
+  if (keepCastFrom != null && keepCastFrom.trim().isNotEmpty) {
+    try {
+      final decoded = jsonDecode(keepCastFrom);
+      if (decoded is Map) cast = decoded[kCastSettingsKey];
+    } catch (_) {}
+  }
+
+  if (cleaned.isEmpty && manual.isEmpty && overrides.isEmpty && cast == null) {
+    return null;
+  }
 
   final payload = <String, dynamic>{...cleaned};
+  if (cast != null) payload[kCastSettingsKey] = cast;
   if (manual.isNotEmpty) {
     payload[_manualCharacterLinesKey] = manual;
   }
