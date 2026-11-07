@@ -29,7 +29,9 @@ import 'plan_images.dart';
 import 'light_setup_actions.dart';
 import 'plan_item_actions.dart';
 import 'plan_data.dart';
+import 'plan_sketch_promote.dart';
 import 'plan_thumbnail.dart';
+import 'plan_view_picker.dart';
 
 /// Un boceto es una planta para empezar a pensar la luz de una escena, sin
 /// planos del guion técnico: con los elementos de la planta (focos,
@@ -603,7 +605,6 @@ class PlanSketchStrip extends ConsumerWidget {
   final VoidCallback onNewFreehand;
   /// Pasar un boceto con elementos a esquema de verdad; nulo donde no hay
   /// set al que llevarlo.
-  final ValueChanged<LightSetup>? onToPlan;
 
   const PlanSketchStrip({
     super.key,
@@ -613,7 +614,6 @@ class PlanSketchStrip extends ConsumerWidget {
     required this.onOpen,
     required this.onNewElements,
     required this.onNewFreehand,
-    this.onToPlan,
   });
 
   @override
@@ -728,7 +728,21 @@ class PlanSketchStrip extends ConsumerWidget {
                                       );
                                     }
                                   case 'plan':
-                                    onToPlan?.call(sketch);
+                                    if (!context.mounted) return;
+                                    await showPromoteSketchDialog(
+                                      context,
+                                      db,
+                                      data,
+                                      sketch,
+                                    );
+                                  case 'view':
+                                    if (!context.mounted) return;
+                                    await showSetupViewPicker(
+                                      context,
+                                      db: db,
+                                      data: data,
+                                      setup: sketch,
+                                    );
                                   case 'trace':
                                     if (!context.mounted) return;
                                     await chooseSketchTraceImage(
@@ -784,10 +798,14 @@ class PlanSketchStrip extends ConsumerWidget {
                                         : 'Cambiar de escena o hacer general…',
                                   ),
                                 ),
-                                if (!freehand && onToPlan != null)
+                                const PopupMenuItem(
+                                  value: 'plan',
+                                  child: Text('Hacer planta oficial…'),
+                                ),
+                                if (!freehand)
                                   const PopupMenuItem(
-                                    value: 'plan',
-                                    child: Text('Convertir en esquema del set'),
+                                    value: 'view',
+                                    child: Text('Sección para documentos…'),
                                   ),
                                 PopupMenuItem(
                                   value: 'delete',

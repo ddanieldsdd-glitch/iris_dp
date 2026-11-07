@@ -5,11 +5,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/painting.dart';
 
 import '../../core/database/app_database.dart';
+import '../../shared/annotations/annotation_document.dart';
 import '../locations/location_scan_service.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'plan_data.dart';
 import 'plan_images.dart';
+import 'plan_segment.dart';
 import 'plan_thumbnail.dart';
 
 /// Pinta plantas para los documentos tal como se ven en el editor: con la
@@ -100,20 +102,15 @@ class PlanRenderer {
     );
   }
 
-  /// La planta de un plano, con su sección elegida. Nula si no hay nada.
-  Future<Uint8List?> shot(
-    Shot shot, {
-    bool light = true,
-    Size size = const Size(640, 420),
-    double pixelRatio = 1,
-  }) async {
+  /// Todo lo que lleva la planta de un plano, con su sección elegida.
+  Future<PlanPicture> shotPicture(Shot shot, {bool light = true}) async {
     final setup = data.setup(shot.lightSetupId);
     final setId = data.setIdOfShot(shot);
     final siteId =
         data.set(setId)?.siteId ?? data.scene(shot.sceneId)?.locationSiteId;
     final (:focus, :crop) = data.framingOf(shot);
     final background = await _background(siteId, setId);
-    return PlanThumbnail.renderPng(
+    return PlanPicture(
       elements: _visible([
         if (setup != null) ...data.groupLightOf(setup),
         ...data.lightOfShot(shot),
@@ -123,7 +120,6 @@ class PlanRenderer {
       drawings: data.drawingsOfShot(shot),
       focus: focus,
       crop: crop,
-      size: size,
       routes: _routeOf(shot),
       images: await _images(
         siteId: siteId,
@@ -134,28 +130,25 @@ class PlanRenderer {
       background: background.image,
       backgroundRect: background.rect,
       backgroundOpacity: background.opacity,
-      pixelRatio: pixelRatio,
     );
   }
 
-  /// La planta general de un esquema de luz, entera.
-  Future<Uint8List?> setup(
+  /// Todo lo que lleva la planta general de un esquema de luz.
+  Future<PlanPicture> setupPicture(
     LightSetup setup, {
     bool light = true,
-    Size size = const Size(640, 420),
-    double pixelRatio = 1,
   }) async {
     final setId = setup.locationBasePlanId;
     final siteId = data.siteIdOfSetup(setup);
     final background = await _background(siteId, setId);
-    return PlanThumbnail.renderPng(
+    return PlanPicture(
       elements: _visible([
         ...data.groupLightOf(setup),
         ...data.ownOfSetup(setup),
       ], light),
       inherited: _visible(data.inheritedOfSetup(setup), light),
       drawings: data.drawingsOfSetup(setup),
-      size: size,
+      crop: data.documentViewOf(setup),
       images: await _images(
         siteId: siteId,
         setId: setId,
@@ -164,7 +157,107 @@ class PlanRenderer {
       background: background.image,
       backgroundRect: background.rect,
       backgroundOpacity: background.opacity,
-      pixelRatio: pixelRatio,
     );
+  }
+
+  /// Pinta [picture]. Con [view], esa parte en lugar de su sección.
+  Future<Uint8List?> png(
+    PlanPicture picture, {
+    Size size = const Size(640, 420),
+    double pixelRatio = 1,
+    Rect? view,
+  }) => PlanThumbnail.renderPng(
+    elements: picture.elements,
+    inherited: picture.inherited,
+    drawings: picture.drawings,
+    focus: picture.focus,
+    crop: view ?? picture.crop,
+    size: size,
+    routes: picture.routes,
+    images: picture.images,
+    background: picture.background,
+    backgroundRect: picture.backgroundRect,
+    backgroundOpacity: picture.backgroundOpacity,
+    pixelRatio: pixelRatio,
+  );
+
+  /// La planta de un plano, con su sección elegida. Nula si no hay nada.
+  Future<Uint8List?> shot(
+    Shot shot, {
+    bool light = true,
+    Size size = const Size(640, 420),
+    double pixelRatio = 1,
+  }) async => png(
+    await shotPicture(shot, light: light),
+    size: size,
+    pixelRatio: pixelRatio,
+  );
+
+  /// La planta general de un esquema de luz, con su sección si tiene.
+  Future<Uint8List?> setup(
+    LightSetup setup, {
+    bool light = true,
+    Size size = const Size(640, 420),
+    double pixelRatio = 1,
+  }) async => png(
+    await setupPicture(setup, light: light),
+    size: size,
+    pixelRatio: pixelRatio,
+  );
+}
+
+/// Lo que se pinta de una planta, sin decidir aún qué parte se ve.
+class PlanPicture {
+  final List<PlanElement> elements;
+  final List<PlanElement> inherited;
+  final List<AnnotationDocument> drawings;
+  final Rect? focus;
+  final Rect? crop;
+  final List<List<Offset>> routes;
+  final List<PlanImageDraw> images;
+  final ui.Image? background;
+  final Rect? backgroundRect;
+  final double backgroundOpacity;
+
+  const PlanPicture({
+    this.elements = const [],
+    this.inherited = const [],
+    this.drawings = const [],
+    this.focus,
+    this.crop,
+    this.routes = const [],
+    this.images = const [],
+    this.background,
+    this.backgroundRect,
+    this.backgroundOpacity = 0.85,
+  });
+
+  /// Margen alrededor de los elementos, en unidades del lienzo.
+  static const _margin = 90.0;
+
+  /// Lo que ocupa todo: elementos, dibujos, imágenes y cenital. Nulo si no
+  /// hay nada que enseñar.
+  Rect? get extent {
+    Rect? all;
+    void include(Rect? rect) {
+      if (rect == null) return;
+      all = all == null ? rect : all!.expandToInclude(rect);
+    }
+
+    void point(Offset p) => include(Rect.fromCircle(center: p, radius: _margin));
+    for (final el in [...inherited, ...elements]) {
+      point(el.position);
+      if (PlanSegment.isSegment(el)) point(PlanSegment.end(el));
+      el.pathPoints.forEach(point);
+    }
+    include(PlanThumbnail.drawingBounds(drawings));
+    for (final image in images) {
+      include(image.rect);
+    }
+    if (background != null) include(backgroundRect);
+    if (all == null) return null;
+    include(focus);
+    include(crop);
+    return all;
   }
 }

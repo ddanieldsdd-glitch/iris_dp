@@ -238,11 +238,21 @@ Future<List<Uint8List>> _planImages(
     }
     final setup = plans.setup(setupId);
     if (setup == null) continue;
+    // Un boceto a mano es su imagen: no tiene elementos que pintar.
+    if (setup.sketchImagePath != null && plans.ownOfSetup(setup).isEmpty) {
+      final bytes = await PdfSafeImage.loadFromPathMaxEdge(
+        setup.sketchImagePath,
+        maxEdge: 1200,
+      );
+      if (bytes != null) images.add(bytes);
+      continue;
+    }
     final png = await PlanThumbnail.renderPng(
       elements: plans.ownOfSetup(setup),
       inherited: plans.inheritedOfSetup(setup),
       drawings: plans.drawingsOfSetup(setup),
       focus: plans.zoneOf(plans.set(setup.locationBasePlanId)),
+      crop: plans.documentViewOf(setup),
     );
     if (png != null) images.add(png);
   }

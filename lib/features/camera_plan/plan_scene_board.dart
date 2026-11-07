@@ -20,6 +20,7 @@ import 'plan_guide.dart';
 import 'plan_site_sets.dart' show groupLightCount;
 import 'plan_item_actions.dart';
 import 'plan_sketch.dart';
+import 'plan_view_picker.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import 'shot_cover.dart';
@@ -110,28 +111,6 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
       if (!mounted) return;
     }
     await _openSketch(created);
-  }
-
-  /// Un boceto con elementos pasa a ser un esquema de verdad del set de la
-  /// escena (una copia: el boceto se queda).
-  Future<void> _sketchToPlan(LightSetup sketch) async {
-    final setId = _scene.locationId;
-    final copy = await FloorPlanRepository(_db).copyLightSetup(
-      sketch,
-      setId: setId,
-      siteId: setId == null ? _data.siteIdOfScene(_scene) : null,
-      name: sketch.name.replaceFirst('Boceto · ', 'Setup · '),
-      kind: LightSetupKind.plan,
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        content: Text(
-          '«${copy.name}» es ya un esquema de luz: arrastra a él los planos '
-          'que se ruedan así.',
-        ),
-      ),
-    );
   }
 
   Future<void> _openSketch(LightSetup sketch) async {
@@ -272,7 +251,6 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
           onOpen: _openSketch,
           onNewElements: () => _newSketch(kind: LightSetupKind.sketchElements),
           onNewFreehand: () => _newSketch(kind: LightSetupKind.sketchFreehand),
-          onToPlan: _sketchToPlan,
         ),
         Padding(
           padding: const EdgeInsets.only(top: AppSpacing.lg),
@@ -516,6 +494,8 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                   }),
                   onSequence: () => _makeSequence(shot),
                   onSketch: () => _newSketch(shot: shot),
+                  onSection: () =>
+                      showPlanViewPicker(context, data: _data, shot: shot),
                 ),
               ),
             if (shots.isEmpty)
@@ -677,6 +657,9 @@ class PlanBoardShotCard extends StatelessWidget {
   /// Dibujar un boceto para este plano.
   final VoidCallback? onSketch;
 
+  /// Elegir la parte de la planta que sale en los documentos.
+  final VoidCallback? onSection;
+
   /// Con la escena delante del número («11·P3»): en el tablero de la
   /// localización, donde se mezclan escenas.
   final bool sceneTag;
@@ -694,6 +677,7 @@ class PlanBoardShotCard extends StatelessWidget {
     required this.onPick,
     this.onSequence,
     this.onSketch,
+    this.onSection,
     this.sceneTag = false,
     this.showCameras = false,
   });
@@ -807,6 +791,7 @@ class PlanBoardShotCard extends StatelessWidget {
                   'pick' => onPick(),
                   'sketch' => sketchMenu(),
                   'draw' => onSketch?.call(),
+                  'section' => onSection?.call(),
                   _ => onSequence?.call(),
                 },
                 itemBuilder: (_) => [
@@ -826,6 +811,11 @@ class PlanBoardShotCard extends StatelessWidget {
                     const PopupMenuItem(
                       value: 'draw',
                       child: Text('Dibujar un boceto para este plano'),
+                    ),
+                  if (onSection != null)
+                    const PopupMenuItem(
+                      value: 'section',
+                      child: Text('Sección para documentos…'),
                     ),
                   PopupMenuItem(
                     value: 'pick',

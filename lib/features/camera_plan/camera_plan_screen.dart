@@ -9,7 +9,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
-import '../../shared/pdf_export/camera_plan_pdf.dart';
+import '../../shared/pdf_export/shooting_plan_pdf.dart';
+import '../export_center/export_center_screen.dart';
+import '../export_center/export_selection.dart';
 import 'camera_plan_grouping.dart';
 import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
@@ -114,6 +116,15 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
             icon: Icon(Icons.delete_outline, color: palette.textSecondary),
             onPressed: () => PlanTrashScreen.open(context, projectId),
           ),
+          IconButton(
+            tooltip: 'Exportar',
+            icon: Icon(Icons.ios_share, color: palette.textSecondary),
+            onPressed: () => ExportCenterScreen.open(
+              context,
+              projectId: projectId,
+              document: ExportDocument.shootingPlan,
+            ),
+          ),
           GoodNotesPdfActions(
             projectId: projectId,
             moduleType: GoodNotesModuleType.plantaCamara,
@@ -122,11 +133,15 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
               final db = ref.read(databaseProvider);
               final project = await db.getProject(projectId);
               if (project == null) return Uint8List(0);
-              final scenes = await db.watchScenesForProject(projectId).first;
-              return CameraPlanPdfExporter.buildBytes(
-                project: project,
-                scenes: scenes,
+              final source = await ExportSource.load(db, projectId);
+              if (source == null) return Uint8List(0);
+              return ShootingPlanPdf.build(
                 db: db,
+                project: project,
+                sections: resolveExportSections(
+                  source,
+                  const ExportSelection(),
+                ),
               );
             },
           ),

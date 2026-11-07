@@ -40,7 +40,6 @@ import 'floor_plan_repository.dart';
 import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
 import 'light_beam.dart';
-import 'plan_data.dart' show kLightSetupColors;
 import 'plan_cast.dart';
 import 'plan_gear_list.dart';
 import 'plan_elevation_screen.dart';
@@ -49,6 +48,9 @@ import 'plan_image_widgets.dart';
 import 'plan_images.dart';
 import 'plan_item_actions.dart' show PlanMenuRow;
 import 'plan_sketch.dart' show moveDrawingToFreehandSketch;
+import 'plan_data.dart';
+import 'plan_sketch_promote.dart';
+import 'plan_view_picker.dart';
 import 'plan_start_from.dart' show createSetupForSet;
 import 'plan_light_map.dart';
 import 'plan_project_gear_dialog.dart';
@@ -2821,6 +2823,41 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Un dibujo hecho encima de la planta (de antes) se pasa a un boceto a
   /// mano de la escena, o se borra. No se pierde sin preguntar.
+  /// El boceto abierto pasa a ser planta oficial.
+  Future<void> _promoteSketch() async {
+    final sketch = _lightSetup;
+    if (sketch == null) return;
+    await _saveCurrentPlan();
+    if (!mounted) return;
+    final db = ref.read(databaseProvider);
+    final promoted = await showPromoteSketchDialog(
+      context,
+      db,
+      await PlanProjectData.load(db, widget.projectId),
+      sketch,
+    );
+    if (promoted != null && mounted) {
+      setState(() => _lightSetup = promoted);
+    }
+  }
+
+  /// Elige la parte de esta planta que sale en los documentos.
+  Future<void> _pickDocumentSection() async {
+    await _saveCurrentPlan();
+    final db = ref.read(databaseProvider);
+    final data = await PlanProjectData.load(db, widget.projectId);
+    if (!mounted) return;
+    final shotId = widget.shotId;
+    final shot = shotId == null ? null : await db.getShotById(shotId);
+    if (!mounted) return;
+    final setup = _lightSetup;
+    if (shot != null) {
+      await showPlanViewPicker(context, data: data, shot: shot);
+    } else if (setup != null) {
+      await showSetupViewPicker(context, db: db, data: data, setup: setup);
+    }
+  }
+
   Future<void> _resolveOldDrawing() async {
     final palette = context.palette;
     final choice = await showDialog<String>(
@@ -5776,6 +5813,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             ),
             onPressed: () => setState(() => _showReadings = !_showReadings),
           ),
+          if (widget.shotId != null || _lightSetup != null)
+            IconButton(
+              tooltip: 'Sección para documentos',
+              icon: Icon(Icons.crop_free, color: palette.textSecondary),
+              onPressed: _pickDocumentSection,
+            ),
           IconButton(
             tooltip: 'Guardar',
             icon: Icon(Icons.save_outlined, color: palette.textSecondary),
@@ -5947,6 +5990,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                             _zoneMode = true;
                             _selected = null;
                           }),
+                        )
+                      else if (_lightSetup case final sketch?
+                          when LightSetupKind.isSketch(sketch))
+                        _Notice(
+                          palette: palette,
+                          icon: Icons.verified_outlined,
+                          text: 'Esto es un boceto: no lleva planos.',
+                          actionLabel: 'Hacer planta oficial…',
+                          onAction: _promoteSketch,
                         ),
                       Expanded(
                         child: Row(

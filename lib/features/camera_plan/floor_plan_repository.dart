@@ -1,9 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'shot_route.dart';
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/painting.dart' show Offset, Rect;
 
 import '../../core/database/app_database.dart';
+import '../../core/utils/shot_reference_import.dart';
 import 'camera_plan_constants.dart';
 import 'camera_links.dart';
 import 'camera_plan_element_model.dart';
@@ -14,6 +17,7 @@ import 'light/ambient.dart';
 import 'env_overrides.dart';
 import 'light_overrides.dart';
 import 'set_environment.dart';
+import 'plan_images.dart';
 import 'plan_prefs.dart';
 
 /// Capas de una planta, de abajo arriba. Cada nivel ve las anteriores por
@@ -172,15 +176,10 @@ class FloorPlanRepository {
     List<PlanElement> elements, {
     List<String>? hiddenGroupLights,
   }) {
-    final previous = FloorPlanJson.decodeDocument(previousJson);
     return FloorPlanJson.encodeDocument(
-      FloorPlanDocument(
+      FloorPlanJson.decodeDocument(previousJson).copyWith(
         elements: elements,
-        metersPerUnit: previous.metersPerUnit,
-        underlay: previous.underlay,
-        ambient: previous.ambient,
-        environment: previous.environment,
-        hiddenGroupLights: hiddenGroupLights ?? previous.hiddenGroupLights,
+        hiddenGroupLights: hiddenGroupLights,
       ),
     );
   }
@@ -221,18 +220,11 @@ class FloorPlanRepository {
     int? setId,
     int? siteId,
   }) async {
-    String with_(String? json) {
-      final doc = FloorPlanJson.decodeDocument(json);
-      return FloorPlanJson.encodeDocument(
-        FloorPlanDocument(
-          elements: doc.elements,
-          metersPerUnit: doc.metersPerUnit,
-          underlay: doc.underlay,
-          ambient: doc.ambient,
-          environment: environment.toJson(),
-        ),
-      );
-    }
+    String with_(String? json) => FloorPlanJson.encodeDocument(
+      FloorPlanJson.decodeDocument(
+        json,
+      ).copyWith(environment: environment.toJson()),
+    );
 
     if (setId != null) {
       final set = await db.getLocationById(setId);
@@ -464,18 +456,30 @@ class FloorPlanRepository {
   Future<void> saveAmbient(int lightSetupId, PlanAmbient ambient) async {
     final setup = await db.getLightSetupById(lightSetupId);
     if (setup == null) return;
-    final doc = FloorPlanJson.decodeDocument(setup.planJson);
     await db.updateLightSetup(
       setup.copyWith(
         planJson: Value(
           FloorPlanJson.encodeDocument(
-            FloorPlanDocument(
-              elements: doc.elements,
-              metersPerUnit: doc.metersPerUnit,
-              underlay: doc.underlay,
-              ambient: ambient.toJson(),
-              environment: doc.environment,
-            ),
+            FloorPlanJson.decodeDocument(
+              setup.planJson,
+            ).copyWith(ambient: ambient.toJson()),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Sección del esquema que sale en los documentos; nula, la planta entera.
+  Future<void> saveDocumentView(int lightSetupId, Rect? view) async {
+    final setup = await db.getLightSetupById(lightSetupId);
+    if (setup == null) return;
+    await db.updateLightSetup(
+      setup.copyWith(
+        planJson: Value(
+          FloorPlanJson.encodeDocument(
+            FloorPlanJson.decodeDocument(
+              setup.planJson,
+            ).copyWith(documentView: () => view),
           ),
         ),
       ),
@@ -614,8 +618,80 @@ class FloorPlanRepository {
         underlay: doc.underlay,
         ambient: doc.ambient,
         environment: doc.environment,
+        documentView: doc.documentView,
       ),
     );
+  }
+
+  /// Hace oficial un boceto: el mismo esquema pasa a ser una planta de verdad
+  /// de [setId] o de la luz general de [siteId] (sin ninguno, una planta
+  /// libre), con [shotIds] rodados en ella. Esos planos dejan de enseñarlo
+  /// como boceto. Un boceto a mano entra como imagen de la planta, para
+  /// colocar encima focos y cámaras.
+  Future<LightSetup> promoteSketch(
+    LightSetup sketch, {
+    int? setId,
+    int? siteId,
+    String? name,
+    Set<int> shotIds = const {},
+  }) async {
+    final siblings = (await db.getLightSetupsForProject(sketch.projectId))
+        .where(
+          (s) =>
+              s.id != sketch.id &&
+              s.kind == LightSetupKind.plan &&
+              s.locationBasePlanId == setId &&
+              s.locationSiteId == (setId == null ? siteId : null),
+        )
+        .toList();
+    final taken = siblings.map((s) => s.name).toSet();
+    final base = (name ?? sketch.name.replaceFirst('Boceto · ', '')).trim();
+    final wanted = base.isEmpty ? nextSetupName(taken) : base;
+    var finalName = wanted;
+    for (var i = 2; taken.contains(finalName); i++) {
+      finalName = '$wanted ($i)';
+    }
+    if (sketch.kind == LightSetupKind.sketchFreehand) {
+      final path = sketch.sketchImagePath;
+      if (path != null && File(path).existsSync()) {
+        await PlanImageStore(db).add(
+          projectId: sketch.projectId,
+          scope: FloorPlanScope.lightSetup,
+          targetId: sketch.id,
+          bytes: await File(path).readAsBytes(),
+          extension: '.png',
+          source: PlanImageSource.file,
+          center: const Offset(800, 600),
+          longSide: 1600,
+        );
+      }
+    }
+    await db.updateLightSetup(
+      sketch.copyWith(
+        name: finalName,
+        kind: LightSetupKind.plan,
+        status: 'definitivo',
+        sceneId: const Value(null),
+        locationBasePlanId: Value(setId),
+        locationSiteId: Value(setId == null ? siteId : null),
+        sortOrder: siblings.length,
+      ),
+    );
+    for (final shotId in shotIds) {
+      final shot = await db.getShotById(shotId);
+      if (shot == null) continue;
+      await db.moveShot(
+        shotId,
+        setId: setId ?? shot.locationBasePlanId,
+        lightSetupId: sketch.id,
+      );
+      await removeShotPlanSketch(
+        db: db,
+        shot: shot,
+        path: 'setup:${sketch.id}',
+      );
+    }
+    return (await db.getLightSetupById(sketch.id))!;
   }
 
   /// Esquemas de la luz general de una localización (sin set), de los que

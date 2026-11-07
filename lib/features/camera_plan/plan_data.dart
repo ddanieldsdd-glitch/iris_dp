@@ -603,8 +603,17 @@ class PlanProjectData {
   /// zona de su set. Toda pantalla y export sale de aquí.
   ({Rect? focus, Rect? crop}) framingOf(Shot shot) => (
     focus: zoneOf(set(setIdOfShot(shot))),
-    crop: decodeShotPlanView(shot.planViewJson),
+    crop:
+        decodeShotPlanView(shot.planViewJson) ??
+        documentViewOf(setup(shot.lightSetupId)),
   );
+
+  /// Sección del esquema para los documentos; la del plano va por delante.
+  Rect? documentViewOf(LightSetup? setup) {
+    final json = setup?.planJson;
+    if (json == null || !json.contains('documentView')) return null;
+    return FloorPlanJson.decodeDocument(json).documentView;
+  }
 
   /// Zonas marcadas sobre el plano maestro de una localización.
   List<PlanZone> zonesOfSite(int siteId) => [
