@@ -28,6 +28,7 @@ import '../../core/widgets/scene_meta_display.dart';
 import '../shoot_documents/shoot_document_composer.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
 import '../shoot_documents/shoot_document_service.dart';
+import '../technical_script/split_scene_sheet.dart';
 import '../technical_script/technical_script_screen.dart';
 import 'import_scene_sheet.dart';
 import 'normalized_scene.dart';
@@ -270,6 +271,28 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
       entry.key: characterDisplayColor(entry.value),
   };
 
+  /// Divide la escena del proyecto que corresponde a la del guion.
+  Future<void> _splitWorkspaceScene(int index) async {
+    final start = _scenes[index].sourceStartIndex;
+    final scenes = await ref
+        .read(databaseProvider)
+        .watchScenesForProject(widget.projectId)
+        .first;
+    final parts = start == null
+        ? const <Scene>[]
+        : [
+            for (final s in scenes)
+              if (s.sourceStartIndex == start) s,
+          ];
+    if (!mounted) return;
+    if (parts.isEmpty) {
+      AppSnackBar.show(context, 'Guarda antes las escenas en el proyecto.');
+      return;
+    }
+    // Ya dividida: se sigue partiendo la última.
+    await showSplitSceneSheet(context, parts.last);
+  }
+
   Future<void> _persistCharacterColors() async {
     final db = ref.read(databaseProvider);
     final project = await db.getProject(widget.projectId);
@@ -501,6 +524,7 @@ class _ScriptImportScreenState extends ConsumerState<ScriptImportScreen> {
       manualCharacterLines: _manualCharacterLines,
       lineTextOverrides: _lineTextOverrides,
       sceneIndexEntries: _buildSceneIndexEntries(colorCtx),
+      onSplitScene: _splitWorkspaceScene,
       onSluglineTap: (slug) => _onSluglineTap(slug, colorCtx),
       onCharacterTap: _onCharacterTap,
       onLineContextAction: (line, action) =>

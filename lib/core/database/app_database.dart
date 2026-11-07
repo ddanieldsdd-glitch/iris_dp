@@ -11,6 +11,7 @@ import '../utils/media_storage.dart';
 import '../utils/scene_color.dart';
 import '../script/script_scene_matcher.dart';
 import '../utils/scene_format.dart';
+import '../utils/scene_text_parts.dart';
 import '../../shared/visual_bible/bible_section_fields.dart';
 import '../../shared/visual_bible/moodboard_association.dart';
 import '../../shared/visual_bible/bible_layout.dart' as bible_layout;
@@ -1523,11 +1524,23 @@ class AppDatabase extends _$AppDatabase {
     int projectId,
     List<WorkspaceScene> items,
   ) async {
-    final existing = await _scenesInScriptOrder(projectId);
+    final existing = _withoutSplitParts(await _scenesInScriptOrder(projectId));
     return matchScriptScenes(
       existing: [for (final s in existing) _existingScriptScene(s)],
       incoming: [for (final s in items) _incomingScriptScene(s)],
     );
+  }
+
+  /// Una escena dividida es una sola en el guion: para emparejar cuenta su
+  /// primera parte; si no, 13B podría quedarse con la escena y 13A con otra.
+  static List<Scene> _withoutSplitParts(List<Scene> scenes) {
+    final seen = <String>{};
+    return [
+      for (final s in scenes)
+        if (s.numberSuffix == null ||
+            seen.add('${s.number}|${_existingScriptScene(s).headingKey}'))
+          s,
+    ];
   }
 
   Future<List<Scene>> _scenesInScriptOrder(int projectId) =>
@@ -1566,6 +1579,79 @@ class AppDatabase extends _$AppDatabase {
         text: s.sceneText,
       );
 
+  /// Parte una escena en dos: 13 pasa a 13A y nace 13B, justo detrás, con el
+  /// mismo lugar y reparto. [shotIdsForSecond] se mueven a la nueva; el resto
+  /// no se toca. Devuelve el id de la escena nueva.
+  Future<int> splitScene({
+    required int sceneId,
+    required String firstText,
+    required String secondText,
+    Set<int> shotIdsForSecond = const {},
+  }) async {
+    final scene = await getSceneById(sceneId);
+    if (scene == null) throw StateError('La escena ya no existe');
+    final newId = await transaction(() async {
+      final sameNumber =
+          await (select(scenes)..where(
+                (s) =>
+                    s.projectId.equals(scene.projectId) &
+                    s.number.equals(scene.number),
+              ))
+              .get();
+      final letters = splitSceneSuffixes(
+        scene.numberSuffix,
+        sameNumber.map((s) => s.numberSuffix),
+      );
+      final later =
+          await (select(scenes)..where(
+                (s) =>
+                    s.projectId.equals(scene.projectId) &
+                    s.sortOrder.isBiggerThanValue(scene.sortOrder),
+              ))
+              .get();
+      for (final s in later) {
+        await (update(scenes)..where((row) => row.id.equals(s.id))).write(
+          ScenesCompanion(sortOrder: Value(s.sortOrder + 1)),
+        );
+      }
+      // La huella sigue siendo la de la escena entera: es lo que hay en el
+      // guion, así que actualizarlo no la da por cambiada.
+      final hash = scene.scriptTextHash;
+      await (update(scenes)..where((s) => s.id.equals(scene.id))).write(
+        ScenesCompanion(
+          numberSuffix: Value(letters.first),
+          actionText: Value(firstText),
+        ),
+      );
+      final id = await into(scenes).insert(
+        scene
+            .toCompanion(false)
+            .copyWith(
+              id: const Value.absent(),
+              uid: const Value.absent(),
+              numberSuffix: Value(letters.second),
+              actionText: Value(secondText),
+              sortOrder: Value(scene.sortOrder + 1),
+              scriptTextHash: Value(hash),
+            ),
+      );
+      if (shotIdsForSecond.isNotEmpty) {
+        final ids = shotIdsForSecond.toList();
+        await (update(shots)..where((s) => s.id.isIn(ids))).write(
+          ShotsCompanion(sceneId: Value(id)),
+        );
+        await (update(shootDocumentBlocks)
+              ..where((b) => b.shotId.isIn(ids)))
+            .write(ShootDocumentBlocksCompanion(sceneId: Value(id)));
+      }
+      await _renumberShotsInScene(scene.id);
+      await _renumberShotsInScene(id);
+      return id;
+    });
+    await touchProjectContent(scene.projectId);
+    return newId;
+  }
+
   /// Lleva al proyecto las escenas del guion, en su orden.
   ///
   /// Cada escena del guion se une a la del proyecto que le corresponde
@@ -1587,16 +1673,44 @@ class AppDatabase extends _$AppDatabase {
           links ??
           [
             for (final l in matchScriptScenes(
-              existing: [for (final s in existing) _existingScriptScene(s)],
+              existing: [
+                for (final s in _withoutSplitParts(existing))
+                  _existingScriptScene(s),
+              ],
               incoming: [for (final s in items) _incomingScriptScene(s)],
             ).links)
               l.existingId,
           ];
 
+      // Las partes de una escena dividida: el guion tiene una sola, que se une
+      // a la primera; las demás la siguen, con su número y sus planos.
+      final linkedIds = {...resolved.whereType<int>()};
+      final followers = <int, List<Scene>>{};
+      for (final old in existing) {
+        if (old.numberSuffix == null || linkedIds.contains(old.id)) continue;
+        final key = _existingScriptScene(old).headingKey;
+        final parent = existing
+            .where(
+              (e) =>
+                  linkedIds.contains(e.id) &&
+                  e.numberSuffix != null &&
+                  e.number == old.number &&
+                  _existingScriptScene(e).headingKey == key,
+            )
+            .firstOrNull;
+        if (parent != null) (followers[parent.id] ??= []).add(old);
+      }
+      final followerIds = {
+        for (final list in followers.values)
+          for (final s in list) s.id,
+      };
+
       final matchedIds = <int>{};
+      var position = 0;
 
       for (var i = 0; i < items.length; i++) {
         final order = i + 1;
+        final sortAt = ++position;
         final s = items[i];
         final siteName = s.locationSite.trim().isEmpty
             ? s.shootSet.trim()
@@ -1647,10 +1761,13 @@ class AppDatabase extends _$AppDatabase {
               locationColor: Value(s.locationColor),
               charactersJson: Value(s.charactersJson),
               description: Value(s.description),
-              // Sin texto nuevo se conserva el que hubiera.
-              actionText: hasText ? Value(text) : Value(match.actionText),
+              // Sin texto nuevo se conserva el que hubiera. Una escena
+              // dividida guarda solo su parte, no el texto entero.
+              actionText: hasText && !followers.containsKey(match.id)
+                  ? Value(text)
+                  : Value(match.actionText),
               sourceStartIndex: Value(s.sourceStartIndex),
-              sortOrder: order,
+              sortOrder: sortAt,
               scriptLinked: fromScript,
               scriptHeadingKey: Value(headingKey),
               scriptTextHash: hasText
@@ -1659,6 +1776,22 @@ class AppDatabase extends _$AppDatabase {
               offScript: false,
             ),
           );
+          for (final follower in followers[match.id] ?? const <Scene>[]) {
+            await (update(
+              scenes,
+            )..where((sc) => sc.id.equals(follower.id))).write(
+              ScenesCompanion(
+                number: Value(order),
+                sortOrder: Value(++position),
+                sourceStartIndex: Value(s.sourceStartIndex),
+                scriptHeadingKey: Value(headingKey),
+                scriptTextHash: hasText
+                    ? Value(scriptTextHash(text))
+                    : Value(follower.scriptTextHash),
+                offScript: const Value(false),
+              ),
+            );
+          }
         } else {
           await into(scenes).insert(
             ScenesCompanion.insert(
@@ -1675,7 +1808,7 @@ class AppDatabase extends _$AppDatabase {
               description: Value(s.description),
               actionText: Value(hasText ? text : null),
               sourceStartIndex: Value(s.sourceStartIndex),
-              sortOrder: Value(order),
+              sortOrder: Value(sortAt),
               scriptLinked: Value(fromScript),
               scriptHeadingKey: Value(headingKey),
               scriptTextHash: Value(hasText ? scriptTextHash(text) : null),
@@ -1686,9 +1819,11 @@ class AppDatabase extends _$AppDatabase {
 
       // Lo que ya no está en el guion: con planos se conserva aparte, al
       // final; vacío no tiene nada que guardar.
-      var offOrder = items.length;
+      var offOrder = position;
       for (final old in existing) {
-        if (matchedIds.contains(old.id)) continue;
+        if (matchedIds.contains(old.id) || followerIds.contains(old.id)) {
+          continue;
+        }
         final shotCount =
             await (selectOnly(shots)
                   ..addColumns([shots.id.count()])
