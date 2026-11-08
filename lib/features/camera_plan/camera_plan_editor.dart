@@ -536,8 +536,33 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   final AnnotationCanvasController _annotationController =
       AnnotationCanvasController();
   PlanElement? _selected;
-  Offset _canvasOffset = Offset.zero;
-  double _scale = 1.0;
+  /// La vista del lienzo. Moverla repinta solo el lienzo.
+  final _canvasView = PlanCanvasView();
+
+  /// Repinta solo el lienzo, con lo que haya cambiado en la planta.
+  final _canvasTick = ValueNotifier(0);
+
+  /// Cuándo se reconstruyó la pantalla entera por última vez en un arrastre.
+  final _sinceFullBuild = Stopwatch()..start();
+  static const _fullBuildEvery = Duration(milliseconds: 100);
+
+  /// Un cambio de un arrastre. El lienzo lo enseña en cada fotograma; los
+  /// paneles que lo siguen (fotómetro, 3D) van a su ritmo: reconstruirlos en
+  /// cada evento del puntero es lo que más cuesta al arrastrar.
+  void _updateDrag(VoidCallback change) {
+    change();
+    if (_sinceFullBuild.elapsed < _fullBuildEvery) {
+      _canvasTick.value++;
+      return;
+    }
+    _sinceFullBuild.reset();
+    setState(() {});
+  }
+
+  Offset get _canvasOffset => _canvasView.offset;
+  set _canvasOffset(Offset value) => _canvasView.offset = value;
+  double get _scale => _canvasView.scale;
+  set _scale(double value) => _canvasView.scale = value;
 
   /// Marco de selección que se está arrastrando, y dónde empezó.
   Offset? _marqueeStart;
@@ -655,6 +680,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (live != null) Future.microtask(() => live.leave(key));
     _reloadAfterPeer?.cancel();
     _lightMap.dispose();
+    _canvasView.dispose();
+    _canvasTick.dispose();
     _opacityDebounce?.cancel();
     _imageCache
       ..removeListener(_onImageLoaded)
@@ -4576,7 +4603,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (zoneEdit != null) {
       final grip = _zoneGrip;
       if (grip == null) {
-        setState(() => _canvasOffset += d.delta);
+        _canvasOffset += d.delta;
         return;
       }
       final delta = d.delta / _scale;
@@ -4616,7 +4643,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final handle = _segmentHandle;
     if (selected != null && handle != null) {
       _dragDirty = true;
-      setState(() {
+      _updateDrag(() {
         final point = _snapSegmentPoint(canvasPos, except: selected);
         if (PlanTruss.isTruss(selected)) {
           handle == 0
@@ -4648,20 +4675,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (selected != null &&
         _isDraggingPathPoint &&
         _selectedPathIndex != null) {
-      setState(() => selected.pathPoints[_selectedPathIndex!] += delta);
+      _updateDrag(() => selected.pathPoints[_selectedPathIndex!] += delta);
     } else if (selected != null && _isRotating) {
-      setState(() => _updateRotation(selected, canvasPos));
+      _updateDrag(() => _updateRotation(selected, canvasPos));
     } else if (_dragging != null) {
-      setState(() {
+      _updateDrag(() {
         for (final el in _multi.contains(_dragging) ? _multi : {_dragging!}) {
           el.position += delta;
           el.pathPoints = [for (final p in el.pathPoints) p + delta];
         }
       });
     } else if (_marqueeStart != null) {
-      setState(() => _marquee = Rect.fromPoints(_marqueeStart!, canvasPos));
+      _updateDrag(() => _marquee = Rect.fromPoints(_marqueeStart!, canvasPos));
     } else {
-      setState(() => _canvasOffset += d.delta);
+      _canvasOffset += d.delta;
     }
   }
 
@@ -4694,10 +4721,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final next = (_scale * factor).clamp(_minScale, _maxScale);
     if (next == _scale) return;
     final anchor = (local - _canvasOffset) / _scale;
-    setState(() {
-      _scale = next;
-      _canvasOffset = local - anchor * next;
-    });
+    _canvasView.zoomTo(next, local - anchor * next);
   }
 
   /// Encuadra todo lo que hay en la planta.
@@ -5005,6 +5029,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _segmentHandle = null;
     if (_isRotating) setState(() => _isRotating = false);
     _isDraggingPathPoint = false;
+    // Al soltar, la pantalla entera se pone al día.
+    if (moved) setState(() {});
     if (!moved || _selected == null) return;
 
     if (dragged != null && !wasHandle) {
@@ -5935,9 +5961,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Text(
-              '${(_scale * 100).round()}%',
-              style: AppTypography.caption(palette),
+            child: ListenableBuilder(
+              listenable: _canvasView,
+              builder: (context, _) => Text(
+                '${(_scale * 100).round()}%',
+                style: AppTypography.caption(palette),
+              ),
             ),
           ),
           IconButton(
@@ -6181,10 +6210,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                   },
                                                   onPointerMove: (e) {
                                                     if (_middlePan) {
-                                                      setState(
-                                                        () => _canvasOffset +=
-                                                            e.delta,
-                                                      );
+                                                      _canvasOffset += e.delta;
                                                     } else if (_rightDown !=
                                                             null &&
                                                         e.buttons ==
@@ -6199,11 +6225,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         _rightPanned = true;
                                                       }
                                                       if (_rightPanned) {
-                                                        setState(
-                                                          () =>
-                                                              _canvasOffset +=
-                                                                  e.delta,
-                                                        );
+                                                        _canvasOffset +=
+                                                            e.delta;
                                                       }
                                                     }
                                                   },
@@ -6276,10 +6299,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                       );
                                                       _pinchScale = e.scale;
                                                     }
-                                                    setState(
-                                                      () => _canvasOffset +=
-                                                          e.localPanDelta,
-                                                    );
+                                                    _canvasOffset +=
+                                                        e.localPanDelta;
                                                   },
                                                   child: GestureDetector(
                                                     // El trackpad no arrastra
@@ -6310,7 +6331,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                     onTapDown: _onTapCanvas,
                                                     onDoubleTapDown:
                                                         _onDoubleTapCanvas,
-                                                    child: CustomPaint(
+                                                    // Un solo sitio repinta en
+                                                    // cada fotograma: el lienzo.
+                                                    child: RepaintBoundary(
+                                                    child: ListenableBuilder(
+                                                    listenable: _canvasTick,
+                                                    builder: (context, _) => CustomPaint(
                                                       size: Size(
                                                         constraints.maxWidth,
                                                         constraints.maxHeight,
@@ -6372,8 +6398,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                             _selected,
                                                         selectedPathIndex:
                                                             _selectedPathIndex,
-                                                        scale: _scale,
-                                                        offset: _canvasOffset,
+                                                        view: _canvasView,
                                                         palette: palette,
                                                         backgroundImage:
                                                             _backgroundImage,
@@ -6386,7 +6411,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         color:
                                                             Colors.transparent,
                                                       ),
-                                                    ),
+                                                    ))),
                                                   ),
                                                 ),
                                               ),
@@ -6397,19 +6422,26 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                         // pero ya no se dibuja encima de la
                                         // planta: va a un boceto aparte.
                                         IgnorePointer(
-                                          child: AnnotationCanvas(
-                                            controller: _annotationController,
-                                            enabled: false,
-                                            tool: AnnotationToolType.pen,
-                                            color: const Color(0xFF007AFF),
-                                            width: 6,
-                                            viewport: AnnotationViewport(
-                                              documentSize:
-                                                  _annotationDocumentSize,
-                                              offset: _canvasOffset,
-                                              scale: _scale,
-                                            ),
-                                            onChanged: _saveAnnotations,
+                                          child: ListenableBuilder(
+                                            listenable: _canvasView,
+                                            builder: (context, _) =>
+                                                AnnotationCanvas(
+                                                  controller:
+                                                      _annotationController,
+                                                  enabled: false,
+                                                  tool: AnnotationToolType.pen,
+                                                  color: const Color(
+                                                    0xFF007AFF,
+                                                  ),
+                                                  width: 6,
+                                                  viewport: AnnotationViewport(
+                                                    documentSize:
+                                                        _annotationDocumentSize,
+                                                    offset: _canvasOffset,
+                                                    scale: _scale,
+                                                  ),
+                                                  onChanged: _saveAnnotations,
+                                                ),
                                           ),
                                         ),
                                         if (_selectedImage case final image?)

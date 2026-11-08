@@ -204,9 +204,10 @@ Banco de pruebas: proyecto de 30 escenas, 210 planos y planta de 60 elementos, m
 - [x] **R2. Índices.** Se crean al abrir la base, sin migración (`kQueryIndexes`).
 - [x] **R3. Miniaturas e imágenes.** `PlanThumbnailCache`, y `SizedFileImage` para decodificar al tamaño al que se ve.
 - [x] **R4. Listas por plano.** Guion y storyboard construyen solo las filas que se ven.
-- [ ] **R5. Lienzo de planta.** Mover y hacer zoom sin reconstruir el editor, contenido en un `ui.Picture`, descarte de lo que queda fuera y caché de textos. Va en su propia rama.
+- [x] **R5. Lienzo de planta.** Mover la vista y hacer zoom no reconstruyen el editor (`PlanCanvasView`) y el pintor reproduce lo ya pintado. Al arrastrar se repinta el lienzo en cada fotograma y la pantalla entera unas 10 veces por segundo. Por fotograma, con 190 elementos: mover la vista de 51 a 4 ms, zoom de 37 a 5 ms y arrastrar de 54 a unos 30 ms. La caché de textos y el descarte por pantalla se dejan fuera: el pintor solo cuesta unos 7 ms por fotograma.
 - [ ] **R6. WAL.** Escribir pasa de 17 ms a 0,1 ms, pero la base puede estar en una carpeta elegida a mano (unidad externa, de red o sincronizada) y `migrateToCurrentStorage` copia el `.db` sin su `-wal`. Antes hay que resolver las dos cosas.
 - [ ] **R7. Medir en perfil.** Repetir las medidas con `scripts/run_windows.ps1 -Perfil` y en el iPad.
+- [ ] **R8. Pausa al soltar.** Soltar tras un arrastre se lleva unos 1,5 s en el banco de pruebas, igual que antes de esta fase. Falta ver qué parte es guardar la capa y cuánto se nota fuera del test. El mapa de luz fino sigue sin medir con una planta con luces de verdad.
 
 ## Fuera de este plan
 
