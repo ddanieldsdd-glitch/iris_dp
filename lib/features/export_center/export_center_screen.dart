@@ -829,6 +829,16 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
           title: const Text('Con luz'),
           subtitle: const Text('Apágalo para una planta solo de cámara.'),
         ),
+        if (_options.planWithLight)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _options.planBeams,
+            onChanged: (v) => _setOptions(_options.copyWith(planBeams: v)),
+            title: const Text('Con haces de luz'),
+            subtitle: const Text(
+              'Apágalo para ver los aparatos sin la luz que proyectan.',
+            ),
+          ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: _options.planOverviews,

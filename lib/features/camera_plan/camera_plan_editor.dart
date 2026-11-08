@@ -408,6 +408,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   static const _colorByTypeKey = PrefKey<bool>('plan.colorByType', false);
   static const _namesKey = PrefKey<bool>('plan.showNames', false);
   static const _assetViewKey = PrefKey<bool>('plan.assetView', false);
+  static const _beamsKey = PrefKey<bool>('plan.showBeams', true);
+  late bool _showBeams = AppPrefs.instance.get(_beamsKey);
   late bool _colorByType = AppPrefs.instance.get(_colorByTypeKey);
   late bool _showNames = AppPrefs.instance.get(_namesKey);
 
@@ -5851,10 +5853,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           // Reconocer cada elemento: colores por tipo, nombres y la imagen
           // de su asset de Unreal (F6.20). Se recuerdan entre sesiones.
           PopupMenuButton<String>(
-            tooltip: 'Vista: colores por tipo, nombres y assets',
+            tooltip: 'Vista: colores por tipo, nombres, assets y haces de luz',
             icon: Icon(
               Icons.palette_outlined,
-              color: _colorByType || _showNames || _assetView
+              color: _colorByType || _showNames || _assetView || !_showBeams
                   ? palette.accent
                   : palette.textSecondary,
             ),
@@ -5874,6 +5876,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 checked: _assetView,
                 child: const Text('Vista de assets de Unreal'),
               ),
+              CheckedPopupMenuItem(
+                value: 'beams',
+                checked: _showBeams,
+                child: const Text('Haces de luz'),
+              ),
             ],
             onSelected: (v) {
               switch (v) {
@@ -5886,6 +5893,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 case 'assets':
                   setState(() => _assetView = !_assetView);
                   _setViewPref(_assetViewKey, _assetView);
+                case 'beams':
+                  setState(() => _showBeams = !_showBeams);
+                  _setViewPref(_beamsKey, _showBeams);
               }
             },
           ),
@@ -6393,6 +6403,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                             _colorByType,
                                                         showNames: _showNames,
                                                         assetView: _assetView,
+                                                        showBeams: _showBeams,
                                                         thumbOf: _thumbOf,
                                                         selectedElement:
                                                             _selected,

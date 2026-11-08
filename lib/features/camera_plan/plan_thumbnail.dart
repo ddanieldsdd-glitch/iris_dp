@@ -234,6 +234,9 @@ class PlanThumbnail extends StatelessWidget {
     /// Con las marcas a tamaño legible; ver [CameraPlanPainter.documentMarks].
     bool documentMarks = false,
 
+    /// Con la luz que cae en el suelo; ver [CameraPlanPainter.showBeams].
+    bool showBeams = true,
+
     /// En JPEG: el PDF lo mete tal cual, y un PNG lo descomprime y lo vuelve
     /// a comprimir en el hilo de la interfaz.
     bool jpeg = false,
@@ -279,6 +282,7 @@ class PlanThumbnail extends StatelessWidget {
       backgroundRect: backgroundRect,
       backgroundOpacity: backgroundOpacity,
       documentMarks: documentMarks,
+      showBeams: showBeams,
     ).paint(canvas, size);
     for (final drawing in drawings) {
       AnnotationPainter(

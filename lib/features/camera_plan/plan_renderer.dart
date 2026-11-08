@@ -195,6 +195,7 @@ class PlanRenderer {
     double pixelRatio = 1,
     Rect? view,
     bool jpeg = false,
+    bool beams = true,
   }) => PlanThumbnail.renderPng(
     elements: picture.elements,
     inherited: picture.inherited,
@@ -209,6 +210,7 @@ class PlanRenderer {
     backgroundOpacity: picture.backgroundOpacity,
     pixelRatio: pixelRatio,
     documentMarks: true,
+    showBeams: beams,
     jpeg: jpeg,
   );
 
@@ -216,6 +218,7 @@ class PlanRenderer {
   Future<Uint8List?> shot(
     Shot shot, {
     bool light = true,
+    bool beams = true,
     Size size = const Size(640, 420),
     double pixelRatio = 1,
   }) async => png(
@@ -223,12 +226,14 @@ class PlanRenderer {
     size: size,
     pixelRatio: pixelRatio,
     jpeg: true,
+    beams: beams,
   );
 
   /// La planta general de un esquema de luz, con su sección si tiene.
   Future<Uint8List?> setup(
     LightSetup setup, {
     bool light = true,
+    bool beams = true,
     Size size = const Size(640, 420),
     double pixelRatio = 1,
   }) async => png(
@@ -236,6 +241,7 @@ class PlanRenderer {
     size: size,
     pixelRatio: pixelRatio,
     jpeg: true,
+    beams: beams,
   );
 }
 

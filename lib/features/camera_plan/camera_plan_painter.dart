@@ -220,6 +220,10 @@ class CameraPlanPainter extends CustomPainter {
   /// sin el mapa de luz del editor.
   final bool documentMarks;
 
+  /// Pinta la luz que cae en el suelo: haces, charcos y sol. Sin ella quedan
+  /// los aparatos sobre la planta limpia.
+  final bool showBeams;
+
   CameraPlanPainter({
     required this.elements,
     required this.palette,
@@ -258,6 +262,7 @@ class CameraPlanPainter extends CustomPainter {
     this.images = const [],
     this.interacting = false,
     this.documentMarks = false,
+    this.showBeams = true,
   }) : _fixedScale = scale,
        _fixedOffset = offset,
        _contents = PlanLightKey.drawing([
@@ -445,11 +450,11 @@ class CameraPlanPainter extends CustomPainter {
       size.width / scale,
       size.height / scale,
     );
-    final mapped = !exposureMap && lightMap != null;
+    final mapped = showBeams && !exposureMap && lightMap != null;
     if (mapped) {
       _drawLightLayer(canvas, scene, visible, dimmed, lightKey, draft: draft);
     }
-    if (!exposureMap && !mapped && (ambient?.hasSun ?? false)) {
+    if (showBeams && !exposureMap && !mapped && (ambient?.hasSun ?? false)) {
       PlanSunPainter.paint(
         canvas,
         scene,
@@ -465,7 +470,9 @@ class CameraPlanPainter extends CustomPainter {
     // Los haces van debajo de todo lo demás. Con el mapa de exposición no
     // se pintan: el mapa ya dice cuánta luz hay en cada sitio.
     for (final light
-        in exposureMap || mapped ? const <SceneLight>[] : scene.lights) {
+        in exposureMap || mapped || !showBeams
+            ? const <SceneLight>[]
+            : scene.lights) {
       _drawBeam(
         canvas,
         scene,
@@ -488,7 +495,7 @@ class CameraPlanPainter extends CustomPainter {
     if (metersPerUnit != null) _drawScaleBar(canvas, size);
     if (exposureMap && exposure != null) _drawExposureLegend(canvas, size);
     if (ambient?.hasSun ?? false) _drawSunCompass(canvas, size);
-    if (!exposureMap && lightView == LightView.camera && lightMap != null) {
+    if (mapped && lightView == LightView.camera) {
       _drawExposureReference(canvas, size);
     }
     final legendBottom = gearLabels ? _drawGearLegend(canvas, size) : 0.0;
@@ -3416,6 +3423,7 @@ class CameraPlanPainter extends CustomPainter {
       old.images != images ||
       old.inheritedElements != inheritedElements ||
       old.inheritedOpacity != inheritedOpacity ||
+      old.showBeams != showBeams ||
       old.interacting != interacting ||
       old.showGrid != showGrid ||
       old.zones != zones ||
