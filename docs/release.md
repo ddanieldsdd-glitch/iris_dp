@@ -44,6 +44,8 @@ El script [`scripts/register_app_release.sh`](../scripts/register_app_release.sh
 - `windows` → `IRIS-DP-Windows.zip`
 - `ipad` → `IRIS-DP.ipa`
 
+Solo registra los archivos que existen en el Release. Si falla la compilación de una plataforma, el Release sale sin ella y su actualizador sigue en la versión anterior; al volver a lanzar el trabajo fallido se registra.
+
 ---
 
 ## Actualizador en la app (escritorio)

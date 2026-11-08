@@ -34,41 +34,38 @@ FULL="${FULL// /}"
 VERSION="${FULL%%+*}"
 BUILD="${FULL##*+}"
 
-MACOS_URL="https://github.com/${REPO}/releases/download/${TAG}/IRIS-DP.dmg"
-WIN_URL="https://github.com/${REPO}/releases/download/${TAG}/IRIS-DP-Windows.zip"
-IPAD_URL="https://github.com/${REPO}/releases/download/${TAG}/IRIS-DP.ipa"
+BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 
 notes_json="null"
 if [[ -n "$NOTES" ]]; then
   notes_json=$(python3 -c "import json; print(json.dumps('$NOTES'))")
 fi
 
-payload=$(cat <<EOF
-[
-  {
-    "platform": "macos",
-    "version": "${VERSION}",
-    "build_number": ${BUILD},
-    "download_url": "${MACOS_URL}",
-    "release_notes": ${notes_json}
-  },
-  {
-    "platform": "windows",
-    "version": "${VERSION}",
-    "build_number": ${BUILD},
-    "download_url": "${WIN_URL}",
-    "release_notes": ${notes_json}
-  },
-  {
-    "platform": "ipad",
-    "version": "${VERSION}",
-    "build_number": ${BUILD},
-    "download_url": "${IPAD_URL}",
-    "release_notes": ${notes_json}
-  }
-]
-EOF
-)
+# Solo se registra lo que de verdad está en el Release: la publicación sigue
+# adelante aunque falle la compilación de Windows, y el actualizador ofrecería
+# una descarga que no existe.
+asset_exists() {
+  curl -sfIL --retry 3 --retry-delay 2 -o /dev/null "$1"
+}
+
+entries=""
+registered=()
+for item in "macos|IRIS-DP.dmg" "windows|IRIS-DP-Windows.zip" "ipad|IRIS-DP.ipa"; do
+  platform="${item%%|*}"
+  url="${BASE_URL}/${item##*|}"
+  if ! asset_exists "$url"; then
+    echo "::warning::${platform}: no está en el Release, no se registra (${url})"
+    continue
+  fi
+  entry="{\"platform\": \"${platform}\", \"version\": \"${VERSION}\", \"build_number\": ${BUILD}, \"download_url\": \"${url}\", \"release_notes\": ${notes_json}}"
+  entries="${entries:+${entries},}${entry}"
+  registered+=("${platform}: ${url}")
+done
+
+if [[ -z "$entries" ]]; then
+  echo "✗ ${TAG} no tiene ningún archivo publicado: no se registra nada."
+  exit 1
+fi
 
 echo "→ Registrando v${VERSION}+${BUILD} en Supabase…"
 
@@ -77,9 +74,9 @@ curl -sf -X POST "${SUPABASE_URL}/rest/v1/app_releases?on_conflict=platform,buil
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates" \
-  -d "$payload"
+  -d "[${entries}]"
 
 echo ""
-echo "✓ macOS: ${MACOS_URL}"
-echo "✓ Windows: ${WIN_URL}"
-echo "✓ iPad: ${IPAD_URL}"
+for line in "${registered[@]}"; do
+  echo "✓ ${line}"
+done
