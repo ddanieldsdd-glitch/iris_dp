@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/pdf_safe_image.dart';
 import '../../shared/annotations/annotation_canvas.dart';
 import '../../shared/annotations/annotation_document.dart';
 import 'camera_plan_element_model.dart';
@@ -229,6 +230,13 @@ class PlanThumbnail extends StatelessWidget {
     Rect? backgroundRect,
     double backgroundOpacity = 0.85,
     double pixelRatio = 1,
+
+    /// Con las marcas a tamaño legible; ver [CameraPlanPainter.documentMarks].
+    bool documentMarks = false,
+
+    /// En JPEG: el PDF lo mete tal cual, y un PNG lo descomprime y lo vuelve
+    /// a comprimir en el hilo de la interfaz.
+    bool jpeg = false,
   }) async {
     final all = [...inherited, ...elements];
     var drawn = drawingBounds(drawings);
@@ -270,6 +278,7 @@ class PlanThumbnail extends StatelessWidget {
       backgroundImage: background,
       backgroundRect: backgroundRect,
       backgroundOpacity: backgroundOpacity,
+      documentMarks: documentMarks,
     ).paint(canvas, size);
     for (final drawing in drawings) {
       AnnotationPainter(
@@ -293,9 +302,18 @@ class PlanThumbnail extends StatelessWidget {
       (size.width * pixelRatio).round(),
       (size.height * pixelRatio).round(),
     );
-    final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    image.dispose();
-    return data?.buffer.asUint8List();
+    try {
+      if (jpeg) {
+        final raw = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+        if (raw != null) {
+          return await PdfSafeImage.encodeJpeg(raw, image.width, image.height);
+        }
+      }
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      return data?.buffer.asUint8List();
+    } finally {
+      image.dispose();
+    }
   }
 
   @override
