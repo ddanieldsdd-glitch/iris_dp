@@ -15,7 +15,8 @@ import '../model/bible_block_layout.dart';
 import '../model/bible_document.dart';
 import '../model/bible_page.dart';
 import '../theme/bible_theme.dart';
-import '../widgets/bible_block_compositor.dart';
+import '../renderer/bible_moodboard_v2_host.dart';
+import '../renderer/bible_page_renderer.dart';
 import 'bible_block_inspector.dart';
 
 /// Editor canvas v2: Pages | Canvas | Inspector.
@@ -131,13 +132,21 @@ class _BibleCanvasEditorState extends State<BibleCanvasEditor> {
         title: const Text('Renombrar página'),
         content: TextField(controller: ctrl, autofocus: true),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Guardar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Guardar'),
+          ),
         ],
       ),
     );
     if (label == null || label.isEmpty || label == page.label) return;
-    _apply(RenamePageCommand(pageId: page.id, fromLabel: page.label, toLabel: label));
+    _apply(
+      RenamePageCommand(pageId: page.id, fromLabel: page.label, toLabel: label),
+    );
   }
 
   void _movePage(int delta) {
@@ -149,14 +158,18 @@ class _BibleCanvasEditorState extends State<BibleCanvasEditor> {
     if (idx < 0 || newIdx < 0 || newIdx >= pages.length) return;
     final item = pages.removeAt(idx);
     pages.insert(newIdx, item);
-    _apply(ReorderPagesCommand(fromOrder: widget.document.pages, toOrder: pages));
+    _apply(
+      ReorderPagesCommand(fromOrder: widget.document.pages, toOrder: pages),
+    );
   }
 
   void _changeTheme(String themeId) {
-    _apply(UpdateThemeCommand(
-      fromThemeId: widget.document.themeId,
-      toThemeId: themeId,
-    ));
+    _apply(
+      UpdateThemeCommand(
+        fromThemeId: widget.document.themeId,
+        toThemeId: themeId,
+      ),
+    );
   }
 
   void _addBlock(BibleBlockKind kind) {
@@ -318,12 +331,14 @@ class _BibleCanvasEditorState extends State<BibleCanvasEditor> {
           ...block.content,
           'image': {'path': stored, 'source': 'local'},
         };
-        _apply(UpdateBlockContentCommand(
-          pageId: page.id,
-          blockId: block.id,
-          from: from,
-          to: to,
-        ));
+        _apply(
+          UpdateBlockContentCommand(
+            pageId: page.id,
+            blockId: block.id,
+            from: from,
+            to: to,
+          ),
+        );
       },
     );
   }
@@ -391,31 +406,7 @@ class _BibleCanvasEditorState extends State<BibleCanvasEditor> {
                             onAdd: () => _showAddSheet(context),
                             onBrowseTemplates: widget.onBrowseTemplates,
                           )
-                        : SingleChildScrollView(
-                            padding: EdgeInsets.all(_theme.spacing.l),
-                            child: BibleBlockCompositor(
-                              blocks: page.blocks,
-                              theme: _theme,
-                              projectId: widget.projectId ?? widget.document.projectId,
-                              editing: editing,
-                              selectedBlockId: _selectedBlockId,
-                              onSelect: (id) =>
-                                  setState(() => _selectedBlockId = id),
-                              onBlockChanged: (b) {
-                                final from = page.blocks.firstWhere(
-                                  (x) => x.id == b.id,
-                                );
-                                _apply(
-                                  UpdateBlockContentCommand(
-                                    pageId: page.id,
-                                    blockId: b.id,
-                                    from: from.content,
-                                    to: b.content,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
+                        : _buildPageCanvas(page, editing),
                   ),
                 ),
                 if (editing && !widget.previewMode)
@@ -521,6 +512,40 @@ class _BibleCanvasEditorState extends State<BibleCanvasEditor> {
       },
     );
   }
+
+  Widget _buildPageCanvas(BiblePage page, bool editing) {
+    final renderer = BiblePageRenderer(
+      page: page,
+      document: widget.document,
+      mode: editing ? BiblePageRenderMode.edit : BiblePageRenderMode.view,
+      projectId: widget.projectId ?? widget.document.projectId,
+      bibleId: widget.bibleId,
+      sectionBuilder: BibleMoodboardV2Host.wrap(
+        projectId: widget.projectId ?? widget.document.projectId,
+        bibleId: widget.bibleId,
+      ),
+      selectedBlockId: _selectedBlockId,
+      onBlockSelected: (id) => setState(() => _selectedBlockId = id),
+      onBlockChanged: (b) {
+        final from = page.blocks.firstWhere((x) => x.id == b.id);
+        _apply(
+          UpdateBlockContentCommand(
+            pageId: page.id,
+            blockId: b.id,
+            from: from.content,
+            to: b.content,
+          ),
+        );
+      },
+    );
+    if (page.id == BibleMoodboardV2Host.pageId) {
+      return renderer;
+    }
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(_theme.spacing.l),
+      child: renderer,
+    );
+  }
 }
 
 Color? _parseHex(String? hex) {
@@ -591,10 +616,22 @@ class _Toolbar extends StatelessWidget {
           DropdownButton<String>(
             value: themeId,
             items: const [
-              DropdownMenuItem(value: BibleThemeIds.cinematic, child: Text('Cinematic')),
-              DropdownMenuItem(value: BibleThemeIds.technical, child: Text('Technical')),
-              DropdownMenuItem(value: BibleThemeIds.minimalist, child: Text('Minimalist')),
-              DropdownMenuItem(value: BibleThemeIds.custom, child: Text('Custom')),
+              DropdownMenuItem(
+                value: BibleThemeIds.cinematic,
+                child: Text('Cinematic'),
+              ),
+              DropdownMenuItem(
+                value: BibleThemeIds.technical,
+                child: Text('Technical'),
+              ),
+              DropdownMenuItem(
+                value: BibleThemeIds.minimalist,
+                child: Text('Minimalist'),
+              ),
+              DropdownMenuItem(
+                value: BibleThemeIds.custom,
+                child: Text('Custom'),
+              ),
             ],
             onChanged: (v) {
               if (v != null) onThemeChanged(v);
@@ -656,7 +693,9 @@ class _PagesRail extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                Expanded(child: Text('PAGES', style: AppTypography.label(palette))),
+                Expanded(
+                  child: Text('PAGES', style: AppTypography.label(palette)),
+                ),
                 IconButton(
                   tooltip: 'Nueva página',
                   onPressed: onAddPage,
@@ -690,11 +729,23 @@ class _PagesRail extends StatelessWidget {
                         }
                       },
                       itemBuilder: (_) => [
-                        const PopupMenuItem(value: 'rename', child: Text('Renombrar')),
-                        const PopupMenuItem(value: 'dup', child: Text('Duplicar')),
+                        const PopupMenuItem(
+                          value: 'rename',
+                          child: Text('Renombrar'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'dup',
+                          child: Text('Duplicar'),
+                        ),
                         const PopupMenuItem(value: 'up', child: Text('Subir')),
-                        const PopupMenuItem(value: 'down', child: Text('Bajar')),
-                        const PopupMenuItem(value: 'del', child: Text('Eliminar')),
+                        const PopupMenuItem(
+                          value: 'down',
+                          child: Text('Bajar'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'del',
+                          child: Text('Eliminar'),
+                        ),
                       ],
                     )
                   : null,
@@ -718,10 +769,7 @@ class _EmptyPage extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Página vacía',
-            style: AppTypography.titleMedium(palette),
-          ),
+          Text('Página vacía', style: AppTypography.titleMedium(palette)),
           const SizedBox(height: 8),
           Text(
             'Añade widgets o usa un layout preset.',

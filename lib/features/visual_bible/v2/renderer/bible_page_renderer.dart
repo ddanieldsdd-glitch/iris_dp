@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../layout/page_layout_recipe.dart';
 import '../layout/page_layout_recipe_registry.dart';
+import '../model/bible_block.dart';
 import '../model/bible_document.dart';
 import '../model/bible_page.dart';
-import '../model/bible_page_mode.dart';
 import '../theme/bible_theme.dart';
 import '../widgets/bible_block_compositor.dart';
 
@@ -25,6 +25,7 @@ class BiblePageRenderer extends StatelessWidget {
   /// Inspector / selección en modo edición.
   final ValueChanged<String?>? onBlockSelected;
   final String? selectedBlockId;
+  final ValueChanged<BibleBlock>? onBlockChanged;
 
   const BiblePageRenderer({
     super.key,
@@ -36,24 +37,25 @@ class BiblePageRenderer extends StatelessWidget {
     this.sectionBuilder,
     this.onBlockSelected,
     this.selectedBlockId,
+    this.onBlockChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (page.pageMode == BiblePageMode.recipe) {
-      final sectionId = page.legacySectionId ?? page.id;
+    if (page.id == 'moodboard') {
       final builder = sectionBuilder;
-      if (builder != null && sectionId.isNotEmpty) {
+      if (builder != null) {
+        final sectionId = page.legacySectionId ?? page.id;
         return builder(sectionId);
       }
     }
 
     final theme = page.themeId != null
         ? document.themes
-              .where((t) => t.id == page.themeId)
-              .cast<BibleTheme?>()
-              .firstOrNull ??
-          BibleTheme.builtin(page.themeId!)
+                  .where((t) => t.id == page.themeId)
+                  .cast<BibleTheme?>()
+                  .firstOrNull ??
+              BibleTheme.builtin(page.themeId!)
         : document.resolvedTheme;
 
     return BibleBlockCompositor(
@@ -62,9 +64,8 @@ class BiblePageRenderer extends StatelessWidget {
       projectId: projectId ?? document.projectId,
       editing: mode == BiblePageRenderMode.edit,
       selectedBlockId: selectedBlockId,
-      onSelect: onBlockSelected == null
-          ? null
-          : (id) => onBlockSelected!(id),
+      onSelect: onBlockSelected == null ? null : (id) => onBlockSelected!(id),
+      onBlockChanged: onBlockChanged,
     );
   }
 
