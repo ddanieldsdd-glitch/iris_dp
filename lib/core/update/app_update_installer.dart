@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -101,13 +102,10 @@ Future<void> _applyWindowsUpdate(String zipPath) async {
   final exePath = Platform.resolvedExecutable;
   final installDir = p.dirname(exePath);
   final batPath = p.join(tempDir.path, 'iris_apply_update.bat');
-  final bat = '''
-@echo off
-timeout /t 2 /nobreak >nul
-xcopy /E /Y /I "${stagingDir.path}\\*" "$installDir\\"
-start "" "$installDir\\iris_dp.exe"
-del "%~f0"
-''';
+  final bat = windowsUpdateScript(
+    stagingDir: stagingDir.path,
+    installDir: installDir,
+  );
   await File(batPath).writeAsString(bat);
 
   await Process.start(
@@ -116,6 +114,41 @@ del "%~f0"
     mode: ProcessStartMode.detached,
   );
   exit(0);
+}
+
+/// Lo que aplica la actualización en Windows cuando IRIS ya se ha cerrado.
+///
+/// Otra copia de IRIS abierta, aunque no tenga ventana, bloquea los archivos:
+/// se cierra primero. Si aun así no se puede copiar, avisa, para no volver a
+/// abrir la versión antigua como si nada.
+@visibleForTesting
+String windowsUpdateScript({
+  required String stagingDir,
+  required String installDir,
+}) {
+  final exe = '$installDir\\iris_dp.exe';
+  final exeForPowerShell = exe.replaceAll("'", "''");
+  return '''
+@echo off
+chcp 65001 >nul
+"%SystemRoot%\\System32\\PING.EXE" -n 3 127.0.0.1 >nul
+powershell -NoProfile -Command "Get-Process iris_dp -ErrorAction SilentlyContinue | Where-Object { \$_.Path -eq '$exeForPowerShell' } | Stop-Process -Force"
+set tries=0
+:copy
+xcopy /E /Y /I /Q "$stagingDir\\*" "$installDir\\" >nul
+if not errorlevel 1 goto done
+set /a tries+=1
+if %tries% geq 10 goto failed
+"%SystemRoot%\\System32\\PING.EXE" -n 3 127.0.0.1 >nul
+goto copy
+:failed
+powershell -NoProfile -Command "Add-Type -AssemblyName PresentationFramework; [void][System.Windows.MessageBox]::Show('No se pudo instalar la actualización porque hay archivos de IRIS en uso. Reinicia el equipo y vuelve a actualizar.', 'IRIS')"
+:done
+start "" "$exe"
+(goto) 2>nul & del "%~f0"
+'''
+      // cmd pierde las etiquetas de un .bat que no tenga CRLF.
+      .replaceAll(RegExp(r'\r?\n'), '\r\n');
 }
 
 bool get supportsInAppUpdate =>
