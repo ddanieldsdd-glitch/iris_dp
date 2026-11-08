@@ -87,12 +87,25 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
+        # El paso nativo de PDFium lo descarga de GitHub sin reintentar, y a
+        # veces falla. Desde el segundo intento, con detalle: sin él el
+        # registro solo dice «Building native assets failed».
         run: |
-          flutter build windows --release --no-tree-shake-icons `
-            --dart-define=SUPABASE_URL=$env:SUPABASE_URL `
-            --dart-define=SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY `
-            --dart-define=CLOUDINARY_CLOUD_NAME=$env:CLOUDINARY_CLOUD_NAME `
-            --dart-define=CLOUDINARY_UPLOAD_PRESET=$env:CLOUDINARY_UPLOAD_PRESET
+          $max = 3
+          for ($try = 1; $try -le $max; $try++) {
+            $detail = if ($try -gt 1) { @('--verbose') } else { @() }
+            flutter build windows --release --no-tree-shake-icons @detail `
+              --dart-define=SUPABASE_URL=$env:SUPABASE_URL `
+              --dart-define=SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY `
+              --dart-define=CLOUDINARY_CLOUD_NAME=$env:CLOUDINARY_CLOUD_NAME `
+              --dart-define=CLOUDINARY_UPLOAD_PRESET=$env:CLOUDINARY_UPLOAD_PRESET
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            if ($try -lt $max) {
+              Write-Host "::warning::Falló la compilación de Windows (intento $try de $max); se reintenta."
+              Start-Sleep -Seconds 30
+            }
+          }
+          exit 1
       - uses: actions/upload-artifact@v4
         with:
           name: iris-dp-windows
