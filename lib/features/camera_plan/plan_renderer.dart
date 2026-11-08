@@ -21,7 +21,12 @@ class PlanRenderer {
   final AppDatabase db;
   final int projectId;
   final PlanProjectData data;
-  final _store = <String, ui.Image?>{};
+
+  // Se guarda la tarea y no su resultado: los planos se preparan a la vez y
+  // una cenital grande no debe descomprimirse una vez por plano.
+  final _store = <String, Future<ui.Image?>>{};
+  final _backgrounds =
+      <(int?, int?), Future<({ui.Image? image, Rect? rect, double opacity})>>{};
 
   PlanRenderer._(this.db, this.projectId, this.data);
 
@@ -30,18 +35,20 @@ class PlanRenderer {
 
   Future<ui.Image?> _decode(String? path) async {
     if (path == null) return null;
-    if (_store.containsKey(path)) return _store[path];
-    ui.Image? image;
+    return _store[path] ??= _read(path);
+  }
+
+  Future<ui.Image?> _read(String path) async {
     try {
       final file = File(path);
       if (await file.exists()) {
         final codec = await ui.instantiateImageCodec(await file.readAsBytes());
-        image = (await codec.getNextFrame()).image;
+        return (await codec.getNextFrame()).image;
       }
     } catch (_) {
       // Una imagen que no se puede leer se queda sin pintar.
     }
-    return _store[path] = image;
+    return null;
   }
 
   Future<List<PlanImageDraw>> _images({
@@ -72,6 +79,14 @@ class PlanRenderer {
   List<PlanElement> _visible(List<PlanElement> list, bool light) =>
       light ? list : list.where((e) => e.type != ElementType.light).toList();
 
+  /// Las luces heredadas, que en un documento van a plena fuerza.
+  List<PlanElement> _lightsOf(List<PlanElement> list, bool light) => light
+      ? list.where((e) => e.type == ElementType.light).toList()
+      : const [];
+
+  List<PlanElement> _withoutLights(List<PlanElement> list) =>
+      list.where((e) => e.type != ElementType.light).toList();
+
   /// Recorrido de un plano secuencia, de zona a zona.
   List<List<Offset>> _routeOf(Shot shot) {
     final points = [
@@ -83,6 +98,11 @@ class PlanRenderer {
 
   /// La cenital de la localización o el set, si tiene.
   Future<({ui.Image? image, Rect? rect, double opacity})> _background(
+    int? siteId,
+    int? setId,
+  ) => _backgrounds[(siteId, setId)] ??= _readBackground(siteId, setId);
+
+  Future<({ui.Image? image, Rect? rect, double opacity})> _readBackground(
     int? siteId,
     int? setId,
   ) async {
@@ -110,13 +130,17 @@ class PlanRenderer {
         data.set(setId)?.siteId ?? data.scene(shot.sceneId)?.locationSiteId;
     final (:focus, :crop) = data.framingOf(shot);
     final background = await _background(siteId, setId);
+    final base = data.baseOfShot(shot);
     return PlanPicture(
-      elements: _visible([
-        if (setup != null) ...data.groupLightOf(setup),
-        ...data.lightOfShot(shot),
-        ...data.ownOfShot(shot),
-      ], light),
-      inherited: _visible(data.baseOfShot(shot), light),
+      elements: [
+        ..._lightsOf(base, light),
+        ..._visible([
+          if (setup != null) ...data.groupLightOf(setup),
+          ...data.lightOfShot(shot),
+          ...data.ownOfShot(shot),
+        ], light),
+      ],
+      inherited: _withoutLights(base),
       drawings: data.drawingsOfShot(shot),
       focus: focus,
       crop: crop,
@@ -141,12 +165,16 @@ class PlanRenderer {
     final setId = setup.locationBasePlanId;
     final siteId = data.siteIdOfSetup(setup);
     final background = await _background(siteId, setId);
+    final base = data.inheritedOfSetup(setup);
     return PlanPicture(
-      elements: _visible([
-        ...data.groupLightOf(setup),
-        ...data.ownOfSetup(setup),
-      ], light),
-      inherited: _visible(data.inheritedOfSetup(setup), light),
+      elements: [
+        ..._lightsOf(base, light),
+        ..._visible([
+          ...data.groupLightOf(setup),
+          ...data.ownOfSetup(setup),
+        ], light),
+      ],
+      inherited: _withoutLights(base),
       drawings: data.drawingsOfSetup(setup),
       crop: data.documentViewOf(setup),
       images: await _images(
@@ -166,6 +194,7 @@ class PlanRenderer {
     Size size = const Size(640, 420),
     double pixelRatio = 1,
     Rect? view,
+    bool jpeg = false,
   }) => PlanThumbnail.renderPng(
     elements: picture.elements,
     inherited: picture.inherited,
@@ -179,6 +208,8 @@ class PlanRenderer {
     backgroundRect: picture.backgroundRect,
     backgroundOpacity: picture.backgroundOpacity,
     pixelRatio: pixelRatio,
+    documentMarks: true,
+    jpeg: jpeg,
   );
 
   /// La planta de un plano, con su sección elegida. Nula si no hay nada.
@@ -191,6 +222,7 @@ class PlanRenderer {
     await shotPicture(shot, light: light),
     size: size,
     pixelRatio: pixelRatio,
+    jpeg: true,
   );
 
   /// La planta general de un esquema de luz, con su sección si tiene.
@@ -203,6 +235,7 @@ class PlanRenderer {
     await setupPicture(setup, light: light),
     size: size,
     pixelRatio: pixelRatio,
+    jpeg: true,
   );
 }
 

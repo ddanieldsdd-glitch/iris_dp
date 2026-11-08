@@ -105,6 +105,15 @@ abstract final class PdfSafeImage {
     }
   }
 
+  /// Una imagen opaca en crudo, en JPEG y fuera del hilo de la interfaz.
+  static Future<Uint8List> encodeJpeg(ByteData rgba, int width, int height) {
+    final bytes = rgba.buffer.asUint8List(
+      rgba.offsetInBytes,
+      rgba.lengthInBytes,
+    );
+    return Isolate.run(() => _jpeg(bytes, width, height, quality: 90));
+  }
+
   static bool _opaque(ByteData rgba) {
     final bytes = rgba.buffer.asUint8List(rgba.offsetInBytes, rgba.lengthInBytes);
     for (var i = 3; i < bytes.length; i += 4) {
@@ -113,14 +122,19 @@ abstract final class PdfSafeImage {
     return true;
   }
 
-  static Uint8List _jpeg(Uint8List rgba, int width, int height) {
+  static Uint8List _jpeg(
+    Uint8List rgba,
+    int width,
+    int height, {
+    int quality = 85,
+  }) {
     final image = img.Image.fromBytes(
       width: width,
       height: height,
       bytes: rgba.buffer,
       numChannels: 4,
     );
-    return Uint8List.fromList(img.encodeJpg(image, quality: 85));
+    return Uint8List.fromList(img.encodeJpg(image, quality: quality));
   }
 
   static Uint8List? loadFromPathSync(String? path) {

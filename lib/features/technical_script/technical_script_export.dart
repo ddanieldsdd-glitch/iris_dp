@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart' show Color;
 
 import '../../core/database/app_database.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/export_cancel.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/utils/scene_characters.dart';
@@ -128,6 +129,7 @@ Future<ScriptDocRow> _docRow(
   bool storyboard = false,
   bool references = true,
 }) async {
+  ExportCancel.check();
   final cellFills = <String, int>{};
   final raw = shot.cellStylesJson;
   if (raw != null && raw.isNotEmpty) {

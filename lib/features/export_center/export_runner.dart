@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/utils/export_file_saver.dart';
+import '../../core/utils/pdf_safe_image.dart';
 import '../../shared/pdf_export/shooting_plan_pdf.dart';
 import '../../shared/pdf_export/storyboard_pdf.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
@@ -102,11 +103,13 @@ class ExportRunner {
   Future<Uint8List> preview(
     List<ExportDaySection> sections,
     ExportOptions options,
-  ) => switch (options.document) {
-    ExportDocument.storyboard => _storyboard(sections, options),
-    ExportDocument.shootingPlan => _plan(sections, options),
-    ExportDocument.technicalScript => _script(sections, options, word: false),
-  };
+  ) => PdfSafeImage.withExportCache(
+    () => switch (options.document) {
+      ExportDocument.storyboard => _storyboard(sections, options),
+      ExportDocument.shootingPlan => _plan(sections, options),
+      ExportDocument.technicalScript => _script(sections, options, word: false),
+    },
+  );
 
   /// Los archivos que salen de [sections] con esas opciones.
   List<ExportFile> files(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -11,6 +12,7 @@ import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/utils/export_cancel.dart';
 import '../../core/utils/share_origin.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../../core/utils/user_error.dart';
@@ -83,11 +85,19 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
   bool _ready = false;
   bool _saving = false;
 
-  Uint8List? _preview;
+  _PreviewDoc? _preview;
   Object? _previewError;
   bool _building = false;
   int _version = 0;
   Timer? _debounce;
+
+  /// Lo ya montado en esta sesión: volver a un modo es inmediato.
+  final _previewCache = <String, _PreviewDoc>{};
+  static const _previewsKept = 8;
+  int _previewSerial = 0;
+
+  /// Vista previa de todo el documento, en vez de los primeros planos.
+  bool _previewAll = false;
 
   final _openDays = <int>{};
 
@@ -178,6 +188,7 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
     final source = await ExportSource.load(db, widget.projectId);
     final plans = await PlanProjectData.load(db, widget.projectId);
     if (!mounted || source == null) return;
+    _previewCache.clear();
     setState(() {
       _source = source;
       _plans = plans;
@@ -245,6 +256,7 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
   }
 
   void _setOptions(ExportOptions options) {
+    _previewAll = false;
     setState(() => _options = options);
     unawaited(options.copyWith(scope: _selection.scope).save(widget.projectId));
     _schedulePreview();
@@ -260,15 +272,37 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
     unawaited(_options.copyWith(scope: scope).save(widget.projectId));
   }
 
+  /// Identifica lo que se ve: documento, formato, lo elegido y su alcance.
+  String get _previewKey => jsonEncode([
+    _effective.toJson(),
+    _selection.blockIds.toList()..sort(),
+    _selection.shotIds.toList()..sort(),
+    _previewAll,
+  ]);
+
   void _schedulePreview() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 450), _buildPreview);
+    // Cualquier montaje en curso se queda viejo ya, no al acabar la espera.
+    final version = ++_version;
+    final cached = _previewCache[_previewKey];
+    if (cached != null) {
+      setState(() {
+        _preview = cached;
+        _previewError = null;
+        _building = false;
+      });
+      return;
+    }
+    setState(() => _building = true);
+    _debounce = Timer(
+      const Duration(milliseconds: 250),
+      () => _buildPreview(version),
+    );
   }
 
-  Future<void> _buildPreview() async {
+  Future<void> _buildPreview(int version) async {
     final source = _source;
     if (source == null) return;
-    final version = ++_version;
     if (!_canExport) {
       setState(() {
         _preview = null;
@@ -277,16 +311,31 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
       });
       return;
     }
-    setState(() => _building = true);
+    final key = _previewKey;
+    final sample = previewSample(
+      _sections,
+      _previewAll ? 1 << 30 : _options.previewShots,
+    );
+    final runner = ExportRunner(ref.read(databaseProvider), source, _settings);
+    final options = _effective;
     try {
-      final bytes = await ExportRunner(
-        ref.read(databaseProvider),
-        source,
-        _settings,
-      ).preview(_sections, _effective);
+      final bytes = await ExportCancel.run(
+        () => version != _version,
+        () => runner.preview(sample.sections, options),
+      );
       if (!mounted || version != _version) return;
+      final preview = _PreviewDoc(
+        bytes,
+        'exportacion_${++_previewSerial}.pdf',
+        shown: sample.shown,
+        total: sample.total,
+      );
+      _previewCache[key] = preview;
+      while (_previewCache.length > _previewsKept) {
+        _previewCache.remove(_previewCache.keys.first);
+      }
       setState(() {
-        _preview = bytes;
+        _preview = preview;
         _previewError = null;
         _building = false;
       });
@@ -336,6 +385,7 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
       widget.projectId,
     );
     if (!mounted || source == null) return;
+    _previewCache.clear();
     setState(() {
       _source = source;
       _selection = _selection.copyWith(blockIds: _allBlocks(source));
@@ -344,16 +394,16 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
   }
 
   void _openPreviewPage() {
-    final bytes = _preview;
+    final preview = _preview;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => Scaffold(
           appBar: AppBar(title: const Text('Vista previa')),
-          body: bytes == null
+          body: preview == null
               ? const Center(child: CircularProgressIndicator())
               : PdfViewer.data(
-                  bytes,
-                  sourceName: 'exportacion_$_version.pdf',
+                  preview.bytes,
+                  sourceName: preview.name,
                   params: const PdfViewerParams(margin: 12),
                 ),
         ),
@@ -489,7 +539,9 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
                     child: IconButton(
                       tooltip: 'Vista previa',
                       icon: const Icon(Icons.visibility_outlined),
-                      onPressed: _preview == null ? null : _openPreviewPage,
+                      onPressed: _preview == null || _building
+                          ? null
+                          : _openPreviewPage,
                     ),
                   ),
                 FilledButton.icon(
@@ -810,22 +862,37 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
     ];
   }
 
-  List<Widget> _storyboardFormat(AppPalette palette) => [
-    Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.xs,
+  Widget _lookChips(AppPalette palette, String title, bool sheets) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final look in StoryboardLook.values)
-          Tooltip(
-            message: look.hint,
-            child: ChoiceChip(
-              label: Text(look.label),
-              selected: _options.look == look,
-              onSelected: (_) => _setOptions(_options.copyWith(look: look)),
-            ),
-          ),
+        Text(title, style: AppTypography.caption(palette)),
+        const SizedBox(height: AppSpacing.xs),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            for (final look in StoryboardLook.values)
+              if (look.isSheet == sheets)
+                Tooltip(
+                  message: look.hint,
+                  child: ChoiceChip(
+                    label: Text(look.label),
+                    selected: _options.look == look,
+                    onSelected: (_) =>
+                        _setOptions(_options.copyWith(look: look)),
+                  ),
+                ),
+          ],
+        ),
       ],
     ),
+  );
+
+  List<Widget> _storyboardFormat(AppPalette palette) => [
+    _lookChips(palette, 'Varios planos por hoja', false),
+    _lookChips(palette, 'Una hoja por plano', true),
     Padding(
       padding: const EdgeInsets.only(top: AppSpacing.xs),
       child: Text(_options.look.hint, style: AppTypography.caption(palette)),
@@ -911,6 +978,32 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
     ];
   }
 
+  Widget _partialNotice(AppPalette palette, _PreviewDoc preview) => Material(
+    color: palette.surfaceElevated,
+    borderRadius: BorderRadius.circular(8),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Vista previa con los ${preview.shown} primeros de '
+              '${preview.total} planos. El archivo sale completo.',
+              style: AppTypography.caption(palette),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              _previewAll = true;
+              _schedulePreview();
+            },
+            child: const Text('Ver todo'),
+          ),
+        ],
+      ),
+    ),
+  );
+
   Widget _previewPane(AppPalette palette) {
     final Widget content;
     if (_previewError != null) {
@@ -925,10 +1018,12 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
         ),
       );
     } else if (_preview != null) {
+      // El visor guarda cada documento por su nombre: uno nuevo necesita un
+      // nombre nuevo o enseñaría el anterior.
       content = PdfViewer.data(
-        _preview!,
-        key: ValueKey(_preview),
-        sourceName: 'exportacion_$_version.pdf',
+        _preview!.bytes,
+        key: ValueKey(_preview!.name),
+        sourceName: _preview!.name,
         params: const PdfViewerParams(margin: 16),
       );
     } else if (_building) {
@@ -947,20 +1042,56 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
         fit: StackFit.expand,
         children: [
           content,
-          if (_building && _preview != null)
-            const Positioned(
-              top: AppSpacing.md,
+          if (_preview case final preview? when preview.partial && !_building)
+            Positioned(
+              left: AppSpacing.md,
               right: AppSpacing.md,
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+              bottom: AppSpacing.md,
+              child: _partialNotice(palette, preview),
+            ),
+          // Lo que se ve ya no es lo elegido: que no parezca que no cambia.
+          if (_building && _preview != null)
+            Positioned.fill(
+              child: ColoredBox(
+                color: palette.background.withValues(alpha: 0.78),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'Actualizando la vista previa…',
+                        style: AppTypography.bodyMedium(palette),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
         ],
       ),
     );
   }
+}
+
+/// Una vista previa ya montada.
+class _PreviewDoc {
+  final Uint8List bytes;
+
+  /// Único para cada documento: el visor los guarda por nombre.
+  final String name;
+  final int shown;
+  final int total;
+
+  const _PreviewDoc(
+    this.bytes,
+    this.name, {
+    required this.shown,
+    required this.total,
+  });
+
+  bool get partial => shown < total;
 }
 
 /// Las tres tarjetas de documento, cada una con su dibujo.

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -103,8 +104,6 @@ class _PlanViewPicker extends ConsumerStatefulWidget {
 }
 
 class _PlanViewPickerState extends ConsumerState<_PlanViewPicker> {
-  static const _minSide = 80.0;
-
   PlanRenderer? _renderer;
   PlanPicture? _picture;
   bool _loaded = false;
@@ -115,17 +114,24 @@ class _PlanViewPickerState extends ConsumerState<_PlanViewPicker> {
   Size? _renderedFor;
 
   /// Sección que se está eligiendo, en coordenadas de la planta. Nula: aún
-  /// no se ha tocado.
-  late Rect? _rect = widget.initial ?? widget.zone;
+  /// no se ha tocado. Arrastrarla repinta solo el recuadro.
+  late final _selection = ValueNotifier<Rect?>(widget.initial ?? widget.zone);
 
-  /// La que se ve ahora en el lienzo.
-  Rect? _shown;
-  Offset? _dragStart;
+  /// La sección si aún no se ha tocado: casi toda la planta.
+  Rect? get _fallback => _view?.deflate(_view!.shortestSide * 0.1);
+
+  Rect? get _current => _selection.value ?? _fallback;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _selection.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -217,12 +223,12 @@ class _PlanViewPickerState extends ConsumerState<_PlanViewPicker> {
                       TextButton(
                         onPressed: _view == null
                             ? null
-                            : () => setState(() => _rect = _view),
+                            : () => _selection.value = _view,
                         child: const Text('Toda la planta'),
                       ),
                       if (widget.zone != null)
                         TextButton(
-                          onPressed: () => setState(() => _rect = widget.zone),
+                          onPressed: () => _selection.value = widget.zone,
                           child: const Text('Zona del set'),
                         ),
                     ],
@@ -235,9 +241,9 @@ class _PlanViewPickerState extends ConsumerState<_PlanViewPicker> {
                         child: const Text('Cancelar'),
                       ),
                       FilledButton(
-                        onPressed: _shown == null && _rect == null
+                        onPressed: _current == null
                             ? null
-                            : () => _save(_rect ?? _shown),
+                            : () => _save(_current),
                         child: const Text('Usar esta sección'),
                       ),
                     ],
@@ -281,96 +287,182 @@ class _PlanViewPickerState extends ConsumerState<_PlanViewPicker> {
       drawn: null,
       crop: whole,
     );
-    final rect = _rect ?? whole.deflate(whole.shortestSide * 0.1);
-    _shown = rect;
-    final shown = Rect.fromPoints(
-      rect.topLeft * scale + offset,
-      rect.bottomRight * scale + offset,
+    return PlanSectionCanvas(
+      selection: _selection,
+      fallback: _fallback!,
+      scale: scale,
+      offset: offset,
+      child: Image.memory(png, fit: BoxFit.fill, gaplessPlayback: true),
     );
+  }
+}
 
-    void update(Rect next) => setState(() => _rect = next);
-    Offset toPlan(Offset local) => (local - offset) / scale;
+/// Reconoce el arrastre desde que se toca, sin esperar a ver si es un scroll:
+/// el diálogo se desplaza y le quitaría el gesto en pantallas táctiles.
+class _ImmediatePan extends PanGestureRecognizer {
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
+  }
+}
 
-    Widget corner(Alignment at) {
-      return Positioned(
-        left: at.x < 0 ? shown.left - 14 : shown.right - 14,
-        top: at.y < 0 ? shown.top - 14 : shown.bottom - 14,
-        width: 28,
-        height: 28,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onPanUpdate: (d) {
-            final delta = d.delta / scale;
-            var left = rect.left, top = rect.top;
-            var right = rect.right, bottom = rect.bottom;
-            if (at.x < 0) {
-              left = math.min(left + delta.dx, right - _minSide);
-            } else {
-              right = math.max(right + delta.dx, left + _minSide);
-            }
-            if (at.y < 0) {
-              top = math.min(top + delta.dy, bottom - _minSide);
-            } else {
-              bottom = math.max(bottom + delta.dy, top + _minSide);
-            }
-            update(Rect.fromLTRB(left, top, right, bottom));
-          },
-          child: Center(
-            child: Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                color: palette.accent,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5),
-              ),
-            ),
+/// La planta con el recuadro de la sección encima.
+///
+/// El ratón manda varios movimientos por fotograma: cada uno se suma a la
+/// sección de ese instante, no a la del último repintado.
+class PlanSectionCanvas extends StatefulWidget {
+  final ValueNotifier<Rect?> selection;
+
+  /// La sección mientras [selection] sea nula.
+  final Rect fallback;
+  final double scale;
+  final Offset offset;
+  final Widget child;
+
+  const PlanSectionCanvas({
+    super.key,
+    required this.selection,
+    required this.fallback,
+    required this.scale,
+    required this.offset,
+    required this.child,
+  });
+
+  @override
+  State<PlanSectionCanvas> createState() => _PlanSectionCanvasState();
+}
+
+class _PlanSectionCanvasState extends State<PlanSectionCanvas> {
+  static const _minSide = 80.0;
+
+  Offset? _dragStart;
+
+  Rect get _rect => widget.selection.value ?? widget.fallback;
+
+  Offset _toPlan(Offset local) => (local - widget.offset) / widget.scale;
+
+  void _resize(Alignment at, Offset delta) {
+    final rect = _rect;
+    var left = rect.left, top = rect.top;
+    var right = rect.right, bottom = rect.bottom;
+    if (at.x < 0) {
+      left = math.min(left + delta.dx, right - _minSide);
+    } else {
+      right = math.max(right + delta.dx, left + _minSide);
+    }
+    if (at.y < 0) {
+      top = math.min(top + delta.dy, bottom - _minSide);
+    } else {
+      bottom = math.max(bottom + delta.dy, top + _minSide);
+    }
+    widget.selection.value = Rect.fromLTRB(left, top, right, bottom);
+  }
+
+  Widget _pan({
+    GestureDragStartCallback? onStart,
+    required GestureDragUpdateCallback onUpdate,
+    GestureDragEndCallback? onEnd,
+    required Widget child,
+  }) => RawGestureDetector(
+    behavior: HitTestBehavior.opaque,
+    gestures: {
+      _ImmediatePan: GestureRecognizerFactoryWithHandlers<_ImmediatePan>(
+        _ImmediatePan.new,
+        (pan) => pan
+          ..dragStartBehavior = DragStartBehavior.down
+          ..onStart = onStart
+          ..onUpdate = onUpdate
+          ..onEnd = onEnd,
+      ),
+    },
+    child: child,
+  );
+
+  Widget _corner(Rect shown, Alignment at, Color color) => Positioned(
+    left: at.x < 0 ? shown.left - 14 : shown.right - 14,
+    top: at.y < 0 ? shown.top - 14 : shown.bottom - 14,
+    width: 28,
+    height: 28,
+    child: _pan(
+      onUpdate: (d) => _resize(at, d.delta / widget.scale),
+      child: Center(
+        child: Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 1.5),
           ),
         ),
-      );
-    }
+      ),
+    ),
+  );
 
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
     return Stack(
       children: [
         // Fuera del recuadro, arrastrar marca una sección nueva.
         Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanStart: (d) => _dragStart = toPlan(d.localPosition),
-            onPanUpdate: (d) {
+          child: _pan(
+            onStart: (d) => _dragStart = _toPlan(d.localPosition),
+            onUpdate: (d) {
               final start = _dragStart;
               if (start == null) return;
-              final next = Rect.fromPoints(start, toPlan(d.localPosition));
+              final next = Rect.fromPoints(start, _toPlan(d.localPosition));
               if (next.width >= _minSide && next.height >= _minSide) {
-                update(next);
+                widget.selection.value = next;
               }
             },
-            onPanEnd: (_) => _dragStart = null,
-            child: Image.memory(png, fit: BoxFit.fill, gaplessPlayback: true),
+            onEnd: (_) => _dragStart = null,
+            child: RepaintBoundary(child: widget.child),
           ),
         ),
         Positioned.fill(
-          child: IgnorePointer(
-            child: CustomPaint(
-              painter: _DimOutside(hole: shown, stroke: palette.accent),
-            ),
+          child: ValueListenableBuilder<Rect?>(
+            valueListenable: widget.selection,
+            builder: (_, value, _) {
+              final rect = value ?? widget.fallback;
+              final shown = Rect.fromPoints(
+                rect.topLeft * widget.scale + widget.offset,
+                rect.bottomRight * widget.scale + widget.offset,
+              );
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        painter: _DimOutside(
+                          hole: shown,
+                          stroke: palette.accent,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned.fromRect(
+                    rect: shown,
+                    child: _pan(
+                      onUpdate: (d) => widget.selection.value = _rect.shift(
+                        d.delta / widget.scale,
+                      ),
+                      child: const MouseRegion(
+                        cursor: SystemMouseCursors.move,
+                        child: SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                  _corner(shown, Alignment.topLeft, palette.accent),
+                  _corner(shown, Alignment.topRight, palette.accent),
+                  _corner(shown, Alignment.bottomLeft, palette.accent),
+                  _corner(shown, Alignment.bottomRight, palette.accent),
+                ],
+              );
+            },
           ),
         ),
-        Positioned.fromRect(
-          rect: shown,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanUpdate: (d) => update(rect.shift(d.delta / scale)),
-            child: const MouseRegion(
-              cursor: SystemMouseCursors.move,
-              child: SizedBox.expand(),
-            ),
-          ),
-        ),
-        corner(Alignment.topLeft),
-        corner(Alignment.topRight),
-        corner(Alignment.bottomLeft),
-        corner(Alignment.bottomRight),
       ],
     );
   }
@@ -386,11 +478,10 @@ class _DimOutside extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawPath(
-      Path.combine(
-        PathOperation.difference,
-        Path()..addRect(Offset.zero & size),
-        Path()..addRect(hole),
-      ),
+      Path()
+        ..fillType = PathFillType.evenOdd
+        ..addRect(Offset.zero & size)
+        ..addRect(hole),
       Paint()..color = Colors.black.withValues(alpha: 0.5),
     );
     canvas.drawRect(

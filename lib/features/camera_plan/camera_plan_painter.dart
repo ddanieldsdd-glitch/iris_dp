@@ -215,6 +215,11 @@ class CameraPlanPainter extends CustomPainter {
   /// [PlanLightMapCache.draft]) y se afina al parar.
   final bool interacting;
 
+  /// Planta para un documento: se ve encogida en media página, así que
+  /// cámaras, actores y luces guardan un tamaño legible y los haces se ven
+  /// sin el mapa de luz del editor.
+  final bool documentMarks;
+
   CameraPlanPainter({
     required this.elements,
     required this.palette,
@@ -252,6 +257,7 @@ class CameraPlanPainter extends CustomPainter {
     this.lightMap,
     this.images = const [],
     this.interacting = false,
+    this.documentMarks = false,
   }) : _fixedScale = scale,
        _fixedOffset = offset,
        _contents = PlanLightKey.drawing([
@@ -1980,6 +1986,15 @@ class CameraPlanPainter extends CustomPainter {
     canvas.drawPath(path, paint..style = PaintingStyle.fill);
   }
 
+  /// Cuánto crecen las marcas de un documento para verse a [_documentMarkSize]
+  /// veces su tamaño, por mucho que se aleje la planta.
+  double get _documentMarkScale => documentMarks
+      ? (_documentMarkSize / scale).clamp(1.0, _documentMarkMax).toDouble()
+      : 1;
+
+  static const _documentMarkSize = 0.52;
+  static const _documentMarkMax = 3.0;
+
   void _drawElement(
     Canvas canvas,
     PlanElement el, {
@@ -2009,9 +2024,15 @@ class CameraPlanPainter extends CustomPainter {
           ..strokeWidth = 2,
       );
     }
+    final grows =
+        el.type == ElementType.camera ||
+        el.type == ElementType.actor ||
+        (el.type == ElementType.light && !_isGripBar(el));
+    final marks = _documentMarkScale;
     canvas.save();
     canvas.translate(el.position.dx, el.position.dy);
     canvas.rotate(el.rotation * math.pi / 180);
+    if (grows && marks != 1) canvas.scale(marks);
 
     switch (el.type) {
       case ElementType.camera:
@@ -2056,6 +2077,7 @@ class CameraPlanPainter extends CustomPainter {
     // Los rótulos no giran con el elemento: siempre se leen del derecho.
     canvas.save();
     canvas.translate(el.position.dx, el.position.dy);
+    if (el.type != ElementType.wall && marks != 1) canvas.scale(marks);
     if (PlanCategory.hasUnrealAsset(el)) _drawUnrealBadge(canvas);
     switch (el.type) {
       case ElementType.camera:
@@ -2198,7 +2220,7 @@ class CameraPlanPainter extends CustomPainter {
     _drawLabelBelow(
       canvas,
       name,
-      _CanvasColors.inkSecondary,
+      documentMarks ? _CanvasColors.ink : _CanvasColors.inkSecondary,
       yOffset: 20,
       maxWidth: 110,
     );
@@ -2479,6 +2501,11 @@ class CameraPlanPainter extends CustomPainter {
       }
       final stops =
           math.log(math.max(lux, _beamFloorLux) / _beamFloorLux) / math.ln2;
+      if (documentMarks) {
+        return math.pow((stops / 11).clamp(0.0, 1.0), 1.15).toDouble() *
+            0.85 *
+            strength;
+      }
       return math.pow((stops / 16).clamp(0.0, 1.0), 1.7).toDouble() *
           0.5 *
           strength;
@@ -3049,6 +3076,22 @@ class CameraPlanPainter extends CustomPainter {
     }
     final beam = LightBeam.of(el);
     final lit = beam != null && !beam.off;
+    if (documentMarks && lit) {
+      // En papel, un disco del color de la luz la distingue del decorado.
+      canvas.drawCircle(
+        Offset.zero,
+        18,
+        Paint()..color = beam.color.withValues(alpha: 0.45),
+      );
+      canvas.drawCircle(
+        Offset.zero,
+        18,
+        Paint()
+          ..color = beam.color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    }
     final stroke = lit
         ? Color.lerp(LightSymbolColors.darkStroke, beam.color, 0.35)!
         : beam != null

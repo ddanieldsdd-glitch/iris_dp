@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/pdf_export_fonts.dart';
+import '../../core/utils/export_cancel.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -194,7 +195,10 @@ class StoryboardPdfExporter {
       regular: fonts.regular,
       bold: fonts.bold,
     );
-    final imageCache = await _preloadShotImages(parts);
+    // Las hojas por plano cargan sus imágenes una a una.
+    final imageCache = groupChoice?.mode == StoryboardGroupExportMode.asShots
+        ? const <int, Uint8List>{}
+        : await _preloadShotImages(parts);
 
     final effectiveStyle =
         groupChoice?.mode == StoryboardGroupExportMode.asShots
@@ -254,6 +258,7 @@ class StoryboardPdfExporter {
       for (final part in parts) {
         final scene = part.scene;
         for (final shot in part.shots) {
+          ExportCancel.check();
           hasPages = true;
           final data = await ShotSheetData.resolve(
             db: db,
@@ -343,8 +348,10 @@ class StoryboardPdfExporter {
     for (final part in parts) {
       for (final shot in part.shots) {
         if (cache.containsKey(shot.id)) continue;
+        ExportCancel.check();
         final bytes = await PdfSafeImage.loadFromPathMaxEdge(
           storyboardImageOf(shot),
+          maxEdge: 1400,
         );
         if (bytes != null) cache[shot.id] = bytes;
       }

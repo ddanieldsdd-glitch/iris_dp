@@ -73,6 +73,29 @@ class ExportDaySection {
 }
 
 /// Todo lo que hace falta para resolver una selección.
+/// Los [limit] primeros planos de [sections], para la vista previa.
+({List<ExportDaySection> sections, int shown, int total}) previewSample(
+  List<ExportDaySection> sections,
+  int limit,
+) {
+  final total = sections.fold<int>(0, (n, s) => n + s.shotCount);
+  if (total <= limit) return (sections: sections, shown: total, total: total);
+  final kept = <ExportDaySection>[];
+  var room = limit;
+  for (final section in sections) {
+    if (room == 0) break;
+    final scenes = <ExportSceneSection>[];
+    for (final tract in section.scenes) {
+      if (room == 0) break;
+      final shots = tract.shots.take(room).toList();
+      room -= shots.length;
+      scenes.add(ExportSceneSection(tract.scene, shots));
+    }
+    kept.add(ExportDaySection(section.day, scenes));
+  }
+  return (sections: kept, shown: limit, total: total);
+}
+
 class ExportSource {
   final Project project;
   final List<Scene> scenes;

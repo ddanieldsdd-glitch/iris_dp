@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:iris_dp/shared/pdf_export/shooting_plan_pdf.dart';
 
 ShootingPlanBlock _block(int n) => ShootingPlanBlock(
@@ -20,6 +24,39 @@ void main() {
     ShootingPlanPdf.debugEntryPages = {};
   });
   tearDown(() => ShootingPlanPdf.debugEntryPages = null);
+
+  test('un plano lleva todas sus imágenes en el PDF', () async {
+    Uint8List frame(int shade) => Uint8List.fromList(
+      img.encodeJpg(
+        img.Image(width: 16, height: 9)
+          ..clear(img.ColorRgb8(shade, shade, shade)),
+      ),
+    );
+    final bytes = await ShootingPlanPdf.compose(
+      projectName: 'Prueba',
+      days: [
+        ShootingPlanDay('Orden', [
+          ShootingPlanEntry('ESCENA 1 (1)', [
+            ShootingPlanBlock(
+              sceneLabel: '1',
+              shotNumber: 1,
+              slug: 'CALLE',
+              frames: [frame(10), frame(90), frame(170), frame(250)],
+            ),
+          ]),
+        ]),
+      ],
+    );
+    final raw = latin1.decode(bytes);
+    expect(RegExp(r'/Subtype\s*/Image').allMatches(raw).length, 4);
+  });
+
+  test('la rejilla de imágenes crece con su número', () {
+    expect(ShootingPlanPdf.frameGridColumns(1), 1);
+    expect(ShootingPlanPdf.frameGridColumns(2), 1);
+    expect(ShootingPlanPdf.frameGridColumns(4), 2);
+    expect(ShootingPlanPdf.frameGridColumns(9), 3);
+  });
 
   test('cada entrada del índice apunta a la página donde se pinta', () async {
     final days = [

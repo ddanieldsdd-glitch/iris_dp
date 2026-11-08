@@ -27,7 +27,7 @@ enum StoryboardLook {
   clean('Clean', 'Cada plano en su hoja, la imagen sola'),
   basic('Basic', 'Hoja por plano con encuadre y focal'),
   detail('Detail', 'Hoja por plano con cámara, paleta y notas'),
-  shotPlan('Shot plan', 'Hoja por plano con guion, planta y sol');
+  shotPlan('Shot plan', 'La más completa: hoja por plano con guion, planta y sol');
 
   final String label;
   final String hint;
@@ -96,6 +96,14 @@ class ExportOptions {
     this.planOverviews = true,
     this.script = const ScriptExportOptions(),
   });
+
+  /// Planos que entran en la vista previa: los justos para ver cómo sale,
+  /// sin esperar al documento entero.
+  int get previewShots => switch (document) {
+    ExportDocument.storyboard => look.isSheet ? 6 : 18,
+    ExportDocument.shootingPlan => 8,
+    ExportDocument.technicalScript => 24,
+  };
 
   ExportOptions copyWith({
     ExportDocument? document,

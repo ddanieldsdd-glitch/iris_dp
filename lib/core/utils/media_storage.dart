@@ -7,6 +7,15 @@ import 'package:path_provider/path_provider.dart';
 import '../storage/app_storage_config.dart';
 
 class MediaStorage {
+  static int _lastStamp = 0;
+
+  /// Para el nombre de un archivo nuevo. Nunca se repite: dos imágenes del
+  /// mismo plano escritas seguidas se pisarían con un nombre por la hora.
+  static int _stamp() {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    return _lastStamp = now > _lastStamp ? now : _lastStamp + 1;
+  }
+
   static Future<Directory?> _documentsRoot() async {
     try {
       if (AppStorageConfig.isConfigured) {
@@ -100,7 +109,7 @@ class MediaStorage {
       projectId: destProjectId,
       sourcePath: sourcePath,
       subfolder: subfolder,
-      fileName: '${prefix}_${DateTime.now().microsecondsSinceEpoch}$ext',
+      fileName: '${prefix}_${_stamp()}$ext',
     );
   }
 
@@ -123,7 +132,7 @@ class MediaStorage {
     final ext = p.extension(sourcePath).isEmpty ? '.jpg' : p.extension(sourcePath);
     final destPath = p.join(
       destDir.path,
-      'img_${DateTime.now().millisecondsSinceEpoch}$ext',
+      'img_${_stamp()}$ext',
     );
     await File(sourcePath).copy(destPath);
     return destPath;
@@ -168,7 +177,7 @@ class MediaStorage {
     final ext = p.extension(sourcePath).isEmpty ? '.jpg' : p.extension(sourcePath);
     final destPath = p.join(
       destDir.path,
-      'img_${DateTime.now().millisecondsSinceEpoch}$ext',
+      'img_${_stamp()}$ext',
     );
     await File(sourcePath).copy(destPath);
     return destPath;
@@ -193,7 +202,7 @@ class MediaStorage {
     final ext = p.extension(sourcePath).isEmpty ? '.jpg' : p.extension(sourcePath);
     final destPath = p.join(
       destDir.path,
-      'shot_${shotId}_${DateTime.now().millisecondsSinceEpoch}$ext',
+      'shot_${shotId}_${_stamp()}$ext',
     );
     await File(sourcePath).copy(destPath);
     return destPath;
@@ -220,7 +229,7 @@ class MediaStorage {
     if (ext.isEmpty) ext = '.jpg';
     final destPath = p.join(
       destDir.path,
-      'shot_${shotId}_${DateTime.now().millisecondsSinceEpoch}$ext',
+      'shot_${shotId}_${_stamp()}$ext',
     );
     await File(destPath).writeAsBytes(bytes, flush: true);
     return destPath;
@@ -271,7 +280,7 @@ class MediaStorage {
     final ext = p.extension(sourcePath).isEmpty ? '' : p.extension(sourcePath);
     final destPath = p.join(
       destDir.path,
-      '${prefix}_${DateTime.now().millisecondsSinceEpoch}$ext',
+      '${prefix}_${_stamp()}$ext',
     );
     await File(sourcePath).copy(destPath);
     return destPath;

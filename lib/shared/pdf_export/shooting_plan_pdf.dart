@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' show Size;
 
@@ -6,6 +7,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../core/database/app_database.dart';
+import '../../core/utils/export_cancel.dart';
 import '../../core/utils/pdf_export_fonts.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../core/utils/shot_reference_import.dart';
@@ -32,7 +34,9 @@ class ShootingPlanBlock {
   final String? action;
   final String? notes;
   final Uint8List? plan;
-  final Uint8List? frame;
+
+  /// El storyboard y todas las referencias del plano.
+  final List<Uint8List> frames;
 
   const ShootingPlanBlock({
     required this.sceneLabel,
@@ -49,7 +53,7 @@ class ShootingPlanBlock {
     this.action,
     this.notes,
     this.plan,
-    this.frame,
+    this.frames = const [],
   });
 }
 
@@ -200,10 +204,10 @@ class ShootingPlanPdf {
               dayNight: tract.scene.dayNight,
               shots: [for (final s in tract.shots) '${s.shot.number}'],
             ),
-            await Future.wait([
-              for (final item in tract.shots)
-                _block(renderer, tract.scene, item, withLight),
-            ]),
+            await ExportCancel.mapPooled(
+              tract.shots,
+              (item) => _block(db, renderer, tract.scene, item, withLight),
+            ),
           ),
         );
       }
@@ -267,7 +271,29 @@ class ShootingPlanPdf {
     return parts.isEmpty ? null : parts.join('/');
   }
 
+  /// Las imágenes del plano: primero su storyboard y luego todas sus
+  /// referencias, sin repetir.
+  static Future<List<Uint8List>> _frames(AppDatabase db, Shot shot) async {
+    final paths = <String>{
+      ?shot.storyboardImagePath,
+      ...referenceImagesOf(shot, await db.getReferencesForShot(shot.id)),
+    };
+    if (paths.isEmpty) {
+      final fallback = referenceImageOf(shot);
+      if (fallback != null) paths.add(fallback);
+    }
+    final images = await Future.wait([
+      for (final path in paths)
+        PdfSafeImage.loadFromPathMaxEdge(
+          path,
+          maxEdge: paths.length == 1 ? 900 : 640,
+        ),
+    ]);
+    return images.nonNulls.toList();
+  }
+
   static Future<ShootingPlanBlock> _block(
+    AppDatabase db,
     PlanRenderer renderer,
     Scene scene,
     ExportShot item,
@@ -299,10 +325,7 @@ class ShootingPlanPdf {
         size: Size(_planWidth, _blockHeight),
         pixelRatio: 2.5,
       ),
-      frame: await PdfSafeImage.loadFromPathMaxEdge(
-        storyboardImageOf(shot) ?? referenceImageOf(shot),
-        maxEdge: 900,
-      ),
+      frames: await _frames(db, shot),
     );
   }
 
@@ -666,7 +689,7 @@ class ShootingPlanPdf {
   static pw.Widget _blockView(ShootingPlanBlock block) {
     final title = pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold);
     final rightWidth = _bodyWidth - _planWidth - 12;
-    final frameWidth = rightWidth * 0.46;
+    final frameWidth = rightWidth * (block.frames.length > 2 ? 0.6 : 0.46);
     final text = [
       if (block.action != null) block.action!,
       if (block.notes != null) block.notes!,
@@ -753,16 +776,12 @@ class ShootingPlanPdf {
                           ),
                         ),
                       ),
-                      if (block.frame != null) ...[
+                      if (block.frames.isNotEmpty) ...[
                         pw.SizedBox(width: 6),
                         pw.Container(
                           width: frameWidth,
                           color: PdfColors.black,
-                          alignment: pw.Alignment.center,
-                          child: pw.Image(
-                            pw.MemoryImage(block.frame!),
-                            fit: pw.BoxFit.contain,
-                          ),
+                          child: _frameGrid(block.frames),
                         ),
                       ],
                     ],
@@ -775,6 +794,47 @@ class ShootingPlanPdf {
       ),
     );
   }
+
+  /// Las imágenes del plano en una rejilla que llena su casilla.
+  static pw.Widget _frameGrid(List<Uint8List> frames) {
+    final columns = frameGridColumns(frames.length);
+    final rows = <List<Uint8List>>[
+      for (var i = 0; i < frames.length; i += columns)
+        frames.sublist(i, math.min(i + columns, frames.length)),
+    ];
+    pw.Widget cell(Uint8List? frame) => pw.Expanded(
+      child: frame == null
+          ? pw.SizedBox()
+          : pw.Container(
+              margin: const pw.EdgeInsets.all(0.75),
+              alignment: pw.Alignment.center,
+              child: pw.Image(pw.MemoryImage(frame), fit: pw.BoxFit.contain),
+            ),
+    );
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        for (final row in rows)
+          pw.Expanded(
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < columns; i++)
+                  cell(i < row.length ? row[i] : null),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Columnas de la rejilla para [count] imágenes.
+  @visibleForTesting
+  static int frameGridColumns(int count) => switch (count) {
+    <= 2 => 1,
+    <= 6 => 2,
+    _ => 3,
+  };
 
   static pw.Widget _table(ShootingPlanBlock block) {
     final columns = <(String, String?)>[
