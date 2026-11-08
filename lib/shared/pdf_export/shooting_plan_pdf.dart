@@ -187,6 +187,7 @@ class ShootingPlanPdf {
     required Project project,
     required List<ExportDaySection> sections,
     bool withLight = true,
+    bool withBeams = true,
     bool withOverviews = true,
   }) async {
     final renderer = await PlanRenderer.load(db, project.id);
@@ -206,7 +207,14 @@ class ShootingPlanPdf {
             ),
             await ExportCancel.mapPooled(
               tract.shots,
-              (item) => _block(db, renderer, tract.scene, item, withLight),
+              (item) => _block(
+                db,
+                renderer,
+                tract.scene,
+                item,
+                withLight,
+                withBeams,
+              ),
             ),
           ),
         );
@@ -230,7 +238,7 @@ class ShootingPlanPdf {
       projectName: project.name,
       days: days,
       overviews: withOverviews
-          ? await _overviews(renderer, sections, withLight)
+          ? await _overviews(renderer, sections, withLight, withBeams)
           : const [],
       withLight: withLight,
     );
@@ -298,6 +306,7 @@ class ShootingPlanPdf {
     Scene scene,
     ExportShot item,
     bool withLight,
+    bool withBeams,
   ) async {
     final shot = item.shot;
     final slug = [
@@ -322,6 +331,7 @@ class ShootingPlanPdf {
       plan: await renderer.shot(
         shot,
         light: withLight,
+        beams: withBeams,
         size: Size(_planWidth, _blockHeight),
         pixelRatio: 2.5,
       ),
@@ -334,6 +344,7 @@ class ShootingPlanPdf {
     PlanRenderer renderer,
     List<ExportDaySection> sections,
     bool withLight,
+    bool withBeams,
   ) async {
     final data = renderer.data;
     final scenesOf = <int, List<String>>{};
@@ -362,6 +373,7 @@ class ShootingPlanPdf {
             plan: await renderer.setup(
               setup,
               light: withLight,
+              beams: withBeams,
               size: Size(_bodyWidth, _bodyHeight - 22),
               pixelRatio: 2,
             ),

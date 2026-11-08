@@ -82,6 +82,9 @@ class ExportOptions {
   final ShotImageSource imageSource;
   final bool planWithLight;
 
+  /// Con la luz que cae en el suelo; sin ella, solo los aparatos.
+  final bool planBeams;
+
   /// La planta general de cada esquema al final del documento de planta.
   final bool planOverviews;
   final ScriptExportOptions script;
@@ -93,6 +96,7 @@ class ExportOptions {
     this.look = StoryboardLook.grid6,
     this.imageSource = ShotImageSource.storyboard,
     this.planWithLight = true,
+    this.planBeams = true,
     this.planOverviews = true,
     this.script = const ScriptExportOptions(),
   });
@@ -112,6 +116,7 @@ class ExportOptions {
     StoryboardLook? look,
     ShotImageSource? imageSource,
     bool? planWithLight,
+    bool? planBeams,
     bool? planOverviews,
     ScriptExportOptions? script,
   }) => ExportOptions(
@@ -121,6 +126,7 @@ class ExportOptions {
     look: look ?? this.look,
     imageSource: imageSource ?? this.imageSource,
     planWithLight: planWithLight ?? this.planWithLight,
+    planBeams: planBeams ?? this.planBeams,
     planOverviews: planOverviews ?? this.planOverviews,
     script: script ?? this.script,
   );
@@ -132,6 +138,7 @@ class ExportOptions {
     'look': look.name,
     'imageSource': imageSource.name,
     'planWithLight': planWithLight,
+    'planBeams': planBeams,
     'planOverviews': planOverviews,
     'script': script.toJson(),
   };
@@ -147,6 +154,7 @@ class ExportOptions {
       imageSource:
           _byName(ShotImageSource.values, json['imageSource']) ?? d.imageSource,
       planWithLight: json['planWithLight'] != false,
+      planBeams: json['planBeams'] != false,
       planOverviews: json['planOverviews'] != false,
       script: script is Map
           ? ScriptExportOptions.fromJson(Map<String, dynamic>.from(script))

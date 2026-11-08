@@ -72,6 +72,7 @@ class ExportRunner {
     project: source.project,
     sections: sections,
     withLight: options.planWithLight,
+    withBeams: options.planBeams,
     withOverviews: options.planOverviews,
   );
 
