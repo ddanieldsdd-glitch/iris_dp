@@ -2314,22 +2314,26 @@ class CameraPlanPainter extends CustomPainter {
       fovPaint,
     );
 
-    canvas.drawCircle(Offset.zero, 16, Paint()..color = _CanvasColors.body);
-    canvas.drawCircle(
-      Offset.zero,
-      16,
+    // La cámara vista desde arriba: el objetivo marca hacia dónde mira.
+    final lens = Path()
+      ..moveTo(-5, -8)
+      ..lineTo(5, -8)
+      ..lineTo(9, -19)
+      ..lineTo(-9, -19)
+      ..close();
+    canvas.drawPath(lens, Paint()..color = camColor.withValues(alpha: 0.9));
+    final housing = RRect.fromRectAndRadius(
+      const Rect.fromLTRB(-13, -8, 13, 14),
+      const Radius.circular(3),
+    );
+    canvas.drawRRect(housing, Paint()..color = _CanvasColors.body);
+    canvas.drawRRect(
+      housing,
       Paint()
         ..color = camColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
-
-    final body = Path()
-      ..moveTo(0, -10)
-      ..lineTo(-7, 6)
-      ..lineTo(7, 6)
-      ..close();
-    canvas.drawPath(body, Paint()..color = camColor.withValues(alpha: 0.9));
 
     final tp = TextPainter(
       text: TextSpan(
@@ -2343,7 +2347,7 @@ class CameraPlanPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+    tp.paint(canvas, Offset(-tp.width / 2, 3 - tp.height / 2));
   }
 
   /// Una persona vista desde arriba: hombros, cabeza y nariz, que marca
