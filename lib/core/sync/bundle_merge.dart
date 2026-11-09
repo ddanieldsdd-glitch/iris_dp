@@ -66,6 +66,16 @@ abstract final class BundleMerge {
     'shots',
     'shotReferences',
     'locationCaptures',
+    ...additiveCollections,
+  ];
+
+  /// Con borrado lógico: una lista ausente o vacía no significa que se haya
+  /// borrado, sino que quien subió no conoce estas tablas (una versión
+  /// anterior de IRIS). Ese lado se trata como sin cambios.
+  static const additiveCollections = [
+    'rentalHouses',
+    'rentalReservations',
+    'rentalItems',
   ];
 
   /// La clave propia de cada colección a la que otras apuntan.
@@ -167,6 +177,11 @@ abstract final class BundleMerge {
       for (final k in _metaKeys)
         if (local.containsKey(k)) k: _copy(local[k]),
     };
+
+    for (final k in additiveCollections) {
+      _absentMeansUnchanged(l, bl, k);
+      _absentMeansUnchanged(c, bc, k);
+    }
 
     final allKeys = {...bl.keys, ...bc.keys, ...l.keys, ...c.keys}
       ..removeAll(_metaKeys);
@@ -628,6 +643,18 @@ abstract final class BundleMerge {
     if (list is! List) return;
     for (final r in list) {
       if (r is Map<String, dynamic>) yield r;
+    }
+  }
+
+  static void _absentMeansUnchanged(
+    Map<String, dynamic> side,
+    Map<String, dynamic> base,
+    String key,
+  ) {
+    final list = side[key];
+    if ((list == null || (list is List && list.isEmpty)) &&
+        base[key] != null) {
+      side[key] = _copy(base[key]);
     }
   }
 

@@ -3,9 +3,12 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
+import 'package:iris_dp/core/settings/app_prefs.dart';
+import 'package:iris_dp/core/sync/project_content_bundle.dart';
 import 'package:iris_dp/core/theme/app_theme.dart';
 import 'package:iris_dp/features/shoot_documents/shoot_day_on_set.dart';
 import 'package:iris_dp/features/shoot_documents/shoot_day_screen.dart';
@@ -105,6 +108,18 @@ void main() {
     }
   }
 
+  Future<List<int>> dayIds(WidgetTester tester) async {
+    List<ShootDocument>? docs;
+    db.watchShootDocumentsForProject(projectId).first.then((d) => docs = d);
+    for (var i = 0; i < 100 && docs == null; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 2)),
+      );
+    }
+    return [for (final d in docs!) d.id];
+  }
+
   Future<void> unmount(WidgetTester tester) async {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
@@ -153,6 +168,80 @@ void main() {
     expect(find.text('1 de 3 hechos'), findsOneWidget);
     final blocks = await db.getBlocksForShootDocument(dayId);
     expect(OnSetMark.of(blocks.first).status, OnSetStatus.done);
+    expect(tester.takeException(), isNull);
+    await unmount(tester);
+  });
+
+  testWidgets('ocultar hechos y planos sueltos solo cambia la vista', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await AppPrefs.reloadForTest();
+    iphone(tester);
+    await seed(tester);
+    await tester.pumpWidget(
+      host(
+        ShootDayOnSetScreen(
+          projectId: projectId,
+          documentId: dayId,
+          title: 'Jornada 1',
+        ),
+      ),
+    );
+    await settle(tester);
+    await tester.tap(find.text('Hecho').first);
+    await settle(tester);
+    await tester.tap(find.text('Ocultar hechos'));
+    await settle(tester);
+    expect(find.text('1 de 3 hechos'), findsOneWidget);
+    expect(find.text('1 plano oculto en este aparato'), findsOneWidget);
+    expect(find.text('Hecho'), findsNWidgets(2));
+
+    await tester.tap(find.text('Ocultar').first);
+    await settle(tester);
+    expect(find.text('2 planos ocultos en este aparato'), findsOneWidget);
+    expect(find.text('Hecho'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Mostrar todo'));
+    await settle(tester);
+    expect(find.text('Hecho'), findsNWidgets(3));
+    await unmount(tester);
+  });
+
+  testWidgets('sobrevive a una bajada que recrea la jornada', (tester) async {
+    iphone(tester);
+    await seed(tester);
+    await tester.pumpWidget(
+      host(
+        ShootDayOnSetScreen(
+          projectId: projectId,
+          documentId: dayId,
+          title: 'Jornada 1',
+        ),
+      ),
+    );
+    await settle(tester);
+    expect(find.text('0 de 3 hechos'), findsOneWidget);
+    // Con la pantalla montada, sus consultas viven en el reloj simulado:
+    // hay que hacerlo avanzar mientras importa, o se esperan mutuamente.
+    final before = (await dayIds(tester)).single;
+    var done = false;
+    Object? failure;
+    ProjectContentBundle.export(db, projectId)
+        .then((b) => ProjectContentBundle.importBundle(db, projectId, b))
+        .then((_) => done = true, onError: (Object e) => failure = e);
+    for (var i = 0; i < 400 && !done && failure == null; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 2)),
+      );
+    }
+    expect(failure, isNull);
+    expect(done, isTrue, reason: 'la importación debe terminar');
+    await settle(tester);
+    expect((await dayIds(tester)).single, isNot(before));
+    expect(find.text('0 de 3 hechos'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await unmount(tester);
   });

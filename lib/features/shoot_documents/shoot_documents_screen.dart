@@ -14,6 +14,7 @@ import 'shoot_document_template_picker.dart';
 import '../../core/templates/user_template_service.dart';
 import 'shoot_template_editor_screen.dart';
 import 'package:drift/drift.dart' show Value;
+import 'shoot_agenda.dart';
 import 'shoot_day_on_set.dart';
 import 'shoot_day_screen.dart';
 import '../../core/theme/app_layout.dart';
@@ -116,6 +117,7 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
                   return ListView(
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     children: [
+                      ShootAgendaSection(projectId: widget.projectId),
                       Text('Crear', style: AppTypography.label(palette)),
                       const SizedBox(height: AppSpacing.sm),
                       grid([
@@ -255,11 +257,15 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
                                   color: palette.textSecondary,
                                 ),
                                 const SizedBox(width: 6),
-                                Text(
+                                Flexible(
+                                  child: Text(
                                   group.key == null
                                       ? 'Sin fecha'
                                       : formatShootDate(group.key),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: AppTypography.label(palette),
+                                ),
                                 ),
                               ],
                             ),
@@ -270,6 +276,14 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
                                 doc: doc,
                                 scenes: scenes,
                                 onTap: () => _openEditor(context, doc),
+                                onOpenOnSet: doc.kind == kShootDayKind
+                                    ? () => ShootDayOnSetScreen.open(
+                                        context,
+                                        projectId: widget.projectId,
+                                        documentId: doc.id,
+                                        title: doc.name,
+                                      )
+                                    : null,
                                 onExport: doc.kind == kShootDayKind
                                     ? (word) => _openExport(
                                         context,
@@ -508,8 +522,8 @@ class _CreateCard extends StatelessWidget {
       onTap: onTap,
       focused: highlighted,
       padding: const EdgeInsets.all(AppSpacing.md),
-      child: SizedBox(
-        height: 96,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 96),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -556,6 +570,7 @@ class _DocumentCard extends ConsumerWidget {
   /// Exporta a PDF (falso) o Word (verdadero); nulo si no se exporta desde
   /// aquí.
   final ValueChanged<bool>? onExport;
+  final VoidCallback? onOpenOnSet;
   final VoidCallback onSetPrimary;
   final VoidCallback onDelete;
 
@@ -564,6 +579,7 @@ class _DocumentCard extends ConsumerWidget {
     required this.scenes,
     required this.onTap,
     required this.onExport,
+    this.onOpenOnSet,
     required this.onSetPrimary,
     required this.onDelete,
   });
@@ -667,29 +683,52 @@ class _DocumentCard extends ConsumerWidget {
                 ),
               ],
               const SizedBox(height: AppSpacing.sm),
-              Row(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 4,
                 children: [
-                  if (onExport != null) ...[
-                    OutlinedButton.icon(
-                      onPressed: shots == 0 ? null : () => onExport!(false),
-                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
-                      label: const Text('PDF'),
-                      style: OutlinedButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                      ),
+                  if (onExport != null)
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: shots == 0 ? null : () => onExport!(false),
+                          icon: const Icon(
+                            Icons.picture_as_pdf_outlined,
+                            size: 16,
+                          ),
+                          label: const Text('PDF'),
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: shots == 0 ? null : () => onExport!(true),
+                          icon: const Icon(
+                            Icons.description_outlined,
+                            size: 16,
+                          ),
+                          label: const Text('Word'),
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                    OutlinedButton.icon(
-                      onPressed: shots == 0 ? null : () => onExport!(true),
-                      icon: const Icon(Icons.description_outlined, size: 16),
-                      label: const Text('Word'),
-                      style: OutlinedButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
-                  TextButton(onPressed: onTap, child: const Text('Abrir')),
+                  Wrap(
+                    children: [
+                      // En el iPhone, «Abrir» ya lleva a En set.
+                      if (onOpenOnSet != null && !AppLayout.isCompact(context))
+                        TextButton.icon(
+                          onPressed: shots == 0 ? null : onOpenOnSet,
+                          icon: const Icon(Icons.task_alt, size: 16),
+                          label: const Text('En set'),
+                        ),
+                      TextButton(onPressed: onTap, child: const Text('Abrir')),
+                    ],
+                  ),
                 ],
               ),
             ],

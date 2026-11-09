@@ -20,6 +20,7 @@ import '../optics_lab/optics_lab_screen.dart';
 import '../storage_calculator/storage_calculator_screen.dart';
 import 'equipment_detail_screen.dart';
 import 'equipment_spec_helpers.dart';
+import 'rentals/rentals_tab.dart';
 import 'widgets/light_quick_add_sheet.dart';
 import 'services/catalog_sync_service.dart';
 import 'services/equipment_spreadsheet_service.dart';
@@ -41,7 +42,7 @@ class EquipmentScreen extends ConsumerStatefulWidget {
 
 class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
     with SingleTickerProviderStateMixin, RouteAware {
-  static const _labTabIndex = 3;
+  static const _labTabIndex = 4;
 
   late final TabController _tabs;
   final _labKey = GlobalKey<OpticsLabScreenState>();
@@ -55,7 +56,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 5, vsync: this);
+    _tabs = TabController(length: 6, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureCatalog());
   }
 
@@ -339,6 +340,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
           indicatorColor: palette.accent,
           isScrollable: true,
           tabs: [
+            const Tab(text: 'Reservas'),
             const Tab(text: 'Cámaras'),
             const Tab(text: 'Ópticas'),
             const Tab(text: 'Luces'),
@@ -377,6 +379,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
             child: TabBarView(
               controller: _tabs,
               children: [
+                RentalsTab(projectId: widget.projectId),
                 StreamBuilder<List<Camera>>(
                   stream: db.watchAllCameras(),
                   builder: (context, snap) {

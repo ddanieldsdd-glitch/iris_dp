@@ -7,12 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/settings/app_prefs.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../../shared/rich_text/script_markup.dart';
+import 'on_set_view_prefs.dart';
 import 'shoot_day_order.dart';
 import 'shoot_document_block_types.dart';
 
@@ -82,8 +84,9 @@ class OnSetMark {
 }
 
 /// La jornada en el set: los planos en su orden de rodaje, en tarjetas para
-/// leer de un vistazo en el iPhone, y marcar cada uno hecho o descartado.
-class ShootDayOnSetScreen extends ConsumerWidget {
+/// leer de un vistazo y marcar cada uno hecho o descartado. En pantallas
+/// anchas las tarjetas van en rejilla.
+class ShootDayOnSetScreen extends ConsumerStatefulWidget {
   final int projectId;
   final int documentId;
   final String title;
@@ -111,64 +114,156 @@ class ShootDayOnSetScreen extends ConsumerWidget {
   );
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ShootDayOnSetScreen> createState() =>
+      _ShootDayOnSetScreenState();
+}
+
+class _ShootDayOnSetScreenState extends ConsumerState<ShootDayOnSetScreen> {
+  late final AppDatabase _db = ref.read(databaseProvider);
+  late final Stream<List<ShootDocument>> _days = _db
+      .watchShootDocumentsForProject(widget.projectId);
+  late final Stream<List<Scene>> _scenes = _db.watchScenesForProject(
+    widget.projectId,
+  );
+  late final Stream<List<Shot>> _shots = _db.watchShotsForProject(
+    widget.projectId,
+  );
+
+  ShootDocument? _lastSeen;
+  int? _blocksDayId;
+  Stream<List<ShootDocumentBlock>>? _blocks;
+
+  Stream<List<ShootDocumentBlock>> _blocksFor(int dayId) {
+    if (_blocksDayId != dayId || _blocks == null) {
+      _blocksDayId = dayId;
+      _blocks = _db.watchBlocksForShootDocument(dayId);
+    }
+    return _blocks!;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final palette = context.palette;
-    final db = ref.watch(databaseProvider);
     return Scaffold(
       appBar: AppBar(
         backgroundColor: palette.surface,
         title: Text(
-          'En set · $title',
+          'En set · ${widget.title}',
           style: AppTypography.titleMedium(palette),
         ),
       ),
-      body: StreamBuilder<List<Scene>>(
-        stream: db.watchScenesForProject(projectId),
-        builder: (context, sceneSnap) => StreamBuilder<List<Shot>>(
-          stream: db.watchShotsForProject(projectId),
-          builder: (context, shotSnap) =>
-              StreamBuilder<List<ShootDocumentBlock>>(
-                stream: db.watchBlocksForShootDocument(documentId),
-                builder: (context, blockSnap) {
-                  if (!blockSnap.hasData || !shotSnap.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final scenes = {
-                    for (final s in sceneSnap.data ?? const <Scene>[]) s.id: s,
-                  };
-                  final shots = {for (final s in shotSnap.data!) s.id: s};
-                  final blocks = [
-                    for (final b in blockSnap.data!)
-                      if (b.blockType == ShootBlockType.shot &&
-                          shots.containsKey(b.shotId))
-                        b,
-                  ];
-                  return OnSetList(
-                    blocks: blocks,
-                    shots: shots,
-                    scenes: scenes,
-                    onMark: (block, mark) => db.updateShootDocumentBlock(
-                      block.copyWith(
-                        contentOverridesJson: Value(
-                          mark.writeInto(block.contentOverridesJson),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+      body: StreamBuilder<List<ShootDocument>>(
+        stream: _days,
+        builder: (context, daySnap) {
+          if (!daySnap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final day = resolveOpenShootDay(
+            daySnap.data!,
+            id: widget.documentId,
+            lastSeen: _lastSeen,
+          );
+          if (day == null) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Text(
+                  'Esta jornada ya no existe en el proyecto.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodyMedium(palette),
+                ),
               ),
-        ),
+            );
+          }
+          _lastSeen = day;
+          return StreamBuilder<List<Scene>>(
+            stream: _scenes,
+            builder: (context, sceneSnap) => StreamBuilder<List<Shot>>(
+              stream: _shots,
+              builder: (context, shotSnap) =>
+                  StreamBuilder<List<ShootDocumentBlock>>(
+                    stream: _blocksFor(day.id),
+                    builder: (context, blockSnap) {
+                      if (!blockSnap.hasData || !shotSnap.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      return _body(
+                        day,
+                        sceneSnap.data ?? const [],
+                        shotSnap.data!,
+                        blockSnap.data!,
+                      );
+                    },
+                  ),
+            ),
+          );
+        },
       ),
+    );
+  }
+
+  Widget _body(
+    ShootDocument day,
+    List<Scene> sceneRows,
+    List<Shot> shotRows,
+    List<ShootDocumentBlock> blockRows,
+  ) {
+    final scenes = {for (final s in sceneRows) s.id: s};
+    final shots = {for (final s in shotRows) s.id: s};
+    final blocks = [
+      for (final b in blockRows)
+        if (b.blockType == ShootBlockType.shot && shots.containsKey(b.shotId))
+          b,
+    ];
+    final projectId = widget.projectId;
+    final dayKey = OnSetViewPrefs.dayKey(day);
+    return ListenableBuilder(
+      listenable: AppPrefs.instance,
+      builder: (context, _) {
+        final hidden = OnSetViewPrefs.hiddenShots(projectId, dayKey);
+        final hideFinished = OnSetViewPrefs.hideFinished(projectId);
+        return OnSetList(
+          blocks: blocks,
+          shots: shots,
+          scenes: scenes,
+          hideFinished: hideFinished,
+          hiddenShots: hidden,
+          onHideFinishedChanged: (v) =>
+              OnSetViewPrefs.setHideFinished(projectId, v),
+          onHideShot: (shot) => OnSetViewPrefs.setHiddenShots(
+            projectId,
+            dayKey,
+            {...hidden, OnSetViewPrefs.shotKey(shot)},
+          ),
+          onShowHidden: () async {
+            await OnSetViewPrefs.setHiddenShots(projectId, dayKey, const {});
+            await OnSetViewPrefs.setHideFinished(projectId, false);
+          },
+          onMark: (block, mark) => _db.updateShootDocumentBlock(
+            block.copyWith(
+              contentOverridesJson: Value(
+                mark.writeInto(block.contentOverridesJson),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
 
-/// La lista de tarjetas, sin base de datos (para las pruebas).
+/// La lista de tarjetas, sin base de datos (para las pruebas). Lo oculto solo
+/// cambia lo que se ve: la cuenta de hechos sigue siendo la de toda la jornada.
 class OnSetList extends StatelessWidget {
   final List<ShootDocumentBlock> blocks;
   final Map<int, Shot> shots;
   final Map<int, Scene> scenes;
   final Future<void> Function(ShootDocumentBlock, OnSetMark) onMark;
+  final bool hideFinished;
+  final Set<String> hiddenShots;
+  final ValueChanged<bool>? onHideFinishedChanged;
+  final ValueChanged<Shot>? onHideShot;
+  final VoidCallback? onShowHidden;
 
   const OnSetList({
     super.key,
@@ -176,7 +271,26 @@ class OnSetList extends StatelessWidget {
     required this.shots,
     required this.scenes,
     required this.onMark,
+    this.hideFinished = false,
+    this.hiddenShots = const {},
+    this.onHideFinishedChanged,
+    this.onHideShot,
+    this.onShowHidden,
   });
+
+  /// Columnas de tarjetas según el ancho útil.
+  static int columnsFor(double width) => width >= 1200
+      ? 3
+      : width >= 720
+      ? 2
+      : 1;
+
+  bool _isVisible(ShootDocumentBlock block) {
+    if (hiddenShots.contains(OnSetViewPrefs.shotKey(shots[block.shotId]!))) {
+      return false;
+    }
+    return !hideFinished || OnSetMark.of(block).status == OnSetStatus.pending;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -186,7 +300,7 @@ class OnSetList extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Text(
-            'La jornada aún no tiene planos. Añádelos desde el iPad o el Mac.',
+            'La jornada aún no tiene planos. Añádelos desde la jornada.',
             textAlign: TextAlign.center,
             style: AppTypography.bodyMedium(palette),
           ),
@@ -200,45 +314,130 @@ class OnSetList extends StatelessWidget {
     final tracts = groupShootTracts([
       for (final b in blocks) b.id,
     ], (id) => shots[byId[id]!.shotId]!.sceneId);
+    final hiddenCount = blocks.where((b) => !_isVisible(b)).length;
     final gutter = AppLayout.gutter(context);
+    final columns = columnsFor(MediaQuery.sizeOf(context).width - 2 * gutter);
     var order = 0;
-    return ListView(
-      padding: EdgeInsets.fromLTRB(gutter, AppSpacing.md, gutter, 40),
-      children: [
-        Text(
-          '$done de ${blocks.length - dropped} hechos'
-          '${dropped > 0 ? ' · $dropped descartados' : ''}',
-          style: AppTypography.label(palette),
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            minHeight: 6,
-            value: blocks.length == dropped
-                ? 1
-                : done / (blocks.length - dropped),
-          ),
-        ),
-        for (final tract in tracts) ...[
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: 6),
-            child: Text(
-              _sceneTitle(scenes[tract.sceneId]),
-              style: AppTypography.titleMedium(palette),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardWidth =
+            (constraints.maxWidth -
+                2 * gutter -
+                (columns - 1) * AppSpacing.sm) /
+            columns;
+        return ListView(
+          padding: EdgeInsets.fromLTRB(gutter, AppSpacing.md, gutter, 40),
+          children: [
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpacing.sm,
+              children: [
+                Text(
+                  '$done de ${blocks.length - dropped} hechos'
+                  '${dropped > 0 ? ' · $dropped descartados' : ''}',
+                  style: AppTypography.label(palette),
+                ),
+                if (onHideFinishedChanged case final onChanged?)
+                  TextButton.icon(
+                    onPressed: () => onChanged(!hideFinished),
+                    icon: Icon(
+                      hideFinished
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: 16,
+                    ),
+                    label: Text(
+                      hideFinished ? 'Mostrar hechos' : 'Ocultar hechos',
+                    ),
+                  ),
+              ],
             ),
-          ),
-          for (final id in tract.blockIds)
-            OnSetShotCard(
-              order: ++order,
-              shot: shots[byId[id]!.shotId]!,
-              scene: scenes[tract.sceneId],
-              mark: OnSetMark.of(byId[id]!),
-              onMark: (mark) => onMark(byId[id]!, mark),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                minHeight: 6,
+                value: blocks.length == dropped
+                    ? 1
+                    : done / (blocks.length - dropped),
+              ),
             ),
-        ],
-      ],
+            if (hiddenCount > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: AppSpacing.sm,
+                  children: [
+                    Text(
+                      hiddenCount == 1
+                          ? '1 plano oculto en este aparato'
+                          : '$hiddenCount planos ocultos en este aparato',
+                      style: AppTypography.caption(palette),
+                    ),
+                    if (onShowHidden != null)
+                      TextButton(
+                        onPressed: onShowHidden,
+                        child: const Text('Mostrar todo'),
+                      ),
+                  ],
+                ),
+              ),
+            for (final tract in tracts)
+              ..._tract(
+                context,
+                tract: tract,
+                byId: byId,
+                nextOrder: () => ++order,
+                cardWidth: cardWidth,
+              ),
+          ],
+        );
+      },
     );
+  }
+
+  List<Widget> _tract(
+    BuildContext context, {
+    required ShootTract tract,
+    required Map<int, ShootDocumentBlock> byId,
+    required int Function() nextOrder,
+    required double cardWidth,
+  }) {
+    final palette = context.palette;
+    final cards = <Widget>[];
+    for (final id in tract.blockIds) {
+      // El número es el de rodaje: ocultar un plano no renumera los demás.
+      final number = nextOrder();
+      final block = byId[id]!;
+      if (!_isVisible(block)) continue;
+      final shot = shots[block.shotId]!;
+      cards.add(
+        SizedBox(
+          width: cardWidth,
+          child: OnSetShotCard(
+            order: number,
+            shot: shot,
+            scene: scenes[tract.sceneId],
+            mark: OnSetMark.of(block),
+            onMark: (mark) => onMark(block, mark),
+            onHide: onHideShot == null ? null : () => onHideShot!(shot),
+          ),
+        ),
+      );
+    }
+    if (cards.isEmpty) return const [];
+    return [
+      Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: 6),
+        child: Text(
+          _sceneTitle(scenes[tract.sceneId]),
+          style: AppTypography.titleMedium(palette),
+        ),
+      ),
+      Wrap(spacing: AppSpacing.sm, children: cards),
+    ];
   }
 
   static String _sceneTitle(Scene? scene) => scene == null
@@ -255,6 +454,9 @@ class OnSetShotCard extends StatelessWidget {
   final OnSetMark mark;
   final ValueChanged<OnSetMark>? onMark;
 
+  /// Lo quita de la vista de este aparato.
+  final VoidCallback? onHide;
+
   const OnSetShotCard({
     super.key,
     required this.order,
@@ -262,6 +464,7 @@ class OnSetShotCard extends StatelessWidget {
     required this.scene,
     this.mark = const OnSetMark(),
     this.onMark,
+    this.onHide,
   });
 
   @override
@@ -386,6 +589,15 @@ class OnSetShotCard extends StatelessWidget {
                       label: Text(mark.note.isEmpty ? 'Nota' : 'Editar nota'),
                       onPressed: () => _editNote(context, onMark),
                     ),
+                    if (onHide != null)
+                      ActionChip(
+                        avatar: const Icon(
+                          Icons.visibility_off_outlined,
+                          size: 16,
+                        ),
+                        label: const Text('Ocultar'),
+                        onPressed: onHide,
+                      ),
                   ],
                 ),
               ],

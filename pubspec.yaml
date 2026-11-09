@@ -59,6 +59,8 @@ dependencies:
   flutter_inappwebview: ^6.1.5
   pdfrx: ^2.4.5
   image_picker: ^1.2.4
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.10.0
 
 dev_dependencies:
   flutter_test:

@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/database_provider.dart';
+import '../../../../core/theme/app_layout.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/clipboard_image_reader.dart';
@@ -326,6 +327,7 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
     List<VisualBibleLocationRef> refs,
   ) {
     final site = group.site;
+    final compact = AppLayout.isCompact(context);
     final refsByPlanId = {
       for (final r in refs)
         if (r.locationBasePlanId != null) r.locationBasePlanId!: r,
@@ -339,18 +341,35 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
     return [
       Row(
         children: [
-          TextButton.icon(
-            onPressed: () => setState(() => _open = null),
-            icon: const Icon(Icons.arrow_back, size: 18),
-            label: const Text('Todas las localizaciones'),
+          Flexible(
+            child: TextButton.icon(
+              onPressed: () => setState(() => _open = null),
+              icon: const Icon(Icons.arrow_back, size: 18),
+              label: Text(
+                compact ? 'Localizaciones' : 'Todas las localizaciones',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ),
           const Spacer(),
-          TextButton.icon(
-            onPressed: () =>
-                BibleNavigationScope.openLocationSet(context, siteId: site?.id),
-            icon: const Icon(Icons.open_in_new, size: 16),
-            label: const Text('Abrir en Localizaciones'),
-          ),
+          if (compact)
+            IconButton(
+              tooltip: 'Abrir en Localizaciones',
+              onPressed: () => BibleNavigationScope.openLocationSet(
+                context,
+                siteId: site?.id,
+              ),
+              icon: const Icon(Icons.open_in_new, size: 18),
+            )
+          else
+            TextButton.icon(
+              onPressed: () => BibleNavigationScope.openLocationSet(
+                context,
+                siteId: site?.id,
+              ),
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Abrir en Localizaciones'),
+            ),
           LocationManageMenu(
             projectId: widget.projectId,
             site: site,

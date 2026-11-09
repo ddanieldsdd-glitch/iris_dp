@@ -90,6 +90,9 @@ typedef WorkspaceScene = ({
     PlanTrash,
     PlanImages,
     LocationCaptures,
+    RentalHouses,
+    RentalReservations,
+    RentalItems,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -774,6 +777,12 @@ class AppDatabase extends _$AppDatabase {
         await add(shots, shots.planViewJson);
         await add(shootDocuments, shootDocuments.dayOrder);
       }
+      if (from < 63) {
+        // Reservas de material por casa de alquiler.
+        await m.createTable(rentalHouses);
+        await m.createTable(rentalReservations);
+        await m.createTable(rentalItems);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -1016,6 +1025,12 @@ class AppDatabase extends _$AppDatabase {
         )..where((b) => b.documentId.equals(doc.id))).go();
       }
       await (delete(shootDocuments)..where((d) => d.projectId.equals(id))).go();
+
+      await (delete(rentalItems)..where((r) => r.projectId.equals(id))).go();
+      await (delete(
+        rentalReservations,
+      )..where((r) => r.projectId.equals(id))).go();
+      await (delete(rentalHouses)..where((r) => r.projectId.equals(id))).go();
 
       await (delete(projects)..where((p) => p.id.equals(id))).go();
     });
@@ -5398,7 +5413,7 @@ const kQueryIndexes = [
   ('project_annotation_documents', 'project_id'),
 ];
 
-const kSchemaVersion = 62;
+const kSchemaVersion = 63;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

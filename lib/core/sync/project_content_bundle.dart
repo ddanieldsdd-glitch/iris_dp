@@ -10,6 +10,7 @@ import '../../shared/visual_bible/bible_image_links.dart';
 import '../database/app_database.dart';
 import 'media_entity_keys.dart';
 import 'media_slots.dart';
+import 'rental_bundle.dart';
 
 int? bundleInt(dynamic value) {
   if (value == null) return null;
@@ -105,6 +106,16 @@ class ContentSyncSummary {
 }
 
 /// Exporta e importa el contenido completo de un proyecto como JSON.
+/// El proyecto en la nube es de una versión de IRIS más nueva que esta.
+class BundleTooNewException implements Exception {
+  const BundleTooNewException();
+
+  @override
+  String toString() =>
+      'Este proyecto se guardó con una versión más nueva de IRIS. '
+      'Actualiza IRIS en este equipo para seguir sincronizándolo.';
+}
+
 class ProjectContentBundle {
   /// v5: obturación, fps, descripción, numeración y planta de cada plano, y
   /// localización y set de los esquemas de luz de la biblia.
@@ -802,6 +813,7 @@ class ProjectContentBundle {
           )
           .toList(),
       'shootDocumentBlocks': shootBlocks,
+      ...await RentalBundle.export(db, projectId),
       'projectEquipment': equipment
           .map(
             (e) => {
@@ -1302,11 +1314,21 @@ class ProjectContentBundle {
       hasMeaningfulContent(await export(db, projectId));
 
   /// Reemplaza todo el contenido del proyecto (mantiene la fila Projects).
+  /// Un bundle de una versión de IRIS más nueva no se toca: aplicarlo o
+  /// mezclarlo perdería lo que este equipo no sabe leer.
+  static void assertReadable(Map<String, dynamic> bundle) {
+    final version = bundle['version'];
+    if (version is num && version > bundleVersion) {
+      throw const BundleTooNewException();
+    }
+  }
+
   static Future<void> importBundle(
     AppDatabase db,
     int projectId,
     Map<String, dynamic> bundle,
   ) async {
+    assertReadable(bundle);
     if (!hasMeaningfulContent(bundle)) return;
     // Todo o nada: si la importación falla a medias, el contenido anterior
     // sigue ahí.
@@ -1317,6 +1339,7 @@ class ProjectContentBundle {
     await db.transaction(() async {
       await _replaceContent(db, projectId, bundle);
       await _restoreLocalFiles(db, projectId, localFiles);
+      await RentalBundle.import(db, projectId, bundle);
     });
     await _clearMissingSlotPaths(db, projectId);
   }

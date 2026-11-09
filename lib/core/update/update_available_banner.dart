@@ -7,8 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../cloud/cloud_providers.dart';
 import '../cloud/cloud_runtime_config.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import 'app_release.dart';
 import 'app_update_providers.dart';
 import 'update_actions_row.dart';
 
@@ -63,41 +65,83 @@ class UpdateAvailableBanner extends ConsumerWidget {
     final release = update.availableRelease;
     if (release == null) return const SizedBox.shrink();
 
+    return UpdateAvailableCard(
+      release: release,
+      actions: UpdateActionsRow(release: release),
+    );
+  }
+}
+
+/// El aviso de versión nueva. Por debajo de [_sideBySideMinWidth] los botones
+/// van debajo del texto: al lado le dejaban al texto una letra de ancho.
+class UpdateAvailableCard extends StatelessWidget {
+  final AppRelease release;
+  final Widget actions;
+
+  const UpdateAvailableCard({
+    super.key,
+    required this.release,
+    required this.actions,
+  });
+
+  static const double _sideBySideMinWidth = 760;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Nueva versión ${release.version} disponible',
+          style: AppTypography.titleMedium(palette),
+        ),
+        Text(
+          release.releaseNotes?.isNotEmpty == true
+              ? release.releaseNotes!
+              : 'Descarga e instala la actualización. '
+                    'Tus proyectos siguen en la nube.',
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textSecondary),
+        ),
+      ],
+    );
     return Material(
       color: palette.accent.withValues(alpha: 0.12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xl,
+        padding: EdgeInsets.symmetric(
+          horizontal: AppLayout.gutter(context, regular: AppSpacing.xl),
           vertical: AppSpacing.md,
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.system_update_alt, color: palette.accent),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Nueva versión ${release.version} disponible',
-                    style: AppTypography.titleMedium(palette),
-                  ),
-                  Text(
-                    release.releaseNotes?.isNotEmpty == true
-                        ? release.releaseNotes!
-                        : 'Descarga e instala la actualización. '
-                              'Tus proyectos siguen en la nube.',
-                    style: AppTypography.caption(
-                      palette,
-                    ).copyWith(color: palette.textSecondary),
-                  ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final sideBySide = constraints.maxWidth >= _sideBySideMinWidth;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.system_update_alt, color: palette.accent),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: sideBySide
+                      ? text
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            text,
+                            const SizedBox(height: AppSpacing.sm),
+                            actions,
+                          ],
+                        ),
+                ),
+                if (sideBySide) ...[
+                  const SizedBox(width: AppSpacing.md),
+                  // Con límite de ancho, para que el Wrap pueda saltar de línea.
+                  Flexible(child: actions),
                 ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            UpdateActionsRow(release: release),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );

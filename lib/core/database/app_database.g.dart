@@ -38488,6 +38488,2818 @@ class LocationCapturesCompanion extends UpdateCompanion<LocationCapture> {
   }
 }
 
+class $RentalHousesTable extends RentalHouses
+    with TableInfo<$RentalHousesTable, RentalHouse> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RentalHousesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _addressMeta = const VerificationMeta(
+    'address',
+  );
+  @override
+  late final GeneratedColumn<String> address = GeneratedColumn<String>(
+    'address',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _contactMeta = const VerificationMeta(
+    'contact',
+  );
+  @override
+  late final GeneratedColumn<String> contact = GeneratedColumn<String>(
+    'contact',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<String> deletedAt = GeneratedColumn<String>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    uid,
+    projectId,
+    name,
+    address,
+    contact,
+    notes,
+    sortOrder,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'rental_houses';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RentalHouse> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_uidMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('address')) {
+      context.handle(
+        _addressMeta,
+        address.isAcceptableOrUnknown(data['address']!, _addressMeta),
+      );
+    }
+    if (data.containsKey('contact')) {
+      context.handle(
+        _contactMeta,
+        contact.isAcceptableOrUnknown(data['contact']!, _contactMeta),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {projectId, uid},
+  ];
+  @override
+  RentalHouse map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RentalHouse(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      address: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}address'],
+      ),
+      contact: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}contact'],
+      ),
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $RentalHousesTable createAlias(String alias) {
+    return $RentalHousesTable(attachedDatabase, alias);
+  }
+}
+
+class RentalHouse extends DataClass implements Insertable<RentalHouse> {
+  final int id;
+  final String uid;
+  final int projectId;
+  final String name;
+  final String? address;
+  final String? contact;
+  final String? notes;
+  final int sortOrder;
+
+  /// Borrado lógico: al mezclar, una lista vacía nunca significa «borrado».
+  final String? deletedAt;
+  const RentalHouse({
+    required this.id,
+    required this.uid,
+    required this.projectId,
+    required this.name,
+    this.address,
+    this.contact,
+    this.notes,
+    required this.sortOrder,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['uid'] = Variable<String>(uid);
+    map['project_id'] = Variable<int>(projectId);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || address != null) {
+      map['address'] = Variable<String>(address);
+    }
+    if (!nullToAbsent || contact != null) {
+      map['contact'] = Variable<String>(contact);
+    }
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<String>(deletedAt);
+    }
+    return map;
+  }
+
+  RentalHousesCompanion toCompanion(bool nullToAbsent) {
+    return RentalHousesCompanion(
+      id: Value(id),
+      uid: Value(uid),
+      projectId: Value(projectId),
+      name: Value(name),
+      address: address == null && nullToAbsent
+          ? const Value.absent()
+          : Value(address),
+      contact: contact == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contact),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+      sortOrder: Value(sortOrder),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory RentalHouse.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RentalHouse(
+      id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String>(json['uid']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      name: serializer.fromJson<String>(json['name']),
+      address: serializer.fromJson<String?>(json['address']),
+      contact: serializer.fromJson<String?>(json['contact']),
+      notes: serializer.fromJson<String?>(json['notes']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      deletedAt: serializer.fromJson<String?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String>(uid),
+      'projectId': serializer.toJson<int>(projectId),
+      'name': serializer.toJson<String>(name),
+      'address': serializer.toJson<String?>(address),
+      'contact': serializer.toJson<String?>(contact),
+      'notes': serializer.toJson<String?>(notes),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'deletedAt': serializer.toJson<String?>(deletedAt),
+    };
+  }
+
+  RentalHouse copyWith({
+    int? id,
+    String? uid,
+    int? projectId,
+    String? name,
+    Value<String?> address = const Value.absent(),
+    Value<String?> contact = const Value.absent(),
+    Value<String?> notes = const Value.absent(),
+    int? sortOrder,
+    Value<String?> deletedAt = const Value.absent(),
+  }) => RentalHouse(
+    id: id ?? this.id,
+    uid: uid ?? this.uid,
+    projectId: projectId ?? this.projectId,
+    name: name ?? this.name,
+    address: address.present ? address.value : this.address,
+    contact: contact.present ? contact.value : this.contact,
+    notes: notes.present ? notes.value : this.notes,
+    sortOrder: sortOrder ?? this.sortOrder,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  RentalHouse copyWithCompanion(RentalHousesCompanion data) {
+    return RentalHouse(
+      id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      name: data.name.present ? data.name.value : this.name,
+      address: data.address.present ? data.address.value : this.address,
+      contact: data.contact.present ? data.contact.value : this.contact,
+      notes: data.notes.present ? data.notes.value : this.notes,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RentalHouse(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('name: $name, ')
+          ..write('address: $address, ')
+          ..write('contact: $contact, ')
+          ..write('notes: $notes, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    uid,
+    projectId,
+    name,
+    address,
+    contact,
+    notes,
+    sortOrder,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RentalHouse &&
+          other.id == this.id &&
+          other.uid == this.uid &&
+          other.projectId == this.projectId &&
+          other.name == this.name &&
+          other.address == this.address &&
+          other.contact == this.contact &&
+          other.notes == this.notes &&
+          other.sortOrder == this.sortOrder &&
+          other.deletedAt == this.deletedAt);
+}
+
+class RentalHousesCompanion extends UpdateCompanion<RentalHouse> {
+  final Value<int> id;
+  final Value<String> uid;
+  final Value<int> projectId;
+  final Value<String> name;
+  final Value<String?> address;
+  final Value<String?> contact;
+  final Value<String?> notes;
+  final Value<int> sortOrder;
+  final Value<String?> deletedAt;
+  const RentalHousesCompanion({
+    this.id = const Value.absent(),
+    this.uid = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.address = const Value.absent(),
+    this.contact = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+  });
+  RentalHousesCompanion.insert({
+    this.id = const Value.absent(),
+    required String uid,
+    required int projectId,
+    required String name,
+    this.address = const Value.absent(),
+    this.contact = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+  }) : uid = Value(uid),
+       projectId = Value(projectId),
+       name = Value(name);
+  static Insertable<RentalHouse> custom({
+    Expression<int>? id,
+    Expression<String>? uid,
+    Expression<int>? projectId,
+    Expression<String>? name,
+    Expression<String>? address,
+    Expression<String>? contact,
+    Expression<String>? notes,
+    Expression<int>? sortOrder,
+    Expression<String>? deletedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
+      if (projectId != null) 'project_id': projectId,
+      if (name != null) 'name': name,
+      if (address != null) 'address': address,
+      if (contact != null) 'contact': contact,
+      if (notes != null) 'notes': notes,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+    });
+  }
+
+  RentalHousesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? uid,
+    Value<int>? projectId,
+    Value<String>? name,
+    Value<String?>? address,
+    Value<String?>? contact,
+    Value<String?>? notes,
+    Value<int>? sortOrder,
+    Value<String?>? deletedAt,
+  }) {
+    return RentalHousesCompanion(
+      id: id ?? this.id,
+      uid: uid ?? this.uid,
+      projectId: projectId ?? this.projectId,
+      name: name ?? this.name,
+      address: address ?? this.address,
+      contact: contact ?? this.contact,
+      notes: notes ?? this.notes,
+      sortOrder: sortOrder ?? this.sortOrder,
+      deletedAt: deletedAt ?? this.deletedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (address.present) {
+      map['address'] = Variable<String>(address.value);
+    }
+    if (contact.present) {
+      map['contact'] = Variable<String>(contact.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<String>(deletedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RentalHousesCompanion(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('name: $name, ')
+          ..write('address: $address, ')
+          ..write('contact: $contact, ')
+          ..write('notes: $notes, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RentalReservationsTable extends RentalReservations
+    with TableInfo<$RentalReservationsTable, RentalReservation> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RentalReservationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _houseUidMeta = const VerificationMeta(
+    'houseUid',
+  );
+  @override
+  late final GeneratedColumn<String> houseUid = GeneratedColumn<String>(
+    'house_uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<String> number = GeneratedColumn<String>(
+    'number',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceStatusMeta = const VerificationMeta(
+    'sourceStatus',
+  );
+  @override
+  late final GeneratedColumn<String> sourceStatus = GeneratedColumn<String>(
+    'source_status',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _responsibleMeta = const VerificationMeta(
+    'responsible',
+  );
+  @override
+  late final GeneratedColumn<String> responsible = GeneratedColumn<String>(
+    'responsible',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pickupAtMeta = const VerificationMeta(
+    'pickupAt',
+  );
+  @override
+  late final GeneratedColumn<String> pickupAt = GeneratedColumn<String>(
+    'pickup_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _returnAtMeta = const VerificationMeta(
+    'returnAt',
+  );
+  @override
+  late final GeneratedColumn<String> returnAt = GeneratedColumn<String>(
+    'return_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pickedUpAtMeta = const VerificationMeta(
+    'pickedUpAt',
+  );
+  @override
+  late final GeneratedColumn<String> pickedUpAt = GeneratedColumn<String>(
+    'picked_up_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pickedUpDeviceMeta = const VerificationMeta(
+    'pickedUpDevice',
+  );
+  @override
+  late final GeneratedColumn<String> pickedUpDevice = GeneratedColumn<String>(
+    'picked_up_device',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _returnedAtMeta = const VerificationMeta(
+    'returnedAt',
+  );
+  @override
+  late final GeneratedColumn<String> returnedAt = GeneratedColumn<String>(
+    'returned_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _returnedDeviceMeta = const VerificationMeta(
+    'returnedDevice',
+  );
+  @override
+  late final GeneratedColumn<String> returnedDevice = GeneratedColumn<String>(
+    'returned_device',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceFileNameMeta = const VerificationMeta(
+    'sourceFileName',
+  );
+  @override
+  late final GeneratedColumn<String> sourceFileName = GeneratedColumn<String>(
+    'source_file_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<String> deletedAt = GeneratedColumn<String>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    uid,
+    projectId,
+    houseUid,
+    number,
+    externalId,
+    sourceStatus,
+    title,
+    responsible,
+    pickupAt,
+    returnAt,
+    pickedUpAt,
+    pickedUpDevice,
+    returnedAt,
+    returnedDevice,
+    notes,
+    sourceFileName,
+    sortOrder,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'rental_reservations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RentalReservation> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_uidMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('house_uid')) {
+      context.handle(
+        _houseUidMeta,
+        houseUid.isAcceptableOrUnknown(data['house_uid']!, _houseUidMeta),
+      );
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    }
+    if (data.containsKey('source_status')) {
+      context.handle(
+        _sourceStatusMeta,
+        sourceStatus.isAcceptableOrUnknown(
+          data['source_status']!,
+          _sourceStatusMeta,
+        ),
+      );
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('responsible')) {
+      context.handle(
+        _responsibleMeta,
+        responsible.isAcceptableOrUnknown(
+          data['responsible']!,
+          _responsibleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('pickup_at')) {
+      context.handle(
+        _pickupAtMeta,
+        pickupAt.isAcceptableOrUnknown(data['pickup_at']!, _pickupAtMeta),
+      );
+    }
+    if (data.containsKey('return_at')) {
+      context.handle(
+        _returnAtMeta,
+        returnAt.isAcceptableOrUnknown(data['return_at']!, _returnAtMeta),
+      );
+    }
+    if (data.containsKey('picked_up_at')) {
+      context.handle(
+        _pickedUpAtMeta,
+        pickedUpAt.isAcceptableOrUnknown(
+          data['picked_up_at']!,
+          _pickedUpAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('picked_up_device')) {
+      context.handle(
+        _pickedUpDeviceMeta,
+        pickedUpDevice.isAcceptableOrUnknown(
+          data['picked_up_device']!,
+          _pickedUpDeviceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('returned_at')) {
+      context.handle(
+        _returnedAtMeta,
+        returnedAt.isAcceptableOrUnknown(data['returned_at']!, _returnedAtMeta),
+      );
+    }
+    if (data.containsKey('returned_device')) {
+      context.handle(
+        _returnedDeviceMeta,
+        returnedDevice.isAcceptableOrUnknown(
+          data['returned_device']!,
+          _returnedDeviceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('source_file_name')) {
+      context.handle(
+        _sourceFileNameMeta,
+        sourceFileName.isAcceptableOrUnknown(
+          data['source_file_name']!,
+          _sourceFileNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {projectId, uid},
+  ];
+  @override
+  RentalReservation map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RentalReservation(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      houseUid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}house_uid'],
+      ),
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}number'],
+      ),
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
+      sourceStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_status'],
+      ),
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      responsible: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}responsible'],
+      ),
+      pickupAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pickup_at'],
+      ),
+      returnAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}return_at'],
+      ),
+      pickedUpAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}picked_up_at'],
+      ),
+      pickedUpDevice: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}picked_up_device'],
+      ),
+      returnedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}returned_at'],
+      ),
+      returnedDevice: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}returned_device'],
+      ),
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+      sourceFileName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_file_name'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $RentalReservationsTable createAlias(String alias) {
+    return $RentalReservationsTable(attachedDatabase, alias);
+  }
+}
+
+class RentalReservation extends DataClass
+    implements Insertable<RentalReservation> {
+  final int id;
+  final String uid;
+  final int projectId;
+  final String? houseUid;
+  final String? number;
+  final String? externalId;
+  final String? sourceStatus;
+  final String title;
+  final String? responsible;
+  final String? pickupAt;
+  final String? returnAt;
+  final String? pickedUpAt;
+  final String? pickedUpDevice;
+  final String? returnedAt;
+  final String? returnedDevice;
+  final String? notes;
+  final String? sourceFileName;
+  final int sortOrder;
+  final String? deletedAt;
+  const RentalReservation({
+    required this.id,
+    required this.uid,
+    required this.projectId,
+    this.houseUid,
+    this.number,
+    this.externalId,
+    this.sourceStatus,
+    required this.title,
+    this.responsible,
+    this.pickupAt,
+    this.returnAt,
+    this.pickedUpAt,
+    this.pickedUpDevice,
+    this.returnedAt,
+    this.returnedDevice,
+    this.notes,
+    this.sourceFileName,
+    required this.sortOrder,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['uid'] = Variable<String>(uid);
+    map['project_id'] = Variable<int>(projectId);
+    if (!nullToAbsent || houseUid != null) {
+      map['house_uid'] = Variable<String>(houseUid);
+    }
+    if (!nullToAbsent || number != null) {
+      map['number'] = Variable<String>(number);
+    }
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
+    if (!nullToAbsent || sourceStatus != null) {
+      map['source_status'] = Variable<String>(sourceStatus);
+    }
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || responsible != null) {
+      map['responsible'] = Variable<String>(responsible);
+    }
+    if (!nullToAbsent || pickupAt != null) {
+      map['pickup_at'] = Variable<String>(pickupAt);
+    }
+    if (!nullToAbsent || returnAt != null) {
+      map['return_at'] = Variable<String>(returnAt);
+    }
+    if (!nullToAbsent || pickedUpAt != null) {
+      map['picked_up_at'] = Variable<String>(pickedUpAt);
+    }
+    if (!nullToAbsent || pickedUpDevice != null) {
+      map['picked_up_device'] = Variable<String>(pickedUpDevice);
+    }
+    if (!nullToAbsent || returnedAt != null) {
+      map['returned_at'] = Variable<String>(returnedAt);
+    }
+    if (!nullToAbsent || returnedDevice != null) {
+      map['returned_device'] = Variable<String>(returnedDevice);
+    }
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    if (!nullToAbsent || sourceFileName != null) {
+      map['source_file_name'] = Variable<String>(sourceFileName);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<String>(deletedAt);
+    }
+    return map;
+  }
+
+  RentalReservationsCompanion toCompanion(bool nullToAbsent) {
+    return RentalReservationsCompanion(
+      id: Value(id),
+      uid: Value(uid),
+      projectId: Value(projectId),
+      houseUid: houseUid == null && nullToAbsent
+          ? const Value.absent()
+          : Value(houseUid),
+      number: number == null && nullToAbsent
+          ? const Value.absent()
+          : Value(number),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
+      sourceStatus: sourceStatus == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceStatus),
+      title: Value(title),
+      responsible: responsible == null && nullToAbsent
+          ? const Value.absent()
+          : Value(responsible),
+      pickupAt: pickupAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pickupAt),
+      returnAt: returnAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(returnAt),
+      pickedUpAt: pickedUpAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pickedUpAt),
+      pickedUpDevice: pickedUpDevice == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pickedUpDevice),
+      returnedAt: returnedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(returnedAt),
+      returnedDevice: returnedDevice == null && nullToAbsent
+          ? const Value.absent()
+          : Value(returnedDevice),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+      sourceFileName: sourceFileName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceFileName),
+      sortOrder: Value(sortOrder),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory RentalReservation.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RentalReservation(
+      id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String>(json['uid']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      houseUid: serializer.fromJson<String?>(json['houseUid']),
+      number: serializer.fromJson<String?>(json['number']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
+      sourceStatus: serializer.fromJson<String?>(json['sourceStatus']),
+      title: serializer.fromJson<String>(json['title']),
+      responsible: serializer.fromJson<String?>(json['responsible']),
+      pickupAt: serializer.fromJson<String?>(json['pickupAt']),
+      returnAt: serializer.fromJson<String?>(json['returnAt']),
+      pickedUpAt: serializer.fromJson<String?>(json['pickedUpAt']),
+      pickedUpDevice: serializer.fromJson<String?>(json['pickedUpDevice']),
+      returnedAt: serializer.fromJson<String?>(json['returnedAt']),
+      returnedDevice: serializer.fromJson<String?>(json['returnedDevice']),
+      notes: serializer.fromJson<String?>(json['notes']),
+      sourceFileName: serializer.fromJson<String?>(json['sourceFileName']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      deletedAt: serializer.fromJson<String?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String>(uid),
+      'projectId': serializer.toJson<int>(projectId),
+      'houseUid': serializer.toJson<String?>(houseUid),
+      'number': serializer.toJson<String?>(number),
+      'externalId': serializer.toJson<String?>(externalId),
+      'sourceStatus': serializer.toJson<String?>(sourceStatus),
+      'title': serializer.toJson<String>(title),
+      'responsible': serializer.toJson<String?>(responsible),
+      'pickupAt': serializer.toJson<String?>(pickupAt),
+      'returnAt': serializer.toJson<String?>(returnAt),
+      'pickedUpAt': serializer.toJson<String?>(pickedUpAt),
+      'pickedUpDevice': serializer.toJson<String?>(pickedUpDevice),
+      'returnedAt': serializer.toJson<String?>(returnedAt),
+      'returnedDevice': serializer.toJson<String?>(returnedDevice),
+      'notes': serializer.toJson<String?>(notes),
+      'sourceFileName': serializer.toJson<String?>(sourceFileName),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'deletedAt': serializer.toJson<String?>(deletedAt),
+    };
+  }
+
+  RentalReservation copyWith({
+    int? id,
+    String? uid,
+    int? projectId,
+    Value<String?> houseUid = const Value.absent(),
+    Value<String?> number = const Value.absent(),
+    Value<String?> externalId = const Value.absent(),
+    Value<String?> sourceStatus = const Value.absent(),
+    String? title,
+    Value<String?> responsible = const Value.absent(),
+    Value<String?> pickupAt = const Value.absent(),
+    Value<String?> returnAt = const Value.absent(),
+    Value<String?> pickedUpAt = const Value.absent(),
+    Value<String?> pickedUpDevice = const Value.absent(),
+    Value<String?> returnedAt = const Value.absent(),
+    Value<String?> returnedDevice = const Value.absent(),
+    Value<String?> notes = const Value.absent(),
+    Value<String?> sourceFileName = const Value.absent(),
+    int? sortOrder,
+    Value<String?> deletedAt = const Value.absent(),
+  }) => RentalReservation(
+    id: id ?? this.id,
+    uid: uid ?? this.uid,
+    projectId: projectId ?? this.projectId,
+    houseUid: houseUid.present ? houseUid.value : this.houseUid,
+    number: number.present ? number.value : this.number,
+    externalId: externalId.present ? externalId.value : this.externalId,
+    sourceStatus: sourceStatus.present ? sourceStatus.value : this.sourceStatus,
+    title: title ?? this.title,
+    responsible: responsible.present ? responsible.value : this.responsible,
+    pickupAt: pickupAt.present ? pickupAt.value : this.pickupAt,
+    returnAt: returnAt.present ? returnAt.value : this.returnAt,
+    pickedUpAt: pickedUpAt.present ? pickedUpAt.value : this.pickedUpAt,
+    pickedUpDevice: pickedUpDevice.present
+        ? pickedUpDevice.value
+        : this.pickedUpDevice,
+    returnedAt: returnedAt.present ? returnedAt.value : this.returnedAt,
+    returnedDevice: returnedDevice.present
+        ? returnedDevice.value
+        : this.returnedDevice,
+    notes: notes.present ? notes.value : this.notes,
+    sourceFileName: sourceFileName.present
+        ? sourceFileName.value
+        : this.sourceFileName,
+    sortOrder: sortOrder ?? this.sortOrder,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  RentalReservation copyWithCompanion(RentalReservationsCompanion data) {
+    return RentalReservation(
+      id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      houseUid: data.houseUid.present ? data.houseUid.value : this.houseUid,
+      number: data.number.present ? data.number.value : this.number,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
+      sourceStatus: data.sourceStatus.present
+          ? data.sourceStatus.value
+          : this.sourceStatus,
+      title: data.title.present ? data.title.value : this.title,
+      responsible: data.responsible.present
+          ? data.responsible.value
+          : this.responsible,
+      pickupAt: data.pickupAt.present ? data.pickupAt.value : this.pickupAt,
+      returnAt: data.returnAt.present ? data.returnAt.value : this.returnAt,
+      pickedUpAt: data.pickedUpAt.present
+          ? data.pickedUpAt.value
+          : this.pickedUpAt,
+      pickedUpDevice: data.pickedUpDevice.present
+          ? data.pickedUpDevice.value
+          : this.pickedUpDevice,
+      returnedAt: data.returnedAt.present
+          ? data.returnedAt.value
+          : this.returnedAt,
+      returnedDevice: data.returnedDevice.present
+          ? data.returnedDevice.value
+          : this.returnedDevice,
+      notes: data.notes.present ? data.notes.value : this.notes,
+      sourceFileName: data.sourceFileName.present
+          ? data.sourceFileName.value
+          : this.sourceFileName,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RentalReservation(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('houseUid: $houseUid, ')
+          ..write('number: $number, ')
+          ..write('externalId: $externalId, ')
+          ..write('sourceStatus: $sourceStatus, ')
+          ..write('title: $title, ')
+          ..write('responsible: $responsible, ')
+          ..write('pickupAt: $pickupAt, ')
+          ..write('returnAt: $returnAt, ')
+          ..write('pickedUpAt: $pickedUpAt, ')
+          ..write('pickedUpDevice: $pickedUpDevice, ')
+          ..write('returnedAt: $returnedAt, ')
+          ..write('returnedDevice: $returnedDevice, ')
+          ..write('notes: $notes, ')
+          ..write('sourceFileName: $sourceFileName, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    uid,
+    projectId,
+    houseUid,
+    number,
+    externalId,
+    sourceStatus,
+    title,
+    responsible,
+    pickupAt,
+    returnAt,
+    pickedUpAt,
+    pickedUpDevice,
+    returnedAt,
+    returnedDevice,
+    notes,
+    sourceFileName,
+    sortOrder,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RentalReservation &&
+          other.id == this.id &&
+          other.uid == this.uid &&
+          other.projectId == this.projectId &&
+          other.houseUid == this.houseUid &&
+          other.number == this.number &&
+          other.externalId == this.externalId &&
+          other.sourceStatus == this.sourceStatus &&
+          other.title == this.title &&
+          other.responsible == this.responsible &&
+          other.pickupAt == this.pickupAt &&
+          other.returnAt == this.returnAt &&
+          other.pickedUpAt == this.pickedUpAt &&
+          other.pickedUpDevice == this.pickedUpDevice &&
+          other.returnedAt == this.returnedAt &&
+          other.returnedDevice == this.returnedDevice &&
+          other.notes == this.notes &&
+          other.sourceFileName == this.sourceFileName &&
+          other.sortOrder == this.sortOrder &&
+          other.deletedAt == this.deletedAt);
+}
+
+class RentalReservationsCompanion extends UpdateCompanion<RentalReservation> {
+  final Value<int> id;
+  final Value<String> uid;
+  final Value<int> projectId;
+  final Value<String?> houseUid;
+  final Value<String?> number;
+  final Value<String?> externalId;
+  final Value<String?> sourceStatus;
+  final Value<String> title;
+  final Value<String?> responsible;
+  final Value<String?> pickupAt;
+  final Value<String?> returnAt;
+  final Value<String?> pickedUpAt;
+  final Value<String?> pickedUpDevice;
+  final Value<String?> returnedAt;
+  final Value<String?> returnedDevice;
+  final Value<String?> notes;
+  final Value<String?> sourceFileName;
+  final Value<int> sortOrder;
+  final Value<String?> deletedAt;
+  const RentalReservationsCompanion({
+    this.id = const Value.absent(),
+    this.uid = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.houseUid = const Value.absent(),
+    this.number = const Value.absent(),
+    this.externalId = const Value.absent(),
+    this.sourceStatus = const Value.absent(),
+    this.title = const Value.absent(),
+    this.responsible = const Value.absent(),
+    this.pickupAt = const Value.absent(),
+    this.returnAt = const Value.absent(),
+    this.pickedUpAt = const Value.absent(),
+    this.pickedUpDevice = const Value.absent(),
+    this.returnedAt = const Value.absent(),
+    this.returnedDevice = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.sourceFileName = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+  });
+  RentalReservationsCompanion.insert({
+    this.id = const Value.absent(),
+    required String uid,
+    required int projectId,
+    this.houseUid = const Value.absent(),
+    this.number = const Value.absent(),
+    this.externalId = const Value.absent(),
+    this.sourceStatus = const Value.absent(),
+    required String title,
+    this.responsible = const Value.absent(),
+    this.pickupAt = const Value.absent(),
+    this.returnAt = const Value.absent(),
+    this.pickedUpAt = const Value.absent(),
+    this.pickedUpDevice = const Value.absent(),
+    this.returnedAt = const Value.absent(),
+    this.returnedDevice = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.sourceFileName = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+  }) : uid = Value(uid),
+       projectId = Value(projectId),
+       title = Value(title);
+  static Insertable<RentalReservation> custom({
+    Expression<int>? id,
+    Expression<String>? uid,
+    Expression<int>? projectId,
+    Expression<String>? houseUid,
+    Expression<String>? number,
+    Expression<String>? externalId,
+    Expression<String>? sourceStatus,
+    Expression<String>? title,
+    Expression<String>? responsible,
+    Expression<String>? pickupAt,
+    Expression<String>? returnAt,
+    Expression<String>? pickedUpAt,
+    Expression<String>? pickedUpDevice,
+    Expression<String>? returnedAt,
+    Expression<String>? returnedDevice,
+    Expression<String>? notes,
+    Expression<String>? sourceFileName,
+    Expression<int>? sortOrder,
+    Expression<String>? deletedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
+      if (projectId != null) 'project_id': projectId,
+      if (houseUid != null) 'house_uid': houseUid,
+      if (number != null) 'number': number,
+      if (externalId != null) 'external_id': externalId,
+      if (sourceStatus != null) 'source_status': sourceStatus,
+      if (title != null) 'title': title,
+      if (responsible != null) 'responsible': responsible,
+      if (pickupAt != null) 'pickup_at': pickupAt,
+      if (returnAt != null) 'return_at': returnAt,
+      if (pickedUpAt != null) 'picked_up_at': pickedUpAt,
+      if (pickedUpDevice != null) 'picked_up_device': pickedUpDevice,
+      if (returnedAt != null) 'returned_at': returnedAt,
+      if (returnedDevice != null) 'returned_device': returnedDevice,
+      if (notes != null) 'notes': notes,
+      if (sourceFileName != null) 'source_file_name': sourceFileName,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+    });
+  }
+
+  RentalReservationsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? uid,
+    Value<int>? projectId,
+    Value<String?>? houseUid,
+    Value<String?>? number,
+    Value<String?>? externalId,
+    Value<String?>? sourceStatus,
+    Value<String>? title,
+    Value<String?>? responsible,
+    Value<String?>? pickupAt,
+    Value<String?>? returnAt,
+    Value<String?>? pickedUpAt,
+    Value<String?>? pickedUpDevice,
+    Value<String?>? returnedAt,
+    Value<String?>? returnedDevice,
+    Value<String?>? notes,
+    Value<String?>? sourceFileName,
+    Value<int>? sortOrder,
+    Value<String?>? deletedAt,
+  }) {
+    return RentalReservationsCompanion(
+      id: id ?? this.id,
+      uid: uid ?? this.uid,
+      projectId: projectId ?? this.projectId,
+      houseUid: houseUid ?? this.houseUid,
+      number: number ?? this.number,
+      externalId: externalId ?? this.externalId,
+      sourceStatus: sourceStatus ?? this.sourceStatus,
+      title: title ?? this.title,
+      responsible: responsible ?? this.responsible,
+      pickupAt: pickupAt ?? this.pickupAt,
+      returnAt: returnAt ?? this.returnAt,
+      pickedUpAt: pickedUpAt ?? this.pickedUpAt,
+      pickedUpDevice: pickedUpDevice ?? this.pickedUpDevice,
+      returnedAt: returnedAt ?? this.returnedAt,
+      returnedDevice: returnedDevice ?? this.returnedDevice,
+      notes: notes ?? this.notes,
+      sourceFileName: sourceFileName ?? this.sourceFileName,
+      sortOrder: sortOrder ?? this.sortOrder,
+      deletedAt: deletedAt ?? this.deletedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (houseUid.present) {
+      map['house_uid'] = Variable<String>(houseUid.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<String>(number.value);
+    }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
+    if (sourceStatus.present) {
+      map['source_status'] = Variable<String>(sourceStatus.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (responsible.present) {
+      map['responsible'] = Variable<String>(responsible.value);
+    }
+    if (pickupAt.present) {
+      map['pickup_at'] = Variable<String>(pickupAt.value);
+    }
+    if (returnAt.present) {
+      map['return_at'] = Variable<String>(returnAt.value);
+    }
+    if (pickedUpAt.present) {
+      map['picked_up_at'] = Variable<String>(pickedUpAt.value);
+    }
+    if (pickedUpDevice.present) {
+      map['picked_up_device'] = Variable<String>(pickedUpDevice.value);
+    }
+    if (returnedAt.present) {
+      map['returned_at'] = Variable<String>(returnedAt.value);
+    }
+    if (returnedDevice.present) {
+      map['returned_device'] = Variable<String>(returnedDevice.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    if (sourceFileName.present) {
+      map['source_file_name'] = Variable<String>(sourceFileName.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<String>(deletedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RentalReservationsCompanion(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('houseUid: $houseUid, ')
+          ..write('number: $number, ')
+          ..write('externalId: $externalId, ')
+          ..write('sourceStatus: $sourceStatus, ')
+          ..write('title: $title, ')
+          ..write('responsible: $responsible, ')
+          ..write('pickupAt: $pickupAt, ')
+          ..write('returnAt: $returnAt, ')
+          ..write('pickedUpAt: $pickedUpAt, ')
+          ..write('pickedUpDevice: $pickedUpDevice, ')
+          ..write('returnedAt: $returnedAt, ')
+          ..write('returnedDevice: $returnedDevice, ')
+          ..write('notes: $notes, ')
+          ..write('sourceFileName: $sourceFileName, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RentalItemsTable extends RentalItems
+    with TableInfo<$RentalItemsTable, RentalItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RentalItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _reservationUidMeta = const VerificationMeta(
+    'reservationUid',
+  );
+  @override
+  late final GeneratedColumn<String> reservationUid = GeneratedColumn<String>(
+    'reservation_uid',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _parentUidMeta = const VerificationMeta(
+    'parentUid',
+  );
+  @override
+  late final GeneratedColumn<String> parentUid = GeneratedColumn<String>(
+    'parent_uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('item'),
+  );
+  static const VerificationMeta _sectionMeta = const VerificationMeta(
+    'section',
+  );
+  @override
+  late final GeneratedColumn<String> section = GeneratedColumn<String>(
+    'section',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _groupLabelMeta = const VerificationMeta(
+    'groupLabel',
+  );
+  @override
+  late final GeneratedColumn<String> groupLabel = GeneratedColumn<String>(
+    'group_label',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _quantityMeta = const VerificationMeta(
+    'quantity',
+  );
+  @override
+  late final GeneratedColumn<double> quantity = GeneratedColumn<double>(
+    'quantity',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _quantityCertainMeta = const VerificationMeta(
+    'quantityCertain',
+  );
+  @override
+  late final GeneratedColumn<bool> quantityCertain = GeneratedColumn<bool>(
+    'quantity_certain',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("quantity_certain" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _lotMeta = const VerificationMeta('lot');
+  @override
+  late final GeneratedColumn<String> lot = GeneratedColumn<String>(
+    'lot',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _serialMeta = const VerificationMeta('serial');
+  @override
+  late final GeneratedColumn<String> serial = GeneratedColumn<String>(
+    'serial',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _rawTextMeta = const VerificationMeta(
+    'rawText',
+  );
+  @override
+  late final GeneratedColumn<String> rawText = GeneratedColumn<String>(
+    'raw_text',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _catalogRefMeta = const VerificationMeta(
+    'catalogRef',
+  );
+  @override
+  late final GeneratedColumn<String> catalogRef = GeneratedColumn<String>(
+    'catalog_ref',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pickupCheckedAtMeta = const VerificationMeta(
+    'pickupCheckedAt',
+  );
+  @override
+  late final GeneratedColumn<String> pickupCheckedAt = GeneratedColumn<String>(
+    'pickup_checked_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _returnCheckedAtMeta = const VerificationMeta(
+    'returnCheckedAt',
+  );
+  @override
+  late final GeneratedColumn<String> returnCheckedAt = GeneratedColumn<String>(
+    'return_checked_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _removedFromSourceAtMeta =
+      const VerificationMeta('removedFromSourceAt');
+  @override
+  late final GeneratedColumn<String> removedFromSourceAt =
+      GeneratedColumn<String>(
+        'removed_from_source_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<String> deletedAt = GeneratedColumn<String>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    uid,
+    projectId,
+    reservationUid,
+    parentUid,
+    kind,
+    section,
+    groupLabel,
+    name,
+    quantity,
+    quantityCertain,
+    lot,
+    serial,
+    note,
+    rawText,
+    catalogRef,
+    pickupCheckedAt,
+    returnCheckedAt,
+    removedFromSourceAt,
+    sortOrder,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'rental_items';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RentalItem> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_uidMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('reservation_uid')) {
+      context.handle(
+        _reservationUidMeta,
+        reservationUid.isAcceptableOrUnknown(
+          data['reservation_uid']!,
+          _reservationUidMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_reservationUidMeta);
+    }
+    if (data.containsKey('parent_uid')) {
+      context.handle(
+        _parentUidMeta,
+        parentUid.isAcceptableOrUnknown(data['parent_uid']!, _parentUidMeta),
+      );
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    }
+    if (data.containsKey('section')) {
+      context.handle(
+        _sectionMeta,
+        section.isAcceptableOrUnknown(data['section']!, _sectionMeta),
+      );
+    }
+    if (data.containsKey('group_label')) {
+      context.handle(
+        _groupLabelMeta,
+        groupLabel.isAcceptableOrUnknown(data['group_label']!, _groupLabelMeta),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('quantity')) {
+      context.handle(
+        _quantityMeta,
+        quantity.isAcceptableOrUnknown(data['quantity']!, _quantityMeta),
+      );
+    }
+    if (data.containsKey('quantity_certain')) {
+      context.handle(
+        _quantityCertainMeta,
+        quantityCertain.isAcceptableOrUnknown(
+          data['quantity_certain']!,
+          _quantityCertainMeta,
+        ),
+      );
+    }
+    if (data.containsKey('lot')) {
+      context.handle(
+        _lotMeta,
+        lot.isAcceptableOrUnknown(data['lot']!, _lotMeta),
+      );
+    }
+    if (data.containsKey('serial')) {
+      context.handle(
+        _serialMeta,
+        serial.isAcceptableOrUnknown(data['serial']!, _serialMeta),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('raw_text')) {
+      context.handle(
+        _rawTextMeta,
+        rawText.isAcceptableOrUnknown(data['raw_text']!, _rawTextMeta),
+      );
+    }
+    if (data.containsKey('catalog_ref')) {
+      context.handle(
+        _catalogRefMeta,
+        catalogRef.isAcceptableOrUnknown(data['catalog_ref']!, _catalogRefMeta),
+      );
+    }
+    if (data.containsKey('pickup_checked_at')) {
+      context.handle(
+        _pickupCheckedAtMeta,
+        pickupCheckedAt.isAcceptableOrUnknown(
+          data['pickup_checked_at']!,
+          _pickupCheckedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('return_checked_at')) {
+      context.handle(
+        _returnCheckedAtMeta,
+        returnCheckedAt.isAcceptableOrUnknown(
+          data['return_checked_at']!,
+          _returnCheckedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('removed_from_source_at')) {
+      context.handle(
+        _removedFromSourceAtMeta,
+        removedFromSourceAt.isAcceptableOrUnknown(
+          data['removed_from_source_at']!,
+          _removedFromSourceAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {projectId, uid},
+  ];
+  @override
+  RentalItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RentalItem(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}project_id'],
+      )!,
+      reservationUid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reservation_uid'],
+      )!,
+      parentUid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_uid'],
+      ),
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      section: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}section'],
+      ),
+      groupLabel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_label'],
+      ),
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      quantity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}quantity'],
+      ),
+      quantityCertain: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}quantity_certain'],
+      )!,
+      lot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}lot'],
+      ),
+      serial: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}serial'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      rawText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}raw_text'],
+      ),
+      catalogRef: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}catalog_ref'],
+      ),
+      pickupCheckedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pickup_checked_at'],
+      ),
+      returnCheckedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}return_checked_at'],
+      ),
+      removedFromSourceAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}removed_from_source_at'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $RentalItemsTable createAlias(String alias) {
+    return $RentalItemsTable(attachedDatabase, alias);
+  }
+}
+
+class RentalItem extends DataClass implements Insertable<RentalItem> {
+  final int id;
+  final String uid;
+  final int projectId;
+  final String reservationUid;
+  final String? parentUid;
+
+  /// `item` o `note` (lo apuntado sin cantidad: «Retales de gelatinas»).
+  final String kind;
+  final String? section;
+
+  /// Subgrupo dentro de un kit: «Maleta 1».
+  final String? groupLabel;
+  final String name;
+  final double? quantity;
+
+  /// Falso si el importador no la tuvo clara: se revisa antes de guardar.
+  final bool quantityCertain;
+  final String? lot;
+  final String? serial;
+  final String? note;
+  final String? rawText;
+  final String? catalogRef;
+  final String? pickupCheckedAt;
+  final String? returnCheckedAt;
+
+  /// Ya no viene en la lista reimportada, pero se había comprobado.
+  final String? removedFromSourceAt;
+  final int sortOrder;
+  final String? deletedAt;
+  const RentalItem({
+    required this.id,
+    required this.uid,
+    required this.projectId,
+    required this.reservationUid,
+    this.parentUid,
+    required this.kind,
+    this.section,
+    this.groupLabel,
+    required this.name,
+    this.quantity,
+    required this.quantityCertain,
+    this.lot,
+    this.serial,
+    this.note,
+    this.rawText,
+    this.catalogRef,
+    this.pickupCheckedAt,
+    this.returnCheckedAt,
+    this.removedFromSourceAt,
+    required this.sortOrder,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['uid'] = Variable<String>(uid);
+    map['project_id'] = Variable<int>(projectId);
+    map['reservation_uid'] = Variable<String>(reservationUid);
+    if (!nullToAbsent || parentUid != null) {
+      map['parent_uid'] = Variable<String>(parentUid);
+    }
+    map['kind'] = Variable<String>(kind);
+    if (!nullToAbsent || section != null) {
+      map['section'] = Variable<String>(section);
+    }
+    if (!nullToAbsent || groupLabel != null) {
+      map['group_label'] = Variable<String>(groupLabel);
+    }
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || quantity != null) {
+      map['quantity'] = Variable<double>(quantity);
+    }
+    map['quantity_certain'] = Variable<bool>(quantityCertain);
+    if (!nullToAbsent || lot != null) {
+      map['lot'] = Variable<String>(lot);
+    }
+    if (!nullToAbsent || serial != null) {
+      map['serial'] = Variable<String>(serial);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    if (!nullToAbsent || rawText != null) {
+      map['raw_text'] = Variable<String>(rawText);
+    }
+    if (!nullToAbsent || catalogRef != null) {
+      map['catalog_ref'] = Variable<String>(catalogRef);
+    }
+    if (!nullToAbsent || pickupCheckedAt != null) {
+      map['pickup_checked_at'] = Variable<String>(pickupCheckedAt);
+    }
+    if (!nullToAbsent || returnCheckedAt != null) {
+      map['return_checked_at'] = Variable<String>(returnCheckedAt);
+    }
+    if (!nullToAbsent || removedFromSourceAt != null) {
+      map['removed_from_source_at'] = Variable<String>(removedFromSourceAt);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<String>(deletedAt);
+    }
+    return map;
+  }
+
+  RentalItemsCompanion toCompanion(bool nullToAbsent) {
+    return RentalItemsCompanion(
+      id: Value(id),
+      uid: Value(uid),
+      projectId: Value(projectId),
+      reservationUid: Value(reservationUid),
+      parentUid: parentUid == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentUid),
+      kind: Value(kind),
+      section: section == null && nullToAbsent
+          ? const Value.absent()
+          : Value(section),
+      groupLabel: groupLabel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(groupLabel),
+      name: Value(name),
+      quantity: quantity == null && nullToAbsent
+          ? const Value.absent()
+          : Value(quantity),
+      quantityCertain: Value(quantityCertain),
+      lot: lot == null && nullToAbsent ? const Value.absent() : Value(lot),
+      serial: serial == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serial),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      rawText: rawText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rawText),
+      catalogRef: catalogRef == null && nullToAbsent
+          ? const Value.absent()
+          : Value(catalogRef),
+      pickupCheckedAt: pickupCheckedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pickupCheckedAt),
+      returnCheckedAt: returnCheckedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(returnCheckedAt),
+      removedFromSourceAt: removedFromSourceAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(removedFromSourceAt),
+      sortOrder: Value(sortOrder),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory RentalItem.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RentalItem(
+      id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String>(json['uid']),
+      projectId: serializer.fromJson<int>(json['projectId']),
+      reservationUid: serializer.fromJson<String>(json['reservationUid']),
+      parentUid: serializer.fromJson<String?>(json['parentUid']),
+      kind: serializer.fromJson<String>(json['kind']),
+      section: serializer.fromJson<String?>(json['section']),
+      groupLabel: serializer.fromJson<String?>(json['groupLabel']),
+      name: serializer.fromJson<String>(json['name']),
+      quantity: serializer.fromJson<double?>(json['quantity']),
+      quantityCertain: serializer.fromJson<bool>(json['quantityCertain']),
+      lot: serializer.fromJson<String?>(json['lot']),
+      serial: serializer.fromJson<String?>(json['serial']),
+      note: serializer.fromJson<String?>(json['note']),
+      rawText: serializer.fromJson<String?>(json['rawText']),
+      catalogRef: serializer.fromJson<String?>(json['catalogRef']),
+      pickupCheckedAt: serializer.fromJson<String?>(json['pickupCheckedAt']),
+      returnCheckedAt: serializer.fromJson<String?>(json['returnCheckedAt']),
+      removedFromSourceAt: serializer.fromJson<String?>(
+        json['removedFromSourceAt'],
+      ),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      deletedAt: serializer.fromJson<String?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String>(uid),
+      'projectId': serializer.toJson<int>(projectId),
+      'reservationUid': serializer.toJson<String>(reservationUid),
+      'parentUid': serializer.toJson<String?>(parentUid),
+      'kind': serializer.toJson<String>(kind),
+      'section': serializer.toJson<String?>(section),
+      'groupLabel': serializer.toJson<String?>(groupLabel),
+      'name': serializer.toJson<String>(name),
+      'quantity': serializer.toJson<double?>(quantity),
+      'quantityCertain': serializer.toJson<bool>(quantityCertain),
+      'lot': serializer.toJson<String?>(lot),
+      'serial': serializer.toJson<String?>(serial),
+      'note': serializer.toJson<String?>(note),
+      'rawText': serializer.toJson<String?>(rawText),
+      'catalogRef': serializer.toJson<String?>(catalogRef),
+      'pickupCheckedAt': serializer.toJson<String?>(pickupCheckedAt),
+      'returnCheckedAt': serializer.toJson<String?>(returnCheckedAt),
+      'removedFromSourceAt': serializer.toJson<String?>(removedFromSourceAt),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'deletedAt': serializer.toJson<String?>(deletedAt),
+    };
+  }
+
+  RentalItem copyWith({
+    int? id,
+    String? uid,
+    int? projectId,
+    String? reservationUid,
+    Value<String?> parentUid = const Value.absent(),
+    String? kind,
+    Value<String?> section = const Value.absent(),
+    Value<String?> groupLabel = const Value.absent(),
+    String? name,
+    Value<double?> quantity = const Value.absent(),
+    bool? quantityCertain,
+    Value<String?> lot = const Value.absent(),
+    Value<String?> serial = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+    Value<String?> rawText = const Value.absent(),
+    Value<String?> catalogRef = const Value.absent(),
+    Value<String?> pickupCheckedAt = const Value.absent(),
+    Value<String?> returnCheckedAt = const Value.absent(),
+    Value<String?> removedFromSourceAt = const Value.absent(),
+    int? sortOrder,
+    Value<String?> deletedAt = const Value.absent(),
+  }) => RentalItem(
+    id: id ?? this.id,
+    uid: uid ?? this.uid,
+    projectId: projectId ?? this.projectId,
+    reservationUid: reservationUid ?? this.reservationUid,
+    parentUid: parentUid.present ? parentUid.value : this.parentUid,
+    kind: kind ?? this.kind,
+    section: section.present ? section.value : this.section,
+    groupLabel: groupLabel.present ? groupLabel.value : this.groupLabel,
+    name: name ?? this.name,
+    quantity: quantity.present ? quantity.value : this.quantity,
+    quantityCertain: quantityCertain ?? this.quantityCertain,
+    lot: lot.present ? lot.value : this.lot,
+    serial: serial.present ? serial.value : this.serial,
+    note: note.present ? note.value : this.note,
+    rawText: rawText.present ? rawText.value : this.rawText,
+    catalogRef: catalogRef.present ? catalogRef.value : this.catalogRef,
+    pickupCheckedAt: pickupCheckedAt.present
+        ? pickupCheckedAt.value
+        : this.pickupCheckedAt,
+    returnCheckedAt: returnCheckedAt.present
+        ? returnCheckedAt.value
+        : this.returnCheckedAt,
+    removedFromSourceAt: removedFromSourceAt.present
+        ? removedFromSourceAt.value
+        : this.removedFromSourceAt,
+    sortOrder: sortOrder ?? this.sortOrder,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  RentalItem copyWithCompanion(RentalItemsCompanion data) {
+    return RentalItem(
+      id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      reservationUid: data.reservationUid.present
+          ? data.reservationUid.value
+          : this.reservationUid,
+      parentUid: data.parentUid.present ? data.parentUid.value : this.parentUid,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      section: data.section.present ? data.section.value : this.section,
+      groupLabel: data.groupLabel.present
+          ? data.groupLabel.value
+          : this.groupLabel,
+      name: data.name.present ? data.name.value : this.name,
+      quantity: data.quantity.present ? data.quantity.value : this.quantity,
+      quantityCertain: data.quantityCertain.present
+          ? data.quantityCertain.value
+          : this.quantityCertain,
+      lot: data.lot.present ? data.lot.value : this.lot,
+      serial: data.serial.present ? data.serial.value : this.serial,
+      note: data.note.present ? data.note.value : this.note,
+      rawText: data.rawText.present ? data.rawText.value : this.rawText,
+      catalogRef: data.catalogRef.present
+          ? data.catalogRef.value
+          : this.catalogRef,
+      pickupCheckedAt: data.pickupCheckedAt.present
+          ? data.pickupCheckedAt.value
+          : this.pickupCheckedAt,
+      returnCheckedAt: data.returnCheckedAt.present
+          ? data.returnCheckedAt.value
+          : this.returnCheckedAt,
+      removedFromSourceAt: data.removedFromSourceAt.present
+          ? data.removedFromSourceAt.value
+          : this.removedFromSourceAt,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RentalItem(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('reservationUid: $reservationUid, ')
+          ..write('parentUid: $parentUid, ')
+          ..write('kind: $kind, ')
+          ..write('section: $section, ')
+          ..write('groupLabel: $groupLabel, ')
+          ..write('name: $name, ')
+          ..write('quantity: $quantity, ')
+          ..write('quantityCertain: $quantityCertain, ')
+          ..write('lot: $lot, ')
+          ..write('serial: $serial, ')
+          ..write('note: $note, ')
+          ..write('rawText: $rawText, ')
+          ..write('catalogRef: $catalogRef, ')
+          ..write('pickupCheckedAt: $pickupCheckedAt, ')
+          ..write('returnCheckedAt: $returnCheckedAt, ')
+          ..write('removedFromSourceAt: $removedFromSourceAt, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    uid,
+    projectId,
+    reservationUid,
+    parentUid,
+    kind,
+    section,
+    groupLabel,
+    name,
+    quantity,
+    quantityCertain,
+    lot,
+    serial,
+    note,
+    rawText,
+    catalogRef,
+    pickupCheckedAt,
+    returnCheckedAt,
+    removedFromSourceAt,
+    sortOrder,
+    deletedAt,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RentalItem &&
+          other.id == this.id &&
+          other.uid == this.uid &&
+          other.projectId == this.projectId &&
+          other.reservationUid == this.reservationUid &&
+          other.parentUid == this.parentUid &&
+          other.kind == this.kind &&
+          other.section == this.section &&
+          other.groupLabel == this.groupLabel &&
+          other.name == this.name &&
+          other.quantity == this.quantity &&
+          other.quantityCertain == this.quantityCertain &&
+          other.lot == this.lot &&
+          other.serial == this.serial &&
+          other.note == this.note &&
+          other.rawText == this.rawText &&
+          other.catalogRef == this.catalogRef &&
+          other.pickupCheckedAt == this.pickupCheckedAt &&
+          other.returnCheckedAt == this.returnCheckedAt &&
+          other.removedFromSourceAt == this.removedFromSourceAt &&
+          other.sortOrder == this.sortOrder &&
+          other.deletedAt == this.deletedAt);
+}
+
+class RentalItemsCompanion extends UpdateCompanion<RentalItem> {
+  final Value<int> id;
+  final Value<String> uid;
+  final Value<int> projectId;
+  final Value<String> reservationUid;
+  final Value<String?> parentUid;
+  final Value<String> kind;
+  final Value<String?> section;
+  final Value<String?> groupLabel;
+  final Value<String> name;
+  final Value<double?> quantity;
+  final Value<bool> quantityCertain;
+  final Value<String?> lot;
+  final Value<String?> serial;
+  final Value<String?> note;
+  final Value<String?> rawText;
+  final Value<String?> catalogRef;
+  final Value<String?> pickupCheckedAt;
+  final Value<String?> returnCheckedAt;
+  final Value<String?> removedFromSourceAt;
+  final Value<int> sortOrder;
+  final Value<String?> deletedAt;
+  const RentalItemsCompanion({
+    this.id = const Value.absent(),
+    this.uid = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.reservationUid = const Value.absent(),
+    this.parentUid = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.section = const Value.absent(),
+    this.groupLabel = const Value.absent(),
+    this.name = const Value.absent(),
+    this.quantity = const Value.absent(),
+    this.quantityCertain = const Value.absent(),
+    this.lot = const Value.absent(),
+    this.serial = const Value.absent(),
+    this.note = const Value.absent(),
+    this.rawText = const Value.absent(),
+    this.catalogRef = const Value.absent(),
+    this.pickupCheckedAt = const Value.absent(),
+    this.returnCheckedAt = const Value.absent(),
+    this.removedFromSourceAt = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+  });
+  RentalItemsCompanion.insert({
+    this.id = const Value.absent(),
+    required String uid,
+    required int projectId,
+    required String reservationUid,
+    this.parentUid = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.section = const Value.absent(),
+    this.groupLabel = const Value.absent(),
+    required String name,
+    this.quantity = const Value.absent(),
+    this.quantityCertain = const Value.absent(),
+    this.lot = const Value.absent(),
+    this.serial = const Value.absent(),
+    this.note = const Value.absent(),
+    this.rawText = const Value.absent(),
+    this.catalogRef = const Value.absent(),
+    this.pickupCheckedAt = const Value.absent(),
+    this.returnCheckedAt = const Value.absent(),
+    this.removedFromSourceAt = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+  }) : uid = Value(uid),
+       projectId = Value(projectId),
+       reservationUid = Value(reservationUid),
+       name = Value(name);
+  static Insertable<RentalItem> custom({
+    Expression<int>? id,
+    Expression<String>? uid,
+    Expression<int>? projectId,
+    Expression<String>? reservationUid,
+    Expression<String>? parentUid,
+    Expression<String>? kind,
+    Expression<String>? section,
+    Expression<String>? groupLabel,
+    Expression<String>? name,
+    Expression<double>? quantity,
+    Expression<bool>? quantityCertain,
+    Expression<String>? lot,
+    Expression<String>? serial,
+    Expression<String>? note,
+    Expression<String>? rawText,
+    Expression<String>? catalogRef,
+    Expression<String>? pickupCheckedAt,
+    Expression<String>? returnCheckedAt,
+    Expression<String>? removedFromSourceAt,
+    Expression<int>? sortOrder,
+    Expression<String>? deletedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
+      if (projectId != null) 'project_id': projectId,
+      if (reservationUid != null) 'reservation_uid': reservationUid,
+      if (parentUid != null) 'parent_uid': parentUid,
+      if (kind != null) 'kind': kind,
+      if (section != null) 'section': section,
+      if (groupLabel != null) 'group_label': groupLabel,
+      if (name != null) 'name': name,
+      if (quantity != null) 'quantity': quantity,
+      if (quantityCertain != null) 'quantity_certain': quantityCertain,
+      if (lot != null) 'lot': lot,
+      if (serial != null) 'serial': serial,
+      if (note != null) 'note': note,
+      if (rawText != null) 'raw_text': rawText,
+      if (catalogRef != null) 'catalog_ref': catalogRef,
+      if (pickupCheckedAt != null) 'pickup_checked_at': pickupCheckedAt,
+      if (returnCheckedAt != null) 'return_checked_at': returnCheckedAt,
+      if (removedFromSourceAt != null)
+        'removed_from_source_at': removedFromSourceAt,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+    });
+  }
+
+  RentalItemsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? uid,
+    Value<int>? projectId,
+    Value<String>? reservationUid,
+    Value<String?>? parentUid,
+    Value<String>? kind,
+    Value<String?>? section,
+    Value<String?>? groupLabel,
+    Value<String>? name,
+    Value<double?>? quantity,
+    Value<bool>? quantityCertain,
+    Value<String?>? lot,
+    Value<String?>? serial,
+    Value<String?>? note,
+    Value<String?>? rawText,
+    Value<String?>? catalogRef,
+    Value<String?>? pickupCheckedAt,
+    Value<String?>? returnCheckedAt,
+    Value<String?>? removedFromSourceAt,
+    Value<int>? sortOrder,
+    Value<String?>? deletedAt,
+  }) {
+    return RentalItemsCompanion(
+      id: id ?? this.id,
+      uid: uid ?? this.uid,
+      projectId: projectId ?? this.projectId,
+      reservationUid: reservationUid ?? this.reservationUid,
+      parentUid: parentUid ?? this.parentUid,
+      kind: kind ?? this.kind,
+      section: section ?? this.section,
+      groupLabel: groupLabel ?? this.groupLabel,
+      name: name ?? this.name,
+      quantity: quantity ?? this.quantity,
+      quantityCertain: quantityCertain ?? this.quantityCertain,
+      lot: lot ?? this.lot,
+      serial: serial ?? this.serial,
+      note: note ?? this.note,
+      rawText: rawText ?? this.rawText,
+      catalogRef: catalogRef ?? this.catalogRef,
+      pickupCheckedAt: pickupCheckedAt ?? this.pickupCheckedAt,
+      returnCheckedAt: returnCheckedAt ?? this.returnCheckedAt,
+      removedFromSourceAt: removedFromSourceAt ?? this.removedFromSourceAt,
+      sortOrder: sortOrder ?? this.sortOrder,
+      deletedAt: deletedAt ?? this.deletedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (reservationUid.present) {
+      map['reservation_uid'] = Variable<String>(reservationUid.value);
+    }
+    if (parentUid.present) {
+      map['parent_uid'] = Variable<String>(parentUid.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (section.present) {
+      map['section'] = Variable<String>(section.value);
+    }
+    if (groupLabel.present) {
+      map['group_label'] = Variable<String>(groupLabel.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (quantity.present) {
+      map['quantity'] = Variable<double>(quantity.value);
+    }
+    if (quantityCertain.present) {
+      map['quantity_certain'] = Variable<bool>(quantityCertain.value);
+    }
+    if (lot.present) {
+      map['lot'] = Variable<String>(lot.value);
+    }
+    if (serial.present) {
+      map['serial'] = Variable<String>(serial.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (rawText.present) {
+      map['raw_text'] = Variable<String>(rawText.value);
+    }
+    if (catalogRef.present) {
+      map['catalog_ref'] = Variable<String>(catalogRef.value);
+    }
+    if (pickupCheckedAt.present) {
+      map['pickup_checked_at'] = Variable<String>(pickupCheckedAt.value);
+    }
+    if (returnCheckedAt.present) {
+      map['return_checked_at'] = Variable<String>(returnCheckedAt.value);
+    }
+    if (removedFromSourceAt.present) {
+      map['removed_from_source_at'] = Variable<String>(
+        removedFromSourceAt.value,
+      );
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<String>(deletedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RentalItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('uid: $uid, ')
+          ..write('projectId: $projectId, ')
+          ..write('reservationUid: $reservationUid, ')
+          ..write('parentUid: $parentUid, ')
+          ..write('kind: $kind, ')
+          ..write('section: $section, ')
+          ..write('groupLabel: $groupLabel, ')
+          ..write('name: $name, ')
+          ..write('quantity: $quantity, ')
+          ..write('quantityCertain: $quantityCertain, ')
+          ..write('lot: $lot, ')
+          ..write('serial: $serial, ')
+          ..write('note: $note, ')
+          ..write('rawText: $rawText, ')
+          ..write('catalogRef: $catalogRef, ')
+          ..write('pickupCheckedAt: $pickupCheckedAt, ')
+          ..write('returnCheckedAt: $returnCheckedAt, ')
+          ..write('removedFromSourceAt: $removedFromSourceAt, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -38565,6 +41377,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LocationCapturesTable locationCaptures = $LocationCapturesTable(
     this,
   );
+  late final $RentalHousesTable rentalHouses = $RentalHousesTable(this);
+  late final $RentalReservationsTable rentalReservations =
+      $RentalReservationsTable(this);
+  late final $RentalItemsTable rentalItems = $RentalItemsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -38616,6 +41432,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     planTrash,
     planImages,
     locationCaptures,
+    rentalHouses,
+    rentalReservations,
+    rentalItems,
   ];
 }
 
@@ -39399,6 +42218,66 @@ final class $$ProjectsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$RentalHousesTable, List<RentalHouse>>
+  _rentalHousesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.rentalHouses,
+    aliasName: $_aliasNameGenerator(db.projects.id, db.rentalHouses.projectId),
+  );
+
+  $$RentalHousesTableProcessedTableManager get rentalHousesRefs {
+    final manager = $$RentalHousesTableTableManager(
+      $_db,
+      $_db.rentalHouses,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_rentalHousesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$RentalReservationsTable, List<RentalReservation>>
+  _rentalReservationsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.rentalReservations,
+        aliasName: $_aliasNameGenerator(
+          db.projects.id,
+          db.rentalReservations.projectId,
+        ),
+      );
+
+  $$RentalReservationsTableProcessedTableManager get rentalReservationsRefs {
+    final manager = $$RentalReservationsTableTableManager(
+      $_db,
+      $_db.rentalReservations,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _rentalReservationsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$RentalItemsTable, List<RentalItem>>
+  _rentalItemsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.rentalItems,
+    aliasName: $_aliasNameGenerator(db.projects.id, db.rentalItems.projectId),
+  );
+
+  $$RentalItemsTableProcessedTableManager get rentalItemsRefs {
+    final manager = $$RentalItemsTableTableManager(
+      $_db,
+      $_db.rentalItems,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_rentalItemsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ProjectsTableFilterComposer
@@ -40056,6 +42935,81 @@ class $$ProjectsTableFilterComposer
           }) => $$LocationCapturesTableFilterComposer(
             $db: $db,
             $table: $db.locationCaptures,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> rentalHousesRefs(
+    Expression<bool> Function($$RentalHousesTableFilterComposer f) f,
+  ) {
+    final $$RentalHousesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.rentalHouses,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RentalHousesTableFilterComposer(
+            $db: $db,
+            $table: $db.rentalHouses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> rentalReservationsRefs(
+    Expression<bool> Function($$RentalReservationsTableFilterComposer f) f,
+  ) {
+    final $$RentalReservationsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.rentalReservations,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RentalReservationsTableFilterComposer(
+            $db: $db,
+            $table: $db.rentalReservations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> rentalItemsRefs(
+    Expression<bool> Function($$RentalItemsTableFilterComposer f) f,
+  ) {
+    final $$RentalItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.rentalItems,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RentalItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.rentalItems,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -40876,6 +43830,82 @@ class $$ProjectsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> rentalHousesRefs<T extends Object>(
+    Expression<T> Function($$RentalHousesTableAnnotationComposer a) f,
+  ) {
+    final $$RentalHousesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.rentalHouses,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RentalHousesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.rentalHouses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> rentalReservationsRefs<T extends Object>(
+    Expression<T> Function($$RentalReservationsTableAnnotationComposer a) f,
+  ) {
+    final $$RentalReservationsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.rentalReservations,
+          getReferencedColumn: (t) => t.projectId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$RentalReservationsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.rentalReservations,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<T> rentalItemsRefs<T extends Object>(
+    Expression<T> Function($$RentalItemsTableAnnotationComposer a) f,
+  ) {
+    final $$RentalItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.rentalItems,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RentalItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.rentalItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ProjectsTableTableManager
@@ -40913,6 +43943,9 @@ class $$ProjectsTableTableManager
             bool planTrashRefs,
             bool planImagesRefs,
             bool locationCapturesRefs,
+            bool rentalHousesRefs,
+            bool rentalReservationsRefs,
+            bool rentalItemsRefs,
           })
         > {
   $$ProjectsTableTableManager(_$AppDatabase db, $ProjectsTable table)
@@ -41073,6 +44106,9 @@ class $$ProjectsTableTableManager
                 planTrashRefs = false,
                 planImagesRefs = false,
                 locationCapturesRefs = false,
+                rentalHousesRefs = false,
+                rentalReservationsRefs = false,
+                rentalItemsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -41098,6 +44134,9 @@ class $$ProjectsTableTableManager
                     if (planTrashRefs) db.planTrash,
                     if (planImagesRefs) db.planImages,
                     if (locationCapturesRefs) db.locationCaptures,
+                    if (rentalHousesRefs) db.rentalHouses,
+                    if (rentalReservationsRefs) db.rentalReservations,
+                    if (rentalItemsRefs) db.rentalItems,
                   ],
                   addJoins:
                       <
@@ -41553,6 +44592,69 @@ class $$ProjectsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (rentalHousesRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          RentalHouse
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._rentalHousesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).rentalHousesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (rentalReservationsRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          RentalReservation
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._rentalReservationsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).rentalReservationsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (rentalItemsRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          RentalItem
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._rentalItemsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).rentalItemsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -41595,6 +44697,9 @@ typedef $$ProjectsTableProcessedTableManager =
         bool planTrashRefs,
         bool planImagesRefs,
         bool locationCapturesRefs,
+        bool rentalHousesRefs,
+        bool rentalReservationsRefs,
+        bool rentalItemsRefs,
       })
     >;
 typedef $$LocationSitesTableCreateCompanionBuilder =
@@ -70307,6 +73412,1637 @@ typedef $$LocationCapturesTableProcessedTableManager =
       LocationCapture,
       PrefetchHooks Function({bool projectId})
     >;
+typedef $$RentalHousesTableCreateCompanionBuilder =
+    RentalHousesCompanion Function({
+      Value<int> id,
+      required String uid,
+      required int projectId,
+      required String name,
+      Value<String?> address,
+      Value<String?> contact,
+      Value<String?> notes,
+      Value<int> sortOrder,
+      Value<String?> deletedAt,
+    });
+typedef $$RentalHousesTableUpdateCompanionBuilder =
+    RentalHousesCompanion Function({
+      Value<int> id,
+      Value<String> uid,
+      Value<int> projectId,
+      Value<String> name,
+      Value<String?> address,
+      Value<String?> contact,
+      Value<String?> notes,
+      Value<int> sortOrder,
+      Value<String?> deletedAt,
+    });
+
+final class $$RentalHousesTableReferences
+    extends BaseReferences<_$AppDatabase, $RentalHousesTable, RentalHouse> {
+  $$RentalHousesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.rentalHouses.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$RentalHousesTableFilterComposer
+    extends Composer<_$AppDatabase, $RentalHousesTable> {
+  $$RentalHousesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contact => $composableBuilder(
+    column: $table.contact,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RentalHousesTableOrderingComposer
+    extends Composer<_$AppDatabase, $RentalHousesTable> {
+  $$RentalHousesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contact => $composableBuilder(
+    column: $table.contact,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RentalHousesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RentalHousesTable> {
+  $$RentalHousesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get address =>
+      $composableBuilder(column: $table.address, builder: (column) => column);
+
+  GeneratedColumn<String> get contact =>
+      $composableBuilder(column: $table.contact, builder: (column) => column);
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<String> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RentalHousesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RentalHousesTable,
+          RentalHouse,
+          $$RentalHousesTableFilterComposer,
+          $$RentalHousesTableOrderingComposer,
+          $$RentalHousesTableAnnotationComposer,
+          $$RentalHousesTableCreateCompanionBuilder,
+          $$RentalHousesTableUpdateCompanionBuilder,
+          (RentalHouse, $$RentalHousesTableReferences),
+          RentalHouse,
+          PrefetchHooks Function({bool projectId})
+        > {
+  $$RentalHousesTableTableManager(_$AppDatabase db, $RentalHousesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RentalHousesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RentalHousesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RentalHousesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> uid = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> address = const Value.absent(),
+                Value<String?> contact = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<String?> deletedAt = const Value.absent(),
+              }) => RentalHousesCompanion(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                name: name,
+                address: address,
+                contact: contact,
+                notes: notes,
+                sortOrder: sortOrder,
+                deletedAt: deletedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String uid,
+                required int projectId,
+                required String name,
+                Value<String?> address = const Value.absent(),
+                Value<String?> contact = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<String?> deletedAt = const Value.absent(),
+              }) => RentalHousesCompanion.insert(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                name: name,
+                address: address,
+                contact: contact,
+                notes: notes,
+                sortOrder: sortOrder,
+                deletedAt: deletedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$RentalHousesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable: $$RentalHousesTableReferences
+                                    ._projectIdTable(db),
+                                referencedColumn: $$RentalHousesTableReferences
+                                    ._projectIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$RentalHousesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RentalHousesTable,
+      RentalHouse,
+      $$RentalHousesTableFilterComposer,
+      $$RentalHousesTableOrderingComposer,
+      $$RentalHousesTableAnnotationComposer,
+      $$RentalHousesTableCreateCompanionBuilder,
+      $$RentalHousesTableUpdateCompanionBuilder,
+      (RentalHouse, $$RentalHousesTableReferences),
+      RentalHouse,
+      PrefetchHooks Function({bool projectId})
+    >;
+typedef $$RentalReservationsTableCreateCompanionBuilder =
+    RentalReservationsCompanion Function({
+      Value<int> id,
+      required String uid,
+      required int projectId,
+      Value<String?> houseUid,
+      Value<String?> number,
+      Value<String?> externalId,
+      Value<String?> sourceStatus,
+      required String title,
+      Value<String?> responsible,
+      Value<String?> pickupAt,
+      Value<String?> returnAt,
+      Value<String?> pickedUpAt,
+      Value<String?> pickedUpDevice,
+      Value<String?> returnedAt,
+      Value<String?> returnedDevice,
+      Value<String?> notes,
+      Value<String?> sourceFileName,
+      Value<int> sortOrder,
+      Value<String?> deletedAt,
+    });
+typedef $$RentalReservationsTableUpdateCompanionBuilder =
+    RentalReservationsCompanion Function({
+      Value<int> id,
+      Value<String> uid,
+      Value<int> projectId,
+      Value<String?> houseUid,
+      Value<String?> number,
+      Value<String?> externalId,
+      Value<String?> sourceStatus,
+      Value<String> title,
+      Value<String?> responsible,
+      Value<String?> pickupAt,
+      Value<String?> returnAt,
+      Value<String?> pickedUpAt,
+      Value<String?> pickedUpDevice,
+      Value<String?> returnedAt,
+      Value<String?> returnedDevice,
+      Value<String?> notes,
+      Value<String?> sourceFileName,
+      Value<int> sortOrder,
+      Value<String?> deletedAt,
+    });
+
+final class $$RentalReservationsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $RentalReservationsTable,
+          RentalReservation
+        > {
+  $$RentalReservationsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.rentalReservations.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$RentalReservationsTableFilterComposer
+    extends Composer<_$AppDatabase, $RentalReservationsTable> {
+  $$RentalReservationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get houseUid => $composableBuilder(
+    column: $table.houseUid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceStatus => $composableBuilder(
+    column: $table.sourceStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get responsible => $composableBuilder(
+    column: $table.responsible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pickupAt => $composableBuilder(
+    column: $table.pickupAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get returnAt => $composableBuilder(
+    column: $table.returnAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pickedUpAt => $composableBuilder(
+    column: $table.pickedUpAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pickedUpDevice => $composableBuilder(
+    column: $table.pickedUpDevice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get returnedAt => $composableBuilder(
+    column: $table.returnedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get returnedDevice => $composableBuilder(
+    column: $table.returnedDevice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceFileName => $composableBuilder(
+    column: $table.sourceFileName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RentalReservationsTableOrderingComposer
+    extends Composer<_$AppDatabase, $RentalReservationsTable> {
+  $$RentalReservationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get houseUid => $composableBuilder(
+    column: $table.houseUid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceStatus => $composableBuilder(
+    column: $table.sourceStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get responsible => $composableBuilder(
+    column: $table.responsible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pickupAt => $composableBuilder(
+    column: $table.pickupAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get returnAt => $composableBuilder(
+    column: $table.returnAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pickedUpAt => $composableBuilder(
+    column: $table.pickedUpAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pickedUpDevice => $composableBuilder(
+    column: $table.pickedUpDevice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get returnedAt => $composableBuilder(
+    column: $table.returnedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get returnedDevice => $composableBuilder(
+    column: $table.returnedDevice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceFileName => $composableBuilder(
+    column: $table.sourceFileName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RentalReservationsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RentalReservationsTable> {
+  $$RentalReservationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
+
+  GeneratedColumn<String> get houseUid =>
+      $composableBuilder(column: $table.houseUid, builder: (column) => column);
+
+  GeneratedColumn<String> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceStatus => $composableBuilder(
+    column: $table.sourceStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get responsible => $composableBuilder(
+    column: $table.responsible,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get pickupAt =>
+      $composableBuilder(column: $table.pickupAt, builder: (column) => column);
+
+  GeneratedColumn<String> get returnAt =>
+      $composableBuilder(column: $table.returnAt, builder: (column) => column);
+
+  GeneratedColumn<String> get pickedUpAt => $composableBuilder(
+    column: $table.pickedUpAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get pickedUpDevice => $composableBuilder(
+    column: $table.pickedUpDevice,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get returnedAt => $composableBuilder(
+    column: $table.returnedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get returnedDevice => $composableBuilder(
+    column: $table.returnedDevice,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceFileName => $composableBuilder(
+    column: $table.sourceFileName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<String> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RentalReservationsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RentalReservationsTable,
+          RentalReservation,
+          $$RentalReservationsTableFilterComposer,
+          $$RentalReservationsTableOrderingComposer,
+          $$RentalReservationsTableAnnotationComposer,
+          $$RentalReservationsTableCreateCompanionBuilder,
+          $$RentalReservationsTableUpdateCompanionBuilder,
+          (RentalReservation, $$RentalReservationsTableReferences),
+          RentalReservation,
+          PrefetchHooks Function({bool projectId})
+        > {
+  $$RentalReservationsTableTableManager(
+    _$AppDatabase db,
+    $RentalReservationsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RentalReservationsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RentalReservationsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RentalReservationsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> uid = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String?> houseUid = const Value.absent(),
+                Value<String?> number = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
+                Value<String?> sourceStatus = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String?> responsible = const Value.absent(),
+                Value<String?> pickupAt = const Value.absent(),
+                Value<String?> returnAt = const Value.absent(),
+                Value<String?> pickedUpAt = const Value.absent(),
+                Value<String?> pickedUpDevice = const Value.absent(),
+                Value<String?> returnedAt = const Value.absent(),
+                Value<String?> returnedDevice = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<String?> sourceFileName = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<String?> deletedAt = const Value.absent(),
+              }) => RentalReservationsCompanion(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                houseUid: houseUid,
+                number: number,
+                externalId: externalId,
+                sourceStatus: sourceStatus,
+                title: title,
+                responsible: responsible,
+                pickupAt: pickupAt,
+                returnAt: returnAt,
+                pickedUpAt: pickedUpAt,
+                pickedUpDevice: pickedUpDevice,
+                returnedAt: returnedAt,
+                returnedDevice: returnedDevice,
+                notes: notes,
+                sourceFileName: sourceFileName,
+                sortOrder: sortOrder,
+                deletedAt: deletedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String uid,
+                required int projectId,
+                Value<String?> houseUid = const Value.absent(),
+                Value<String?> number = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
+                Value<String?> sourceStatus = const Value.absent(),
+                required String title,
+                Value<String?> responsible = const Value.absent(),
+                Value<String?> pickupAt = const Value.absent(),
+                Value<String?> returnAt = const Value.absent(),
+                Value<String?> pickedUpAt = const Value.absent(),
+                Value<String?> pickedUpDevice = const Value.absent(),
+                Value<String?> returnedAt = const Value.absent(),
+                Value<String?> returnedDevice = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<String?> sourceFileName = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<String?> deletedAt = const Value.absent(),
+              }) => RentalReservationsCompanion.insert(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                houseUid: houseUid,
+                number: number,
+                externalId: externalId,
+                sourceStatus: sourceStatus,
+                title: title,
+                responsible: responsible,
+                pickupAt: pickupAt,
+                returnAt: returnAt,
+                pickedUpAt: pickedUpAt,
+                pickedUpDevice: pickedUpDevice,
+                returnedAt: returnedAt,
+                returnedDevice: returnedDevice,
+                notes: notes,
+                sourceFileName: sourceFileName,
+                sortOrder: sortOrder,
+                deletedAt: deletedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$RentalReservationsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable:
+                                    $$RentalReservationsTableReferences
+                                        ._projectIdTable(db),
+                                referencedColumn:
+                                    $$RentalReservationsTableReferences
+                                        ._projectIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$RentalReservationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RentalReservationsTable,
+      RentalReservation,
+      $$RentalReservationsTableFilterComposer,
+      $$RentalReservationsTableOrderingComposer,
+      $$RentalReservationsTableAnnotationComposer,
+      $$RentalReservationsTableCreateCompanionBuilder,
+      $$RentalReservationsTableUpdateCompanionBuilder,
+      (RentalReservation, $$RentalReservationsTableReferences),
+      RentalReservation,
+      PrefetchHooks Function({bool projectId})
+    >;
+typedef $$RentalItemsTableCreateCompanionBuilder =
+    RentalItemsCompanion Function({
+      Value<int> id,
+      required String uid,
+      required int projectId,
+      required String reservationUid,
+      Value<String?> parentUid,
+      Value<String> kind,
+      Value<String?> section,
+      Value<String?> groupLabel,
+      required String name,
+      Value<double?> quantity,
+      Value<bool> quantityCertain,
+      Value<String?> lot,
+      Value<String?> serial,
+      Value<String?> note,
+      Value<String?> rawText,
+      Value<String?> catalogRef,
+      Value<String?> pickupCheckedAt,
+      Value<String?> returnCheckedAt,
+      Value<String?> removedFromSourceAt,
+      Value<int> sortOrder,
+      Value<String?> deletedAt,
+    });
+typedef $$RentalItemsTableUpdateCompanionBuilder =
+    RentalItemsCompanion Function({
+      Value<int> id,
+      Value<String> uid,
+      Value<int> projectId,
+      Value<String> reservationUid,
+      Value<String?> parentUid,
+      Value<String> kind,
+      Value<String?> section,
+      Value<String?> groupLabel,
+      Value<String> name,
+      Value<double?> quantity,
+      Value<bool> quantityCertain,
+      Value<String?> lot,
+      Value<String?> serial,
+      Value<String?> note,
+      Value<String?> rawText,
+      Value<String?> catalogRef,
+      Value<String?> pickupCheckedAt,
+      Value<String?> returnCheckedAt,
+      Value<String?> removedFromSourceAt,
+      Value<int> sortOrder,
+      Value<String?> deletedAt,
+    });
+
+final class $$RentalItemsTableReferences
+    extends BaseReferences<_$AppDatabase, $RentalItemsTable, RentalItem> {
+  $$RentalItemsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.rentalItems.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<int>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$RentalItemsTableFilterComposer
+    extends Composer<_$AppDatabase, $RentalItemsTable> {
+  $$RentalItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reservationUid => $composableBuilder(
+    column: $table.reservationUid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentUid => $composableBuilder(
+    column: $table.parentUid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get section => $composableBuilder(
+    column: $table.section,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupLabel => $composableBuilder(
+    column: $table.groupLabel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get quantity => $composableBuilder(
+    column: $table.quantity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get quantityCertain => $composableBuilder(
+    column: $table.quantityCertain,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lot => $composableBuilder(
+    column: $table.lot,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serial => $composableBuilder(
+    column: $table.serial,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rawText => $composableBuilder(
+    column: $table.rawText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get catalogRef => $composableBuilder(
+    column: $table.catalogRef,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pickupCheckedAt => $composableBuilder(
+    column: $table.pickupCheckedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get returnCheckedAt => $composableBuilder(
+    column: $table.returnCheckedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get removedFromSourceAt => $composableBuilder(
+    column: $table.removedFromSourceAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RentalItemsTableOrderingComposer
+    extends Composer<_$AppDatabase, $RentalItemsTable> {
+  $$RentalItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reservationUid => $composableBuilder(
+    column: $table.reservationUid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get parentUid => $composableBuilder(
+    column: $table.parentUid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get section => $composableBuilder(
+    column: $table.section,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupLabel => $composableBuilder(
+    column: $table.groupLabel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get quantity => $composableBuilder(
+    column: $table.quantity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get quantityCertain => $composableBuilder(
+    column: $table.quantityCertain,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lot => $composableBuilder(
+    column: $table.lot,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serial => $composableBuilder(
+    column: $table.serial,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rawText => $composableBuilder(
+    column: $table.rawText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get catalogRef => $composableBuilder(
+    column: $table.catalogRef,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pickupCheckedAt => $composableBuilder(
+    column: $table.pickupCheckedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get returnCheckedAt => $composableBuilder(
+    column: $table.returnCheckedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get removedFromSourceAt => $composableBuilder(
+    column: $table.removedFromSourceAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RentalItemsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RentalItemsTable> {
+  $$RentalItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
+
+  GeneratedColumn<String> get reservationUid => $composableBuilder(
+    column: $table.reservationUid,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get parentUid =>
+      $composableBuilder(column: $table.parentUid, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get section =>
+      $composableBuilder(column: $table.section, builder: (column) => column);
+
+  GeneratedColumn<String> get groupLabel => $composableBuilder(
+    column: $table.groupLabel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<double> get quantity =>
+      $composableBuilder(column: $table.quantity, builder: (column) => column);
+
+  GeneratedColumn<bool> get quantityCertain => $composableBuilder(
+    column: $table.quantityCertain,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lot =>
+      $composableBuilder(column: $table.lot, builder: (column) => column);
+
+  GeneratedColumn<String> get serial =>
+      $composableBuilder(column: $table.serial, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<String> get rawText =>
+      $composableBuilder(column: $table.rawText, builder: (column) => column);
+
+  GeneratedColumn<String> get catalogRef => $composableBuilder(
+    column: $table.catalogRef,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get pickupCheckedAt => $composableBuilder(
+    column: $table.pickupCheckedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get returnCheckedAt => $composableBuilder(
+    column: $table.returnCheckedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get removedFromSourceAt => $composableBuilder(
+    column: $table.removedFromSourceAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<String> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RentalItemsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RentalItemsTable,
+          RentalItem,
+          $$RentalItemsTableFilterComposer,
+          $$RentalItemsTableOrderingComposer,
+          $$RentalItemsTableAnnotationComposer,
+          $$RentalItemsTableCreateCompanionBuilder,
+          $$RentalItemsTableUpdateCompanionBuilder,
+          (RentalItem, $$RentalItemsTableReferences),
+          RentalItem,
+          PrefetchHooks Function({bool projectId})
+        > {
+  $$RentalItemsTableTableManager(_$AppDatabase db, $RentalItemsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RentalItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RentalItemsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RentalItemsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> uid = const Value.absent(),
+                Value<int> projectId = const Value.absent(),
+                Value<String> reservationUid = const Value.absent(),
+                Value<String?> parentUid = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String?> section = const Value.absent(),
+                Value<String?> groupLabel = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<double?> quantity = const Value.absent(),
+                Value<bool> quantityCertain = const Value.absent(),
+                Value<String?> lot = const Value.absent(),
+                Value<String?> serial = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<String?> rawText = const Value.absent(),
+                Value<String?> catalogRef = const Value.absent(),
+                Value<String?> pickupCheckedAt = const Value.absent(),
+                Value<String?> returnCheckedAt = const Value.absent(),
+                Value<String?> removedFromSourceAt = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<String?> deletedAt = const Value.absent(),
+              }) => RentalItemsCompanion(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                reservationUid: reservationUid,
+                parentUid: parentUid,
+                kind: kind,
+                section: section,
+                groupLabel: groupLabel,
+                name: name,
+                quantity: quantity,
+                quantityCertain: quantityCertain,
+                lot: lot,
+                serial: serial,
+                note: note,
+                rawText: rawText,
+                catalogRef: catalogRef,
+                pickupCheckedAt: pickupCheckedAt,
+                returnCheckedAt: returnCheckedAt,
+                removedFromSourceAt: removedFromSourceAt,
+                sortOrder: sortOrder,
+                deletedAt: deletedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String uid,
+                required int projectId,
+                required String reservationUid,
+                Value<String?> parentUid = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String?> section = const Value.absent(),
+                Value<String?> groupLabel = const Value.absent(),
+                required String name,
+                Value<double?> quantity = const Value.absent(),
+                Value<bool> quantityCertain = const Value.absent(),
+                Value<String?> lot = const Value.absent(),
+                Value<String?> serial = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<String?> rawText = const Value.absent(),
+                Value<String?> catalogRef = const Value.absent(),
+                Value<String?> pickupCheckedAt = const Value.absent(),
+                Value<String?> returnCheckedAt = const Value.absent(),
+                Value<String?> removedFromSourceAt = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<String?> deletedAt = const Value.absent(),
+              }) => RentalItemsCompanion.insert(
+                id: id,
+                uid: uid,
+                projectId: projectId,
+                reservationUid: reservationUid,
+                parentUid: parentUid,
+                kind: kind,
+                section: section,
+                groupLabel: groupLabel,
+                name: name,
+                quantity: quantity,
+                quantityCertain: quantityCertain,
+                lot: lot,
+                serial: serial,
+                note: note,
+                rawText: rawText,
+                catalogRef: catalogRef,
+                pickupCheckedAt: pickupCheckedAt,
+                returnCheckedAt: returnCheckedAt,
+                removedFromSourceAt: removedFromSourceAt,
+                sortOrder: sortOrder,
+                deletedAt: deletedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$RentalItemsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable: $$RentalItemsTableReferences
+                                    ._projectIdTable(db),
+                                referencedColumn: $$RentalItemsTableReferences
+                                    ._projectIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$RentalItemsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RentalItemsTable,
+      RentalItem,
+      $$RentalItemsTableFilterComposer,
+      $$RentalItemsTableOrderingComposer,
+      $$RentalItemsTableAnnotationComposer,
+      $$RentalItemsTableCreateCompanionBuilder,
+      $$RentalItemsTableUpdateCompanionBuilder,
+      (RentalItem, $$RentalItemsTableReferences),
+      RentalItem,
+      PrefetchHooks Function({bool projectId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -70419,4 +75155,10 @@ class $AppDatabaseManager {
       $$PlanImagesTableTableManager(_db, _db.planImages);
   $$LocationCapturesTableTableManager get locationCaptures =>
       $$LocationCapturesTableTableManager(_db, _db.locationCaptures);
+  $$RentalHousesTableTableManager get rentalHouses =>
+      $$RentalHousesTableTableManager(_db, _db.rentalHouses);
+  $$RentalReservationsTableTableManager get rentalReservations =>
+      $$RentalReservationsTableTableManager(_db, _db.rentalReservations);
+  $$RentalItemsTableTableManager get rentalItems =>
+      $$RentalItemsTableTableManager(_db, _db.rentalItems);
 }
