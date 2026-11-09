@@ -128,6 +128,31 @@ void main() {
       await auditAndUnmount(tester);
     });
 
+    testWidgets('localización ubicada con un set abierto · ${e.key}', (
+      tester,
+    ) async {
+      setAuditSize(tester, e.value);
+      await seed(tester);
+      await tester.runAsync(() async {
+        final site = (await db.watchSitesForProject(projectId).first).single;
+        await db.setSitePlace(
+          site.id,
+          latitude: 41.5632,
+          longitude: 2.0089,
+          placeLabel: 'Terrassa, Barcelona, Cataluña, España, con nombre largo',
+        );
+      });
+      await pumpScreen(tester, LocationsScreen(projectId: projectId));
+      final set = find.text('COCINA TRASERA DEL LOCAL').first;
+      await tester.ensureVisible(set);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(set, warnIfMissed: false);
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await auditAndUnmount(tester);
+    });
+
     testWidgets('reservas · ${e.key}', (tester) async {
       setAuditSize(tester, e.value);
       await seed(tester);

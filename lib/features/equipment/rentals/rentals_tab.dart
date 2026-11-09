@@ -44,12 +44,14 @@ class _RentalsTabState extends ConsumerState<RentalsTab> {
   Future<void> _drop(List<String> paths) async {
     if (paths.isEmpty) return;
     final file = File(paths.first);
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
     final uid = await importRentalListBytes(
       context,
       ref,
       widget.projectId,
       file.uri.pathSegments.last,
-      await file.readAsBytes(),
+      bytes,
     );
     if (uid != null && mounted) setState(() => _selectedUid = uid);
   }

@@ -156,56 +156,80 @@ class _SitePlaceCardState extends ConsumerState<SitePlaceCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Icon(
-                located ? Icons.place_outlined : Icons.location_off_outlined,
-                size: 18,
-                color: located ? palette.accent : palette.textSecondary,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      located
-                          ? (site.placeLabel ?? 'Ubicación')
-                          : 'Sin ubicar en el mapa',
-                      style: AppTypography.bodyLarge(palette),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final info = Row(
+                children: [
+                  Icon(
+                    located
+                        ? Icons.place_outlined
+                        : Icons.location_off_outlined,
+                    size: 18,
+                    color: located ? palette.accent : palette.textSecondary,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          located
+                              ? (site.placeLabel ?? 'Ubicación')
+                              : 'Sin ubicar en el mapa',
+                          style: AppTypography.bodyLarge(palette),
+                        ),
+                        Text(
+                          located
+                              ? formatCoordinates(lat, lon)
+                              : 'Sirve para el sol y la previsión de las '
+                                    'jornadas de rodaje.',
+                          style: AppTypography.caption(palette),
+                        ),
+                      ],
                     ),
-                    Text(
-                      located
-                          ? formatCoordinates(lat, lon)
-                          : 'Sirve para el sol y la previsión de las '
-                                'jornadas de rodaje.',
-                      style: AppTypography.caption(palette),
+                  ),
+                ],
+              );
+              final actions = Wrap(
+                alignment: WrapAlignment.end,
+                children: [
+                  if (located) ...[
+                    TextButton(
+                      onPressed: () => openSiteInMaps(lat, lon),
+                      child: const Text('Abrir en Maps'),
+                    ),
+                    TextButton(
+                      onPressed: () => ref
+                          .read(databaseProvider)
+                          .setSitePlace(
+                            site.id,
+                            latitude: null,
+                            longitude: null,
+                            placeLabel: null,
+                          ),
+                      child: const Text('Quitar'),
                     ),
                   ],
-                ),
-              ),
-              if (located) ...[
-                TextButton(
-                  onPressed: () => openSiteInMaps(lat, lon),
-                  child: const Text('Abrir en Maps'),
-                ),
-                TextButton(
-                  onPressed: () => ref
-                      .read(databaseProvider)
-                      .setSitePlace(
-                        site.id,
-                        latitude: null,
-                        longitude: null,
-                        placeLabel: null,
-                      ),
-                  child: const Text('Quitar'),
-                ),
-              ],
-              TextButton(
-                onPressed: () => pickSitePlace(context, ref, site),
-                child: Text(located ? 'Cambiar' : 'Ubicar'),
-              ),
-            ],
+                  TextButton(
+                    onPressed: () => pickSitePlace(context, ref, site),
+                    child: Text(located ? 'Cambiar' : 'Ubicar'),
+                  ),
+                ],
+              );
+              // Los tres botones no caben al lado del texto en un móvil.
+              if (constraints.maxWidth < 560) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [info, actions],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: info),
+                  actions,
+                ],
+              );
+            },
           ),
           if (located && widget.full) ...[
             const SizedBox(height: AppSpacing.sm),
