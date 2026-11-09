@@ -14,7 +14,10 @@ import 'shoot_document_template_picker.dart';
 import '../../core/templates/user_template_service.dart';
 import 'shoot_template_editor_screen.dart';
 import 'package:drift/drift.dart' show Value;
+import '../camera_plan/camera_plan_screen.dart';
 import 'shoot_agenda.dart';
+import 'shoot_calendar_screen.dart';
+import 'shoot_day_widgets.dart';
 import 'shoot_day_on_set.dart';
 import 'shoot_day_screen.dart';
 import '../../core/theme/app_layout.dart';
@@ -87,7 +90,9 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
           // Por jornada, en orden de fecha; los que no tienen, al final.
           final groups = <String?, List<ShootDocument>>{};
           for (final date in [...dates, null]) {
-            final inDate = docs.where((d) => d.shootDate == date).toList();
+            final inDate = _inShootOrder(
+              docs.where((d) => d.shootDate == date).toList(),
+            );
             if (inDate.isNotEmpty) groups[date] = inDate;
           }
 
@@ -118,6 +123,57 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     children: [
                       ShootAgendaSection(projectId: widget.projectId),
+                      Text('Herramientas', style: AppTypography.label(palette)),
+                      const SizedBox(height: AppSpacing.sm),
+                      _ToolRow(
+                        width: width,
+                        tools: [
+                          _Tool(
+                            Icons.view_week_outlined,
+                            'Plan de rodaje',
+                            () => ShootDaysBoardScreen.open(
+                              context,
+                              projectId: widget.projectId,
+                            ),
+                          ),
+                          _Tool(
+                            Icons.calendar_month_outlined,
+                            'Calendario',
+                            () => ShootCalendarScreen.open(
+                              context,
+                              projectId: widget.projectId,
+                            ),
+                          ),
+                          _Tool(
+                            Icons.inventory_2_outlined,
+                            'Material',
+                            () => openShootRentals(
+                              context,
+                              projectId: widget.projectId,
+                            ),
+                          ),
+                          _Tool(
+                            Icons.architecture_outlined,
+                            'Plantas',
+                            () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => CameraPlanScreen(
+                                  projectId: widget.projectId,
+                                ),
+                              ),
+                            ),
+                          ),
+                          _Tool(
+                            Icons.ios_share,
+                            'Exportar',
+                            () => ExportCenterScreen.open(
+                              context,
+                              projectId: widget.projectId,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
                       Text('Crear', style: AppTypography.label(palette)),
                       const SizedBox(height: AppSpacing.sm),
                       grid([
@@ -500,6 +556,146 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
 }
 
 /// Tarjeta para crear un tipo de documento.
+/// Las jornadas de un mismo día, como en el plan; el resto, detrás y como
+/// estaban.
+List<ShootDocument> _inShootOrder(List<ShootDocument> docs) => [
+  ...sortShootDays(docs.where((d) => d.kind == kShootDayKind).toList()),
+  ...docs.where((d) => d.kind != kShootDayKind),
+];
+
+class _Tool {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _Tool(this.icon, this.label, this.onTap);
+}
+
+/// Accesos a las herramientas: cinco en fila, o tres por fila en el iPhone.
+class _ToolRow extends StatelessWidget {
+  final double width;
+  final List<_Tool> tools;
+
+  const _ToolRow({required this.width, required this.tools});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final perRow = width < 560 ? 3 : tools.length;
+    final tileWidth = (width - AppSpacing.sm * (perRow - 1)) / perRow;
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        for (final tool in tools)
+          SizedBox(
+            width: tileWidth,
+            child: AppCard(
+              onTap: tool.onTap,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: AppSpacing.md,
+              ),
+              child: Column(
+                children: [
+                  Icon(tool.icon, size: 24, color: palette.accent),
+                  const SizedBox(height: 6),
+                  Text(
+                    tool.label,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption(
+                      palette,
+                    ).copyWith(color: palette.textPrimary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Dónde y a qué hora, y las portadas de los planos de la jornada.
+class _DayGlance extends ConsumerWidget {
+  final ShootDocument doc;
+  final List<ShootDocumentBlock> blocks;
+
+  const _DayGlance({required this.doc, required this.blocks});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final db = ref.watch(databaseProvider);
+    return StreamBuilder<List<LocationSite>>(
+      stream: db.watchSitesForProject(doc.projectId),
+      builder: (context, sites) => StreamBuilder<List<Shot>>(
+        stream: db.watchShotsForProject(doc.projectId),
+        builder: (context, allShots) {
+          final site = sites.data
+              ?.where((s) => s.id == doc.locationSiteId)
+              .firstOrNull;
+          final shotById = {
+            for (final s in allShots.data ?? const <Shot>[]) s.id: s,
+          };
+          final shots = [
+            for (final b in blocks) ?shotById[b.shotId],
+          ];
+          final line = [
+            if (doc.shootFromTime != null)
+              doc.shootToTime == null
+                  ? doc.shootFromTime!
+                  : '${doc.shootFromTime} – ${doc.shootToTime}',
+            ?site?.name,
+          ].join(' · ');
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (line.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  line,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption(palette),
+                ),
+              ],
+              if (shots.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                LayoutBuilder(
+                  builder: (context, box) {
+                    const thumb = 48.0;
+                    const gap = 4.0;
+                    final fit = ((box.maxWidth + gap) / (thumb + gap))
+                        .floor()
+                        .clamp(1, 12);
+                    return Row(
+                      children: [
+                        for (final shot in shots.take(fit))
+                          Padding(
+                            padding: const EdgeInsets.only(right: gap),
+                            child: ShootShotThumb(
+                              shot: shot,
+                              width: thumb,
+                              height: 27,
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 2),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _CreateCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -671,6 +867,7 @@ class _DocumentCard extends ConsumerWidget {
                 ].join(' · '),
                 style: AppTypography.caption(palette),
               ),
+              if (isDay) _DayGlance(doc: doc, blocks: blocks),
               if (sceneLabels.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(

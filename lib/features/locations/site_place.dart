@@ -106,10 +106,21 @@ Future<void> pickSitePlace(
   );
 }
 
+/// El enlace de Google Maps de unas coordenadas. Es el único de la app, para
+/// que una localización abra el mismo sitio desde cualquier pantalla.
+String siteMapsUrl(double latitude, double longitude) =>
+    'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
+
+String siteWazeUrl(double latitude, double longitude) =>
+    'https://waze.com/ul?ll=$latitude,$longitude&navigate=yes';
+
 Future<void> openSiteInMaps(double latitude, double longitude) => launchUrl(
-  Uri.parse(
-    'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
-  ),
+  Uri.parse(siteMapsUrl(latitude, longitude)),
+  mode: LaunchMode.externalApplication,
+);
+
+Future<void> openSiteInWaze(double latitude, double longitude) => launchUrl(
+  Uri.parse(siteWazeUrl(latitude, longitude)),
   mode: LaunchMode.externalApplication,
 );
 
@@ -119,7 +130,15 @@ class SitePlaceCard extends ConsumerStatefulWidget {
   final LocationSite site;
   final bool full;
 
-  const SitePlaceCard({super.key, required this.site, this.full = true});
+  /// Para ir hasta allí: añade Waze y no deja quitar la ubicación.
+  final bool navigation;
+
+  const SitePlaceCard({
+    super.key,
+    required this.site,
+    this.full = true,
+    this.navigation = false,
+  });
 
   @override
   ConsumerState<SitePlaceCard> createState() => _SitePlaceCardState();
@@ -198,17 +217,23 @@ class _SitePlaceCardState extends ConsumerState<SitePlaceCard> {
                       onPressed: () => openSiteInMaps(lat, lon),
                       child: const Text('Abrir en Maps'),
                     ),
-                    TextButton(
-                      onPressed: () => ref
-                          .read(databaseProvider)
-                          .setSitePlace(
-                            site.id,
-                            latitude: null,
-                            longitude: null,
-                            placeLabel: null,
-                          ),
-                      child: const Text('Quitar'),
-                    ),
+                    if (widget.navigation)
+                      TextButton(
+                        onPressed: () => openSiteInWaze(lat, lon),
+                        child: const Text('Waze'),
+                      )
+                    else
+                      TextButton(
+                        onPressed: () => ref
+                            .read(databaseProvider)
+                            .setSitePlace(
+                              site.id,
+                              latitude: null,
+                              longitude: null,
+                              placeLabel: null,
+                            ),
+                        child: const Text('Quitar'),
+                      ),
                   ],
                   TextButton(
                     onPressed: () => pickSitePlace(context, ref, site),

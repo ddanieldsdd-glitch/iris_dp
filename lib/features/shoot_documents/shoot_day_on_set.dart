@@ -16,6 +16,8 @@ import '../../core/utils/shot_reference_import.dart';
 import '../../shared/rich_text/script_markup.dart';
 import 'on_set_view_prefs.dart';
 import 'shoot_day_order.dart';
+import 'shoot_day_timeline.dart';
+import 'shoot_day_widgets.dart';
 import 'shoot_document_block_types.dart';
 
 /// Cómo va un plano en el rodaje del día.
@@ -226,6 +228,10 @@ class _ShootDayOnSetScreenState extends ConsumerState<ShootDayOnSetScreen> {
           blocks: blocks,
           shots: shots,
           scenes: scenes,
+          strips: [
+            for (final b in blockRows)
+              if (ShootStrip.isStrip(b)) b,
+          ],
           hideFinished: hideFinished,
           hiddenShots: hidden,
           onHideFinishedChanged: (v) =>
@@ -259,6 +265,10 @@ class OnSetList extends StatelessWidget {
   final Map<int, Shot> shots;
   final Map<int, Scene> scenes;
   final Future<void> Function(ShootDocumentBlock, OnSetMark) onMark;
+
+  /// Montaje, comida… del día, para tenerlos a la vista. No cuentan como
+  /// planos hechos.
+  final List<ShootDocumentBlock> strips;
   final bool hideFinished;
   final Set<String> hiddenShots;
   final ValueChanged<bool>? onHideFinishedChanged;
@@ -271,6 +281,7 @@ class OnSetList extends StatelessWidget {
     required this.shots,
     required this.scenes,
     required this.onMark,
+    this.strips = const [],
     this.hideFinished = false,
     this.hiddenShots = const {},
     this.onHideFinishedChanged,
@@ -363,6 +374,17 @@ class OnSetList extends StatelessWidget {
                     : done / (blocks.length - dropped),
               ),
             ),
+            if (strips.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final block in strips) _StripChip(block: block),
+                  ],
+                ),
+              ),
             if (hiddenCount > 0)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -445,6 +467,46 @@ class OnSetList extends StatelessWidget {
       : 'ESC ${scene.label} · ${scene.locationCanonical}';
 }
 
+/// Una franja del día en el set, solo para leerla.
+class _StripChip extends StatelessWidget {
+  final ShootDocumentBlock block;
+
+  const _StripChip({required this.block});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final strip = ShootStrip.of(block);
+    final color = shootStripColor(strip.kind, palette);
+    final time = shootTimeRange(strip.from, strip.to);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(shootStripIcon(strip.kind), size: 13, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              [
+                if (time.isNotEmpty) time,
+                ShootStrip.titleOf(block),
+              ].join(' · '),
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Un plano en el set: lo que hay que rodar y su estado. Sin [onMark] es
 /// solo de lectura (el guion técnico en el iPhone).
 class OnSetShotCard extends StatelessWidget {
@@ -480,7 +542,7 @@ class OnSetShotCard extends StatelessWidget {
       shot.movement,
       shot.fStop,
     ].where((v) => v != null && v.trim().isNotEmpty).join(' · ');
-    final image = referenceImageOf(shot);
+    final image = coverImageOf(shot);
     final done = mark.status == OnSetStatus.done;
     final dropped = mark.status == OnSetStatus.dropped;
     return Opacity(

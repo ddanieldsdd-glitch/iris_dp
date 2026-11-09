@@ -773,11 +773,8 @@ class _SiteFactsCardState extends ConsumerState<_SiteFactsCard> {
 
 /// Enlaces para abrir unas coordenadas en las apps de mapas.
 List<(String, String)> locationMapLinks(double latitude, double longitude) => [
-  (
-    'Google Maps',
-    'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
-  ),
-  ('Waze', 'https://waze.com/ul?ll=$latitude,$longitude&navigate=yes'),
+  ('Google Maps', siteMapsUrl(latitude, longitude)),
+  ('Waze', siteWazeUrl(latitude, longitude)),
   ('Google Earth', 'https://earth.google.com/web/search/$latitude,$longitude'),
   ('Apple Mapas', 'https://maps.apple.com/?ll=$latitude,$longitude&q=Rodaje'),
 ];
@@ -1091,6 +1088,12 @@ class _FeaturedLocationState extends ConsumerState<_FeaturedLocation> {
   }
 
   Future<void> _openMaps() async {
+    final site = widget.site;
+    if (site?.latitude != null && site?.longitude != null) {
+      // Ubicada: el mismo enlace que en el resto de pantallas.
+      await openSiteInMaps(site!.latitude!, site.longitude!);
+      return;
+    }
     final url = _s('mapsUrl');
     final coords = _coordsText();
     final uri = url.isNotEmpty

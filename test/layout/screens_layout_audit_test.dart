@@ -15,6 +15,12 @@ import 'package:iris_dp/features/equipment/rentals/rental_import_models.dart';
 import 'package:iris_dp/features/equipment/rentals/rental_import_service.dart';
 import 'package:iris_dp/features/equipment/rentals/rentals_tab.dart';
 import 'package:iris_dp/features/locations/locations_screen.dart';
+import 'package:iris_dp/features/shoot_documents/shoot_calendar.dart';
+import 'package:iris_dp/features/shoot_documents/shoot_calendar_screen.dart';
+import 'package:iris_dp/features/shoot_documents/shoot_day_on_set.dart';
+import 'package:iris_dp/features/shoot_documents/shoot_day_screen.dart';
+import 'package:iris_dp/features/shoot_documents/shoot_day_timeline.dart';
+import 'package:iris_dp/features/shoot_documents/shoot_days_board.dart';
 import 'package:iris_dp/features/shoot_documents/shoot_documents_screen.dart';
 
 import '../helpers/layout_audit.dart';
@@ -153,6 +159,85 @@ void main() {
       await auditAndUnmount(tester);
     });
 
+    for (final (name, screen) in <(String, Widget Function(int, int))>[
+      (
+        'jornada',
+        (p, d) => ShootDayScreen(projectId: p, documentId: d),
+      ),
+      ('plan de rodaje', (p, _) => ShootDaysBoardScreen(projectId: p)),
+      (
+        'en set con franjas',
+        (p, d) => ShootDayOnSetScreen(projectId: p, documentId: d, title: 'J1'),
+      ),
+    ]) {
+      testWidgets('$name · ${e.key}', (tester) async {
+        setAuditSize(tester, e.value);
+        await seed(tester);
+        late int dayId;
+        await tester.runAsync(() async {
+          final site = (await db.watchSitesForProject(projectId).first).single;
+          await db.setSitePlace(
+            site.id,
+            latitude: 41.56,
+            longitude: 2.0,
+            placeLabel: 'Terrassa, Barcelona, Cataluña, España, nombre largo',
+          );
+          final day =
+              (await db.getShootDocumentsForProject(projectId)).single;
+          dayId = day.id;
+          await db.updateShootDocument(
+            day.copyWith(
+              locationSiteId: Value(site.id),
+              shootFromTime: const Value('08:00'),
+              shootToTime: const Value('20:00'),
+            ),
+          );
+          final sceneId = await db.insertScene(
+            ScenesCompanion.insert(
+              projectId: projectId,
+              number: 1,
+              name: 'SALÓN',
+              locationCanonical: 'INT. SALÓN DEL KEBAB MUY LARGO - NOCHE',
+              locationPureName: 'SALÓN DEL KEBAB MUY LARGO',
+            ),
+          );
+          for (final n in [1, 2, 3]) {
+            final shotId = await db.insertShot(
+              ShotsCompanion.insert(
+                sceneId: sceneId,
+                projectId: projectId,
+                number: n,
+                framing: const Value('Plano general con un nombre bien largo'),
+              ),
+            );
+            await db.insertShootDocumentBlock(
+              ShootDocumentBlocksCompanion.insert(
+                documentId: dayId,
+                blockType: 'shot',
+                sortOrder: Value(n),
+                sceneId: Value(sceneId),
+                shotId: Value(shotId),
+              ),
+            );
+          }
+          await ShootDayScheduleService(db).addStrip(
+            dayId,
+            const ShootStripDraft(
+              strip: ShootStrip(
+                kind: ShootStripKind.move,
+                from: '13:30',
+                to: '15:00',
+              ),
+              label: 'Cambio de localización con un nombre largo',
+              note: 'Aclaración larga para el equipo de cámara y de eléctricos',
+            ),
+          );
+        });
+        await pumpScreen(tester, screen(projectId, dayId));
+        await auditAndUnmount(tester);
+      });
+    }
+
     testWidgets('reservas · ${e.key}', (tester) async {
       setAuditSize(tester, e.value);
       await seed(tester);
@@ -199,6 +284,71 @@ void main() {
       expect(find.textContaining('Lista de cámara'), findsWidgets);
       await auditAndUnmount(tester);
     });
+
+    for (final month in [false, true]) {
+      testWidgets('calendario ${month ? 'mes' : 'semana'} · ${e.key}', (
+        tester,
+      ) async {
+        setAuditSize(tester, e.value);
+        await seed(tester);
+        final day = DateTime.now().add(const Duration(days: 1));
+        final date = shootCalendarDate(day);
+        await tester.runAsync(() async {
+          final doc = (await db.getShootDocumentsForProject(projectId)).single;
+          await db.updateShootDocument(
+            doc.copyWith(
+              shootDate: Value(date),
+              shootFromTime: const Value('20:00'),
+              shootToTime: const Value('04:00'),
+            ),
+          );
+          final service = ShootDayScheduleService(db);
+          for (final (kind, from, to) in [
+            (ShootStripKind.setup, '20:00', '21:30'),
+            (ShootStripKind.meal, '20:30', '21:00'),
+            (ShootStripKind.note, null, null),
+          ]) {
+            await service.addStrip(
+              doc.id,
+              ShootStripDraft(
+                strip: ShootStrip(kind: kind, from: from, to: to),
+                label: 'Una franja con un nombre realmente largo',
+              ),
+            );
+          }
+          final rentals = RentalImportService(db);
+          await rentals.apply(
+            projectId: projectId,
+            preview: await rentals.preview(
+              projectId,
+              ParsedReservation(
+                number: 'S1',
+                pickupAt: '${date}T10:00',
+                returnAt: '${date}T14:00',
+                sourceStatus: 'Presupuesto',
+                items: const [
+                  ParsedRentalItem(name: 'BNC', quantity: 3, rawText: ''),
+                ],
+              ),
+            ),
+            title: 'Lista de cámara de la reserva grande',
+            houseName: 'ESCAC',
+            contact: '',
+          );
+        });
+        await pumpScreen(
+          tester,
+          ShootCalendarScreen(projectId: projectId),
+        );
+        if (month && find.text('Mes').evaluate().isNotEmpty) {
+          await tester.tap(find.text('Mes'));
+          await tester.pump(const Duration(milliseconds: 50));
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        expect(find.textContaining('Lista de cámara'), findsWidgets);
+        await auditAndUnmount(tester);
+      });
+    }
 
     testWidgets('documentos de rodaje · ${e.key}', (tester) async {
       setAuditSize(tester, e.value);

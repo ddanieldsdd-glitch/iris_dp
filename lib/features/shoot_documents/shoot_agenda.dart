@@ -7,7 +7,7 @@ import '../../core/database/rental_queries.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
-import 'shoot_plan.dart';
+import 'shoot_calendar.dart';
 
 enum ShootAgendaKind { shoot, pickup, ret }
 
@@ -35,82 +35,34 @@ Map<String, List<ShootAgendaEntry>> buildShootAgenda({
   required DateTime now,
   int maxDays = 7,
 }) {
-  final today =
-      '${now.year}-${now.month.toString().padLeft(2, '0')}'
-      '-${now.day.toString().padLeft(2, '0')}';
-  final byDate = <String, List<(int, String, ShootAgendaEntry)>>{};
-  void add(String date, int rank, String time, ShootAgendaEntry e) {
-    if (date.compareTo(today) < 0) return;
-    byDate.putIfAbsent(date, () => []).add((rank, time, e));
+  final today = shootCalendarDate(now);
+  final calendar = buildShootCalendar(
+    documents: documents,
+    blocks: const [],
+    reservations: reservations,
+    houses: houses,
+    sites: sites,
+  );
+  final byDate = <String, List<ShootAgendaEntry>>{};
+  for (final e in calendar) {
+    if (e.date.compareTo(today) < 0) continue;
+    byDate
+        .putIfAbsent(e.date, () => [])
+        .add(
+          ShootAgendaEntry(
+            kind: switch (e.kind) {
+              ShootCalendarKind.pickup => ShootAgendaKind.pickup,
+              ShootCalendarKind.ret => ShootAgendaKind.ret,
+              _ => ShootAgendaKind.shoot,
+            },
+            title: e.title,
+            detail: e.detail,
+            done: e.done,
+          ),
+        );
   }
-
-  for (final d in documents) {
-    final date = d.shootDate;
-    if (d.kind != kShootDayKind || date == null || date.isEmpty) continue;
-    final from = d.shootFromTime;
-    final to = d.shootToTime;
-    add(
-      date,
-      1,
-      from ?? '',
-      ShootAgendaEntry(
-        kind: ShootAgendaKind.shoot,
-        title: d.name,
-        detail: [
-          if (from != null && to != null)
-            '$from – $to'
-          else if (from != null)
-            from,
-          if (sites[d.locationSiteId]?.name case final place?) place,
-        ].join(' · '),
-      ),
-    );
-  }
-
-  String? timeOf(String? value) =>
-      value != null && value.length >= 16 ? value.substring(11, 16) : null;
-
-  void addRental(
-    RentalReservation r,
-    ShootAgendaKind kind,
-    String? when,
-    bool done,
-  ) {
-    if (when == null || when.length < 10) return;
-    final time = timeOf(when);
-    add(
-      when.substring(0, 10),
-      0,
-      time ?? '',
-      ShootAgendaEntry(
-        kind: kind,
-        title: r.title,
-        detail: [
-          if (time != null) time,
-          if (houses[r.houseUid]?.name case final house?) house,
-        ].join(' · '),
-        done: done,
-      ),
-    );
-  }
-
-  for (final r in reservations) {
-    addRental(r, ShootAgendaKind.pickup, r.pickupAt, r.pickedUpAt != null);
-    addRental(r, ShootAgendaKind.ret, r.returnAt, r.returnedAt != null);
-  }
-
   final dates = byDate.keys.toList()..sort();
-  return {
-    for (final date in dates.take(maxDays))
-      date: [
-        for (final item
-            in byDate[date]!..sort((a, b) {
-              final byTime = a.$2.compareTo(b.$2);
-              return byTime != 0 ? byTime : a.$1.compareTo(b.$1);
-            }))
-          item.$3,
-      ],
-  };
+  return {for (final date in dates.take(maxDays)) date: byDate[date]!};
 }
 
 String _dayLabel(String date) {
@@ -170,8 +122,7 @@ class _ShootAgendaSectionState extends ConsumerState<ShootAgendaSection> {
                     h.uid: h,
                 },
                 sites: {
-                  for (final s in sites.data ?? const <LocationSite>[])
-                    s.id: s,
+                  for (final s in sites.data ?? const <LocationSite>[]) s.id: s,
                 },
                 now: DateTime.now(),
               );
@@ -203,7 +154,7 @@ class _ShootAgendaSectionState extends ConsumerState<ShootAgendaSection> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
-                    width: 84,
+                    width: 100,
                     child: Text(
                       _dayLabel(e.key),
                       style: AppTypography.bodyMedium(

@@ -846,10 +846,9 @@ Future<void> _showShootDays(
   int projectId,
 ) async {
   final db = ref.read(databaseProvider);
-  final days = [
-    for (final d in await db.watchShootDocumentsForProject(projectId).first)
-      if (d.kind == kShootDayKind) d,
-  ]..sort((a, b) => (a.shootDate ?? '').compareTo(b.shootDate ?? ''));
+  final days = sortShootDays(
+    await db.watchShootDocumentsForProject(projectId).first,
+  );
   if (!context.mounted) return;
   final palette = context.palette;
   final picked = await showModalBottomSheet<ShootDocument>(

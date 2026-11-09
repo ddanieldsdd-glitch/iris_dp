@@ -13,19 +13,19 @@ import '../../core/weather/weather_models.dart';
 import '../../core/weather/weather_service.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../core/widgets/safe_reorderable_column.dart';
-import '../../shared/rich_text/script_markup.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
-import '../locations/locations_screen.dart';
+import '../locations/site_place.dart';
 import '../export_center/export_center_screen.dart';
 import '../export_center/export_selection.dart';
 import '../technical_script/technical_script_export.dart';
 import 'shoot_day_on_set.dart';
 import 'shoot_day_order.dart';
+import 'shoot_day_timeline.dart';
+import 'shoot_day_widgets.dart';
 import 'shoot_document_block_types.dart';
 import 'shoot_document_script_picker.dart';
 
-export 'shoot_plan.dart' show kShootDayKind;
-
+export 'shoot_plan.dart' show kShootDayKind, sortShootDays;
 
 /// Guion técnico de rodaje de una jornada: fecha, lugar, meteorología y los
 /// planos del guion técnico en el orden en que se van a rodar.
@@ -68,20 +68,13 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
   }
 
   Future<void> _pickTime(ShootDocument day, {required bool from}) async {
-    final raw = from ? day.shootFromTime : day.shootToTime;
-    final parts = (raw ?? (from ? '08:00' : '18:00')).split(':');
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(
-        hour: int.tryParse(parts.first) ?? 8,
-        minute: int.tryParse(parts.last) ?? 0,
-      ),
-      helpText: from ? 'Se rueda desde' : 'Se rueda hasta',
+    final value = await pickClockTime(
+      context,
+      current: from ? day.shootFromTime : day.shootToTime,
+      fallback: from ? '08:00' : '18:00',
+      help: from ? 'Se rueda desde' : 'Se rueda hasta',
     );
-    if (picked == null) return;
-    final value =
-        '${picked.hour.toString().padLeft(2, '0')}:'
-        '${picked.minute.toString().padLeft(2, '0')}';
+    if (value == null) return;
     await _save(
       from
           ? day.copyWith(shootFromTime: Value(value))
@@ -218,39 +211,36 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
               return StreamBuilder<List<ShootDocumentBlock>>(
                 stream: db.watchBlocksForShootDocument(widget.documentId),
                 builder: (context, blockSnap) {
-                  final blocks = <ShootDocumentBlock>[
-                    for (final b
-                        in blockSnap.data ?? const <ShootDocumentBlock>[])
-                      if (b.blockType == ShootBlockType.shot &&
-                          b.shotId != null)
-                        b,
-                  ];
+                  final blocks = blockSnap.data ?? const <ShootDocumentBlock>[];
                   final header = _header(day, sites, site, palette);
-                  final order = _OrderList(
+                  Widget order({required bool embedded}) => _DayOrder(
                     projectId: widget.projectId,
                     documentId: widget.documentId,
                     blocks: blocks,
+                    sites: sites,
+                    embedded: embedded,
                     onAdd: () => _addFromScript(blocks),
                   );
                   return LayoutBuilder(
                     builder: (context, constraints) =>
                         constraints.maxWidth < 900
                         ? ListView(
+                            padding: const EdgeInsets.only(bottom: 40),
                             children: [
                               header,
                               const Divider(height: 1),
-                              SizedBox(height: 600, child: order),
+                              order(embedded: true),
                             ],
                           )
                         : Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               SizedBox(
-                                width: 400,
+                                width: 380,
                                 child: SingleChildScrollView(child: header),
                               ),
                               VerticalDivider(width: 1, color: palette.divider),
-                              Expanded(child: order),
+                              Expanded(child: order(embedded: false)),
                             ],
                           ),
                   );
@@ -366,39 +356,9 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
           ),
           if (site != null) ...[
             const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(
-                  site.latitude == null
-                      ? Icons.location_off_outlined
-                      : Icons.place_outlined,
-                  size: 16,
-                  color: palette.textSecondary,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    site.placeLabel ??
-                        'Sin ubicar en el mapa. Se fija en Localizaciones; '
-                            'hace falta para el sol y la previsión.',
-                    style: AppTypography.caption(palette),
-                  ),
-                ),
-                if (site.latitude == null)
-                  TextButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => LocationsScreen(
-                          projectId: widget.projectId,
-                          initialSiteId: site.id,
-                        ),
-                      ),
-                    ),
-                    child: const Text('Abrir localización'),
-                  ),
-              ],
-            ),
+            SitePlaceCard(site: site, full: false, navigation: true),
+            const SizedBox(height: 8),
+            ShootSitePhotos(projectId: widget.projectId, site: site),
           ],
           const SizedBox(height: AppSpacing.lg),
           Row(
@@ -443,47 +403,59 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
               style: AppTypography.caption(palette),
             ),
           ],
-          const SizedBox(height: AppSpacing.md),
-          Text('Qué sale en la jornada y en su documento', style: label),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            title: Text(
+              'Qué sale en la jornada y en su documento',
+              style: label,
+            ),
             children: [
-              toggle(
-                'Cielo',
-                options.sky,
-                () => options.copyWith(sky: !options.sky),
-              ),
-              toggle(
-                'Temperatura',
-                options.temperature,
-                () => options.copyWith(temperature: !options.temperature),
-              ),
-              toggle(
-                'Lluvia',
-                options.rain,
-                () => options.copyWith(rain: !options.rain),
-              ),
-              toggle(
-                'Viento',
-                options.wind,
-                () => options.copyWith(wind: !options.wind),
-              ),
-              toggle(
-                'Amanecer y atardecer',
-                options.sun,
-                () => options.copyWith(sun: !options.sun),
-              ),
-              toggle(
-                'Hora azul y dorada',
-                options.blueAndGolden,
-                () => options.copyWith(blueAndGolden: !options.blueAndGolden),
-              ),
-              toggle(
-                'Hora a hora',
-                options.hourly,
-                () => options.copyWith(hourly: !options.hourly),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    toggle(
+                      'Cielo',
+                      options.sky,
+                      () => options.copyWith(sky: !options.sky),
+                    ),
+                    toggle(
+                      'Temperatura',
+                      options.temperature,
+                      () => options.copyWith(temperature: !options.temperature),
+                    ),
+                    toggle(
+                      'Lluvia',
+                      options.rain,
+                      () => options.copyWith(rain: !options.rain),
+                    ),
+                    toggle(
+                      'Viento',
+                      options.wind,
+                      () => options.copyWith(wind: !options.wind),
+                    ),
+                    toggle(
+                      'Amanecer y atardecer',
+                      options.sun,
+                      () => options.copyWith(sun: !options.sun),
+                    ),
+                    toggle(
+                      'Hora azul y dorada',
+                      options.blueAndGolden,
+                      () => options.copyWith(
+                        blueAndGolden: !options.blueAndGolden,
+                      ),
+                    ),
+                    toggle(
+                      'Hora a hora',
+                      options.hourly,
+                      () => options.copyWith(hourly: !options.hourly),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -497,45 +469,71 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
       '${t.minute.toString().padLeft(2, '0')}';
 }
 
-/// Planos de la jornada en su orden de rodaje. Se ordena por escenas (cada
-/// tramo seguido de una escena se mueve entero, y cada tarjeta es la línea
-/// que tendrá en el índice del documento) o plano a plano.
-class _OrderList extends ConsumerStatefulWidget {
+/// Una opción del menú de una línea del orden.
+typedef _OrderAction = ({String label, VoidCallback run});
+
+/// Una fila en la vista plano a plano. La fila de escena sin planos que se
+/// haya quedado junto a sus planos viaja con el primero.
+class _FlatRow {
+  final List<int> ids;
+  final ShootDocumentBlock block;
+  final Shot? shot;
+
+  const _FlatRow(this.ids, this.block, this.shot);
+}
+
+/// El orden de rodaje de la jornada: escenas con sus planos y franjas de
+/// montaje, comida o cambio de localización. Todo se puede arrastrar; en el
+/// menú de cada línea también se sube, se baja y se añade otra franja.
+class _DayOrder extends ConsumerStatefulWidget {
   final int projectId;
   final int documentId;
   final List<ShootDocumentBlock> blocks;
+  final List<LocationSite> sites;
   final VoidCallback onAdd;
 
-  const _OrderList({
+  /// Dentro de una lista con su propio desplazamiento.
+  final bool embedded;
+
+  const _DayOrder({
     required this.projectId,
     required this.documentId,
     required this.blocks,
+    required this.sites,
     required this.onAdd,
+    required this.embedded,
   });
 
   @override
-  ConsumerState<_OrderList> createState() => _OrderListState();
+  ConsumerState<_DayOrder> createState() => _DayOrderState();
 }
 
-class _OrderListState extends ConsumerState<_OrderList> {
-  /// Cambia el orden y deja deshacerlo desde el aviso.
-  void _reorder(AppDatabase db, List<int> before, List<int> next) {
-    db.reorderShootDocumentBlocks(widget.documentId, next);
+class _DayOrderState extends ConsumerState<_DayOrder> {
+  bool _byScene = true;
+
+  AppDatabase get _db => ref.read(databaseProvider);
+  ShootDayScheduleService get _service => ShootDayScheduleService(_db);
+
+  Future<void> _apply(Map<int, Shot> shots, List<int> next) async {
+    final undo = await _service.applyOrder(
+      widget.documentId,
+      widget.blocks,
+      next,
+      shots,
+    );
+    if (!mounted) return;
     AppSnackBar.show(
       context,
       'Orden de rodaje cambiado.',
       actionLabel: 'Deshacer',
-      onAction: () => db.reorderShootDocumentBlocks(widget.documentId, before),
+      onAction: () => undo(),
     );
   }
 
-  /// Quita [removed] de la jornada y deja deshacerlo: vuelven en su sitio
-  /// del orden [before].
-  Future<void> _remove(
-    AppDatabase db,
-    List<ShootDocumentBlock> removed,
-    List<int> before,
-  ) async {
+  /// Quita [removed] de la jornada y deja deshacerlo.
+  Future<void> _remove(List<ShootDocumentBlock> removed) async {
+    final before = [for (final b in widget.blocks) b.id];
+    final db = _db;
     for (final b in removed) {
       await db.deleteShootDocumentBlock(b.id);
     }
@@ -543,7 +541,7 @@ class _OrderListState extends ConsumerState<_OrderList> {
     final n = removed.length;
     AppSnackBar.show(
       context,
-      n == 1 ? 'Plano quitado de la jornada.' : '$n planos quitados.',
+      n == 1 ? 'Quitado de la jornada.' : '$n elementos quitados.',
       actionLabel: 'Deshacer',
       onAction: () async {
         final newIds = <int, int>{};
@@ -559,7 +557,108 @@ class _OrderListState extends ConsumerState<_OrderList> {
     );
   }
 
-  bool _byScene = true;
+  Future<void> _addStrip({int? beforeBlockId}) async {
+    final edit = await showShootStripSheet(context, sites: widget.sites);
+    if (edit?.draft case final draft?) {
+      await _service.addStrip(
+        widget.documentId,
+        draft,
+        beforeBlockId: beforeBlockId,
+      );
+    }
+  }
+
+  Future<void> _editStrip(ShootDocumentBlock block) async {
+    final edit = await showShootStripSheet(
+      context,
+      block: block,
+      sites: widget.sites,
+    );
+    if (edit == null) return;
+    if (edit.draft case final draft?) {
+      await _service.updateStrip(block, draft);
+    } else {
+      await _remove([block]);
+    }
+  }
+
+  Future<void> _editScene(ShootDocumentBlock first, String title) async {
+    final next = await showSceneScheduleSheet(
+      context,
+      title: title,
+      initial: SceneSchedule.of(first),
+    );
+    if (next != null) await _service.setSceneSchedule(first, next);
+  }
+
+  Future<void> _confirmRemoveScene(
+    ShootSceneEntry entry,
+    Scene? scene,
+    int shotCount,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Quitar la escena ${scene?.label ?? '—'} de la jornada'),
+        content: Text(
+          shotCount == 1
+              ? 'Se quita 1 plano de este documento. El plano sigue en el '
+                    'guion técnico.'
+              : 'Se quitan $shotCount planos de este documento. Siguen en el '
+                    'guion técnico.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Quitar'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await _remove(entry.blocks);
+  }
+
+  /// Lo común del menú de la línea [i]: añadir franja y mover.
+  List<_OrderAction> _commonActions(
+    List<ShootDayEntry> entries,
+    int i,
+    Map<int, Shot> shots,
+  ) {
+    void move(int to) => _apply(
+      shots,
+      shootDayOrderOf(moveShootDayEntry(entries, i, to), widget.blocks),
+    );
+    final after = i + 1 < entries.length ? entries[i + 1].blockIds.first : null;
+    return [
+      (
+        label: 'Franja antes',
+        run: () => _addStrip(beforeBlockId: entries[i].blockIds.first),
+      ),
+      (label: 'Franja después', run: () => _addStrip(beforeBlockId: after)),
+      if (i > 0) (label: 'Subir', run: () => move(i - 1)),
+      if (i + 1 < entries.length) (label: 'Bajar', run: () => move(i + 1)),
+    ];
+  }
+
+  Widget _menu(List<_OrderAction> actions) => PopupMenuButton<VoidCallback>(
+    tooltip: 'Acciones',
+    padding: EdgeInsets.zero,
+    iconSize: 18,
+    onSelected: (run) => run(),
+    itemBuilder: (_) => [
+      for (final a in actions)
+        PopupMenuItem(value: a.run, child: Text(a.label)),
+    ],
+  );
+
+  String? _siteNameOf(ShootStrip strip) {
+    if (strip.kind != ShootStripKind.move || strip.siteUid == null) return null;
+    return widget.sites.where((s) => s.uid == strip.siteUid).firstOrNull?.name;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -579,30 +678,95 @@ class _OrderListState extends ConsumerState<_OrderList> {
           final shots = {
             for (final s in shotSnap.data ?? const <Shot>[]) s.id: s,
           };
-          final rows = [
-            for (final b in widget.blocks)
-              if (shots[b.shotId] != null) b,
+          final blocks = widget.blocks;
+          final entries = buildShootDayEntries(blocks, shots);
+          final sceneCount = entries.whereType<ShootSceneEntry>().length;
+          final flat = _flatRows(entries, shots);
+          final shotBlocks = [
+            for (final b in blocks)
+              if (b.blockType == ShootBlockType.shot &&
+                  shots.containsKey(b.shotId))
+                b,
           ];
-          final shotOfBlock = {for (final b in rows) b.id: shots[b.shotId]!};
-          final ids = [for (final b in rows) b.id];
-          final tracts = groupShootTracts(
-            ids,
-            (id) => shotOfBlock[id]!.sceneId,
-          );
-
-          void reorder(List<int> next) => _reorder(db, ids, next);
-          final blockById = {for (final b in rows) b.id: b};
-
+          final shotIds = [for (final b in shotBlocks) b.id];
+          final byBlock = {for (final b in shotBlocks) b.id: shots[b.shotId]!};
           final inScriptOrder = scriptOrderOf(
-            ids,
+            shotIds,
             scenePosition: (id) =>
-                scenePosition[shotOfBlock[id]!.sceneId] ?? 1 << 30,
-            shotNumber: (id) => shotOfBlock[id]!.number,
+                scenePosition[byBlock[id]!.sceneId] ?? 1 << 30,
+            shotNumber: (id) => byBlock[id]!.number,
           );
-          final isScriptOrder = _sameOrder(ids, inScriptOrder);
+
+          void toScriptOrder() {
+            final sorted = inScriptOrder.iterator;
+            final positions = shotIds.toSet();
+            final all = shootDayOrderOf(entries, blocks);
+            _apply(shots, [
+              for (final id in all)
+                if (positions.contains(id))
+                  (sorted..moveNext()).current
+                else
+                  id,
+            ]);
+          }
+
+          final list = entries.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Center(
+                    child: Text(
+                      'La jornada aún no tiene nada en su orden.',
+                      style: AppTypography.bodyMedium(palette),
+                    ),
+                  ),
+                )
+              : _byScene
+              ? SafeReorderableColumn(
+                  scrollable: !widget.embedded,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
+                  itemCount: entries.length,
+                  keyOf: (i) => ValueKey('linea-${entries[i].blockIds.first}'),
+                  dragLabel: (i) => switch (entries[i]) {
+                    ShootSceneEntry(:final sceneId) =>
+                      'Escena ${scenes[sceneId]?.label ?? '—'}',
+                    ShootStripEntry(:final block) => ShootStrip.titleOf(block),
+                  },
+                  onReorder: (from, to) => _apply(
+                    shots,
+                    shootDayOrderOf(
+                      moveShootDayEntry(entries, from, to),
+                      blocks,
+                    ),
+                  ),
+                  itemBuilder: (context, i) =>
+                      _entry(entries, i, shots, scenes),
+                )
+              : SafeReorderableColumn(
+                  scrollable: !widget.embedded,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
+                  itemCount: flat.length,
+                  keyOf: (i) => ValueKey('fila-${flat[i].block.id}'),
+                  dragLabel: (i) => _flatLabel(flat[i], scenes, shots),
+                  onReorder: (from, to) {
+                    final next = [...flat];
+                    next.insert(to, next.removeAt(from));
+                    final seen = {for (final r in next) ...r.ids};
+                    _apply(shots, [
+                      for (final r in next) ...r.ids,
+                      for (final b in blocks)
+                        if (!seen.contains(b.id)) b.id,
+                    ]);
+                  },
+                  itemBuilder: (context, i) => _flatRow(flat, i, shots, scenes),
+                );
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: widget.embedded ? MainAxisSize.min : MainAxisSize.max,
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(
@@ -611,257 +775,269 @@ class _OrderListState extends ConsumerState<_OrderList> {
                   AppSpacing.lg,
                   AppSpacing.sm,
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Orden de rodaje',
-                            style: AppTypography.titleMedium(palette),
-                          ),
-                          Text(
-                            rows.isEmpty
-                                ? 'Elige las escenas y planos que se ruedan '
-                                      'este día.'
-                                : _byScene
-                                ? 'Arrastra las escenas para ordenarlas. Así '
-                                      'sale el índice del documento.'
-                                : 'Arrastra los planos para ordenarlos. El '
-                                      'número de plano es el del guion técnico.',
-                            style: AppTypography.caption(palette),
-                          ),
-                        ],
-                      ),
+                    Text(
+                      'Orden de rodaje',
+                      style: AppTypography.titleMedium(palette),
                     ),
-                    FilledButton.tonalIcon(
-                      onPressed: widget.onAdd,
-                      icon: const Icon(Icons.playlist_add, size: 18),
-                      label: const Text('Escenas y planos'),
+                    Text(
+                      'Arrastra escenas, planos y franjas. Así se ve en el '
+                      'plan, en el set y en los documentos.',
+                      style: AppTypography.caption(palette),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        FilledButton.tonalIcon(
+                          onPressed: widget.onAdd,
+                          icon: const Icon(Icons.playlist_add, size: 18),
+                          label: const Text('Escenas y planos'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _addStrip,
+                          icon: const Icon(Icons.more_time, size: 18),
+                          label: const Text('Franja'),
+                        ),
+                        if (entries.isNotEmpty)
+                          SegmentedButton<bool>(
+                            showSelectedIcon: false,
+                            style: const ButtonStyle(
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            segments: [
+                              ButtonSegment(
+                                value: true,
+                                icon: const Icon(
+                                  Icons.view_agenda_outlined,
+                                  size: 16,
+                                ),
+                                label: Text('Escenas ($sceneCount)'),
+                              ),
+                              ButtonSegment(
+                                value: false,
+                                icon: const Icon(
+                                  Icons.format_list_numbered,
+                                  size: 16,
+                                ),
+                                label: Text('Planos (${shotIds.length})'),
+                              ),
+                            ],
+                            selected: {_byScene},
+                            onSelectionChanged: (v) =>
+                                setState(() => _byScene = v.first),
+                          ),
+                        if (shotIds.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: _sameOrder(shotIds, inScriptOrder)
+                                ? null
+                                : toScriptOrder,
+                            icon: const Icon(Icons.sort, size: 16),
+                            label: const Text('Orden de guion'),
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              if (rows.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    0,
-                    AppSpacing.lg,
-                    AppSpacing.sm,
-                  ),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      SegmentedButton<bool>(
-                        showSelectedIcon: false,
-                        style: const ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        segments: [
-                          ButtonSegment(
-                            value: true,
-                            icon: const Icon(
-                              Icons.view_agenda_outlined,
-                              size: 16,
-                            ),
-                            label: Text('Escenas (${tracts.length})'),
-                          ),
-                          ButtonSegment(
-                            value: false,
-                            icon: const Icon(
-                              Icons.format_list_numbered,
-                              size: 16,
-                            ),
-                            label: Text('Planos (${rows.length})'),
-                          ),
-                        ],
-                        selected: {_byScene},
-                        onSelectionChanged: (v) =>
-                            setState(() => _byScene = v.first),
-                      ),
-                      TextButton.icon(
-                        onPressed: isScriptOrder
-                            ? null
-                            : () => reorder(inScriptOrder),
-                        icon: const Icon(Icons.sort, size: 16),
-                        label: const Text('Orden de guion'),
-                      ),
-                    ],
-                  ),
-                ),
-              Expanded(
-                child: rows.isEmpty
-                    ? Center(
-                        child: Text(
-                          'La jornada aún no tiene planos.',
-                          style: AppTypography.bodyMedium(palette),
-                        ),
-                      )
-                    : _byScene
-                    ? SafeReorderableColumn(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                        ),
-                        itemCount: tracts.length,
-                        keyOf: (i) =>
-                            ValueKey('tract-${tracts[i].blockIds.first}'),
-                        dragLabel: (i) =>
-                            'Escena ${scenes[tracts[i].sceneId]?.label ?? '—'}',
-                        onReorder: (from, to) =>
-                            reorder(moveShootTract(tracts, from, to)),
-                        itemBuilder: (context, i) => _TractCard(
-                          position: i + 1,
-                          scene: scenes[tracts[i].sceneId],
-                          shots: [
-                            for (final id in tracts[i].blockIds)
-                              shotOfBlock[id]!,
-                          ],
-                          onRemove: () async {
-                            final tract = tracts[i];
-                            final n = tract.blockIds.length;
-                            final ok = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: Text(
-                                  'Quitar la escena '
-                                  '${scenes[tract.sceneId]?.label ?? '—'} '
-                                  'de la jornada',
-                                ),
-                                content: Text(
-                                  n == 1
-                                      ? 'Se quita 1 plano de este documento. '
-                                            'El plano sigue en el guion técnico.'
-                                      : 'Se quitan $n planos de este '
-                                            'documento. Siguen en el guion '
-                                            'técnico.',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, false),
-                                    child: const Text('Cancelar'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('Quitar'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (ok != true) return;
-                            await _remove(db, [
-                              for (final id in tract.blockIds) blockById[id]!,
-                            ], ids);
-                          },
-                        ),
-                      )
-                    : SafeReorderableColumn(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                        ),
-                        itemCount: rows.length,
-                        keyOf: (i) => ValueKey(rows[i].id),
-                        dragLabel: (i) {
-                          final shot = shots[rows[i].shotId]!;
-                          return 'Esc. ${scenes[shot.sceneId]?.label ?? '—'} '
-                              '· Plano ${shot.number}';
-                        },
-                        onReorder: (from, to) {
-                          final next = [...ids];
-                          next.insert(to, next.removeAt(from));
-                          reorder(next);
-                        },
-                        itemBuilder: (context, i) {
-                          final shot = shots[rows[i].shotId]!;
-                          final scene = scenes[shot.sceneId];
-                          final framing = scriptMarkupToPlain(
-                            shot.framing,
-                          ).trim();
-                          // La escena se nombra cuando cambia respecto al
-                          // plano anterior.
-                          final previous = i == 0
-                              ? null
-                              : shots[rows[i - 1].shotId];
-                          final newScene = previous?.sceneId != shot.sceneId;
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (newScene && scene != null)
-                                Padding(
-                                  padding: EdgeInsets.only(
-                                    top: i == 0 ? 0 : AppSpacing.md,
-                                    bottom: 4,
-                                  ),
-                                  child: Text(
-                                    '${scene.label}. ${scene.locationCanonical}',
-                                    style: AppTypography.label(
-                                      palette,
-                                    ).copyWith(color: palette.accent),
-                                  ),
-                                ),
-                              Container(
-                                margin: const EdgeInsets.only(bottom: 4),
-                                padding: const EdgeInsets.fromLTRB(
-                                  12,
-                                  8,
-                                  48,
-                                  8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: palette.surfaceElevated,
-                                  border: Border.all(color: palette.border),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 34,
-                                      child: Text(
-                                        '${i + 1}',
-                                        style: AppTypography.mono(
-                                          palette,
-                                        ).copyWith(color: palette.accent),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Text(
-                                        [
-                                          'Esc. ${scene?.label ?? '—'} · '
-                                              'Plano ${shot.number}',
-                                          if (framing.isNotEmpty) framing,
-                                        ].join(' · '),
-                                        style: AppTypography.bodyMedium(
-                                          palette,
-                                        ).copyWith(color: palette.textPrimary),
-                                      ),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Quitar de la jornada',
-                                      icon: Icon(
-                                        Icons.close,
-                                        size: 16,
-                                        color: palette.textSecondary,
-                                      ),
-                                      onPressed: () =>
-                                          _remove(db, [rows[i]], ids),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-              ),
+              if (widget.embedded) list else Expanded(child: list),
             ],
           );
         },
       ),
     );
   }
+
+  Widget _entry(
+    List<ShootDayEntry> entries,
+    int i,
+    Map<int, Shot> shots,
+    Map<int, Scene> scenes,
+  ) {
+    final common = _commonActions(entries, i, shots);
+    switch (entries[i]) {
+      case ShootStripEntry(:final block, :final strip):
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: ShootStripCard(
+            block: block,
+            siteName: _siteNameOf(strip),
+            padding: const EdgeInsets.fromLTRB(10, 8, 40, 8),
+            trailing: _menu([
+              (label: 'Editar', run: () => _editStrip(block)),
+              ...common,
+              (label: 'Quitar', run: () => _remove([block])),
+            ]),
+          ),
+        );
+      case final ShootSceneEntry entry:
+        final scene = scenes[entry.sceneId];
+        final order = entries.take(i + 1).whereType<ShootSceneEntry>().length;
+        final shotBlocks = entry.shotBlocks(shots);
+        final title = _sceneTitle(scene);
+        return _SceneCard(
+          position: order,
+          title: title,
+          schedule: SceneSchedule.of(entry.blocks.first),
+          shots: [for (final b in shotBlocks) shots[b.shotId]!],
+          menu: _menu([
+            (
+              label: 'Hora y aclaración',
+              run: () => _editScene(entry.blocks.first, title),
+            ),
+            ...common,
+            (
+              label: 'Quitar de la jornada',
+              run: () => _confirmRemoveScene(entry, scene, shotBlocks.length),
+            ),
+          ]),
+        );
+    }
+  }
+
+  static String _sceneTitle(Scene? scene) => scene == null
+      ? 'Escena desconocida'
+      : scriptIndexLabel(
+          sceneLabel: scene.label,
+          intExt: scene.intExt,
+          location: scene.locationPureName,
+          dayNight: scene.dayNight,
+        );
+
+  List<_FlatRow> _flatRows(List<ShootDayEntry> entries, Map<int, Shot> shots) {
+    final rows = <_FlatRow>[];
+    for (final entry in entries) {
+      switch (entry) {
+        case ShootStripEntry(:final block):
+          rows.add(_FlatRow([block.id], block, null));
+        case ShootSceneEntry():
+          final withShot = entry.shotBlocks(shots);
+          if (withShot.isEmpty) {
+            rows.add(_FlatRow(entry.blockIds, entry.blocks.first, null));
+            continue;
+          }
+          final loose = [
+            for (final b in entry.blocks)
+              if (!shots.containsKey(b.shotId)) b.id,
+          ];
+          for (final (i, b) in withShot.indexed) {
+            rows.add(
+              _FlatRow([if (i == 0) ...loose, b.id], b, shots[b.shotId]),
+            );
+          }
+      }
+    }
+    return rows;
+  }
+
+  String _flatLabel(
+    _FlatRow row,
+    Map<int, Scene> scenes,
+    Map<int, Shot> shots,
+  ) {
+    if (ShootStrip.isStrip(row.block)) return ShootStrip.titleOf(row.block);
+    final scene = scenes[shootBlockSceneId(row.block, shots)];
+    return row.shot == null
+        ? 'Esc. ${scene?.label ?? '—'}'
+        : 'Esc. ${scene?.label ?? '—'} · Plano ${row.shot!.number}';
+  }
+
+  Widget _flatRow(
+    List<_FlatRow> rows,
+    int i,
+    Map<int, Shot> shots,
+    Map<int, Scene> scenes,
+  ) {
+    final palette = context.palette;
+    final row = rows[i];
+    if (ShootStrip.isStrip(row.block)) {
+      final block = row.block;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: ShootStripCard(
+          block: block,
+          siteName: _siteNameOf(ShootStrip.of(block)),
+          padding: const EdgeInsets.fromLTRB(10, 8, 40, 8),
+          trailing: IconButton(
+            tooltip: 'Editar',
+            icon: Icon(
+              Icons.edit_outlined,
+              size: 16,
+              color: palette.textSecondary,
+            ),
+            onPressed: () => _editStrip(block),
+          ),
+        ),
+      );
+    }
+    final sceneId = shootBlockSceneId(row.block, shots);
+    final scene = scenes[sceneId];
+    final previous = i == 0
+        ? null
+        : shootBlockSceneId(rows[i - 1].block, shots);
+    final newScene =
+        ShootStrip.isStrip(rows[i == 0 ? 0 : i - 1].block) ||
+        previous != sceneId ||
+        i == 0;
+    final removed = [
+      for (final id in row.ids) widget.blocks.firstWhere((b) => b.id == id),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (newScene && scene != null)
+          Padding(
+            padding: EdgeInsets.only(
+              top: i == 0 ? 0 : AppSpacing.sm,
+              bottom: 4,
+            ),
+            child: Text(
+              '${scene.label}. ${scene.locationCanonical}',
+              style: AppTypography.label(
+                palette,
+              ).copyWith(color: palette.accent),
+            ),
+          ),
+        Container(
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.fromLTRB(8, 6, 40, 6),
+          decoration: BoxDecoration(
+            color: palette.surfaceElevated,
+            border: Border.all(color: palette.border),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: row.shot == null
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Escena sin planos todavía',
+                        style: AppTypography.caption(palette),
+                      ),
+                    ),
+                    _removeButton(palette, removed),
+                  ],
+                )
+              : ShootShotRow(
+                  shot: row.shot!,
+                  thumbWidth: 72,
+                  trailing: [_removeButton(palette, removed)],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _removeButton(AppPalette palette, List<ShootDocumentBlock> blocks) =>
+      IconButton(
+        tooltip: 'Quitar de la jornada',
+        icon: Icon(Icons.close, size: 16, color: palette.textSecondary),
+        onPressed: () => _remove(blocks),
+      );
 
   static bool _sameOrder(List<int> a, List<int> b) {
     if (a.length != b.length) return false;
@@ -872,103 +1048,91 @@ class _OrderListState extends ConsumerState<_OrderList> {
   }
 }
 
-/// Tarjeta de un tramo de escena: su puesto, la línea que tendrá en el
-/// índice y sus planos.
-class _TractCard extends StatelessWidget {
+/// Una escena del orden: su puesto, su hora y sus planos en imagen.
+class _SceneCard extends StatelessWidget {
   final int position;
-  final Scene? scene;
+  final String title;
+  final SceneSchedule schedule;
   final List<Shot> shots;
-  final VoidCallback onRemove;
+  final Widget menu;
 
-  const _TractCard({
+  const _SceneCard({
     required this.position,
-    required this.scene,
+    required this.title,
+    required this.schedule,
     required this.shots,
-    required this.onRemove,
+    required this.menu,
   });
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final scene = this.scene;
-    final title = scene == null
-        ? 'Escena desconocida'
-        : scriptIndexLabel(
-            sceneLabel: scene.label,
-            intExt: scene.intExt,
-            location: scene.locationPureName,
-            dayNight: scene.dayNight,
-          );
+    final time = shootTimeRange(schedule.from, schedule.to);
+    final note = schedule.note.trim();
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.fromLTRB(12, 10, 48, 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 40, 10),
       decoration: BoxDecoration(
         color: palette.surfaceElevated,
         border: Border.all(color: palette.border),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: palette.accent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              '$position',
-              style: AppTypography.mono(
-                palette,
-              ).copyWith(color: palette.accent),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AppTypography.label(
-                    palette,
-                  ).copyWith(color: palette.textPrimary),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: palette.accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
+                child: Text(
+                  '$position',
+                  style: AppTypography.mono(
+                    palette,
+                  ).copyWith(color: palette.accent),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final shot in shots)
-                      Tooltip(
-                        message: scriptMarkupToPlain(shot.framing).trim(),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: palette.border),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            'Plano ${shot.number}',
-                            style: AppTypography.caption(palette),
-                          ),
-                        ),
+                    Text(
+                      title,
+                      style: AppTypography.label(
+                        palette,
+                      ).copyWith(color: palette.textPrimary),
+                    ),
+                    if (time.isNotEmpty)
+                      Text(
+                        time,
+                        style: AppTypography.caption(
+                          palette,
+                        ).copyWith(color: palette.accent),
                       ),
+                    if (note.isNotEmpty)
+                      Text(note, style: AppTypography.caption(palette)),
                   ],
                 ),
-              ],
+              ),
+              menu,
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (shots.isEmpty)
+            Text('Sin planos todavía.', style: AppTypography.caption(palette))
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [for (final shot in shots) ShootShotTile(shot: shot)],
             ),
-          ),
-          IconButton(
-            tooltip: 'Quitar la escena de la jornada',
-            icon: Icon(Icons.close, size: 16, color: palette.textSecondary),
-            onPressed: onRemove,
-          ),
         ],
       ),
     );
