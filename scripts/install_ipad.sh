@@ -78,7 +78,18 @@ until mkdir "$LOCK" 2>/dev/null; do
   WAITED=1
   sleep 10
 done
-trap 'rm -rf "$LOCK"' EXIT
+# Un error de bash (variable sin definir, por ejemplo) sale sin pasar por el
+# trap ERR: aquí se avisa también, una vez al día, para que no falle en silencio.
+on_exit() {
+  local code=$?
+  rm -rf "$LOCK"
+  if [[ $code -ge 2 && "$(state_get error_warned_on)" != "$(date +%F)" ]]; then
+    log "La instalación terminó con el código $code."
+    notify "La instalación automática ha fallado" "Mira $LOG_DIR"
+    state_set "error_warned_on=$(date +%F)"
+  fi
+}
+trap on_exit EXIT
 trap 'on_error $LINENO' ERR
 
 state_get() {
@@ -383,7 +394,7 @@ sys.exit(0 if sys.argv[1] in plistlib.loads(sys.stdin.buffer.read()).get("Provis
 FAILED=0
 for entry in "${TODO[@]}"; do
   IFS=$'\t' read -r ID NAME SHA LABEL DAY_INSTALL <<<"$entry"
-  log "Instalando ${SHA:0:7} ($LABEL) en $NAME…"
+  log "Instalando ${SHA:0:7} ($LABEL) en ${NAME}…"
   dev_set "$ID" "last_attempt=$(date -u +%FT%TZ)"
   if [[ "$BUILT_SHA" != "$SHA" ]]; then
     build_sha "$SHA" || exit 1

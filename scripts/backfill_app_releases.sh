@@ -17,7 +17,7 @@ fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 chmod +x "$ROOT/scripts/register_app_release.sh"
 
-echo "→ Tags en GitHub para $REPO…"
+echo "→ Tags en GitHub para ${REPO}…"
 tags=$(gh release list --repo "$REPO" --limit 50 --json tagName -q '.[].tagName')
 
 for tag in $tags; do
