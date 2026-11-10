@@ -9,6 +9,7 @@ import '../../core/theme/app_typography.dart';
 import 'floor_plan_repository.dart';
 import 'floor_plan_scope.dart';
 import 'light_setup_actions.dart';
+import 'plan_library.dart';
 import 'plan_trash_ui.dart';
 import '../../core/utils/platform_keys.dart';
 
@@ -369,6 +370,16 @@ class SetMenuButton extends ConsumerWidget {
             setupCount: setupCount,
           );
           switch (action) {
+            case 'library':
+              saveToPlanLibrary(
+                context,
+                initialName: set.locationName,
+                save: (store, name) => PlanLibrary(
+                  ref.read(databaseProvider),
+                ).saveSet(store, set, name: name),
+              );
+            case 'library-open':
+              showPlanLibrary(context);
             case 'rename':
               actions.rename();
             case 'copy':
@@ -403,6 +414,14 @@ class SetMenuButton extends ConsumerWidget {
                 '${modKey}V',
               ),
             ),
+          const PopupMenuItem(
+            value: 'library',
+            child: Text('Guardar en la biblioteca…'),
+          ),
+          const PopupMenuItem(
+            value: 'library-open',
+            child: Text('Ver la biblioteca…'),
+          ),
           const PopupMenuItem(value: 'clear', child: Text('Vaciar planta…')),
           PopupMenuItem(
             value: 'delete',

@@ -92,7 +92,7 @@ Comprobación: pruebas de widget por recorrido (plano→planta→plano; plano nu
 
 1. ✅ (sin PDF) Planificador eléctrico: consumo real, reparto por circuito, generadores (L7).
 2. Patch DMX y MVR con direcciones (necesita modos DMX en el catálogo).
-3. Biblioteca de sets y esquemas de luz reutilizables entre proyectos.
+3. ✅ Biblioteca de sets y esquemas de luz reutilizables entre proyectos. Viaja entre equipos con la migración 015; el fondo de la planta no viaja.
 4. ✅ Sol real por fecha, hora y coordenadas de la localización (L9).
 5. Hoja de citación y lista maestra de material (ya en el plan RC, tras el 18-11).
 6. Roles de equipo (gaffer, foquista) con solo lectura real y PDF publicados por enlace.

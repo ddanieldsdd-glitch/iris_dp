@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/database/app_database.dart';
+import '../../core/sync/plan_library_store.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'camera_plan_constants.dart';
 import 'floor_plan_json.dart';
 import 'floor_plan_repository.dart';
+import 'plan_library.dart';
 
 /// Crea un esquema de luz para un set. Si su localización tiene luz general
 /// (luces colocadas en la planta de la localización), pregunta si se empieza
@@ -48,7 +52,12 @@ Future<LightSetup?> createSetupAsked(
           !sources.any((s) => s.id == previous.id)
       ? previous
       : null;
-  if (sources.isEmpty && like == null) return empty();
+  final library = await PlanLibraryStore.open();
+  final saved = library == null
+      ? const <PlanLibraryEntry>[]
+      : planLibraryEntriesWithSchemes(library.list());
+  if (library != null) unawaited(library.sync());
+  if (sources.isEmpty && like == null && saved.isEmpty) return empty();
   final site = sourceSite == null ? null : await db.getSiteById(sourceSite);
   if (!context.mounted) return null;
   final choice = await pickLightSetupStart(
@@ -56,16 +65,25 @@ Future<LightSetup?> createSetupAsked(
     sources: sources,
     siteName: site?.name ?? 'la localización',
     previous: like,
+    library: saved,
   );
   if (choice == null) return null;
+  if (choice.scheme case final scheme?) {
+    return PlanLibrary(db).createSetup(
+      scheme,
+      projectId: projectId,
+      setId: setId,
+      siteId: siteId,
+    );
+  }
   final source = choice.source;
   if (source == null) return empty();
   return repo.createLightSetupFrom(source, setId: setId, siteId: siteId);
 }
 
-/// Con qué empieza un esquema nuevo: vacío (`source == null`) o con las
-/// luces de [source].
-typedef LightSetupStart = ({LightSetup? source});
+/// Con qué empieza un esquema nuevo: vacío (ambos nulos), con las luces de
+/// [source] o con un esquema de la biblioteca ([scheme]).
+typedef LightSetupStart = ({LightSetup? source, PlanLibraryScheme? scheme});
 
 /// Hoja «Nuevo esquema de luz»: vacío o desde un esquema de la luz general.
 Future<LightSetupStart?> pickLightSetupStart(
@@ -73,15 +91,16 @@ Future<LightSetupStart?> pickLightSetupStart(
   required List<LightSetup> sources,
   required String siteName,
   LightSetup? previous,
+  List<PlanLibraryEntry> library = const [],
 }) {
   final palette = context.palette;
   return showModalBottomSheet<LightSetupStart>(
     context: context,
     backgroundColor: palette.surfaceElevated,
+    isScrollControlled: true,
     builder: (ctx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListView(
+        shrinkWrap: true,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -103,12 +122,12 @@ Future<LightSetupStart?> pickLightSetupStart(
                 'uno no pasa al otro',
                 style: AppTypography.caption(palette),
               ),
-              onTap: () => Navigator.pop(ctx, (source: previous)),
+              onTap: () => Navigator.pop(ctx, (source: previous, scheme: null)),
             ),
           ListTile(
             leading: Icon(Icons.crop_square, color: palette.textSecondary),
             title: Text('Vacío', style: AppTypography.bodyLarge(palette)),
-            onTap: () => Navigator.pop(ctx, (source: null)),
+            onTap: () => Navigator.pop(ctx, (source: null, scheme: null)),
           ),
           for (final setup in sources)
             ListTile(
@@ -122,7 +141,21 @@ Future<LightSetupStart?> pickLightSetupStart(
                 'localización, este esquema no cambia',
                 style: AppTypography.caption(palette),
               ),
-              onTap: () => Navigator.pop(ctx, (source: setup)),
+              onTap: () => Navigator.pop(ctx, (source: setup, scheme: null)),
+            ),
+          for (final item in planLibrarySchemes(library))
+            ListTile(
+              leading: Icon(Icons.bookmark_outline, color: palette.accent),
+              title: Text(
+                'De la biblioteca · ${item.title}',
+                style: AppTypography.bodyLarge(palette),
+              ),
+              subtitle: Text(
+                '${item.subtitle} · una copia para este proyecto',
+                style: AppTypography.caption(palette),
+              ),
+              onTap: () =>
+                  Navigator.pop(ctx, (source: null, scheme: item.scheme)),
             ),
         ],
       ),
@@ -150,9 +183,13 @@ class NewSetRequest {
   /// Copiar también las luces del origen.
   final bool includeLights;
 
+  /// Set de la biblioteca del que se parte, con su planta y sus luces.
+  final PlanLibraryEntry? fromLibrary;
+
   const NewSetRequest({
     required this.name,
     this.fromSet,
+    this.fromLibrary,
     this.fromSite = false,
     this.includeLights = false,
   });
@@ -166,11 +203,16 @@ Future<NewSetRequest?> askNewSet(
   required List<LocationBasePlan> sets,
   required bool siteHasLights,
   required Set<int> setsWithLights,
+  List<PlanLibraryEntry> library = const [],
 }) {
   final palette = context.palette;
   final controller = TextEditingController();
-  // -1 = vacío, 0 = localización, id = set.
+  // -1 = vacío, 0 = localización, id = set, -2 - i = entrada i de la
+  // biblioteca.
   var from = -1;
+  final savedSets = library.where((e) => e.isSet).toList();
+  PlanLibraryEntry? saved(int value) =>
+      value <= -2 ? savedSets[-2 - value] : null;
   var includeLights = true;
   return showDialog<NewSetRequest>(
     context: context,
@@ -190,6 +232,7 @@ Future<NewSetRequest?> askNewSet(
                   ? sets.where((s) => s.id == from).firstOrNull
                   : null,
               includeLights: lightsAvailable && includeLights,
+              fromLibrary: saved(from),
             ),
           );
         }
@@ -231,8 +274,19 @@ Future<NewSetRequest?> askNewSet(
                         value: set.id,
                         child: Text('El set ${set.locationName}'),
                       ),
+                    for (var i = 0; i < savedSets.length; i++)
+                      DropdownMenuItem(
+                        value: -2 - i,
+                        child: Text('Biblioteca · ${savedSets[i].name}'),
+                      ),
                   ],
-                  onChanged: (v) => refresh(() => from = v ?? -1),
+                  onChanged: (v) => refresh(() {
+                    from = v ?? -1;
+                    final entry = saved(from);
+                    if (entry != null && controller.text.trim().isEmpty) {
+                      controller.text = entry.name;
+                    }
+                  }),
                 ),
                 if (lightsAvailable)
                   CheckboxListTile(

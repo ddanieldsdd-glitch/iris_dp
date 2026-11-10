@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import '../../core/sync/plan_library_store.dart';
+import 'plan_library.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -98,6 +102,9 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
 
   Future<void> _newSet(LocationSite site) async {
     final sets = _data.setsOfSite(site.id);
+    final library = await PlanLibraryStore.open();
+    if (library != null) unawaited(library.sync());
+    if (!mounted) return;
     final request = await askNewSet(
       context,
       siteName: site.name,
@@ -107,8 +114,18 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
         for (final set in sets)
           if (_data.setupsOfSet(set.id).isNotEmpty) set.id,
       },
+      library: library?.list() ?? const [],
     );
     if (request == null) return;
+    if (request.fromLibrary case final entry?) {
+      await PlanLibrary(ref.read(databaseProvider)).createSet(
+        entry,
+        projectId: widget.projectId,
+        siteId: site.id,
+        name: request.name,
+      );
+      return;
+    }
     await FloorPlanRepository(ref.read(databaseProvider)).createSet(
       projectId: widget.projectId,
       siteId: site.id,

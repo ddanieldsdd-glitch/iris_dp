@@ -20,6 +20,7 @@ import '../widgets/sync/sync_conflict_history_sheet.dart';
 import 'content_sync_base_store.dart';
 import 'editing_guard.dart';
 import 'media_upload_queue.dart';
+import 'plan_library_store.dart';
 import 'project_content_sync_service.dart';
 import 'realtime_hub.dart';
 import 'sync_engine.dart';
@@ -54,6 +55,7 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   Timer? _backupFirst;
   Timer? _backupTicker;
   Timer? _healthCheck;
+  Timer? _librarySync;
   Timer? _editDebounce;
   StreamSubscription<int>? _queueWatch;
   int _lastQueueCount = 0;
@@ -74,6 +76,7 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       (_) => _dailyBackup(),
     );
     _healthCheck = Timer(const Duration(seconds: 90), _checkDatabase);
+    _librarySync = Timer(const Duration(seconds: 45), _syncLibrary);
     unawaited(_connectLive());
     // Al abrir, la sesión aún se está cargando: el canal en vivo se abre en
     // cuanto hay usuario o vuelve la red (antes solo al volver a la app, y
@@ -103,6 +106,7 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
     _backupFirst?.cancel();
     _backupTicker?.cancel();
     _healthCheck?.cancel();
+    _librarySync?.cancel();
     _editDebounce?.cancel();
     _queueWatch?.cancel();
     super.dispose();
@@ -114,6 +118,10 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       secondFolder: BackupPrefs.secondFolder(),
     ),
   );
+
+  /// Trae lo guardado en la biblioteca desde los otros equipos.
+  Future<void> _syncLibrary() async =>
+      (await PlanLibraryStore.open())?.sync();
 
   /// Una vez por arranque, cuando la app ya está tranquila. Solo informa.
   Future<void> _checkDatabase() async {

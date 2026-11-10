@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'plan_data.dart';
 import 'plan_item_actions.dart';
+import 'plan_library.dart';
 import 'plan_target.dart';
 import 'plan_view_picker.dart';
 import '../../core/utils/platform_keys.dart';
@@ -109,6 +110,14 @@ class LightSetupMenuButton extends ConsumerWidget {
               value: 'paste',
               child: PlanMenuRow('Pegar «${clip!.name}» al lado', '${modKey}V'),
             ),
+          const PopupMenuItem(
+            value: 'library',
+            child: Text('Guardar en la biblioteca…'),
+          ),
+          const PopupMenuItem(
+            value: 'library-open',
+            child: Text('Ver la biblioteca…'),
+          ),
           const PopupMenuItem(value: 'clear', child: Text('Vaciar planta…')),
           const PopupMenuItem(
             value: 'delete',
@@ -131,6 +140,15 @@ class LightSetupMenuButton extends ConsumerWidget {
       return;
     }
     switch (action) {
+      case 'library':
+        await saveToPlanLibrary(
+          context,
+          initialName: setup.name,
+          save: (store, name) =>
+              PlanLibrary(db).saveSetup(store, setup, name: name),
+        );
+      case 'library-open':
+        await showPlanLibrary(context);
       case 'section':
         final data = await PlanProjectData.load(db, setup.projectId);
         if (!context.mounted) return;
