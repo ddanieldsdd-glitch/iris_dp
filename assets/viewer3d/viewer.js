@@ -14,6 +14,23 @@
     return;
   }
 
+  // Calibración heredada de la luz de IRIS (three r147): los hex se leen tal
+  // cual, como valores lineales (los `albedoRgb` y el `baseColor` del glTF
+  // que llega a Unreal cuentan con ello), sin la conversión sRGB moderna.
+  THREE.ColorManagement.enabled = false;
+  // «Luz de siempre» (sin exposición de cámara): la intensidad antigua iba
+  // multiplicada por π y la caída era lineal hasta `distance`. three moderno
+  // ya no lo trae, así que un `decay` negativo pide aquí esa caída.
+  const LEGACY_DECAY = -1;
+  const FALLOFF_HEAD = 'float getDistanceAttenuation( const in float lightDistance, const in float cutoffDistance, const in float decayExponent ) {';
+  THREE.ShaderChunk.lights_pars_begin = THREE.ShaderChunk.lights_pars_begin.replace(FALLOFF_HEAD, FALLOFF_HEAD +
+    '\n\tif ( decayExponent < 0.0 ) return cutoffDistance > 0.0 ? pow( saturate( 1.0 - lightDistance / cutoffDistance ), - decayExponent ) : 1.0;\n');
+  // r147 no descontaba de la luz ambiente lo que se lleva el especular.
+  const AMBIENT_LOSS = 'BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - singleScattering - multiScattering );';
+  THREE.ShaderChunk.lights_physical_pars_fragment = THREE.ShaderChunk.lights_physical_pars_fragment.replace(AMBIENT_LOSS, 'BRDF_Lambert( material.diffuseContribution );');
+  let physicalLights = false;
+  const power = (v) => (physicalLights ? v : v * Math.PI);
+
   // Ejes de la escena: x, y en planta y z arriba. three.js usa y arriba:
   // (x, y, z) → (x, z, −y) conserva la mano derecha.
   const V = (x, y, z) => new THREE.Vector3(x, z, -y);
@@ -26,12 +43,27 @@
   }
 
   // ── Escena, cámaras y controles ──────────────────────────────────────────
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+  } catch (e) {
+    msg.textContent = 'Este equipo no tiene WebGL 2, que necesita el visor 3D.';
+    return;
+  }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.autoClear = false;
+  // Luces reales a la vez: lo que permiten los uniforms de este equipo (cada
+  // foco gasta unos 7), con un tope más bajo en iPad y iPhone. Si aun así no
+  // llega a 25 fps, se rebaja (watchFrames).
+  const MIN_LIGHTS = 14;
+  const lightCap = Math.max(MIN_LIGHTS, Math.min(Math.floor((renderer.capabilities.maxFragmentUniforms - 160) / 7), navigator.maxTouchPoints > 1 ? 24 : 40));
+  let lightBudget = lightCap;
+  // Telas y rebotes como luces de área (no dan sombra, igual que antes).
+  const MAX_AREA = 8;
+  let areaReady = false;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   // Que pueda tener el foco: W A S D llegan al visor (F6.22.6).
   renderer.domElement.tabIndex = 0;
   renderer.domElement.style.outline = 'none';
@@ -118,7 +150,7 @@
       g.textBaseline = 'middle';
       g.fillText(t, 64, 66);
       const tx = new THREE.CanvasTexture(c);
-      tx.encoding = THREE.sRGBEncoding;
+      tx.colorSpace = THREE.SRGBColorSpace;
       return new THREE.MeshBasicMaterial({ map: tx });
     }),
   );
@@ -476,7 +508,7 @@
     if (h.roof === 'tensile') {
       const tx = new THREE.CanvasTexture(stripes);
       tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
-      tx.encoding = THREE.sRGBEncoding;
+      tx.colorSpace = THREE.SRGBColorSpace;
       mat = new THREE.MeshStandardMaterial({ map: tx, roughness: 0.8, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
     } else {
       mat = new THREE.MeshStandardMaterial({ color: 0x9aa3ab, metalness: 0.3, roughness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.6, depthWrite: false });
@@ -972,7 +1004,7 @@
     g.textBaseline = 'middle';
     g.fillText(text, 20, 27);
     const tx = new THREE.CanvasTexture(c);
-    tx.encoding = THREE.sRGBEncoding;
+    tx.colorSpace = THREE.SRGBColorSpace;
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, depthTest: false, transparent: true, sizeAttenuation: false }));
     sprite.userData.aspect = w / 52;
     sprite.renderOrder = 10;
@@ -1068,7 +1100,7 @@
         : env === 'exterior' ? (sc.sun ? '#9cbfdf' : '#0b1020')
         : baseBg);
     const k = physical ? sc.exposure.scale : 1;
-    renderer.physicallyCorrectLights = physical;
+    physicalLights = physical;
     if (physical) {
       // Cielo de día (aprox. un cuarto del sol) o un poco de rebote de noche.
       // En un plató, solo los focos.
@@ -1079,14 +1111,14 @@
       }
     } else if (clearView) {
       // Luz de trabajo pareja: todo se ve, nada deslumbra.
-      root.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 1.0));
-      root.add(new THREE.AmbientLight(0xffffff, 0.45));
-      const work = new THREE.DirectionalLight(0xffffff, 0.35);
+      root.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, power(1.0)));
+      root.add(new THREE.AmbientLight(0xffffff, power(0.45)));
+      const work = new THREE.DirectionalLight(0xffffff, power(0.35));
       work.position.set(4, 10, 6);
       root.add(work);
     } else {
-      root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, sc.sun ? 0.6 : 0.38));
-      root.add(new THREE.AmbientLight(0xffffff, 0.12));
+      root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, power(sc.sun ? 0.6 : 0.38)));
+      root.add(new THREE.AmbientLight(0xffffff, power(0.12)));
     }
     post({ type: 'lightMode', physical, ev100: physical ? sc.exposure.ev100 : null });
 
@@ -1190,7 +1222,7 @@
 
     // Luces: el cuerpo, su cono y, hasta un máximo, luz de verdad.
     const fixtures = sc.fixtures || [];
-    const maxLights = 14, step = Math.max(1, fixtures.length / maxLights);
+    const maxLights = lightBudget, step = Math.max(1, fixtures.length / maxLights);
     let next = 0, lit = 0;
     // Con un escaneo se ensaya la luz sobre la localización: los primeros
     // focos dan sombra (F6.12.4). Son caras, así que solo unos pocos.
@@ -1221,14 +1253,14 @@
         if ((f.beamDeg || 360) >= 180) {
           const pl = physical
             ? new THREE.PointLight(col, ((f.source && f.source.cd) || 0) * k, 0, 2)
-            : new THREE.PointLight(col, 0.4 + (f.watts || 100) / 2400, 12, 1);
+            : new THREE.PointLight(col, power(0.4 + (f.watts || 100) / 2400), 12, LEGACY_DECAY);
           pl.position.copy(p);
           root.add(pl);
           return;
         }
         const sl = physical
           ? new THREE.SpotLight(col, ((f.source && f.source.cd) || 0) * k, 0, half, 0.45, 2)
-          : new THREE.SpotLight(col, 0.6 + (f.watts || 500) / 1600, 0, half, 0.45, 1);
+          : new THREE.SpotLight(col, power(0.6 + (f.watts || 500) / 1600), 0, half, 0.45, LEGACY_DECAY);
         sl.position.copy(p);
         sl.target.position.copy(a);
         if (castShadows && shadows < maxShadows) {
@@ -1334,7 +1366,7 @@
       const d = sc.sun.dir;
       const sun = new THREE.DirectionalLight(
         cctColor(sc.sun.cct || 5400),
-        physical ? (sc.sun.lux || 0) * k : 1.5,
+        physical ? (sc.sun.lux || 0) * k : power(1.5),
       );
       const reach = Math.max(sz.x, sz.z, 10) * 1.2;
       sun.position.copy(c).add(V(d[0], d[1], d[2]).multiplyScalar(reach * 2));
@@ -1378,6 +1410,7 @@
       root.add(grp);
     }
     // La luz que sale de telas y rebotes, la del fotómetro.
+    let areas = 0;
     for (const s of clearView ? [] : sc.soft || []) {
       if (lit >= maxLights + 6) break;
       lit++;
@@ -1386,10 +1419,25 @@
       const half = clamp((s.beamDeg || 120) / 2, 20, 85) * Math.PI / 180;
       const sl = physical
         ? new THREE.SpotLight(col, (s.cd || 0) * k, 0, half, 1, 2)
-        : new THREE.SpotLight(col, 0.5, 0, half, 1, 1);
+        : new THREE.SpotLight(col, power(0.5), 0, half, 1, LEGACY_DECAY);
       sl.position.copy(p);
       sl.target.position.copy(p.clone().add(V(s.dir[0], s.dir[1], s.dir[2]).multiplyScalar(3)));
       root.add(sl, sl.target);
+      // Una superficie mate (120° o más; un rebote plateado sigue como foco)
+      // emite como Lambert, igual que en el fotómetro: luminancia = candelas
+      // en el eje / área, así
+      // que de frente da lo mismo que el fotómetro. El foco se queda en una
+      // capa que no se dibuja porque el glTF no admite luces de área.
+      const area = (s.widthM || 0) * (s.heightM || 0);
+      if (physical && area > 0 && (s.beamDeg || 0) >= 120 && areas < MAX_AREA) {
+        areas++;
+        if (!areaReady) { THREE.RectAreaLightUniformsLib.init(); areaReady = true; }
+        const rect = new THREE.RectAreaLight(col, (s.cd || 0) * k / area, s.widthM, s.heightM);
+        rect.position.copy(p);
+        rect.lookAt(sl.target.position);
+        root.add(rect);
+        sl.layers.set(31);
+      }
     }
 
     if (castShadows && !sc.sun) {
@@ -1410,6 +1458,7 @@
     if (first) setView('iso', true);
     if (keep) highlight(keep);
     post({ type: 'loaded', fixtures: fixtures.length, lit });
+    frames = lit > MIN_LIGHTS ? { n: 0, sum: 0, last: 0 } : null;
   }
 
   function setView(v, instant) {
@@ -1536,7 +1585,7 @@
     img.onload = () => {
       const tx = new THREE.Texture(img);
       tx.needsUpdate = true;
-      tx.encoding = THREE.sRGBEncoding;
+      tx.colorSpace = THREE.SRGBColorSpace;
       const w = f.x1 - f.x0, h = f.yTop - f.yBottom;
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tx, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
       m.rotation.x = -Math.PI / 2;
@@ -1690,8 +1739,30 @@
     controls.update();
   }
 
+  // Con más luces de las de siempre, comprueba que el equipo llega: si tras
+  // estabilizarse va por debajo de 25 fps, quita un tercio y redibuja.
+  let frames = null;
+  function watchFrames(now) {
+    const dt = now - frames.last;
+    frames.last = now;
+    if (document.hidden) return;
+    // Los primeros cuadros compilan shaders; un salto enorme es que la vista
+    // ha estado oculta. Con cuadros muy lentos se decide antes de los 40.
+    if (++frames.n <= 5 || dt > 2000) return;
+    frames.sum += dt;
+    frames.used = (frames.used || 0) + 1;
+    if (frames.used < 40 && frames.sum < 1500) return;
+    const slow = frames.sum / frames.used > 40;
+    frames = null;
+    if (slow && lightBudget > MIN_LIGHTS) {
+      lightBudget = Math.max(MIN_LIGHTS, Math.ceil(lightBudget * 0.66));
+      if (lastScene) load(lastScene);
+    }
+  }
+
   function loop(now) {
     requestAnimationFrame(loop);
+    if (frames && now) watchFrames(now);
     if (anim) anim(now || performance.now());
     if (fly) stepFly(now || performance.now());
     else controls.update();
@@ -1719,6 +1790,17 @@
   // techos, cristales, telas, pilares y rigging, cada pieza con su sitio
   // metido en la propia malla (sin transformaciones de nodo), para que el
   // importador de Unreal la deje donde va aunque separe las piezas.
+  // En la «luz de siempre» el glTF sigue llevando la intensidad antigua, sin
+  // la π que aquí solo sirve para dibujar.
+  function gltfExporter() {
+    return new THREE.GLTFExporter().register((writer) => ({
+      writeNode(o, def) {
+        const ext = def.extensions && def.extensions.KHR_lights_punctual;
+        if (!physicalLights && o.isLight && ext) writer.json.extensions.KHR_lights_punctual.lights[ext.light].intensity /= Math.PI;
+      },
+    }));
+  }
+
   function structureGlb() {
     const out = new THREE.Group();
     for (const g of [...roofs, L.walls, L.glass, L.drapes, L.pillars, L.rig].filter(Boolean)) {
@@ -1736,7 +1818,7 @@
     }
     if (!out.children.length) return Promise.resolve(null);
     return new Promise((resolve, reject) => {
-      new THREE.GLTFExporter().parse(out, (glb) => {
+      gltfExporter().parse(out, (glb) => {
         const bytes = new Uint8Array(glb);
         let bin = '';
         for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
@@ -1751,7 +1833,7 @@
       ? [...roofs, L.walls, L.glass, L.drapes, L.pillars, L.rig].filter(Boolean)
       : [root, scansGroup];
     return new Promise((resolve, reject) => {
-      new THREE.GLTFExporter().parse(what, (glb) => {
+      gltfExporter().parse(what, (glb) => {
         const bytes = new Uint8Array(glb);
         let bin = '';
         for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
@@ -1780,8 +1862,8 @@
     const copy = w.clone(true);
     w.matrixWorld.decompose(copy.position, copy.quaternion, copy.scale);
     tmp.add(copy);
-    tmp.add(new THREE.AmbientLight(0xffffff, 0.9));
-    const sunTop = new THREE.DirectionalLight(0xffffff, 0.5);
+    tmp.add(new THREE.AmbientLight(0xffffff, power(0.9)));
+    const sunTop = new THREE.DirectionalLight(0xffffff, power(0.5));
     sunTop.position.set(0, 1, 0);
     tmp.add(sunTop);
     const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
@@ -1790,7 +1872,7 @@
     top.up.set(0, 0, -1);
     top.lookAt(cx, box.min.y, cz);
     const target = new THREE.WebGLRenderTarget(W, H);
-    target.texture.encoding = THREE.sRGBEncoding;
+    target.texture.colorSpace = THREE.SRGBColorSpace;
     const clear = new THREE.Color();
     renderer.getClearColor(clear);
     const alpha = renderer.getClearAlpha();
@@ -2043,7 +2125,7 @@
         const img = new Image();
         img.onload = () => {
           const tx = new THREE.Texture(img);
-          tx.encoding = THREE.sRGBEncoding;
+          tx.colorSpace = THREE.SRGBColorSpace;
           tx.needsUpdate = true;
           if (thumbTex[key]) thumbTex[key].dispose();
           thumbTex[key] = tx;

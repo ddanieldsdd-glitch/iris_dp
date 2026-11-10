@@ -1,0 +1,12 @@
+{
+  "name": "iris-viewer3d-vendor",
+  "private": true,
+  "description": "Empaqueta three.js y sus addons en un único script clásico para el visor 3D de IRIS.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "three": "0.187.0"
+  }
+}
