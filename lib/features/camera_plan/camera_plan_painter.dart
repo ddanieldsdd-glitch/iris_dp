@@ -368,7 +368,10 @@ class CameraPlanPainter extends CustomPainter {
   /// De la planta, lo que va encima de la luz: recorridos, elementos,
   /// imágenes y nombres.
   void _paintOverLight(Canvas canvas) {
-    for (final el in elements.where(PlanMarks.supports)) {
+    for (final el in [
+      if (documentMarks) ...inheritedElements,
+      ...elements,
+    ].where(PlanMarks.supports)) {
       final isSelected = el.id == selectedElement?.id;
       _drawCameraPath(
         canvas,
@@ -1894,6 +1897,10 @@ class CameraPlanPainter extends CustomPainter {
     bool showHandles = false,
   }) {
     if (camera.pathPoints.isEmpty) return;
+    if (documentMarks) {
+      _drawDocumentPath(canvas, camera);
+      return;
+    }
 
     final camColor = camera.type == ElementType.camera
         ? cameraColorForLetter(camera.cameraLetter)
@@ -1965,6 +1972,167 @@ class CameraPlanPainter extends CustomPainter {
         color: camColor,
         highlighted: picked,
       );
+    }
+  }
+
+  /// El recorrido en papel: el grosor y las flechas no encogen con la
+  /// planta, y cada parada enseña la figura hacia donde mira.
+  void _drawDocumentPath(Canvas canvas, PlanElement el) {
+    final color = _pathColor(el);
+    final point = 1 / scale;
+    final stops = [el.position, ...el.pathPoints];
+    final route = Path()..moveTo(stops.first.dx, stops.first.dy);
+    for (final stop in stops.skip(1)) {
+      route.lineTo(stop.dx, stop.dy);
+    }
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    // Un filo oscuro la separa de las manchas de luz.
+    canvas.drawPath(
+      route,
+      stroke
+        ..color = _CanvasColors.background.withValues(alpha: 0.8)
+        ..strokeWidth = 3.4 * point,
+    );
+    stroke
+      ..color = color
+      ..strokeWidth = 1.7 * point;
+    if (el.type == ElementType.camera) {
+      // La cámara, a trazos: puede compartir color con un personaje.
+      for (var i = 0; i < stops.length - 1; i++) {
+        final span = stops[i + 1] - stops[i];
+        if (span.distance == 0) continue;
+        final dir = span / span.distance;
+        for (var along = 0.0; along < span.distance; along += 8.5 * point) {
+          canvas.drawLine(
+            stops[i] + dir * along,
+            stops[i] + dir * math.min(along + 5 * point, span.distance),
+            stroke,
+          );
+        }
+      }
+    } else {
+      canvas.drawPath(route, stroke);
+    }
+
+    for (final (i, stop) in el.pathPoints.indexed) {
+      final rotation = PlanMarks.rotationAt(el, i);
+      canvas.saveLayer(null, Paint()..color = const Color(0x99FFFFFF));
+      canvas.translate(stop.dx, stop.dy);
+      canvas.rotate(rotation * math.pi / 180);
+      canvas.scale(_documentFigureScale(el));
+      if (el.type == ElementType.camera) {
+        _drawCamera(canvas, el);
+      } else {
+        _drawActor(canvas, el, rotation: rotation);
+      }
+      canvas.restore();
+    }
+
+    final head = Paint()..color = color;
+    for (var i = 0; i < stops.length - 1; i++) {
+      final span = stops[i + 1] - stops[i];
+      if (span.distance * scale < 14) continue;
+      final dir = span / span.distance;
+      final side = Offset(-dir.dy, dir.dx);
+      final tip = stops[i] + span * 0.6 + dir * 4.5 * point;
+      final back = tip - dir * 8 * point;
+      canvas.drawPath(
+        Path()
+          ..moveTo(tip.dx, tip.dy)
+          ..lineTo(
+            back.dx + side.dx * 3.8 * point,
+            back.dy + side.dy * 3.8 * point,
+          )
+          ..lineTo(
+            back.dx - side.dx * 3.8 * point,
+            back.dy - side.dy * 3.8 * point,
+          )
+          ..close(),
+        head,
+      );
+    }
+  }
+
+  Color _pathColor(PlanElement el) => el.type == ElementType.camera
+      ? cameraColorForLetter(el.cameraLetter)
+      : el.actorColor;
+
+  static const _documentStopRadius = 4.4;
+
+  /// Los números de orden de los recorridos, cada uno en una esquina de su
+  /// figura sin tapar otro número.
+  List<_DocumentStop> _layoutDocumentStops(List<PlanElement> moving) {
+    const corners = [
+      Offset(1, -1),
+      Offset(-1, -1),
+      Offset(1, 1),
+      Offset(-1, 1),
+    ];
+    final stops = <_DocumentStop>[];
+    for (final el in moving) {
+      final reach =
+          _documentMarkRadius * _documentFigureScale(el) * scale * 0.72;
+      for (final (i, stop) in [el.position, ...el.pathPoints].indexed) {
+        final at = offset + stop * scale;
+        final center = at + corners.first * reach;
+        final free = corners
+            .map((c) => at + c * reach)
+            .where(
+              (c) => stops.every(
+                (s) => (s.center - c).distance >= _documentStopRadius * 2 + 0.6,
+              ),
+            );
+        stops.add(
+          _DocumentStop(
+            free.isEmpty ? center : free.first,
+            i + 1,
+            _pathColor(el),
+            square: el.type == ElementType.camera,
+          ),
+        );
+      }
+    }
+    return stops;
+  }
+
+  /// Encima de todas las figuras. Las cámaras, con número cuadrado.
+  void _drawDocumentStops(Canvas canvas, List<_DocumentStop> stops) {
+    const r = _documentStopRadius;
+    for (final stop in stops) {
+      final rim = Paint()..color = _CanvasColors.background;
+      final fill = Paint()..color = stop.color;
+      if (stop.square) {
+        canvas.drawRect(
+          Rect.fromCircle(center: stop.center, radius: r * 0.86 + 0.6),
+          rim,
+        );
+        canvas.drawRect(
+          Rect.fromCircle(center: stop.center, radius: r * 0.86),
+          fill,
+        );
+      } else {
+        canvas.drawCircle(stop.center, r + 0.6, rim);
+        canvas.drawCircle(stop.center, r, fill);
+      }
+      final number = TextPainter(
+        text: TextSpan(
+          text: '${stop.number}',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 6,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      number.paint(
+        canvas,
+        stop.center - Offset(number.width / 2, number.height / 2),
+      );
+      number.dispose();
     }
   }
 
@@ -2052,6 +2220,14 @@ class CameraPlanPainter extends CustomPainter {
         .toDouble();
   }
 
+  /// Cámaras y personajes son pocos y lo primero que se busca: van mayores
+  /// que las luces.
+  double _documentFigureScale(PlanElement el) =>
+      _documentMarkScale *
+      (el.type == ElementType.camera || el.type == ElementType.actor
+          ? 1.35
+          : 1);
+
   bool _growsInDocument(PlanElement el) =>
       el.type == ElementType.camera ||
       el.type == ElementType.actor ||
@@ -2101,11 +2277,20 @@ class CameraPlanPainter extends CustomPainter {
   void _drawDocumentLabels(Canvas canvas, Size size) {
     final entries = <_DocumentLabelEntry>[];
     final marks = <Rect>[];
-    final radius = _documentMarkRadius * _documentMarkScale * scale;
+    final moving = <PlanElement>[];
     for (final el in [...inheritedElements, ...elements]) {
       if (PlanTerrainPainter.isTerrain(el)) continue;
       final at = offset + el.position * scale;
       final grows = _growsInDocument(el);
+      final radius = _documentMarkRadius * _documentFigureScale(el) * scale;
+      if (PlanMarks.supports(el) && el.pathPoints.isNotEmpty) {
+        moving.add(el);
+        for (final stop in el.pathPoints) {
+          marks.add(
+            Rect.fromCircle(center: offset + stop * scale, radius: radius),
+          );
+        }
+      }
       if (grows) marks.add(Rect.fromCircle(center: at, radius: radius));
       final found = _documentLabelOf(el);
       if (found == null) continue;
@@ -2129,6 +2314,12 @@ class CameraPlanPainter extends CustomPainter {
         );
       }
     }
+    final stops = _layoutDocumentStops(moving);
+    marks.addAll([
+      for (final stop in stops)
+        Rect.fromCircle(center: stop.center, radius: _documentStopRadius),
+    ]);
+    _drawDocumentStops(canvas, stops);
     if (entries.isEmpty) return;
 
     const padding = EdgeInsets.symmetric(horizontal: 3, vertical: 1);
@@ -2149,6 +2340,7 @@ class CameraPlanPainter extends CustomPainter {
             style: TextStyle(
               color: entry.color,
               fontSize: base * shrink * (entry.optional ? 0.85 : 1),
+
               fontWeight: entry.optional ? FontWeight.w400 : FontWeight.w600,
               height: 1.1,
             ),
@@ -2233,7 +2425,7 @@ class CameraPlanPainter extends CustomPainter {
       );
     }
     final grows = _growsInDocument(el);
-    final marks = _documentMarkScale;
+    final marks = documentMarks ? _documentFigureScale(el) : 1.0;
     canvas.save();
     canvas.translate(el.position.dx, el.position.dy);
     canvas.rotate(el.rotation * math.pi / 180);
@@ -3321,6 +3513,17 @@ class CameraPlanPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5,
       );
+      // Una punta hacia donde apunta el foco, salvo si alumbra a todos lados.
+      if (beam.spread < 300 && !PlanLight.isOverhead(el)) {
+        canvas.drawPath(
+          Path()
+            ..moveTo(0, -31)
+            ..lineTo(-7.5, -19.5)
+            ..lineTo(7.5, -19.5)
+            ..close(),
+          Paint()..color = beam.color,
+        );
+      }
     }
     final stroke = lit
         ? Color.lerp(LightSymbolColors.darkStroke, beam.color, 0.35)!
@@ -3695,4 +3898,19 @@ class _DocumentLabelEntry {
     this.anchors,
     this.radius,
   );
+}
+
+/// Número de una parada de un recorrido, ya colocado.
+class _DocumentStop {
+  final Offset center;
+  final int number;
+  final Color color;
+  final bool square;
+
+  const _DocumentStop(
+    this.center,
+    this.number,
+    this.color, {
+    this.square = false,
+  });
 }
