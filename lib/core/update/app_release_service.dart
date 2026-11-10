@@ -38,8 +38,5 @@ SupabaseClient? _tryClient() {
   }
 }
 
-Future<AppRelease?> fetchIpadRelease({SupabaseClient? client}) =>
-    fetchLatestReleaseForPlatform('ipad', client: client);
-
 Future<AppRelease?> fetchCurrentPlatformRelease({SupabaseClient? client}) =>
     fetchLatestReleaseForPlatform(currentReleasePlatform(), client: client);

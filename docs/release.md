@@ -84,36 +84,16 @@ GitHub Actions lo compila en cada release (y en cada PR) con Flutter 3.44.8. Al 
 
 En local (en el PC): `.\scripts\build_windows.ps1`.
 
-## iPad (SideStore — CI sin firma)
+## iPad e iPhone
 
-GitHub Actions ejecuta:
+No salen del CI ni del GitHub Release: los compila, firma e instala el Mac con `scripts/install_ipad.sh`, a partir de la última versión publicada. La tarea programada (`scripts/setup_ipad_install.sh`) mira cada 15 minutos, y el botón «Actualizar desde el Mac» de la app la lanza al momento si IRIS está abierta en el Mac.
 
-```bash
-flutter build ios --release --no-codesign \
-  --dart-define=SUPABASE_URL=... \
-  --dart-define=SUPABASE_ANON_KEY=...
-./scripts/package_unsigned_ipa.sh
-```
+Cada vez que cambie `install_ipad.sh` hay que volver a ejecutar `setup_ipad_install.sh`, porque la tarea usa una copia fuera de `~/Documents`.
 
-SideStore re-firma el IPA en cada dispositivo con el Apple ID del usuario.
-
-Build local equivalente:
-
-```bash
-./scripts/build_ipad.sh
-# o
-flutter build ios --release --no-codesign ...
-./scripts/package_unsigned_ipa.sh
-```
-
-### TestFlight (Apple Developer $99/año)
-
-Subir IPA firmado con Transporter o `xcrun altool`.
+El iPad y el iPhone comparan su versión con la fila `macos` de `app_releases`.
 
 ## Variables de entorno en CI
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` (registrar `app_releases`; solo CI)
-
-No se requieren certificados Apple para el IPA de SideStore (build `--no-codesign`).

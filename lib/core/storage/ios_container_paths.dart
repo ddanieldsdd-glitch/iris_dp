@@ -6,7 +6,7 @@ import 'package:path_provider/path_provider.dart';
 /// Rutas absolutas que sobreviven a que iOS mueva el contenedor de la app.
 ///
 /// En iOS todo lo de la app vive en `…/Data/Application/<UUID>/`, y ese UUID
-/// puede cambiar al actualizar o reinstalar (con SideStore pasa a menudo).
+/// puede cambiar al actualizar o reinstalar.
 /// La configuración de almacenamiento y la base guardan rutas absolutas, así
 /// que al arrancar se detecta el contenedor anterior y se reescriben.
 abstract final class IosContainerPaths {

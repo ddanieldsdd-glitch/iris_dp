@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +10,7 @@ import '../theme/app_typography.dart';
 import '../widgets/app_button.dart';
 import 'app_update_checker.dart';
 import 'app_update_providers.dart';
+import 'device_update_button.dart';
 import 'update_actions_row.dart';
 
 /// Sección de Ajustes para comprobar actualizaciones manualmente.
@@ -82,6 +85,12 @@ class _SettingsUpdateSectionState extends ConsumerState<SettingsUpdateSection> {
             onTap: update.checking ? null : _checkUpdates,
             loading: update.checking,
           ),
+          // Con una versión nueva, el botón sale junto a ella, más abajo.
+          if (Platform.isIOS &&
+              !(update.checkCompleted && update.availableRelease != null)) ...[
+            const SizedBox(height: AppSpacing.md),
+            const DeviceUpdateButton(),
+          ],
           if (update.checkCompleted && !update.checking) ...[
             const SizedBox(height: AppSpacing.md),
             _buildCheckResult(context, palette, update),

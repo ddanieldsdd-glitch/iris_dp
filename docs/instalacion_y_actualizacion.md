@@ -45,22 +45,21 @@ Las dos rutas se pueden cambiar en **Ajustes → Almacenamiento**.
 
 **IRIS instalada e IRIS de desarrollo en el mismo PC.** La instalada y la que se abre para desarrollar (`scripts\run_windows.ps1`) usan la **misma base de datos**. Se pueden tener las dos, pero **nunca abiertas a la vez**: cierra una antes de abrir la otra. La instalada se actualiza sola cuando sale una versión nueva.
 
-### iPhone y iPad (SideStore, gratis)
+### iPhone y iPad (desde el Mac)
 
-El mismo `IRIS-DP.ipa` vale para iPhone y iPad. Sin cuenta de desarrollador de Apple se instala con **SideStore**. La guía larga, con capturas, está en `docs/ipad_sidestore.md`.
+El Mac compila IRIS, la firma con el equipo personal de Xcode y la instala en el iPad y el iPhone: nunca se descarga nada en el dispositivo. Reciben la misma versión publicada que el Mac.
 
-**La primera vez: instalar SideStore**
-1. Sigue la guía de **sidestore.io** («Install»). Hace falta emparejar el iPhone **una vez** con un ordenador por USB; vale el Mac o el PC con Windows.
-2. Al terminar, el iPhone tiene la app **SideStore** con tu Apple ID.
+**La primera vez** (una por dispositivo)
+1. Conéctalo al Mac por cable y acepta «Confiar en este ordenador». En el iPad o iPhone, activa el modo desarrollador si te lo pide.
+2. En el Mac, una sola vez: `./scripts/setup_ipad_install.sh`. Guarda el equipo de firma de Xcode y programa la tarea.
+3. Primera instalación: `./scripts/install_ipad.sh`.
+4. Abre IRIS, inicia sesión con la misma cuenta que en el Mac y sincroniza.
 
-**Instalar IRIS**
-1. En el iPhone, abre en Safari la página del último release de GitHub (por ejemplo `github.com/ddanieldsdd-glitch/iris_dp/releases/latest`) y descarga **IRIS-DP.ipa**.
-2. Ábrelo desde Descargas con **Compartir → SideStore**, o desde SideStore → **+**. SideStore lo firma y lo instala.
-3. Abre IRIS DP, inicia sesión con la misma cuenta que en el PC o el Mac y sincroniza.
+**Actualizar**
+- Solo: cada 15 minutos el Mac mira si hay una versión publicada nueva y la instala en cuanto coinciden encendidos, en la misma Wi‑Fi o por cable, con IRIS cerrada en el dispositivo.
+- Sin esperar: en el iPad o iPhone, **Ajustes → Actualizaciones → Actualizar desde el Mac**, o el mismo botón del aviso de versión nueva. Hace falta IRIS abierta en el Mac y el dispositivo desbloqueado. IRIS se cierra al instalar y vuelve a abrirse sola.
 
-**Mantenerlo**
-- SideStore tiene que **refrescar la firma cada 7 días**: ábrelo con Wi‑Fi y pulsa «Refresh All». IRIS avisa a los 5 días.
-- Para una versión nueva, descarga el `.ipa` nuevo y ábrelo otra vez con SideStore: se actualiza sin perder los datos.
+**La firma.** Sin cuenta de pago de Apple, la firma dura 7 días. El Mac la renueva solo cuando quedan menos de 5; con menos de 1,5 días instala aunque IRIS esté abierta, y si no llega al dispositivo avisa en el Mac.
 
 ---
 

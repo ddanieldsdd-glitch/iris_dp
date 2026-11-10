@@ -35,7 +35,7 @@ Lo de compilar e instalar está en la PR #49 (`plan/pc-windows`). El resto **se 
 ### Para más adelante: lo que falta por definir
 
 1. **Guardar archivos (PC.2.1):** si `export_file_saver.dart` usa el canal nativo de Windows o el selector de archivos.
-2. **Funciones solo de iPad (PC.2.3):** ocultarlas o explicarlas en el PC (LiDAR, SideStore, guía del iPad).
+2. **Funciones solo de iPad (PC.2.3):** ocultarlas o explicarlas en el PC (LiDAR, guía del iPad).
 3. **Rutas (PC.2.5):** qué datos guardan rutas del Mac y si pasan a medios sincronizados o a rutas relativas.
 4. **Abrir con IRIS (PC.2.6):** qué tipos de archivo se registran en el Explorador.
 5. **Aspecto (PC.2.7):** barra de título propia o la de Windows; dónde va el menú.
@@ -127,7 +127,7 @@ Hay 17 archivos con `Platform.isMacOS` o `Platform.isIOS`. Se revisan uno por un
 - **Hecho cuando:** los atajos del editor de planta y del storyboard funcionan con Ctrl en Windows.
 
 **PC.2.3 Funciones solo de iPad**
-- **Qué:** que no aparezcan o se expliquen en el PC el escaneo LiDAR (`location_scan_service.dart`), el aviso de SideStore (`sidestore_reminder_banner.dart`) y la guía de instalación del iPad.
+- **Qué:** que no aparezcan o se expliquen en el PC el escaneo LiDAR (`location_scan_service.dart`) y la guía de instalación del iPad.
 
 **PC.2.4 Nombre del equipo para la sincronización**
 - **Qué:** `device_label.dart` da el nombre del PC, para que en la nube se sepa desde qué máquina se hizo cada cambio.

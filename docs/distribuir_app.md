@@ -11,7 +11,7 @@ No existe un **único instalador universal** que detecte solo y funcione en Mac,
 | **Mac** | `IRIS-DP.dmg` | Tag `v*` → GitHub Actions, o `./scripts/build_release.sh` local |
 | **Otro Mac** | Mismo `.dmg` | AirDrop, USB, Google Drive, email… |
 | **Windows** | `IRIS-DP-Windows.zip` | Tag `v*` → GitHub Actions, o build local |
-| **iPad** | `IRIS-DP.ipa` | Tag `v*` → GitHub Actions (sin firma, SideStore), o `./scripts/build_ipad.sh` local |
+| **iPad e iPhone** | Los instala el Mac | `./scripts/install_ipad.sh` (ver sección 4) |
 
 Todos los scripts leen **`.env`** con `SUPABASE_URL` y `SUPABASE_ANON_KEY` para incluir la nube en el instalador.
 
@@ -71,45 +71,21 @@ Resultado: `build/dmg/IRIS-DP.dmg`
 
 ---
 
-## 4. Instalar en iPad (SideStore — gratis)
+## 4. Instalar en iPad e iPhone (desde el Mac)
 
-Cada release en GitHub incluye **`IRIS-DP.ipa`** (generado por CI, sin firma). SideStore re-firma en el iPad con tu Apple ID gratuito.
+El Mac compila, firma con el equipo personal de Xcode e instala con `devicectl`. Es la misma versión publicada que recibe el Mac.
 
-### Primera vez
+**La primera vez** (una por dispositivo)
+1. Conéctalo al Mac por cable y acepta «Confiar en este ordenador». En el iPad o iPhone, activa el modo desarrollador si te lo pide.
+2. En el Mac, una sola vez: `./scripts/setup_ipad_install.sh`. Guarda el equipo de firma de Xcode y programa la tarea.
+3. Primera instalación: `./scripts/install_ipad.sh`.
+4. Abre IRIS, inicia sesión con la misma cuenta que en el Mac y sincroniza.
 
-1. En el Mac: instala **SideServer** y empareja el iPad (sidestore.io)
-2. En el iPad: instala **SideStore**
-3. Descarga el IPA:
-   - Desde IRIS DP en el iPad: banner → **Descargar IPA**
-   - Desde Mac/Windows: Ajustes → **Estado del sistema** → **Descargar para iPad**
-4. Abre el `.ipa` con **SideStore**
-5. Inicia sesión en IRIS DP con el mismo email y pulsa sync
+**Actualizar**
+- Solo: cada 15 minutos el Mac mira si hay una versión publicada nueva y la instala en cuanto coinciden encendidos, en la misma Wi‑Fi o por cable, con IRIS cerrada en el dispositivo.
+- Sin esperar: en el iPad o iPhone, **Ajustes → Actualizaciones → Actualizar desde el Mac**, o el mismo botón del aviso de versión nueva. Hace falta IRIS abierta en el Mac y el dispositivo desbloqueado. IRIS se cierra al instalar y vuelve a abrirse sola.
 
-### Actualizar
-
-1. Descarga el IPA nuevo (mismo flujo)
-2. Reinstala en SideStore encima de la versión anterior
-3. Pulsa sync en la app
-
-### Refrescar firma (~7 días)
-
-Con Apple ID gratuito la app caduca si SideStore no refresca. Abre **SideStore en Wi‑Fi** cada semana. La app avisa a los 5 días.
-
-### Build local (opcional)
-
-```bash
-cd iris_dp
-chmod +x scripts/build_ipad.sh scripts/package_unsigned_ipa.sh
-./scripts/build_ipad.sh
-# o tras flutter build ios --release --no-codesign:
-./scripts/package_unsigned_ipa.sh
-```
-
-### TestFlight (cuando pagues Apple Developer $99/año)
-
-1. Sube el IPA con **Transporter**
-2. Invita testers en App Store Connect
-3. Instala **TestFlight** en el iPad
+**La firma.** Sin cuenta de pago de Apple, la firma dura 7 días. El Mac la renueva solo cuando quedan menos de 5; con menos de 1,5 días instala aunque IRIS esté abierta, y si no llega al dispositivo avisa en el Mac.
 
 ---
 
@@ -149,7 +125,7 @@ Con sesión iniciada, IRIS DP comprueba **una vez al día** si hay versión nuev
 |------------|--------|
 | macOS | **Actualizar ahora** → descarga `.dmg` y lo abre |
 | Windows | **Actualizar ahora** → descarga `.zip` e instala |
-| iPad | **Descargar IPA** → abrir con SideStore |
+| iPad e iPhone | **Actualizar desde el Mac**, o se instala sola desde el Mac |
 
 Los instaladores viven en **GitHub Releases** (gratis). Supabase solo guarda metadatos y URLs.
 
@@ -200,7 +176,7 @@ Los **proyectos no se pierden**: están en Supabase, no dentro del instalador.
 
 - **macOS** usa `.app` / `.dmg` (Apple)
 - **Windows** usa `.exe` / MSIX (Microsoft)  
-- **iPad** solo acepta apps firmadas por Apple (`.ipa`, App Store, TestFlight, SideStore)
+- **iPad e iPhone** solo aceptan apps firmadas para Apple; aquí las firma e instala el Mac
 
 Un solo archivo `.exe` no puede instalarse en Mac ni iPad, y viceversa. El script `build_release.sh` **detecta en qué sistema lo ejecutas** y genera el formato correcto **para esa plataforma**.
 
@@ -214,5 +190,5 @@ Un solo archivo `.exe` no puede instalarse en Mac ni iPad, y viceversa. El scrip
 | `Invalid API key` | Anon key antigua / incorrecta en la app | Copia «anon public» (JWT `eyJ…`) a `.env`, cierra la app y `./scripts/run_cloud.sh`. Si vinculaste a mano: Ajustes → Desvincular → Activar nube |
 | `Invalid login` | Email/contraseña | Usa «Crear cuenta» o corrige credenciales |
 | `Email not confirmed` | Confirmación activa | Desactiva en Supabase Auth → Email |
-| iPad «no abre» tras ~7 días | Firma SideStore caducada | Abre SideStore en Wi‑Fi para refrescar |
+| iPad o iPhone «no abre» tras ~7 días | La firma caducó sin coincidir con el Mac | Enciende y desbloquea el dispositivo en la misma Wi‑Fi que el Mac; se renueva en 15 minutos o con `./scripts/install_ipad.sh` |
 | No veo actualización | Sin sesión o throttle 24h | Inicia sesión; Ajustes → Buscar actualizaciones |

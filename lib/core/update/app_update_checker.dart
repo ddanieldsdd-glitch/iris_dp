@@ -57,12 +57,13 @@ class AppUpdateCheckResult {
 }
 
 /// Plataforma actual para consultar `app_releases`.
-String currentReleasePlatform() {
-  if (Platform.isMacOS) return 'macos';
-  if (Platform.isWindows) return 'windows';
-  if (Platform.isIOS) return 'ipad';
-  return 'macos';
-}
+String currentReleasePlatform() =>
+    releasePlatformFor(Platform.operatingSystem);
+
+/// El iPad y el iPhone los instala el Mac con su misma versión publicada, así
+/// que comparan contra la del Mac.
+String releasePlatformFor(String operatingSystem) =>
+    operatingSystem == 'windows' ? 'windows' : 'macos';
 
 /// Compara versión local vs remota (prioriza build_number).
 bool isRemoteNewer({

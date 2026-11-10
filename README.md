@@ -8,7 +8,7 @@ App Flutter de **preproducción cinematográfica**: guion, localizaciones, bibli
 |------------|--------|
 | macOS | Principal — instalador `.dmg` |
 | Windows | `flutter build windows` |
-| iPad | `flutter build ipa` (biblia + moodboard v1) |
+| iPad e iPhone | Los instala el Mac: `scripts/install_ipad.sh` |
 
 ## Requisitos
 

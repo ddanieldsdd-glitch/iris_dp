@@ -1,16 +1,11 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/cloud/cloud_providers.dart';
 import '../../core/cloud/cloud_runtime_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/update/app_release_service.dart';
-import '../../core/update/sidestore_guide_sheet.dart';
-import '../../core/update/update_actions_row.dart';
 import '../../core/widgets/app_button.dart';
 import 'cloud_connection_widgets.dart';
 
@@ -68,35 +63,15 @@ class InstallUpdateGuideScreen extends ConsumerWidget {
                 ],
               ),
               const _SubSection(
-                title: 'iPad — SideStore (gratis, uso personal)',
+                title: 'iPad e iPhone — desde el Mac',
                 bullets: [
-                  'Cada release incluye IRIS-DP.ipa en GitHub (generado por CI)',
-                  'Descarga el IPA desde la app (banner o Ajustes → Estado del sistema)',
-                  'Abre el archivo con SideStore — re-firma con tu Apple ID',
-                  'Refresca SideStore en Wi‑Fi cada ~7 días para evitar caducidad',
-                  'Inicia sesión con el mismo email y pulsa sync',
+                  'El Mac instala IRIS en ellos: no se descarga nada en el dispositivo',
+                  'La primera vez, conéctalo al Mac por cable y acepta «Confiar en este ordenador»',
+                  'Las versiones nuevas llegan solas cuando coinciden encendidos en la misma Wi‑Fi y IRIS está cerrada en el dispositivo',
+                  'Para no esperar: Ajustes → Actualizaciones → Actualizar desde el Mac, con IRIS abierta en el Mac',
+                  'La firma gratuita dura 7 días y el Mac la renueva solo',
                 ],
               ),
-              if (cloud && !Platform.isIOS)
-                _IpadDownloadSection(ref: ref),
-              if (cloud && Platform.isIOS)
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.md),
-                  child: AppButton(
-                    label: 'Guía SideStore',
-                    icon: Icons.tablet_mac_outlined,
-                    onTap: () async {
-                      final release = await fetchIpadRelease(
-                        client: ref.read(supabaseClientProvider),
-                      );
-                      if (!context.mounted) return;
-                      await SideStoreGuideSheet.show(
-                        context,
-                        ipaDownloadUrl: release?.downloadUrl,
-                      );
-                    },
-                  ),
-                ),
             ],
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -416,38 +391,6 @@ class _FaqTile extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _IpadDownloadSection extends StatelessWidget {
-  final WidgetRef ref;
-
-  const _IpadDownloadSection({required this.ref});
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return FutureBuilder(
-      future: fetchIpadRelease(client: ref.read(supabaseClientProvider)),
-      builder: (context, snap) {
-        final release = snap.data;
-        if (release == null) {
-          return Text(
-            'Inicia sesión para ver el enlace IPA más reciente.',
-            style: AppTypography.caption(palette),
-          );
-        }
-
-        return Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.md),
-          child: IpadDownloadLinkRow(
-            downloadUrl: release.downloadUrl,
-            version: release.version,
-          ),
-        );
-      },
     );
   }
 }

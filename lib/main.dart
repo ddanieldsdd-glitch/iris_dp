@@ -14,6 +14,7 @@ import 'core/sync/auto_sync_scheduler.dart';
 import 'core/sync/media_sync_binder.dart';
 import 'core/theme/app_theme.dart';
 import 'core/update/app_update_gate.dart';
+import 'core/update/device_update_host.dart';
 import 'core/widgets/app_background.dart';
 import 'core/widgets/app_splash_screen.dart';
 import 'features/scan_jobs/scan_jobs_host.dart';
@@ -65,12 +66,14 @@ class IrisDPApp extends StatelessWidget {
                     child: MediaSyncBinder(
                       child: ScanJobsHost(
                         child: RentalRemindersHost(
-                          child: OnboardingGate(
-                            homeContentBuilder: (_) => const Column(
-                              children: [
-                                AuthRequiredBanner(),
-                                Expanded(child: ProjectsScreen()),
-                              ],
+                          child: DeviceUpdateHost(
+                            child: OnboardingGate(
+                              homeContentBuilder: (_) => const Column(
+                                children: [
+                                  AuthRequiredBanner(),
+                                  Expanded(child: ProjectsScreen()),
+                                ],
+                              ),
                             ),
                           ),
                         ),

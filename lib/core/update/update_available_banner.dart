@@ -99,6 +99,9 @@ class UpdateAvailableCard extends StatelessWidget {
         Text(
           release.releaseNotes?.isNotEmpty == true
               ? release.releaseNotes!
+              : Platform.isIOS
+              ? 'El Mac la instala por ti. '
+                    'Tus proyectos siguen en la nube.'
               : 'Descarga e instala la actualización. '
                     'Tus proyectos siguen en la nube.',
           style: AppTypography.caption(

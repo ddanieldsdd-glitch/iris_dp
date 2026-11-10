@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../cloud/cloud_providers.dart';
+import '../update/device_update_messages.dart';
 import 'device_label.dart';
 import 'live_drawing.dart';
 import 'live_editing.dart';
@@ -91,6 +92,8 @@ class RealtimeHub {
   static const _mediaEvent = 'media';
   static const _typingEvent = 'typing';
   static const _drawingEvent = 'drawing';
+  static const _updateRequestEvent = 'device-update-request';
+  static const _updateStatusEvent = 'device-update-status';
 
   /// Quién edita qué en los demás equipos (presencia del canal).
   void Function(List<PeerEditing> peers)? onPeers;
@@ -105,6 +108,23 @@ class RealtimeHub {
   /// local (ver `CaptureReceiver`).
   Map<String, dynamic>? _scanBuilder;
   String? _installId;
+
+  /// Este equipo es el Mac que instala en el iPad y el iPhone.
+  bool _updateHost = false;
+
+  /// ¿Hay otro equipo conectado que pueda instalar en este dispositivo?
+  final updateHostAvailable = ValueNotifier<bool>(false);
+
+  final _updateRequests = StreamController<DeviceUpdateRequest>.broadcast();
+  final _updateStatuses = StreamController<DeviceUpdateStatus>.broadcast();
+
+  /// Un iPad o iPhone pide que lo actualicen (lo escucha el Mac).
+  Stream<DeviceUpdateRequest> get deviceUpdateRequests =>
+      _updateRequests.stream;
+
+  /// Cómo va una petición (lo escucha el iPad o iPhone).
+  Stream<DeviceUpdateStatus> get deviceUpdateStatuses =>
+      _updateStatuses.stream;
 
   RealtimeChannel? _channel;
   String? _workspaceId;
@@ -188,6 +208,22 @@ class RealtimeHub {
             _mediaNotices.add(project);
           },
         )
+        .onBroadcast(
+          event: _updateRequestEvent,
+          callback: (payload) {
+            if (payload['installId'] == installId) return;
+            final request = DeviceUpdateRequest.fromPayload(payload);
+            if (request != null) _updateRequests.add(request);
+          },
+        )
+        .onBroadcast(
+          event: _updateStatusEvent,
+          callback: (payload) {
+            if (payload['installId'] == installId) return;
+            final status = DeviceUpdateStatus.fromPayload(payload);
+            if (status != null) _updateStatuses.add(status);
+          },
+        )
         .subscribe((status, error) {
           _joining = false;
           _subscribed = status == RealtimeSubscribeStatus.subscribed;
@@ -200,13 +236,16 @@ class RealtimeHub {
     final channel = _channel;
     if (channel == null) return;
     final peers = <PeerEditing>[];
+    var updateHost = false;
     for (final state in channel.presenceState()) {
       if (state.key == _installId) continue;
       for (final presence in state.presences) {
+        if (presence.payload['updateHost'] == true) updateHost = true;
         final peer = PeerEditing.fromPayload(presence.payload);
         if (peer != null) peers.add(peer);
       }
     }
+    updateHostAvailable.value = updateHost;
     onPeers?.call(peers);
   }
 
@@ -230,6 +269,13 @@ class RealtimeHub {
     await _track();
   }
 
+  /// Anuncia (o retira) que este Mac instala en el iPad y el iPhone.
+  Future<void> setUpdateHost(bool value) async {
+    if (value == _updateHost) return;
+    _updateHost = value;
+    await _track();
+  }
+
   /// Los otros equipos del espacio que construyen escaneos, ahora mismo.
   List<ScanBuilderPeer> get scanBuilders {
     final channel = _channel;
@@ -249,7 +295,7 @@ class RealtimeHub {
     try {
       final editing = _editing;
       final builder = _scanBuilder;
-      if (editing == null && builder == null) {
+      if (editing == null && builder == null && !_updateHost) {
         await channel.untrack();
       } else {
         await channel.track({
@@ -257,6 +303,7 @@ class RealtimeHub {
           'device': deviceLabel(),
           ...?editing,
           if (builder != null) 'scanBuilder': builder,
+          if (_updateHost) 'updateHost': true,
         });
       }
     } catch (e) {
@@ -338,8 +385,33 @@ class RealtimeHub {
     }
   }
 
+  /// Pide al Mac que actualice este dispositivo.
+  Future<void> sendDeviceUpdateRequest(DeviceUpdateRequest request) =>
+      _sendUpdateMessage(_updateRequestEvent, request.toPayload());
+
+  /// Cuenta al dispositivo que lo pidió cómo va su actualización.
+  Future<void> sendDeviceUpdateStatus(DeviceUpdateStatus status) =>
+      _sendUpdateMessage(_updateStatusEvent, status.toPayload());
+
+  Future<void> _sendUpdateMessage(
+    String event,
+    Map<String, dynamic> payload,
+  ) async {
+    final channel = _channel;
+    if (channel == null || !_subscribed) return;
+    try {
+      await channel.sendBroadcastMessage(
+        event: event,
+        payload: {...payload, 'installId': await InstallId.get()},
+      );
+    } catch (e) {
+      debugPrint('Mensaje de actualización no enviado: $e');
+    }
+  }
+
   Future<void> _leave() async {
     final channel = _channel;
+    updateHostAvailable.value = false;
     _channel = null;
     _workspaceId = null;
     _subscribed = false;
@@ -356,6 +428,9 @@ class RealtimeHub {
     await _notices.close();
     await _mediaNotices.close();
     await _drawings.close();
+    await _updateRequests.close();
+    await _updateStatuses.close();
+    updateHostAvailable.dispose();
   }
 }
 

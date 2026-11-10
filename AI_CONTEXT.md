@@ -4,7 +4,7 @@
 
 * App Flutter de preproducción cinematográfica (guion, localizaciones, biblia visual, moodboard, equipo, export PDF, colaboración nube).
 * Stack: Flutter 3.8+ / Dart, Riverpod, Drift+SQLite, Supabase Auth+Postgres+Storage, Cloudinary (media), Syncfusion/pdf, GitHub Actions release.
-* Plataformas: macOS (principal), Windows, iPad/iOS (SideStore IPA). Sin Android en árbol.
+* Plataformas: macOS (principal), Windows, iPad/iPhone (los instala el Mac). Sin Android en árbol.
 * Estado (noviembre de 2026): v1.7.4+35; nube opcional. La versión y el esquema exactos están en `pubspec.yaml` y en `kSchemaVersion`; los planes vivos, en `docs/PLAN_*.md`.
 
 ## 2. ARCHITECTURE
@@ -77,7 +77,7 @@ Sin credenciales Supabase → modo local puro.
 |---|---|---|---|
 | Mac | Principal / estable | `scripts/build_macos_dmg.sh` | `.dmg` + GitHub Release; update in-app |
 | Windows | Soportado | `scripts/build_windows.ps1` | `.zip` Release; update in-app |
-| iPad/iOS | Funcional (biblia/moodboard v1) | `build_ipad.sh` / IPA unsigned | SideStore; TestFlight UNKNOWN |
+| iPad/iOS | Funcional (biblia/moodboard v1) | `install_ipad.sh` (firma personal desde el Mac) | Tarea launchd y botón «Actualizar desde el Mac» |
 
 ## 8. CURRENT STATE
 

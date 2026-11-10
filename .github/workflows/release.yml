@@ -40,28 +40,10 @@ jobs:
         env:
           SKIP_FLUTTER_BUILD: "1"
         run: chmod +x scripts/build_macos_dmg.sh && ./scripts/build_macos_dmg.sh
-      - name: Build iOS (unsigned IPA for SideStore)
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
-          CLOUDINARY_UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
-        run: |
-          flutter build ios --release --no-codesign --no-tree-shake-icons \
-            --dart-define=SUPABASE_URL=$SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
-            --dart-define=CLOUDINARY_CLOUD_NAME=$CLOUDINARY_CLOUD_NAME \
-            --dart-define=CLOUDINARY_UPLOAD_PRESET=$CLOUDINARY_UPLOAD_PRESET
-          chmod +x scripts/package_unsigned_ipa.sh
-          ./scripts/package_unsigned_ipa.sh
       - uses: actions/upload-artifact@v4
         with:
           name: iris-dp-macos-dmg
           path: build/dmg/IRIS-DP.dmg
-      - uses: actions/upload-artifact@v4
-        with:
-          name: iris-dp-ios-ipa
-          path: build/ios/ipa/IRIS-DP.ipa
 
   # Si falla, el release sale en rojo, pero el Mac se publica igual (publish
   # solo exige el Mac); el release queda sin los archivos de Windows.
@@ -148,12 +130,6 @@ jobs:
           path: artifacts/windows-setup
         continue-on-error: true
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: iris-dp-ios-ipa
-          path: artifacts/ios
-        continue-on-error: true
-
       - name: Zip Windows build (si existe)
         run: |
           if [ -d "artifacts/windows" ] && [ "$(ls -A artifacts/windows 2>/dev/null)" ]; then
@@ -173,7 +149,6 @@ jobs:
             artifacts/macos/IRIS-DP.dmg
             IRIS-DP-Windows.zip
             artifacts/windows-setup/IRIS-DP-Windows-Setup.exe
-            artifacts/ios/IRIS-DP.ipa
 
       - name: Register release in Supabase
         env:

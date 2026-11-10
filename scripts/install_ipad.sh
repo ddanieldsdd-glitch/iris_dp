@@ -2,13 +2,17 @@
 # Compila IRIS DP firmada con el equipo personal de Xcode y la instala en el
 # iPad y el iPhone emparejados con este Mac, por Wi‑Fi o cable. La firma
 # gratuita dura 7 días: en modo --auto se renueva sola en cada dispositivo
-# cuando le quedan menos de 5 días o hay un main nuevo con el CI en verde,
-# en cuanto el Mac y ese dispositivo coinciden encendidos (se mira cada 15
+# cuando le quedan menos de 5 días o hay una versión publicada nueva, en
+# cuanto el Mac y ese dispositivo coinciden encendidos (se mira cada 15
 # minutos). Como instalar cierra la app, espera a que IRIS no esté abierta en
 # el dispositivo; con menos de 1,5 días de firma instala aunque lo esté.
 #
-#   install_ipad.sh                    instala el último main con CI en verde
-#   install_ipad.sh --ref <rama>       instala esa rama o commit (sin mirar el CI)
+# El botón «Actualizar desde el Mac» de la app deja una petición en
+# request.json y lanza la tarea: ese dispositivo se instala sin esperar, y
+# el avance se escribe en status.json para que la app lo cuente.
+#
+#   install_ipad.sh                    instala la última versión publicada
+#   install_ipad.sh --ref <rama>       instala esa rama o commit
 #   install_ipad.sh --device <nombre>  solo en ese dispositivo (nombre o id)
 #   install_ipad.sh --auto             lo que ejecuta la tarea programada
 #
@@ -25,6 +29,14 @@ BUILD_DIR="${IRIS_BUILD_DIR:-$STATE_DIR/iris_dp_ipad}"
 # Claves de la nube para compilar: copia guardada por setup_ipad_install.sh.
 ENV_FILE="${IRIS_ENV_FILE:-$STATE_DIR/.env}"
 STATE="$STATE_DIR/state.json"
+# Petición del botón de la app y avance de esa petición.
+REQUEST="$STATE_DIR/request.json"
+STATUS="$STATE_DIR/status.json"
+REQ_ID=""
+REQ_KIND=""
+REQ_DONE=0
+REQ_SEEN=0
+SELF="$0"
 TEAM_FILE="$STATE_DIR/team_id"
 LOG_DIR="$HOME/Library/Logs/IRIS-DP"
 LOG="$LOG_DIR/install_ipad.log"
@@ -73,7 +85,8 @@ until mkdir "$LOCK" 2>/dev/null; do
   if [[ -n "$(find "$LOCK" -maxdepth 0 -mmin +120 2>/dev/null)" ]]; then
     rm -rf "$LOCK"; continue
   fi
-  [[ $AUTO == 1 ]] && exit 0
+  # Con una petición del botón esperando, también se espera aquí.
+  [[ $AUTO == 1 && ! -f "$REQUEST" ]] && exit 0
   [[ $WAITED == 0 ]] && echo "Hay otra instalación en marcha; espero a que acabe…"
   WAITED=1
   sleep 10
@@ -87,6 +100,15 @@ on_exit() {
     log "La instalación terminó con el código $code."
     notify "La instalación automática ha fallado" "Mira $LOG_DIR"
     state_set "error_warned_on=$(date +%F)"
+  fi
+  # Quien pulsó el botón siempre recibe una respuesta.
+  if [[ -n "$REQ_ID" && $REQ_DONE == 0 ]]; then
+    req_status error "El Mac no pudo actualizar este ${REQ_KIND}. Mira el registro en el Mac." || true
+  fi
+  # Una petición que llegó durante esta ejecución se atiende ya.
+  if [[ $AUTO == 1 && -f "$REQUEST" ]]; then
+    trap - EXIT ERR
+    exec /bin/bash "$SELF" --auto
   fi
 }
 trap on_exit EXIT
@@ -123,6 +145,45 @@ t=d.datetime.fromisoformat(sys.argv[1])
 print(round((t-d.datetime.now(d.timezone.utc)).total_seconds()/86400,2))' "$1"
 }
 at_least() { python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) >= float(sys.argv[2]) else 1)" "$1" "$2"; }
+
+# ── Petición del botón de la app ────────────────────────────────────────────
+# Fases: compilando, instalando, hecho, aldia, error.
+req_status() {
+  [[ -n "$REQ_ID" ]] || return 0
+  python3 - "$STATUS" "$REQ_ID" "$1" "$2" <<'PY'
+import datetime, json, os, sys
+path, request_id, phase, message = sys.argv[1:]
+tmp = path + ".tmp"
+with open(tmp, "w") as f:
+    json.dump({
+        "id": request_id,
+        "phase": phase,
+        "message": message,
+        "at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }, f)
+os.replace(tmp, path)
+PY
+}
+req_finish() { req_status "$1" "$2"; REQ_DONE=1; }
+
+if [[ $AUTO == 1 && -f "$REQUEST" ]]; then
+  if [[ -n "$(find "$REQUEST" -mmin +30 2>/dev/null)" ]]; then
+    log "Descarto una petición antigua de la app."
+  else
+    IFS=$'\t' read -r REQ_ID REQ_KIND < <(python3 - "$REQUEST" <<'PY' || true
+import json, sys
+try:
+    r = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+if r.get("kind") in ("iPad", "iPhone") and r.get("id"):
+    print(f'{r["id"]}\t{r["kind"]}')
+PY
+    ) || true
+    [[ -n "$REQ_ID" ]] && log "Petición desde la app: actualizar ${REQ_KIND}."
+  fi
+  rm -f "$REQUEST"
+fi
 
 # ── Dispositivos ────────────────────────────────────────────────────────────
 # Una línea por iPad o iPhone emparejado: «id<TAB>tipo<TAB>nombre<TAB>udid».
@@ -172,6 +233,7 @@ DEVICES=()
 while IFS= read -r line; do DEVICES+=("$line"); done < <(find_devices)
 if [[ ${#DEVICES[@]} == 0 ]]; then
   log "No veo ningún iPad ni iPhone emparejado; se reintentará."
+  req_finish error "El Mac no encuentra este ${REQ_KIND}. Comprueba que estén en la misma Wi‑Fi."
   [[ $AUTO == 1 ]] && exit 0
   echo "Conecta el dispositivo por cable una vez y acepta «Confiar en este ordenador»." >&2
   exit 1
@@ -197,7 +259,7 @@ if [[ ! -d "$REPO/.git" ]]; then
     exit 1
   }
 fi
-if ! FETCH_ERR="$(git -C "$REPO" fetch -q --prune origin 2>&1)"; then
+if ! FETCH_ERR="$(git -C "$REPO" fetch -q --prune --tags --force origin 2>&1)"; then
   if [[ "$FETCH_ERR" == *"not permitted"* ]]; then
     log "macOS no deja leer $REPO: $FETCH_ERR"
     notify "Sin permiso para leer el repo" "Mira $LOG"
@@ -206,9 +268,15 @@ if ! FETCH_ERR="$(git -C "$REPO" fetch -q --prune origin 2>&1)"; then
   log "Sin red para git fetch; uso lo que hay."
 fi
 
-green_main_sha() {
-  gh run list -R "$GITHUB_REPO" --branch main --workflow CI --status success \
-    --limit 1 --json headSha -q '.[0].headSha' 2>/dev/null || true
+# La misma versión que recibe el Mac: la última publicada en GitHub.
+tag_sha() { git -C "$REPO" rev-parse --verify -q "refs/tags/$1^{commit}"; }
+published_tag() {
+  local tag
+  tag="$(gh release view -R "$GITHUB_REPO" --json tagName -q .tagName 2>/dev/null || true)"
+  if [[ -z "$tag" ]] || ! tag_sha "$tag" >/dev/null; then
+    tag="$(git -C "$REPO" tag --list 'v*' --sort=-v:refname | head -1)"
+  fi
+  echo "$tag"
 }
 
 if [[ -n "$REF" ]]; then
@@ -217,34 +285,37 @@ if [[ -n "$REF" ]]; then
     || git -C "$REPO" rev-parse --verify "origin/$REF^{commit}")"
   MAIN_LABEL="$REF"
 else
-  MAIN_SHA="$(green_main_sha)"
-  if [[ -z "$MAIN_SHA" ]]; then
-    MAIN_SHA="$(git -C "$REPO" rev-parse origin/main)"
-    log "No pude consultar el CI; uso ${MAIN_SHA:0:7}."
+  MAIN_LABEL="$(published_tag)"
+  if [[ -z "$MAIN_LABEL" ]]; then
+    log "No encuentro ninguna versión publicada."
+    req_finish error "El Mac no encuentra ninguna versión publicada."
+    [[ $AUTO == 1 ]] && exit 0
+    exit 1
   fi
-  if ! git -C "$REPO" cat-file -e "$MAIN_SHA^{commit}" 2>/dev/null; then
-    log "${MAIN_SHA:0:7} aún no está en local; uso origin/main."
-    MAIN_SHA="$(git -C "$REPO" rev-parse origin/main)"
-  fi
-  MAIN_LABEL="main"
+  MAIN_SHA="$(tag_sha "$MAIN_LABEL")"
 fi
 
 # ── ¿A cuáles les hace falta? ───────────────────────────────────────────────
-# Cada entrada: «id<TAB>nombre<TAB>sha<TAB>etiqueta<TAB>de_día».
+# Cada entrada: «id<TAB>nombre<TAB>sha<TAB>etiqueta<TAB>de_día<TAB>pedido».
 TODO=()
 TARGET_UDIDS=()
 for line in "${DEVICES[@]}"; do
   IFS=$'\t' read -r ID KIND NAME UDID <<<"$line"
-  SHA="$MAIN_SHA"; LABEL="$MAIN_LABEL"; DAY_INSTALL=0
+  SHA="$MAIN_SHA"; LABEL="$MAIN_LABEL"; DAY_INSTALL=0; FORCED=0
+  if [[ -n "$REQ_ID" && "$KIND" == "$REQ_KIND" ]]; then
+    FORCED=1
+    REQ_SEEN=1
+  fi
   EXPIRES="$(dev_get "$ID" expires)"
   if [[ $AUTO == 1 ]]; then
-    # La primera instalación en cada dispositivo se hace a mano.
+    # La primera instalación en cada dispositivo se hace a mano, salvo que
+    # la pida el propio dispositivo.
     INSTALLED_SHA="$(dev_get "$ID" installed_sha)"
-    [[ -n "$INSTALLED_SHA" ]] || continue
-    # Si se instaló una rama a mano, se renueva esa rama hasta que main la
-    # contenga; entonces se vuelve a main.
+    [[ -n "$INSTALLED_SHA" || $FORCED == 1 ]] || continue
+    # Si se instaló una rama a mano, se renueva esa rama hasta que la versión
+    # publicada la contenga. El botón siempre lleva a la versión publicada.
     INSTALLED_REF="$(dev_get "$ID" installed_ref)"
-    if [[ "$INSTALLED_REF" != "main" ]] \
+    if [[ $FORCED == 0 && "$INSTALLED_REF" != "main" ]] \
         && ! git -C "$REPO" merge-base --is-ancestor "$INSTALLED_SHA" "$SHA" 2>/dev/null; then
       NEW_BRANCH_SHA="$(git -C "$REPO" rev-parse --verify -q "origin/$INSTALLED_REF^{commit}" \
         || git -C "$REPO" rev-parse --verify -q "$INSTALLED_REF^{commit}" || true)"
@@ -254,6 +325,7 @@ for line in "${DEVICES[@]}"; do
     LEFT=-99
     [[ -n "$EXPIRES" ]] && LEFT="$(days_left "$EXPIRES")"
     if at_least "$LEFT" "$RENEW_BELOW_DAYS" && [[ "$SHA" == "$INSTALLED_SHA" ]]; then
+      [[ $FORCED == 0 ]] || req_finish aldia "Ya tienes la última versión."
       continue
     fi
     # Con menos de 1,5 días se instala aunque IRIS esté abierta (avisando).
@@ -261,6 +333,7 @@ for line in "${DEVICES[@]}"; do
   fi
   if ! device_reachable "$ID"; then
     log "$NAME no responde (¿dormido, bloqueado o en otra Wi‑Fi?); se reintentará."
+    [[ $FORCED == 0 ]] || req_finish error "El Mac no llega a este ${KIND}. Desbloquéalo y ponlo en la misma Wi‑Fi que el Mac."
     if [[ $AUTO == 1 && -n "$EXPIRES" ]]; then
       TODAY="$(date +%F)"
       if ! at_least "$(days_left "$EXPIRES")" 1.5 && [[ "$(dev_get "$ID" warned_on)" != "$TODAY" ]]; then
@@ -272,16 +345,26 @@ for line in "${DEVICES[@]}"; do
     continue
   fi
   # Instalar cierra la app: si IRIS está abierta y no corre prisa, se espera.
-  if [[ $AUTO == 1 && $DAY_INSTALL == 0 ]] && app_running "$ID"; then
+  if [[ $AUTO == 1 && $DAY_INSTALL == 0 && $FORCED == 0 ]] && app_running "$ID"; then
     if [[ "$(dev_get "$ID" waiting_on)" != "$(date +%F)" ]]; then
       log "IRIS está abierta en $NAME; renuevo cuando se cierre."
       dev_set "$ID" "waiting_on=$(date +%F)"
     fi
     continue
   fi
-  TODO+=("$ID"$'\t'"$NAME"$'\t'"$SHA"$'\t'"$LABEL"$'\t'"$DAY_INSTALL")
+  ENTRY="$ID"$'\t'"$NAME"$'\t'"$SHA"$'\t'"$LABEL"$'\t'"$DAY_INSTALL"$'\t'"$FORCED"
+  # Quien está esperando delante del botón va primero.
+  if [[ $FORCED == 1 ]]; then
+    TODO=("$ENTRY" ${TODO[@]+"${TODO[@]}"})
+  else
+    TODO+=("$ENTRY")
+  fi
   [[ -n "$UDID" ]] && TARGET_UDIDS+=("$UDID")
 done
+
+if [[ -n "$REQ_ID" && $REQ_SEEN == 0 ]]; then
+  req_finish error "Este ${REQ_KIND} no está emparejado con el Mac."
+fi
 
 if [[ ${#TODO[@]} == 0 ]]; then
   [[ $AUTO == 1 ]] && exit 0
@@ -393,12 +476,17 @@ sys.exit(0 if sys.argv[1] in plistlib.loads(sys.stdin.buffer.read()).get("Provis
 # ── Instalar ────────────────────────────────────────────────────────────────
 FAILED=0
 for entry in "${TODO[@]}"; do
-  IFS=$'\t' read -r ID NAME SHA LABEL DAY_INSTALL <<<"$entry"
+  IFS=$'\t' read -r ID NAME SHA LABEL DAY_INSTALL FORCED <<<"$entry"
   log "Instalando ${SHA:0:7} ($LABEL) en ${NAME}…"
   dev_set "$ID" "last_attempt=$(date -u +%FT%TZ)"
   if [[ "$BUILT_SHA" != "$SHA" ]]; then
-    build_sha "$SHA" || exit 1
+    [[ $FORCED == 0 ]] || req_status compilando "El Mac está preparando la versión ${LABEL}."
+    build_sha "$SHA" || {
+      req_finish error "El Mac no pudo compilar la versión ${LABEL}."
+      exit 1
+    }
   fi
+  [[ $FORCED == 0 ]] || req_status instalando "Instalando. IRIS se cerrará y volverá a abrirse."
   NEW_EXPIRES="$(security cms -D -i "$APP/embedded.mobileprovision" 2>/dev/null | python3 -c '
 import plistlib, sys, datetime as d
 e = plistlib.loads(sys.stdin.buffer.read())["ExpirationDate"]
@@ -416,6 +504,7 @@ print(e.replace(tzinfo=d.timezone.utc).isoformat())')"
       log "La instalación en $NAME falló (¿bloqueado o fuera de la Wi‑Fi?)."
     fi
     [[ $AUTO == 1 ]] || notify "No se pudo instalar en $NAME" "Desbloquéalo y vuelve a probar."
+    [[ $FORCED == 0 ]] || req_finish error "No se pudo instalar en ${NAME}. Desbloquéalo y vuelve a probar."
     rm -f "$OUT"
     FAILED=1
     continue
@@ -427,6 +516,12 @@ print(e.replace(tzinfo=d.timezone.utc).isoformat())')"
   UNTIL="$(python3 -c 'import sys,datetime as d; print(d.datetime.fromisoformat(sys.argv[1]).astimezone().strftime("%d/%m %H:%M"))' "$NEW_EXPIRES")"
   log "Instalada ${SHA:0:7} en $NAME. Firma válida hasta $UNTIL."
   notify "IRIS DP instalada en $NAME" "Versión ${SHA:0:7} · válida hasta $UNTIL"
+  if [[ $FORCED == 1 ]]; then
+    req_finish hecho "Versión ${LABEL} instalada."
+    # Instalar cierra la app: quien la pidió la encuentra abierta otra vez.
+    with_timeout 60 xcrun devicectl device process launch --device "$ID" "$BUNDLE_ID" \
+      >>"$LOG" 2>&1 || log "No pude volver a abrir IRIS en ${NAME}."
+  fi
 done
 
 exit "$FAILED"

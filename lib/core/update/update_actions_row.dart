@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -13,7 +12,7 @@ import '../widgets/app_button.dart';
 import 'app_release.dart';
 import 'app_update_installer.dart';
 import 'app_update_providers.dart';
-import 'sidestore_guide_sheet.dart';
+import 'device_update_button.dart';
 
 Future<void> openAppReleaseDownload(String url) async {
   final uri = Uri.tryParse(url);
@@ -29,29 +28,6 @@ Future<void> markAppUpdatedAndSync(BuildContext context, WidgetRef ref) async {
       context,
     ).showSnackBar(SnackBar(content: Text(syncResult.message!)));
   }
-}
-
-Future<void> _downloadIpa(BuildContext context, AppRelease release) async {
-  if (!context.mounted) return;
-  await showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (dialogContext) => _UpdateDownloadDialog(
-      release: release,
-      onComplete: (path) async {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'IPA descargado en ${path.split('/').last}. '
-                'Ábrelo con SideStore desde Archivos.',
-              ),
-            ),
-          );
-        }
-      },
-    ),
-  );
 }
 
 Future<void> _runDesktopUpdate(
@@ -108,9 +84,8 @@ Future<void> _runDesktopUpdate(
 
 class _UpdateDownloadDialog extends StatefulWidget {
   final AppRelease release;
-  final void Function(String path)? onComplete;
 
-  const _UpdateDownloadDialog({required this.release, this.onComplete});
+  const _UpdateDownloadDialog({required this.release});
 
   @override
   State<_UpdateDownloadDialog> createState() => _UpdateDownloadDialogState();
@@ -137,13 +112,6 @@ class _UpdateDownloadDialogState extends State<_UpdateDownloadDialog> {
       );
       if (!mounted) return;
       setState(() => _status = 'Abriendo instalador…');
-      if (widget.onComplete != null) {
-        if (mounted) {
-          Navigator.of(context).pop();
-          widget.onComplete!(path);
-        }
-        return;
-      }
       await launchDownloadedUpdate(path);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -209,19 +177,7 @@ class UpdateActionsRow extends ConsumerWidget {
         spacing: AppSpacing.sm,
         runSpacing: AppSpacing.sm,
         children: [
-          AppButton(
-            label: 'Descargar IPA',
-            icon: Icons.download_outlined,
-            onTap: () => _downloadIpa(context, release),
-          ),
-          AppButton(
-            label: 'Guía SideStore',
-            variant: AppButtonVariant.secondary,
-            onTap: () => SideStoreGuideSheet.show(
-              context,
-              ipaDownloadUrl: release.downloadUrl,
-            ),
-          ),
+          const DeviceUpdateButton(),
           if (showDismissLater)
             AppButton(
               label: 'Más tarde',
@@ -263,48 +219,6 @@ class UpdateActionsRow extends ConsumerWidget {
           label: 'Ya actualicé',
           variant: AppButtonVariant.secondary,
           onTap: () => markAppUpdatedAndSync(context, ref),
-        ),
-      ],
-    );
-  }
-}
-
-/// Enlace para compartir el IPA de iPad (Mac/Windows).
-class IpadDownloadLinkRow extends StatelessWidget {
-  final String downloadUrl;
-  final String version;
-
-  const IpadDownloadLinkRow({
-    super.key,
-    required this.downloadUrl,
-    required this.version,
-  });
-
-  Future<void> _copyLink(BuildContext context) async {
-    await Clipboard.setData(ClipboardData(text: downloadUrl));
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enlace IPA copiado al portapapeles')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: [
-        AppButton(
-          label: 'Descargar para iPad ($version)',
-          icon: Icons.tablet_mac_outlined,
-          variant: AppButtonVariant.secondary,
-          onTap: () => openAppReleaseDownload(downloadUrl),
-        ),
-        AppButton(
-          label: 'Copiar enlace',
-          variant: AppButtonVariant.secondary,
-          onTap: () => _copyLink(context),
         ),
       ],
     );

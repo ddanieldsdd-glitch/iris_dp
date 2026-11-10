@@ -62,5 +62,4 @@ esac
 echo ""
 echo "=== iPad / iPhone ==="
 echo "Desde un Mac con Xcode:"
-echo "  ./scripts/build_ipad.sh"
-echo "Luego instala vía TestFlight o Apple Configurator (ver docs/distribuir_app.md)."
+echo "  ./scripts/install_ipad.sh"

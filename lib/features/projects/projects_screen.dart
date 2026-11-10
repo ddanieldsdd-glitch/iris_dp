@@ -26,7 +26,6 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/widgets/account/account_menu_button.dart';
 import '../../core/widgets/sync_status_indicator.dart';
 import '../../core/update/update_available_banner.dart';
-import '../../core/update/sidestore_reminder_banner.dart';
 import '../../core/cloud/connectivity_gate.dart';
 
 class ProjectsScreen extends ConsumerWidget {
@@ -64,7 +63,6 @@ class ProjectsScreen extends ConsumerWidget {
           children: [
             const OfflineStatusBanner(),
             const UpdateAvailableBanner(),
-            const SideStoreReminderBanner(),
             ProjectsHeader(
               statusActions: [
                 IconButton(

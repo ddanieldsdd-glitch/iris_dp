@@ -18,11 +18,11 @@ pantallas de menos de 600 pt.
   también 375 (SE/mini) y 430 (Pro Max), y el iPhone en horizontal
   (844 × 390: ancho «medio», alto muy justo).
 - **Distribución** (al día el 2026-11-02): la misma que el iPad, desde el Mac
-  con Xcode. La tarea programada (`scripts/setup_ipad_install.sh`, cada hora)
+  con Xcode. La tarea programada (`scripts/setup_ipad_install.sh`, cada 15 minutos)
   ejecuta `scripts/install_ipad.sh --auto` e instala en los iPad e iPhone
-  emparejados el último `main` con el CI en verde, firmado con el equipo
-  personal (7 días, se renueva solo). SideStore ya no se usa; lo de IP.6 que
-  habla de él queda superado. El proyecto iOS ya admite iPhone
+  emparejados la última versión publicada, firmada con el equipo personal
+  (7 días, se renueva sola). El antiguo camino de distribución de IP.6 se
+  descartó. El proyecto iOS ya admite iPhone
   (`TARGETED_DEVICE_FAMILY = "1,2"`).
 - **Capturar localizaciones** (Daniel, 2026-11-02): el iPhone hace las fotos
   de una localización con su posición en metros (ARKit, sin LiDAR) y avisa
@@ -137,12 +137,10 @@ toque. El estado ya sale en el PDF de la jornada. IP.2.2 (`plan/pulido-rodaje`):
 
 ### IP.6 · Distribución
 
-- **IP.6.1** Confirmar que el .ipa del workflow de release instala y arranca
-  en iPhone con SideStore (mismo .ipa que el iPad: es universal).
+- **IP.6.1** Descartada: el iPhone lo instala el Mac (ver «Distribución»).
 - **IP.6.2** Iconos y pantalla de arranque de iPhone en `Assets.xcassets`.
-- **IP.6.3** Apartado iPhone en `docs/ipad_sidestore.md` (o
-  `docs/iphone_sidestore.md`): instalación, refresco cada 7 días, y el aviso
-  de `SideStoreReminderBanner` también en el iPhone.
+- **IP.6.3** Descartada: la instalación está en
+  `docs/instalacion_y_actualizacion.md`.
 - **IP.6.4** Lista de prueba manual en el iPhone (como `PRUEBA_WINDOWS.md`).
 
 ## Cómo se prueba
@@ -150,4 +148,4 @@ toque. El estado ya sale en el PDF de la jornada. IP.2.2 (`plan/pulido-rodaje`):
 - Pruebas de widget a 390 × 844 (`tester.view.physicalSize` con
   `devicePixelRatio = 3`) en `test/iphone/`: cada fase añade las suyas y
   comprueba que no hay desbordes (`tester.takeException()` nulo).
-- En el iPhone real con SideStore al cerrar cada fase.
+- En el iPhone real, instalado desde el Mac, al cerrar cada fase.

@@ -36,4 +36,4 @@ case "$OS" in
 esac
 
 echo ""
-echo "Para iPad local: ./scripts/build_ipad.sh (sin .env en el entorno)"
+echo "Para iPad e iPhone: ./scripts/install_ipad.sh"

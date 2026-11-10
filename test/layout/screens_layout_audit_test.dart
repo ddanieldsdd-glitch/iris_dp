@@ -112,8 +112,7 @@ void main() {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      AppButton(label: 'Descargar IPA', onTap: () {}),
-                      AppButton(label: 'Guía SideStore', onTap: () {}),
+                      AppButton(label: 'Actualizar desde el Mac', onTap: () {}),
                       AppButton(label: 'Más tarde', onTap: () {}),
                     ],
                   ),

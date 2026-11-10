@@ -65,7 +65,7 @@ release_sha() {
 
 entries=""
 registered=()
-for item in "macos|IRIS-DP.dmg" "windows|IRIS-DP-Windows.zip" "ipad|IRIS-DP.ipa"; do
+for item in "macos|IRIS-DP.dmg" "windows|IRIS-DP-Windows.zip"; do
   platform="${item%%|*}"
   url="${BASE_URL}/${item##*|}"
   if ! asset_exists "$url"; then
