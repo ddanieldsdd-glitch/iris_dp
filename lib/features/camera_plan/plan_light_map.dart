@@ -522,6 +522,8 @@ abstract final class PlanLightKey {
     'nd',
     'tStop',
     'sensorWidthMm',
+    'sensorHeightMm',
+    'lensSqueeze',
     'lensName',
     'cameraName',
     'shotTag',

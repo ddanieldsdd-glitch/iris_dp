@@ -2278,8 +2278,7 @@ class CameraPlanPainter extends CustomPainter {
     final fov =
         cameraFovDegrees(
           el.lens,
-          sensorWidthMm:
-              (el.props['sensorWidthMm'] as num?)?.toDouble() ?? 24.89,
+          sensorWidthMm: cameraFrameWidthMm(el.props),
         ) ??
         40;
     final half = fov.clamp(4, 170) * math.pi / 360;

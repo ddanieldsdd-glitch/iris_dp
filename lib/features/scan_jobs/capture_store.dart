@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/sync/realtime_hub.dart';
+import '../camera_plan/rig/scan_capture.dart';
 
 /// Estados de una captura, en el orden en que pasa por ellos.
 abstract final class CaptureStatus {
@@ -58,6 +59,62 @@ abstract final class CaptureStore {
 
   static Future<File> zipFor(String uid) async =>
       File(p.join((await root()).path, '$uid.iriscapture.zip'));
+
+  static ArchiveFile? _named(Archive archive, String name) {
+    for (final f in archive.files) {
+      if (f.isFile && p.basename(f.name) == name) return f;
+    }
+    return null;
+  }
+
+  /// El `capture.json` de una captura de este equipo, sin descomprimir las
+  /// fotos. `null` si el zip no está aquí o no se puede leer.
+  static Future<CapturePackage?> readPackage(String uid) async {
+    final zip = await zipFor(uid);
+    if (!await zip.exists()) return null;
+    final input = InputFileStream(zip.path);
+    try {
+      final entry = _named(
+        ZipDecoder().decodeBuffer(input),
+        CapturePackage.manifest,
+      );
+      if (entry == null) return null;
+      final json =
+          jsonDecode(utf8.decode(entry.content as List<int>)) as Map;
+      final dir = Directory(
+        p.join(Directory.systemTemp.path, 'iris_captura_$uid'),
+      );
+      await dir.create(recursive: true);
+      return CapturePackage.fromJson(dir.path, json);
+    } on Object {
+      return null;
+    } finally {
+      await input.close();
+    }
+  }
+
+  /// Saca una foto de la captura a [folder] y devuelve su ruta.
+  static Future<String?> extractPhoto(
+    String uid,
+    String name,
+    String folder,
+  ) async {
+    final target = File(p.join(folder, name));
+    if (await target.exists()) return target.path;
+    final zip = await zipFor(uid);
+    if (!await zip.exists()) return null;
+    final input = InputFileStream(zip.path);
+    try {
+      final entry = _named(ZipDecoder().decodeBuffer(input), name);
+      if (entry == null) return null;
+      await target.writeAsBytes(entry.content as List<int>, flush: true);
+      return target.path;
+    } on Object {
+      return null;
+    } finally {
+      await input.close();
+    }
+  }
 
   /// Registra lo que devuelve la captura guiada ([path]: el .zip o, si el
   /// sistema no pudo comprimir, la carpeta) como una captura del proyecto

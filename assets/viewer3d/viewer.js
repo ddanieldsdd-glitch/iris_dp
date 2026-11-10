@@ -417,6 +417,11 @@
     return new THREE.Color(clamp(r, 0, 255) / 255, clamp(g, 0, 255) / 255, clamp(b, 0, 255) / 255);
   }
 
+  // Un aparato en RGB alumbra con su color; si no, con su temperatura.
+  function lightColor(l, fallback) {
+    return l.rgb != null ? new THREE.Color(l.rgb) : cctColor(l.cct || fallback);
+  }
+
   function quad(pos, a, b, c, d) { pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z); }
 
   function meshFrom(pos, mat, id) {
@@ -1180,7 +1185,7 @@
     const maxShadows = (sc.grip || []).length > 0 ? 8 : 4;
     let shadows = 0;
     fixtures.forEach((f, i) => {
-      const col = cctColor(f.cct || 3200);
+      const col = lightColor(f, 3200);
       const p = V(f.pos[0], f.pos[1], f.pos[2]), a = V(f.aim[0], f.aim[1], f.aim[2]);
       const dir = new THREE.Vector3().subVectors(a, p).normalize();
       const body = fixtureBody(f, col, a);
@@ -1358,7 +1363,7 @@
     for (const s of clearView ? [] : sc.soft || []) {
       if (lit >= maxLights + 6) break;
       lit++;
-      const col = cctColor(s.cct || 5600);
+      const col = lightColor(s, 5600);
       const p = V(s.pos[0] + s.dir[0] * 0.05, s.pos[1] + s.dir[1] * 0.05, s.pos[2] + s.dir[2] * 0.05);
       const half = clamp((s.beamDeg || 120) / 2, 20, 85) * Math.PI / 180;
       const sl = physical

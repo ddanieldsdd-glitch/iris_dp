@@ -49,6 +49,18 @@ iPhone (ARKit)              PC (RealityScan)
 | ES.6 | Unreal sin aberraciones | después |
 | ES.7 | Malla en vivo sin LiDAR (profundidad monocular) | estudio, opcional |
 
+## Prueba con un sitio de verdad (ES.E)
+
+Hasta ahora todo se ha probado con datos sintéticos. Esta prueba necesita el iPhone y el PC, y una habitación con dos paredes opuestas, una puerta y una ventana.
+
+1. **Captura.** Desde el 3D de un set, «Capturar localización con el iPhone». Recorre la habitación y, con «Marcar», toca las cuatro esquinas en orden, los dos bordes de la puerta y los de la ventana, suelo y techo.
+2. **Planta directa, sin PC.** En el mismo iPhone, «Sacar la planta de una captura». Mide con un metro dos paredes y el ancho de la puerta. Da por buena la prueba si el error es de menos de 5 cm por metro.
+3. **Envío.** Con el iPhone y el PC en la misma Wi‑Fi, comprueba que la captura pasa a «En el PC · en la cola» y luego a «Escaneo listo».
+4. **Escaneo.** Con la malla ya en la planta, «Revisar escaneo»: compara paredes y huecos con los del paso 2, y que al tocar algo dudoso salga la foto correcta.
+5. **Gran angular (IC.7).** Repite el paso 1 con el 0,5× y compara las medidas.
+
+Si algo falla, guarda el `.zip` de la captura («Compartir el .zip»): con él se puede repetir el fallo sin volver al sitio.
+
 ### ES.1 · Captura que guarda estructura · iPhone
 
 En `ios/Runner/IrisCapturePlugin.swift`:

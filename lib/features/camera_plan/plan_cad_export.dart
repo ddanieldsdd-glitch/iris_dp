@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:archive/archive.dart';
 import 'package:flutter/painting.dart';
 import 'package:xml/xml.dart';
@@ -241,7 +242,9 @@ class PlanCadExport {
                 if (unit != null) 'U$unit',
                 (el.props['name'] as String?) ?? el.displayLabel,
                 formatWatts(light.watts),
-                '${beam.cct.round()}K',
+                beam.rgb == null
+                    ? '${beam.cct.round()}K'
+                    : 'RGB #${beam.rgb!.toRadixString(16).padLeft(6, '0').toUpperCase()}',
               ].join(' · '),
             );
           }
@@ -502,7 +505,12 @@ class PlanCadExport {
                               builder.element('GDTFMode', nest: 'Default');
                               builder.element('FixtureID', nest: '$unit');
                               builder.element('UnitNumber', nest: '$unit');
-                              builder.element('Color', nest: _cie(beam.cct));
+                              builder.element(
+                                'Color',
+                                nest: beam.rgb == null
+                                    ? _cie(beam.cct)
+                                    : cieOfRgb(beam.rgb!),
+                              );
                             },
                           );
                         }
@@ -531,6 +539,27 @@ class PlanCadExport {
       );
     }
     return Uint8List.fromList(ZipEncoder().encode(archive)!);
+  }
+
+  /// Un color 0xRRGGBB (sRGB) en CIE xyY, como lo pide MVR.
+  @visibleForTesting
+  static String cieOfRgb(int rgb) {
+    double linear(int shift) {
+      final v = ((rgb >> shift) & 255) / 255;
+      return v <= 0.04045
+          ? v / 12.92
+          : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+    }
+
+    final r = linear(16), g = linear(8), b = linear(0);
+    final x = 0.4124564 * r + 0.3575761 * g + 0.1804375 * b;
+    final y = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b;
+    final z = 0.0193339 * r + 0.1191920 * g + 0.9503041 * b;
+    final sum = x + y + z;
+    if (sum <= 0) return '0.312700,0.329000,0.000000';
+    return '${(x / sum).toStringAsFixed(6)},'
+        '${(y / sum).toStringAsFixed(6)},'
+        '${(y * 100).toStringAsFixed(6)}';
   }
 
   /// Color de la luz en CIE xyY, como lo pide MVR («x,y,Y»).

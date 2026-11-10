@@ -125,6 +125,15 @@ class LightBeam {
 /// Ángulo de visión horizontal de una cámara, en grados, a partir de la
 /// focal escrita («35mm», «50») y el ancho de sensor. Sin focal legible,
 /// `null`.
+/// Ancho de lo que se ve en el encuadre: el del sensor o, con una lente
+/// anamórfica, el del sensor por su compresión.
+double cameraFrameWidthMm(Map<String, dynamic> props) =>
+    ((props['sensorWidthMm'] as num?)?.toDouble() ?? 24.89) *
+    ((props[kLensSqueezeKey] as num?)?.toDouble() ?? 1);
+
+/// Compresión de la lente anamórfica de una cámara de planta.
+const kLensSqueezeKey = 'lensSqueeze';
+
 double? cameraFovDegrees(String? lens, {double sensorWidthMm = 24.89}) {
   if (lens == null) return null;
   final match = RegExp(r'(\d+(?:[.,]\d+)?)').firstMatch(lens);

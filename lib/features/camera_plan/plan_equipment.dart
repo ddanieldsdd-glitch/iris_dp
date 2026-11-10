@@ -97,6 +97,7 @@ class PlanEquipment {
   static void applyCamera(PlanElement el, Camera camera) {
     el.externalMapping.catalogCameraId = camera.id;
     el.props['sensorWidthMm'] = camera.sensorWidthMm;
+    el.props['sensorHeightMm'] = camera.sensorHeightMm;
     el.props['cameraName'] = '${camera.brand} ${camera.model}';
     if (camera.nativeIso != null) {
       el.props[CameraExposure.isoKey] = camera.nativeIso!.toDouble();
@@ -112,6 +113,11 @@ class PlanEquipment {
         : (lens.focalMin ?? lens.focalLength);
     el.lens = '${_trim(focal)}mm';
     el.props['lensName'] = '${lens.brand} ${lens.model}';
+    if (lens.isAnamorphic) {
+      el.props[kLensSqueezeKey] = lens.squeezeRatio ?? 2.0;
+    } else {
+      el.props.remove(kLensSqueezeKey);
+    }
   }
 
   /// Focal de una cámara de planta, en milímetros.

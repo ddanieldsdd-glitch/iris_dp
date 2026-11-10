@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:crypto/crypto.dart';
 
+import '../plan_marks.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
@@ -274,6 +275,9 @@ class PlanScene3d {
             'cat': PlanCategory.of(el).name,
             'at': xy(el.position),
             'z0': level,
+            'yawDeg': _r(el.rotation),
+            'pose': PlanMarks.pose(el),
+            'heightM': _r(PlanMarks.heightM(el)),
           });
         case ElementType.camera:
           final rad = el.rotation * math.pi / 180;
@@ -299,9 +303,15 @@ class PlanScene3d {
             'nd': CameraExposure.settingsOf(el).ndStops,
             'tStop': CameraExposure.stopOf(el),
             'hfovDeg': _r(
-              cameraFovDegrees(el.lens, sensorWidthMm: sensorMm) ?? 40,
+              cameraFovDegrees(
+                    el.lens,
+                    sensorWidthMm: cameraFrameWidthMm(el.props),
+                  ) ??
+                  40,
             ),
             'sensorMm': sensorMm,
+            'sensorHeightMm': ?(el.props['sensorHeightMm'] as num?)?.toDouble(),
+            'squeeze': ?(el.props[kLensSqueezeKey] as num?)?.toDouble(),
             'asset': ?UnrealAssetRef.of(el)?.toPayload(),
           });
         default:
@@ -413,6 +423,7 @@ class PlanScene3d {
         'cd': _r(light.source.candela),
         'beamDeg': _r(light.source.beamDeg),
         'cct': _r(light.source.cct),
+        'rgb': ?light.source.rgb,
         'widthM': _r(light.source.sizeM),
         'heightM': _r(surface.heightM - surface.baseM),
         'tilted': light.overheadM != null,

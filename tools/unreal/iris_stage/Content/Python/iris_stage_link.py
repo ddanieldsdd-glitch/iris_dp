@@ -237,6 +237,26 @@ def _set(obj, name, value):
         unreal.log_warning("[IRIS Stage] %s.%s: %s" % (obj.get_name(), name, exc))
 
 
+def _srgb_to_linear(v):
+    return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+
+
+def _apply_light_color(comp, light):
+    """Un aparato en RGB lleva su color; si no, blanco y su temperatura."""
+    rgb = light.get("rgb")
+    linear = (1.0, 1.0, 1.0)
+    if rgb is not None:
+        rgb = int(rgb)
+        linear = tuple(_srgb_to_linear(((rgb >> s) & 255) / 255.0) for s in (16, 8, 0))
+    _set(comp, "use_temperature", rgb is None)
+    _set(comp, "temperature", float(light.get("cct", 3200)))
+    try:
+        # set_light_color repinta la luz; set_editor_property no siempre.
+        comp.set_light_color(unreal.LinearColor(linear[0], linear[1], linear[2], 1.0))
+    except Exception as exc:
+        unreal.log_warning("[IRIS Stage] color: %s" % exc)
+
+
 def _apply_light(light):
     uid = str(light["id"])
     kind = light.get("kind", "spot")
@@ -250,8 +270,7 @@ def _apply_light(light):
     on = bool(light.get("on", True))
     _set(comp, "intensity_units", unreal.LightUnits.CANDELAS)
     _set(comp, "intensity", float(light.get("cd", 0)) if on else 0.0)
-    _set(comp, "use_temperature", True)
-    _set(comp, "temperature", float(light.get("cct", 3200)))
+    _apply_light_color(comp, light)
     _set(comp, "attenuation_radius", float(light.get("reachCm", 5000)))
     size = float(light.get("sizeCm", 10))
     if kind == "spot":
@@ -275,9 +294,11 @@ def _apply_camera(cam):
         return
     sensor = float(cam.get("sensorMm", 24.89))
     filmback = comp.get_editor_property("filmback")
-    if abs(filmback.sensor_width - sensor) > 0.01:
+    # Sin el dato del catálogo, 16:9.
+    height = float(cam.get("sensorHeightMm") or sensor * 9 / 16)
+    if abs(filmback.sensor_width - sensor) > 0.01 or abs(filmback.sensor_height - height) > 0.01:
         filmback.sensor_width = sensor
-        filmback.sensor_height = sensor * 9 / 16
+        filmback.sensor_height = height
         comp.set_editor_property("filmback", filmback)
     _set(comp, "current_focal_length", float(cam.get("focalMm", 35)))
     # Diafragma, foco y exposición de la cámara de rodaje (F6.22.4).

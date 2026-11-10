@@ -70,17 +70,17 @@ Comprobación: pruebas de widget por recorrido (plano→planta→plano; plano nu
 
 ## ES · Escaneo de localizaciones
 
-- **ES.A Sin LiDAR y sin PC: planta directa.** Un solucionador que saque muros, suelo y huecos solo de `capture.json` v2 (planos ARKit, marcas y nube dispersa) y los lleve a la revisión existente (`scan_review_sheet.dart`). Planta útil en el propio iPhone/iPad.
+- 🟡 Hecho en Dart con pruebas sintéticas (`rig/scan_direct.dart`, botón «Sacar la planta de una captura» en el 3D); sin probar con una captura real, y la nube dispersa solo se usa para el suelo. **ES.A Sin LiDAR y sin PC: planta directa.** Un solucionador que saque muros, suelo y huecos solo de `capture.json` v2 (planos ARKit, marcas y nube dispersa) y los lleve a la revisión existente (`scan_review_sheet.dart`). Planta útil en el propio iPhone/iPad.
 - **ES.B Reconstrucción en el Mac.** Motor alternativo a RealityScan con Object Capture (`PhotogrammetrySession`) en un plugin Swift de `macos/Runner`, usando la misma cola de `scan_jobs`. Prueba previa con una captura real para ver si la calidad en interiores compensa.
 - **ES.C Con LiDAR (listo para cuando llegue el dispositivo).** `isSupported` detecta LiDAR y ofrece: RoomPlan → muros, puertas, ventanas y muebles directos a `reviewElements`; malla de `sceneReconstruction` y profundidad en un `capture.json` v3. Sin LiDAR, la app sigue por ES.A.
 - **ES.D Aceptar USDZ.** Convertir en el Mac/iPad con ModelIO a un formato que el visor ya carga, para importar de Polycam, Scaniverse o RoomPlan.
-- **ES.E Probar la cadena real.** iPhone → PC → vuelta (E6, IC.6, IC.7) y ES.2/ES.3 con un escaneo de verdad; hoy solo hay pruebas sintéticas.
+- ⏳ Necesita el iPhone y el PC: protocolo en `docs/PLAN_ESCANEO.md`. **ES.E Probar la cadena real.** iPhone → PC → vuelta (E6, IC.6, IC.7) y ES.2/ES.3 con un escaneo de verdad; hoy solo hay pruebas sintéticas.
 - **ES.F Escala.** Hoja impresa con marcadores para vídeo y gran angular 0,5× (E3). Profundidad monocular (ES.7) sigue en estudio.
 
 ## UN · Unreal, Fab y Megascans
 
-- **UN.1 RGB de los focos** a Unreal, al MVR y al visor 3D (hoy solo viaja la temperatura).
-- **UN.2 Cámara completa.** Alto de sensor y squeeze desde el modo del catálogo; fuera el 16:9 forzado; orientación, altura y pose de actores.
+- 🟡 Hecho en la app, el visor, el MVR y el script de Unreal; sin probar dentro de Unreal. **UN.1 RGB de los focos** a Unreal, al MVR y al visor 3D (hoy solo viaja la temperatura).
+- 🟡 Alto de sensor, squeeze y actores (bloque con altura, orientación y pose) hechos, sin probar dentro de Unreal; sigue sin haber modo de cámara por elemento (se usa el sensor de la cámara) y un actor con modelo propio no cambia de pose. **UN.2 Cámara completa.** Alto de sensor y squeeze desde el modo del catálogo; fuera el 16:9 forzado; orientación, altura y pose de actores.
 - **UN.3 Paquete `.irisstage` portable** (F6.16.1): escena v2 en unidades reales + estructura GLB + escaneos + miniaturas; el plugin lo importa sin enlace vivo. Después, valorar salida USD.
 - **UN.4 Fotometría real.** Archivo IES por foco en el catálogo, usado por el motor de luz y asignado en Unreal; GDTF real en el MVR donde exista. Requiere rellenar el Excel (87 focos pendientes).
 - **UN.5 Materiales.** Fab/Megascans en paredes y suelos (F6.20 D3), tabla material IRIS ↔ material Unreal con reflectancia, y comparación de lux IRIS ↔ Unreal (F6.21.4).

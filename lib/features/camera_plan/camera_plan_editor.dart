@@ -3782,13 +3782,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final id = el.externalMapping.catalogCameraId;
     if (id == null) {
       el.props.remove('sensorWidthMm');
+      el.props.remove('sensorHeightMm');
       return;
     }
     final db = ref.read(databaseProvider);
     final camera = await (db.select(
       db.cameras,
     )..where((c) => c.id.equals(id))).getSingleOrNull();
-    if (camera != null) el.props['sensorWidthMm'] = camera.sensorWidthMm;
+    if (camera != null) {
+      el.props['sensorWidthMm'] = camera.sensorWidthMm;
+      el.props['sensorHeightMm'] = camera.sensorHeightMm;
+    }
   }
 
   /// Material de la planta abierta: la luz del esquema, la del grupo, las

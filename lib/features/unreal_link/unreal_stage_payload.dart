@@ -96,6 +96,8 @@ class UnrealStagePayload {
       'rot': dist < 1e-6 ? [-90.0, 0.0, 0.0] : rotToward(dx, dy, dz),
       'cd': _r(((src?['cd'] ?? 0) as num).toDouble()),
       'cct': _r(((src?['cct'] ?? f['cct'] ?? 3200) as num).toDouble()),
+      // 0xRRGGBB. Con él, el color manda sobre la temperatura.
+      'rgb': ?f['rgb'],
       'on': f['on'] == true,
       if (kind == 'spot') ...{'outerDeg': _r(outer), 'innerDeg': _r(inner)},
       if (kind == 'rect') ...{'widthCm': size, 'heightCm': size},
@@ -125,7 +127,10 @@ class UnrealStagePayload {
     final at = c['at'] as List?, dir = c['dir'] as List?;
     if (at == null || dir == null) return null;
     final z = ((c['z0'] ?? 0) as num) + ((c['z'] ?? 1.5) as num);
-    final sensor = ((c['sensorMm'] ?? 24.89) as num).toDouble();
+    // Con lente anamórfica, el ancho que se ve es el del sensor por la
+    // compresión: así el encuadre de Unreal sale ya desprimido.
+    final squeeze = ((c['squeeze'] ?? 1) as num).toDouble();
+    final sensor = ((c['sensorMm'] ?? 24.89) as num).toDouble() * squeeze;
     final hfov = ((c['hfovDeg'] ?? 40) as num).toDouble() * math.pi / 180;
     return {
       'id': c['id'],
@@ -143,6 +148,8 @@ class UnrealStagePayload {
       ],
       'focalMm': _r(sensor / (2 * math.tan(hfov / 2))),
       'sensorMm': _r(sensor),
+      if (c['sensorHeightMm'] != null)
+        'sensorHeightMm': _r((c['sensorHeightMm'] as num).toDouble()),
       // La exposición y el foco de la cámara de rodaje (F6.22.4).
       if (c['tStop'] != null) 'tStop': _r((c['tStop'] as num).toDouble()),
       if (c['iso'] != null) 'iso': (c['iso'] as num).toDouble(),
@@ -174,6 +181,26 @@ class UnrealStagePayload {
       'sizeCm': [depth, width, _r(((p['heightM'] ?? 0.8) as num) * 100)],
       'footCm': size,
       'asset': ?p['asset'],
+    };
+  }
+
+  /// Un actor sin modelo de Unreal: un bloque de su altura según la pose,
+  /// mirando hacia donde mira en planta. Tumbado, el bloque va a lo largo.
+  static Map<String, dynamic>? actor(Map a) {
+    final at = a['at'] as List?;
+    if (at == null || a['asset'] != null) return null;
+    final rad = ((a['yawDeg'] ?? 0) as num) * math.pi / 180;
+    final height = _r(((a['heightM'] ?? 1.7) as num) * 100);
+    final lying = a['pose'] == 'lie';
+    return {
+      'id': a['id'],
+      'name': a['name'],
+      'type': 'actor',
+      'pose': a['pose'] ?? 'stand',
+      'loc': loc([at[0], at[1], a['z0'] ?? 0]),
+      'rot': rotToward(math.sin(rad), math.cos(rad), 0),
+      'sizeCm': lying ? [175.0, 50.0, height] : [28.0, 50.0, height],
+      'footCm': 50.0,
     };
   }
 
@@ -247,6 +274,7 @@ class UnrealStagePayload {
       'rot': rotToward(dx, dy, dz),
       'cd': _r(n(s['cd'] ?? 0)),
       'cct': _r(n(s['cct'] ?? 5600)),
+      'rgb': ?s['rgb'],
       'on': true,
       'widthCm': w,
       'heightCm': h,
@@ -315,6 +343,12 @@ class UnrealStagePayload {
   /// Las listas de piezas que se comparan una a una.
   static const kinds = ['lights', 'cameras', 'props', 'assets', 'scans'];
 
+  /// Si la pieza [id] va a Unreal con su asset, en `assets`.
+  static bool _hasAsset(Map<String, dynamic> scene, Object? id) =>
+      (scene['assets'] as List? ?? const []).cast<Map>().any(
+        (a) => a['id'] == id,
+      );
+
   /// La escena entera para Unreal, en el mundo (nivel) [world].
   static Map<String, dynamic> build(
     Map<String, dynamic> scene, {
@@ -329,6 +363,8 @@ class UnrealStagePayload {
           ?prop(p),
         for (final g in (scene['grip'] as List? ?? const []).cast<Map>())
           ?gripPanel(g),
+        for (final a in (scene['people'] as List? ?? const []).cast<Map>())
+          if (!_hasAsset(scene, a['id'])) ?actor(a),
       ],
       'assets': [
         for (final a in (scene['assets'] as List? ?? const []).cast<Map>())
@@ -383,6 +419,11 @@ class UnrealStagePayload {
       'scanFolders': ?now['scanFolders'],
     };
     final remove = <String>[];
+    final stillThere = {
+      for (final kind in kinds)
+        for (final l in (now[kind] as List? ?? const []).cast<Map>())
+          '${l['id']}',
+    };
     for (final kind in kinds) {
       Map<String, String> byId(Map<String, dynamic> p) => {
         for (final l in (p[kind] as List? ?? const []).cast<Map>())
@@ -395,7 +436,8 @@ class UnrealStagePayload {
       ];
       remove.addAll([
         for (final id in old.keys)
-          if (!cur.containsKey(id)) id,
+          // Puede haber pasado de una lista a otra (un actor que gana modelo).
+          if (!cur.containsKey(id) && !stillThere.contains(id)) id,
       ]);
     }
     final sunChanged =

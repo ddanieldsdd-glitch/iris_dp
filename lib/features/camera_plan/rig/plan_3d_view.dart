@@ -7,8 +7,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/database/app_database.dart';
+import '../../../core/database/database_provider.dart';
+import '../../scan_jobs/capture_store.dart';
+import 'scan_direct.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_layout.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -682,6 +687,13 @@ class _Plan3dViewState extends State<Plan3dView> {
             label: const Text('Crear escaneo desde fotos o vídeo'),
             onPressed: _buildScan,
           ),
+        if (widget.onAdd != null && widget.projectId != null)
+          OutlinedButton.icon(
+            key: const ValueKey('plan-from-capture'),
+            icon: const Icon(Icons.architecture, size: 16),
+            label: const Text('Sacar la planta de una captura'),
+            onPressed: _planFromCapture,
+          ),
         if (_canCapture) ...[
           FilledButton.icon(
             icon: const Icon(Icons.photo_camera_outlined, size: 16),
@@ -1006,6 +1018,124 @@ class _Plan3dViewState extends State<Plan3dView> {
             },
     );
     if (result == null) return;
+    await _addReviewed(structure, result, add);
+  }
+
+  /// La planta sin PC (ES.A): de una captura ya hecha, con sus planos y sus
+  /// toques, a la misma revisión que un escaneo.
+  Future<void> _planFromCapture() async {
+    final add = widget.onAdd;
+    final projectId = widget.projectId;
+    if (add == null || projectId == null) return;
+    final db = ProviderScope.containerOf(context).read(databaseProvider);
+    final rows = await db.watchCapturesForProject(projectId).first;
+    final here = <LocationCapture>[];
+    for (final row in rows) {
+      final uid = row.uid;
+      if (uid != null && await (await CaptureStore.zipFor(uid)).exists()) {
+        here.add(row);
+      }
+    }
+    if (!mounted) return;
+    if (here.isEmpty) {
+      setState(() => _status = 'No hay capturas guardadas en este equipo.');
+      return;
+    }
+    final row = here.length == 1
+        ? here.single
+        : await showDialog<LocationCapture>(
+            context: context,
+            builder: (ctx) => SimpleDialog(
+              title: const Text('¿De qué captura?'),
+              children: [
+                for (final c in here)
+                  SimpleDialogOption(
+                    onPressed: () => Navigator.pop(ctx, c),
+                    child: Text('${c.name} · ${c.photoCount} fotos'),
+                  ),
+              ],
+            ),
+          );
+    if (row == null) return;
+    final uid = row.uid!;
+    final capture = await CaptureStore.readPackage(uid);
+    if (!mounted) return;
+    if (capture == null || !capture.hasStructure) {
+      setState(
+        () => _status =
+            'Esta captura no guardó paredes ni toques. Hazla de nuevo con '
+            'la app actual, marcando las esquinas con «Marcar».',
+      );
+      return;
+    }
+    final plan = solveCaptureDirect(capture);
+    if (plan == null) {
+      setState(
+        () => _status =
+            'No se ha visto ninguna pared. Marca al menos tres esquinas en '
+            'la captura.',
+      );
+      return;
+    }
+    final result = await ScanReviewSheet.show(
+      context,
+      structure: plan.structure,
+      cut: plan.cut,
+      lightNote: _lightNote(capture),
+      findPhoto: capture.frames.isEmpty
+          ? null
+          : (item) async {
+              final view = bestPhoto(
+                capture.frames,
+                reviewPoints(plan.structure, item),
+              );
+              if (view == null) return null;
+              final path = await CaptureStore.extractPhoto(
+                uid,
+                view.frame.file,
+                capture.dir,
+              );
+              return path == null ? null : (path: path, view: view);
+            },
+    );
+    if (result == null) return;
+    await _addReviewed(
+      movedStructure(plan.structure, _landingDelta(plan.structure)),
+      result,
+      add,
+    );
+  }
+
+  /// Cuánto mover una estructura medida en el mundo de ARKit para que caiga
+  /// sobre lo que ya hay en la planta o, si está vacía, en el centro de la
+  /// vista inicial del lienzo.
+  Offset _landingDelta(ScanStructure s) {
+    final mpu = widget.metersPerUnit;
+    var from = Offset.infinite, to = -Offset.infinite;
+    void grow(Offset p) {
+      from = Offset(math.min(from.dx, p.dx), math.min(from.dy, p.dy));
+      to = Offset(math.max(to.dx, p.dx), math.max(to.dy, p.dy));
+    }
+
+    for (final w in s.walls) {
+      grow(w.start);
+      grow(w.end);
+    }
+    final center = (from + to) / 2;
+    if (widget.elements.isEmpty) return const Offset(12, 8) - center;
+    from = Offset.infinite;
+    to = -Offset.infinite;
+    for (final e in widget.elements) {
+      grow(e.position * mpu);
+    }
+    return (from + to) / 2 - center;
+  }
+
+  Future<void> _addReviewed(
+    ScanStructure structure,
+    ScanReviewResult result,
+    Future<void> Function(PlanElement) add,
+  ) async {
     final mpu = widget.metersPerUnit;
     final elements = reviewElements(structure, result.items, mpu);
     for (final e in elements) {
