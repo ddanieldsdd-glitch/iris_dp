@@ -59,6 +59,7 @@ class ContentMergeService {
       final content = row?['content'];
       if (row == null || content is! Map) return null;
       final cloud = Map<String, dynamic>.from(content);
+      ProjectContentBundle.assertReadable(cloud);
       final cloudHash =
           row['content_hash'] as String? ?? ProjectContentBundle.hashBundle(cloud);
       final cloudAt = DateTime.tryParse(row['updated_at'] as String? ?? '');

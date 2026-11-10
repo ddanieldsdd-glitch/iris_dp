@@ -23,6 +23,7 @@ import '../templates/user_template_models.dart';
 import 'seed_data.dart';
 import '../../shared/equipment/catalog_importer.dart';
 import 'plan_layer_migration.dart';
+import 'shoot_block_overrides.dart';
 import 'tables.dart';
 
 part 'app_database.g.dart';
@@ -91,6 +92,9 @@ typedef WorkspaceScene = ({
     PlanTrash,
     PlanImages,
     LocationCaptures,
+    RentalHouses,
+    RentalReservations,
+    RentalItems,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -775,6 +779,12 @@ class AppDatabase extends _$AppDatabase {
         await add(shots, shots.planViewJson);
         await add(shootDocuments, shootDocuments.dayOrder);
       }
+      if (from < 63) {
+        // Reservas de material por casa de alquiler.
+        await m.createTable(rentalHouses);
+        await m.createTable(rentalReservations);
+        await m.createTable(rentalItems);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -1017,6 +1027,12 @@ class AppDatabase extends _$AppDatabase {
         )..where((b) => b.documentId.equals(doc.id))).go();
       }
       await (delete(shootDocuments)..where((d) => d.projectId.equals(id))).go();
+
+      await (delete(rentalItems)..where((r) => r.projectId.equals(id))).go();
+      await (delete(
+        rentalReservations,
+      )..where((r) => r.projectId.equals(id))).go();
+      await (delete(rentalHouses)..where((r) => r.projectId.equals(id))).go();
 
       await (delete(projects)..where((p) => p.id.equals(id))).go();
     });
@@ -2142,7 +2158,10 @@ class AppDatabase extends _$AppDatabase {
           shootDocuments.projectId.equals(projectId) &
               shootDocuments.kind.equals('technical_day'),
         )
-        ..orderBy([OrderingTerm.asc(shootDocumentBlocks.sortOrder)]);
+        ..orderBy([
+          OrderingTerm.asc(shootDocumentBlocks.sortOrder),
+          OrderingTerm.asc(shootDocumentBlocks.id),
+        ]);
 
   Stream<List<ShootDocumentBlock>> watchShootDayBlocks(int projectId) =>
       _shootDayBlocksQuery(projectId).watch().map(
@@ -2167,7 +2186,10 @@ class AppDatabase extends _$AppDatabase {
                 ..where(
                   (b) => b.documentId.equals(dayId) & b.id.isNotIn(blockIds),
                 )
-                ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)]))
+                ..orderBy([
+                  (b) => OrderingTerm.asc(b.sortOrder),
+                  (b) => OrderingTerm.asc(b.id),
+                ]))
               .get();
       final order = [for (final b in rest) b.id];
       final at = beforeBlockId == null ? -1 : order.indexOf(beforeBlockId);
@@ -2197,8 +2219,21 @@ class AppDatabase extends _$AppDatabase {
       await (delete(
         shootDocumentBlocks,
       )..where((b) => b.id.isIn([for (final c in current) c.id]))).go();
+      final currentById = {for (final c in current) c.id: c};
       for (final block in blocks) {
-        await into(shootDocumentBlocks).insert(block);
+        final now = currentById[block.id];
+        await into(shootDocumentBlocks).insert(
+          now == null
+              ? block
+              : block.copyWith(
+                  contentOverridesJson: Value(
+                    keepOnSetMark(
+                      block.contentOverridesJson,
+                      now.contentOverridesJson,
+                    ),
+                  ),
+                ),
+        );
       }
     });
     await touchProjectContent(projectId);
@@ -2257,13 +2292,19 @@ class AppDatabase extends _$AppDatabase {
   ) =>
       (select(shootDocumentBlocks)
             ..where((b) => b.documentId.equals(documentId))
-            ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)]))
+            ..orderBy([
+              (b) => OrderingTerm.asc(b.sortOrder),
+              (b) => OrderingTerm.asc(b.id),
+            ]))
           .watch();
 
   Future<List<ShootDocumentBlock>> getBlocksForShootDocument(int documentId) =>
       (select(shootDocumentBlocks)
             ..where((b) => b.documentId.equals(documentId))
-            ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)]))
+            ..orderBy([
+              (b) => OrderingTerm.asc(b.sortOrder),
+              (b) => OrderingTerm.asc(b.id),
+            ]))
           .get();
 
   Future<int> insertShootDocumentBlock(
@@ -2308,6 +2349,32 @@ class AppDatabase extends _$AppDatabase {
                   b.documentId.equals(documentId),
             ))
             .write(ShootDocumentBlocksCompanion(sortOrder: Value(i)));
+      }
+    });
+    final doc = await getShootDocument(documentId);
+    if (doc != null) await touchProjectContent(doc.projectId);
+  }
+
+  /// Numera la jornada con [blockIds] y guarda a la vez [overrides], el
+  /// `contentOverridesJson` de los bloques que cambian con el orden.
+  Future<void> applyShootDayOrder(
+    int documentId,
+    List<int> blockIds,
+    Map<int, String?> overrides,
+  ) async {
+    await transaction(() async {
+      for (final (i, id) in blockIds.indexed) {
+        await (update(shootDocumentBlocks)..where(
+              (b) => b.id.equals(id) & b.documentId.equals(documentId),
+            ))
+            .write(
+              ShootDocumentBlocksCompanion(
+                sortOrder: Value(i),
+                contentOverridesJson: overrides.containsKey(id)
+                    ? Value(overrides[id])
+                    : const Value.absent(),
+              ),
+            );
       }
     });
     final doc = await getShootDocument(documentId);
@@ -5401,7 +5468,7 @@ const kQueryIndexes = [
   ('project_annotation_documents', 'project_id'),
 ];
 
-const kSchemaVersion = 62;
+const kSchemaVersion = 63;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

@@ -19,6 +19,7 @@ import '../export_center/export_selection.dart';
 import '../camera_plan/plan_data.dart';
 import '../camera_plan/plan_thumbnail.dart';
 import '../shoot_documents/shoot_day_on_set.dart';
+import '../shoot_documents/shoot_day_timeline.dart';
 import 'table/script_sheet_theme.dart';
 import 'technical_script_settings.dart';
 
@@ -412,6 +413,11 @@ Future<TechnicalScriptDoc?> buildScriptDocFor(
     final window = day.shootFromTime != null && day.shootToTime != null
         ? 'de ${day.shootFromTime} a ${day.shootToTime}'
         : null;
+    final schedule = shootDayScheduleLine(
+      source.plan.blocksByDay[day.id] ?? const [],
+      {for (final s in source.shots) s.id: s},
+      {for (final s in source.scenes) s.id: s},
+    );
     return (
       heading: [
         day.name,
@@ -420,6 +426,7 @@ Future<TechnicalScriptDoc?> buildScriptDocFor(
       ].join(' · '),
       detail: [
         if (place.isNotEmpty) place,
+        if (schedule != null) 'Horario: $schedule',
         ...shootDayWeather(day, site).lines,
       ].join('\n'),
     );

@@ -3,6 +3,7 @@ import 'package:drift/drift.dart' show Value;
 import '../../core/database/app_database.dart';
 import '../../shared/history/edit_history.dart';
 import '../camera_plan/camera_plan_grouping.dart';
+import 'shoot_day_timeline.dart';
 import 'shoot_document_block_types.dart';
 
 /// Tipo de documento de una jornada de rodaje.
@@ -70,7 +71,10 @@ class ShootPlan {
     final blocksByDay = {
       for (final day in days)
         day.id: blocks.where((b) => b.documentId == day.id).toList()
-          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)),
+          ..sort((a, b) {
+            final order = a.sortOrder.compareTo(b.sortOrder);
+            return order != 0 ? order : a.id.compareTo(b.id);
+          }),
     };
     final daysOfShot = <int, int>{};
     final scheduledScenes = <int>{};
@@ -167,6 +171,20 @@ class ShootPlanService {
     projectId,
     'mover en el plan de rodaje',
     () => db.arrangeShootDayBlocks(dayId, blockIds, beforeBlockId),
+  );
+
+  /// Añade una franja a [dayId], antes de [beforeBlockId] o al final.
+  Future<void> addStrip({
+    required int projectId,
+    required int dayId,
+    required ShootStripDraft draft,
+    int? beforeBlockId,
+  }) => _recorded(
+    projectId,
+    'añadir franja',
+    () => ShootDayScheduleService(
+      db,
+    ).addStrip(dayId, draft, beforeBlockId: beforeBlockId),
   );
 
   /// Saca [blockIds] de su jornada: vuelven a «Sin asignar».

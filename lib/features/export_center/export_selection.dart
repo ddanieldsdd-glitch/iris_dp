@@ -185,8 +185,26 @@ List<ExportDaySection> resolveExportSections(
           open = <ExportShot>[];
         }
 
+        final dayBlocks =
+            source.plan.blocksByDay[day.id] ?? const <ShootDocumentBlock>[];
+        final withShots = {
+          for (final b in dayBlocks) ?shotById[b.shotId]?.sceneId,
+        };
+        final anyChosen = dayBlocks.any(
+          (b) => selection.blockIds.contains(b.id),
+        );
         var order = 0;
-        for (final block in source.plan.blocksByDay[day.id] ?? const []) {
+        for (final block in dayBlocks) {
+          // Una escena apuntada sin planos ocupa su sitio en la jornada.
+          if (block.blockType == 'scene_header') {
+            final empty = sceneById[block.sceneId];
+            if (empty != null && anyChosen && !withShots.contains(empty.id)) {
+              close();
+              current = null;
+              tracts.add(ExportSceneSection(empty, const []));
+            }
+            continue;
+          }
           final shot = shotById[block.shotId];
           final scene = shot == null ? null : sceneById[shot.sceneId];
           if (shot == null || scene == null) continue;

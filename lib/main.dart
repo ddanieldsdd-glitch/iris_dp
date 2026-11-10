@@ -22,6 +22,7 @@ import 'features/onboarding/onboarding_gate.dart';
 import 'features/projects/projects_screen.dart';
 import 'core/utils/error_log.dart';
 import 'shared/annotations/brushes/auto_import.dart';
+import 'core/notifications/rental_reminders_host.dart';
 
 Future<void> _bootstrapApp() async {
   await AppStorageConfig.ensureLoaded();
@@ -63,12 +64,14 @@ class IrisDPApp extends StatelessWidget {
                   child: AppUpdateGate(
                     child: MediaSyncBinder(
                       child: ScanJobsHost(
-                        child: OnboardingGate(
-                          homeContentBuilder: (_) => const Column(
-                            children: [
-                              AuthRequiredBanner(),
-                              Expanded(child: ProjectsScreen()),
-                            ],
+                        child: RentalRemindersHost(
+                          child: OnboardingGate(
+                            homeContentBuilder: (_) => const Column(
+                              children: [
+                                AuthRequiredBanner(),
+                                Expanded(child: ProjectsScreen()),
+                              ],
+                            ),
                           ),
                         ),
                       ),

@@ -129,4 +129,31 @@ void main() {
       expect(version.read<int>('user_version'), kSchemaVersion);
     },
   );
+
+  test('la migración 62 → 63 crea las reservas y se puede repetir', () async {
+    final dir = Directory.systemTemp.createTempSync('iris_migration_63');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/iris_dp.db');
+
+    final fresh = AppDatabase.forTesting(NativeDatabase(file));
+    final projectId = await fresh.insertProject(
+      ProjectsCompanion.insert(name: 'lala'),
+    );
+    await fresh.customStatement('DROP TABLE rental_items');
+    await fresh.customStatement('DROP TABLE rental_reservations');
+    await fresh.customStatement('DROP TABLE rental_houses');
+    await fresh.close();
+
+    for (var pass = 0; pass < 2; pass++) {
+      final db = AppDatabase.forTesting(
+        NativeDatabase(
+          file,
+          setup: (raw) => raw.execute('PRAGMA user_version = 62'),
+        ),
+      );
+      expect((await db.getProject(projectId))?.name, 'lala');
+      expect(await db.select(db.rentalReservations).get(), isEmpty);
+      await db.close();
+    }
+  });
 }

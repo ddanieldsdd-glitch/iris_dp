@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_button.dart';
@@ -46,8 +47,8 @@ class _SideStoreReminderBannerState extends State<SideStoreReminderBanner> {
     return Material(
       color: palette.warning.withValues(alpha: 0.12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xl,
+        padding: EdgeInsets.symmetric(
+          horizontal: AppLayout.gutter(context, regular: AppSpacing.xl),
           vertical: AppSpacing.md,
         ),
         child: Row(

@@ -11,10 +11,10 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/project_color_scheme.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../shared/history/edit_history.dart';
-import '../../shared/rich_text/script_markup.dart';
-import '../camera_plan/shot_cover.dart';
-import 'shoot_day_order.dart';
+import '../technical_script/technical_script_export.dart';
 import 'shoot_day_screen.dart';
+import 'shoot_day_timeline.dart';
+import 'shoot_day_widgets.dart';
 import '../export_center/export_center_screen.dart';
 import '../export_center/export_selection.dart';
 import 'shoot_plan.dart';
@@ -80,11 +80,18 @@ class ShootDaysBoardScreen extends ConsumerWidget {
               document: ExportDocument.shootingPlan,
             ),
           ),
-          TextButton.icon(
-            onPressed: () => service.addDay(projectId),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Añadir jornada'),
-          ),
+          if (AppLayout.isCompact(context))
+            IconButton(
+              tooltip: 'Añadir jornada',
+              icon: const Icon(Icons.add),
+              onPressed: () => service.addDay(projectId),
+            )
+          else
+            TextButton.icon(
+              onPressed: () => service.addDay(projectId),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Añadir jornada'),
+            ),
           const SizedBox(width: AppSpacing.sm),
         ],
       ),
@@ -121,6 +128,7 @@ class ShootDaysBoardScreen extends ConsumerWidget {
                           ),
                           scenes: {for (final s in scenes.data!) s.id: s},
                           shots: {for (final s in shots.data!) s.id: s},
+                          sites: sites.data ?? const [],
                           colors: ProjectColorScheme.resolve(
                             sites: sites.data ?? const [],
                             sets: sets.data ?? const [],
@@ -144,6 +152,7 @@ class _Board extends StatelessWidget {
   final ShootPlan plan;
   final Map<int, Scene> scenes;
   final Map<int, Shot> shots;
+  final List<LocationSite> sites;
   final ProjectColorScheme colors;
 
   const _Board({
@@ -152,6 +161,7 @@ class _Board extends StatelessWidget {
     required this.plan,
     required this.scenes,
     required this.shots,
+    required this.sites,
     required this.colors,
   });
 
@@ -459,13 +469,15 @@ class _DayColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final blocks = board.plan.blocksByDay[day.id] ?? const [];
-    final byId = {for (final b in blocks) b.id: b};
-    final tracts = groupShootTracts([
-      for (final b in blocks) b.id,
-    ], (id) => byId[id]!.sceneId ?? -1);
+    final entries = buildShootDayEntries(blocks, board.shots);
     final shotCount = blocks.where((b) => b.shotId != null).length;
+    final site = board.sites
+        .where((s) => s.id == day.locationSiteId)
+        .firstOrNull;
+    final hours = shootTimeRange(day.shootFromTime, day.shootToTime);
 
     final header = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: Column(
@@ -475,12 +487,21 @@ class _DayColumn extends StatelessWidget {
               InkWell(
                 onTap: () => _pickDate(context),
                 child: Text(
-                  day.shootDate ?? 'Poner fecha',
+                  day.shootDate == null
+                      ? 'Poner fecha'
+                      : formatShootDate(day.shootDate),
                   style: AppTypography.caption(
                     palette,
                   ).copyWith(color: palette.accent),
                 ),
               ),
+              if (site != null || hours.isNotEmpty)
+                Text(
+                  [if (hours.isNotEmpty) hours, ?site?.name].join(' · '),
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.textPrimary),
+                ),
               Text(
                 '$shotCount plano${shotCount == 1 ? '' : 's'}'
                 '${_duration(blocks)}',
@@ -488,6 +509,20 @@ class _DayColumn extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        IconButton(
+          tooltip: 'Añadir franja',
+          icon: const Icon(Icons.more_time, size: 18),
+          onPressed: () async {
+            final edit = await showShootStripSheet(context, sites: board.sites);
+            if (edit?.draft case final draft?) {
+              await board.service.addStrip(
+                projectId: board.projectId,
+                dayId: day.id,
+                draft: draft,
+              );
+            }
+          },
         ),
         IconButton(
           tooltip: 'Abrir jornada',
@@ -505,61 +540,154 @@ class _DayColumn extends StatelessWidget {
       ],
     );
 
+    int? firstOf(int i) =>
+        i < entries.length ? entries[i].blockIds.first : null;
+
     final tractWidgets = <Widget>[];
-    for (final tract in tracts) {
-      final first = byId[tract.blockIds.first]!;
-      final scene = board.scenes[first.sceneId];
+    for (final (i, entry) in entries.indexed) {
+      final first = blocks.firstWhere((b) => b.id == entry.blockIds.first);
       if (!compact) {
         tractWidgets.add(_DropSlot(board: board, dayId: day.id, before: first));
       }
-      if (scene == null) continue;
-      tractWidgets.add(
-        _Tract(
-          key: ValueKey('tramo-${first.id}'),
-          scene: scene,
-          color: board.colors.sceneColor(scene),
-          subtitle: first.shotId == null
-              ? 'sin planos'
-              : '${tract.blockIds.length} '
-                    'plano${tract.blockIds.length == 1 ? '' : 's'}',
-          compact: compact,
-          drag: _BlocksDrag(tract.blockIds),
-          menu: _blockMenu(tract.blockIds),
-          children: [
-            for (final id in tract.blockIds)
-              if (board.shots[byId[id]!.shotId] case final shot?) ...[
-                _ShotTile(
-                  shot: shot,
-                  days: board.plan.daysOfShot[shot.id] ?? 0,
-                  compact: compact,
-                  drag: _BlocksDrag([id]),
-                  menu: [
-                    ..._blockMenu([id]),
-                    _MenuAction('Repetir en…', (context) async {
-                      final dayId = await board.pickDay(
-                        context,
-                        'Repetir en…',
-                        except: day.id,
-                      );
-                      if (dayId == null) return;
-                      await board.drop(
-                        _ItemsDrag([(sceneId: scene.id, shotId: shot.id)]),
-                        dayId,
-                        null,
-                      );
-                      if (context.mounted) {
-                        AppSnackBar.show(
+      final moves = [
+        if (i > 0)
+          _MenuAction(
+            'Subir',
+            (_) =>
+                board.drop(_BlocksDrag(entry.blockIds), day.id, firstOf(i - 1)),
+          ),
+        if (i + 1 < entries.length)
+          _MenuAction(
+            'Bajar',
+            (_) =>
+                board.drop(_BlocksDrag(entry.blockIds), day.id, firstOf(i + 2)),
+          ),
+      ];
+      switch (entry) {
+        case ShootStripEntry(:final block, :final strip):
+          tractWidgets.add(
+            _draggable(
+              compact,
+              _BlocksDrag(entry.blockIds),
+              ShootStrip.titleOf(block),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: ShootStripCard(
+                  key: ValueKey('franja-${block.id}'),
+                  block: block,
+                  siteName: strip.kind == ShootStripKind.move
+                      ? board.sites
+                            .where((s) => s.uid == strip.siteUid)
+                            .firstOrNull
+                            ?.name
+                      : null,
+                  padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
+                  trailing: _ActionsMenu(
+                    actions: [
+                      _MenuAction('Editar', (context) async {
+                        final edit = await showShootStripSheet(
                           context,
-                          'El plano ${shot.number} está ahora en dos jornadas.',
+                          block: block,
+                          sites: board.sites,
                         );
-                      }
-                    }),
-                  ],
+                        if (edit == null) return;
+                        if (edit.draft case final draft?) {
+                          await ShootDayScheduleService(
+                            board.service.db,
+                          ).updateStrip(block, draft);
+                        } else {
+                          await board.service.remove(
+                            projectId: board.projectId,
+                            blockIds: [block.id],
+                          );
+                        }
+                      }),
+                      ...moves,
+                      ..._blockMenu(entry.blockIds),
+                    ],
+                  ),
                 ),
+              ),
+            ),
+          );
+        case final ShootSceneEntry tract:
+          final scene = board.scenes[tract.sceneId];
+          if (scene == null) continue;
+          final shotBlocks = tract.shotBlocks(board.shots);
+          final schedule = SceneSchedule.of(tract.blocks.first);
+          final time = shootTimeRange(schedule.from, schedule.to);
+          final count = shotBlocks.isEmpty
+              ? 'sin planos'
+              : '${shotBlocks.length} '
+                    'plano${shotBlocks.length == 1 ? '' : 's'}';
+          tractWidgets.add(
+            _Tract(
+              key: ValueKey('tramo-${first.id}'),
+              scene: scene,
+              color: board.colors.sceneColor(scene),
+              subtitle: time.isEmpty ? count : '$time · $count',
+              compact: compact,
+              drag: _BlocksDrag(tract.blockIds),
+              menu: [...moves, ..._blockMenu(tract.blockIds)],
+              children: [
+                for (final (j, block) in shotBlocks.indexed)
+                  if (board.shots[block.shotId] case final shot?) ...[
+                    if (!compact && j > 0)
+                      _DropSlot(board: board, dayId: day.id, before: block),
+                    _ShotTile(
+                      shot: shot,
+                      days: board.plan.daysOfShot[shot.id] ?? 0,
+                      compact: compact,
+                      drag: _BlocksDrag([block.id]),
+                      menu: [
+                        if (j > 0)
+                          _MenuAction(
+                            'Subir',
+                            (_) => board.drop(
+                              _BlocksDrag([block.id]),
+                              day.id,
+                              shotBlocks[j - 1].id,
+                            ),
+                          ),
+                        if (j + 1 < shotBlocks.length)
+                          _MenuAction(
+                            'Bajar',
+                            (_) => board.drop(
+                              _BlocksDrag([block.id]),
+                              day.id,
+                              j + 2 < shotBlocks.length
+                                  ? shotBlocks[j + 2].id
+                                  : firstOf(i + 1),
+                            ),
+                          ),
+                        ..._blockMenu([block.id]),
+                        _MenuAction('Repetir en…', (context) async {
+                          final dayId = await board.pickDay(
+                            context,
+                            'Repetir en…',
+                            except: day.id,
+                          );
+                          if (dayId == null) return;
+                          await board.drop(
+                            _ItemsDrag([(sceneId: scene.id, shotId: shot.id)]),
+                            dayId,
+                            null,
+                          );
+                          if (context.mounted) {
+                            AppSnackBar.show(
+                              context,
+                              'El plano ${shot.number} está ahora en dos '
+                              'jornadas.',
+                            );
+                          }
+                        }),
+                      ],
+                    ),
+                  ],
               ],
-          ],
-        ),
-      );
+            ),
+          );
+      }
     }
 
     final body = compact
@@ -773,7 +901,7 @@ class _Tract extends StatefulWidget {
 }
 
 class _TractState extends State<_Tract> {
-  bool _open = false;
+  bool _open = true;
 
   @override
   Widget build(BuildContext context) {
@@ -847,33 +975,11 @@ class _ShotTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final framing = scriptMarkupToPlain(shot.framing).trim();
-    final title = framing.isEmpty ? 'Plano ${shot.number}' : framing;
     final tile = Padding(
       padding: const EdgeInsets.only(top: AppSpacing.xs),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              width: 64,
-              height: 36,
-              child:
-                  shotCoverThumbnail(shot, cacheWidth: 160) ??
-                  ColoredBox(color: palette.surfaceOverlay),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              '${shot.number} · $title',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.caption(
-                palette,
-              ).copyWith(color: palette.textPrimary),
-            ),
-          ),
+      child: ShootShotRow(
+        shot: shot,
+        trailing: [
           if (days > 1)
             Tooltip(
               message: 'Este plano está en $days jornadas',

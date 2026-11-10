@@ -234,7 +234,9 @@ void main() {
     expect(find.textContaining('Lluvia débil · 13–22 °C'), findsOneWidget);
     expect(find.textContaining('Previsión descargada el'), findsOneWidget);
 
-    // Quitar el viento del documento.
+    // Quitar el viento del documento: va dentro de las opciones plegadas.
+    await tester.tap(find.text('Qué sale en la jornada y en su documento'));
+    await settle();
     await tester.tap(find.text('Viento'));
     await settle();
     expect(find.textContaining('rachas'), findsNothing);
@@ -250,17 +252,17 @@ void main() {
     // Orden de rodaje plano a plano, con el número del guion técnico.
     await tester.tap(find.textContaining('Planos ('));
     await settle();
-    expect(find.text('Esc. 6 · Plano 1 · P seguimiento'), findsOneWidget);
-    expect(find.text('Esc. 1 · Plano 1 · PP de ALI'), findsOneWidget);
+    expect(find.text('1 · P seguimiento'), findsOneWidget);
+    expect(find.text('1 · PP de ALI'), findsOneWidget);
     final first = tester.getTopLeft(
-      find.text('Esc. 6 · Plano 1 · P seguimiento'),
+      find.text('1 · P seguimiento'),
     );
-    final second = tester.getTopLeft(find.text('Esc. 1 · Plano 1 · PP de ALI'));
+    final second = tester.getTopLeft(find.text('1 · PP de ALI'));
     expect(first.dy, lessThan(second.dy));
 
     await tester.tap(find.byTooltip('Quitar de la jornada').first);
     await settle();
-    expect(find.text('Esc. 6 · Plano 1 · P seguimiento'), findsNothing);
+    expect(find.text('1 · P seguimiento'), findsNothing);
     // El plano sigue en el guion técnico.
     expect(await db.getShotById(shotIds[2]), isNotNull);
 
@@ -268,7 +270,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('la jornada no ubica: manda a Localizaciones y refleja el cambio', (
+  testWidgets('la jornada ofrece ubicar y refleja el cambio de la localización', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1500, 1000);
@@ -298,9 +300,8 @@ void main() {
     expect(find.textContaining('Sin ubicar en el mapa'), findsOneWidget);
     expect(find.textContaining(RegExp(r'Amanecer \d')), findsNothing);
 
-    // La ubicación se fija en Localizaciones, no aquí.
-    expect(find.text('Ubicar'), findsNothing);
-    expect(find.text('Abrir localización'), findsOneWidget);
+    // Ubicar desde aquí escribe en la localización: se ve en toda la app.
+    expect(find.text('Ubicar'), findsOneWidget);
 
     await db.setSitePlace(
       siteId,
@@ -309,7 +310,8 @@ void main() {
       placeLabel: 'Barcelona, Cataluña, España',
     );
     await settle();
-    expect(find.text('Abrir localización'), findsNothing);
+    expect(find.text('Ubicar'), findsNothing);
+    expect(find.text('Cambiar'), findsOneWidget);
 
     final site = await db.getSiteById(siteId);
     expect(site!.latitude, closeTo(41.39, 0.01));

@@ -12,6 +12,10 @@ abstract final class ShootBlockType {
   static const pageBreak = 'page_break';
   static const spacer = 'spacer';
 
+  /// Franja del orden de una jornada (montaje, comida…). Solo existe en las
+  /// jornadas: no está en [all] para no salir en el editor libre.
+  static const schedule = 'schedule';
+
   static const all = [
     sectionHeader,
     characterList,

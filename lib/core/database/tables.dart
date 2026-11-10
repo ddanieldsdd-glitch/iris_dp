@@ -1053,3 +1053,95 @@ class LocationCaptures extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
+
+/// Casa de alquiler o punto de recogida de un proyecto.
+@DataClassName('RentalHouse')
+class RentalHouses extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get uid => text()();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get name => text()();
+  TextColumn get address => text().nullable()();
+  TextColumn get contact => text().nullable()();
+  TextColumn get notes => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+
+  /// Borrado lógico: al mezclar, una lista vacía nunca significa «borrado».
+  TextColumn get deletedAt => text().nullable()();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {projectId, uid},
+  ];
+}
+
+/// Una reserva o lista de material: lo que se recoge de una vez en una casa.
+/// [pickupAt] y [returnAt] son hora de pared, `yyyy-MM-ddTHH:mm`.
+@DataClassName('RentalReservation')
+class RentalReservations extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get uid => text()();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get houseUid => text().nullable()();
+  TextColumn get number => text().nullable()();
+  TextColumn get externalId => text().nullable()();
+  TextColumn get sourceStatus => text().nullable()();
+  TextColumn get title => text()();
+  TextColumn get responsible => text().nullable()();
+  TextColumn get pickupAt => text().nullable()();
+  TextColumn get returnAt => text().nullable()();
+  TextColumn get pickedUpAt => text().nullable()();
+  TextColumn get pickedUpDevice => text().nullable()();
+  TextColumn get returnedAt => text().nullable()();
+  TextColumn get returnedDevice => text().nullable()();
+  TextColumn get notes => text().nullable()();
+  TextColumn get sourceFileName => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  TextColumn get deletedAt => text().nullable()();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {projectId, uid},
+  ];
+}
+
+/// Un ítem de una reserva. Un kit es un ítem y su contenido apunta a él con
+/// [parentUid].
+@DataClassName('RentalItem')
+class RentalItems extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get uid => text()();
+  IntColumn get projectId => integer().references(Projects, #id)();
+  TextColumn get reservationUid => text()();
+  TextColumn get parentUid => text().nullable()();
+
+  /// `item` o `note` (lo apuntado sin cantidad: «Retales de gelatinas»).
+  TextColumn get kind => text().withDefault(const Constant('item'))();
+  TextColumn get section => text().nullable()();
+
+  /// Subgrupo dentro de un kit: «Maleta 1».
+  TextColumn get groupLabel => text().nullable()();
+  TextColumn get name => text()();
+  RealColumn get quantity => real().nullable()();
+
+  /// Falso si el importador no la tuvo clara: se revisa antes de guardar.
+  BoolColumn get quantityCertain =>
+      boolean().withDefault(const Constant(true))();
+  TextColumn get lot => text().nullable()();
+  TextColumn get serial => text().nullable()();
+  TextColumn get note => text().nullable()();
+  TextColumn get rawText => text().nullable()();
+  TextColumn get catalogRef => text().nullable()();
+  TextColumn get pickupCheckedAt => text().nullable()();
+  TextColumn get returnCheckedAt => text().nullable()();
+
+  /// Ya no viene en la lista reimportada, pero se había comprobado.
+  TextColumn get removedFromSourceAt => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  TextColumn get deletedAt => text().nullable()();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {projectId, uid},
+  ];
+}
