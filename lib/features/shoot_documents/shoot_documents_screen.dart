@@ -22,6 +22,7 @@ import 'shoot_day_on_set.dart';
 import 'shoot_day_screen.dart';
 import '../../core/theme/app_layout.dart';
 import '../settings/settings_launcher.dart';
+import 'import/shoot_plan_import_screen.dart';
 import 'shoot_days_board.dart';
 import 'shoot_plan.dart';
 import '../export_center/export_center_screen.dart';
@@ -140,6 +141,14 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
                             Icons.calendar_month_outlined,
                             'Calendario',
                             () => ShootCalendarScreen.open(
+                              context,
+                              projectId: widget.projectId,
+                            ),
+                          ),
+                          _Tool(
+                            Icons.playlist_add_outlined,
+                            'Importar plan',
+                            () => openShootPlanImport(
                               context,
                               projectId: widget.projectId,
                             ),
@@ -315,13 +324,13 @@ class _ShootDocumentsScreenState extends ConsumerState<ShootDocumentsScreen> {
                                 const SizedBox(width: 6),
                                 Flexible(
                                   child: Text(
-                                  group.key == null
-                                      ? 'Sin fecha'
-                                      : formatShootDate(group.key),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.label(palette),
-                                ),
+                                    group.key == null
+                                        ? 'Sin fecha'
+                                        : formatShootDate(group.key),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.label(palette),
+                                  ),
                                 ),
                               ],
                             ),
@@ -640,9 +649,7 @@ class _DayGlance extends ConsumerWidget {
           final shotById = {
             for (final s in allShots.data ?? const <Shot>[]) s.id: s,
           };
-          final shots = [
-            for (final b in blocks) ?shotById[b.shotId],
-          ];
+          final shots = [for (final b in blocks) ?shotById[b.shotId]];
           final line = [
             if (doc.shootFromTime != null)
               doc.shootToTime == null

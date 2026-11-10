@@ -884,6 +884,7 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
           title: title,
           schedule: SceneSchedule.of(entry.blocks.first),
           shots: [for (final b in shotBlocks) shots[b.shotId]!],
+          times: [for (final b in shotBlocks) ShotTime.of(b)],
           menu: _menu([
             (
               label: 'Hora y aclaración',
@@ -1025,6 +1026,7 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
               : ShootShotRow(
                   shot: row.shot!,
                   thumbWidth: 72,
+                  time: ShotTime.of(row.block),
                   trailing: [_removeButton(palette, removed)],
                 ),
         ),
@@ -1054,6 +1056,7 @@ class _SceneCard extends StatelessWidget {
   final String title;
   final SceneSchedule schedule;
   final List<Shot> shots;
+  final List<ShotTime> times;
   final Widget menu;
 
   const _SceneCard({
@@ -1061,6 +1064,7 @@ class _SceneCard extends StatelessWidget {
     required this.title,
     required this.schedule,
     required this.shots,
+    required this.times,
     required this.menu,
   });
 
@@ -1131,7 +1135,10 @@ class _SceneCard extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [for (final shot in shots) ShootShotTile(shot: shot)],
+              children: [
+                for (final (i, shot) in shots.indexed)
+                  ShootShotTile(shot: shot, time: times[i]),
+              ],
             ),
         ],
       ),

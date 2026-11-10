@@ -443,6 +443,7 @@ class OnSetList extends StatelessWidget {
             shot: shot,
             scene: scenes[tract.sceneId],
             mark: OnSetMark.of(block),
+            time: ShotTime.of(block),
             onMark: (mark) => onMark(block, mark),
             onHide: onHideShot == null ? null : () => onHideShot!(shot),
           ),
@@ -514,6 +515,9 @@ class OnSetShotCard extends StatelessWidget {
   final Shot shot;
   final Scene? scene;
   final OnSetMark mark;
+
+  /// Hora y apunte del plan de rodaje.
+  final ShotTime time;
   final ValueChanged<OnSetMark>? onMark;
 
   /// Lo quita de la vista de este aparato.
@@ -525,6 +529,7 @@ class OnSetShotCard extends StatelessWidget {
     required this.shot,
     required this.scene,
     this.mark = const OnSetMark(),
+    this.time = const ShotTime(),
     this.onMark,
     this.onHide,
   });
@@ -585,6 +590,10 @@ class OnSetShotCard extends StatelessWidget {
                         if (optics.isNotEmpty) ...[
                           const SizedBox(height: 2),
                           Text(optics, style: AppTypography.mono(palette)),
+                        ],
+                        if (!time.isEmpty) ...[
+                          const SizedBox(height: 2),
+                          ShotTimeText(time: time),
                         ],
                       ],
                     ),
