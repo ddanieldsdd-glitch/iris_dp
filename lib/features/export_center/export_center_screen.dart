@@ -5,6 +5,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../core/database/app_database.dart';
@@ -13,6 +15,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/export_cancel.dart';
+import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/share_origin.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../../core/utils/user_error.dart';
@@ -816,6 +819,63 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
       ),
   ];
 
+  /// Copia la imagen elegida a la carpeta de la app: la ruta original puede
+  /// dejar de valer, sobre todo en el iPad.
+  Future<String?> _importPlanImage() async {
+    final file = await UserFilePicker.pickImage(dialogTitle: 'Elegir imagen');
+    if (file == null) return null;
+    final bytes =
+        file.bytes ??
+        (file.path == null ? null : await File(file.path!).readAsBytes());
+    if (bytes == null || bytes.isEmpty) return null;
+    final folder = Directory(
+      p.join((await getApplicationSupportDirectory()).path, 'export_center'),
+    );
+    await folder.create(recursive: true);
+    final target = File(
+      p.join(
+        folder.path,
+        '${widget.projectId}_${DateTime.now().microsecondsSinceEpoch}'
+        '${p.extension(file.name)}',
+      ),
+    );
+    await target.writeAsBytes(bytes);
+    return target.path;
+  }
+
+  Widget _planImageRow(
+    AppPalette palette, {
+    required String title,
+    required String empty,
+    required String? path,
+    required ValueChanged<String> onPick,
+    required VoidCallback onClear,
+  }) => Padding(
+    padding: const EdgeInsets.only(top: 2),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            '$title · ${path == null ? empty : 'Imagen'}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.bodyMedium(palette),
+          ),
+        ),
+        if (path != null)
+          TextButton(onPressed: onClear, child: const Text('Quitar')),
+        TextButton.icon(
+          onPressed: () async {
+            final imported = await _importPlanImage();
+            if (imported != null && mounted) onPick(imported);
+          },
+          icon: const Icon(Icons.image_outlined, size: 16),
+          label: Text(path == null ? 'Añadir' : 'Cambiar'),
+        ),
+      ],
+    ),
+  );
+
   List<Widget> _format(AppPalette palette) {
     final canSplitDays = _selection.scope == ExportScope.days;
     final split = _effective.split;
@@ -850,6 +910,26 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
           ),
         ),
         if (_options.planOverviews) ..._overviewRows(palette),
+        _planImageRow(
+          palette,
+          title: 'Imagen de portada',
+          empty: 'Banda negra',
+          path: _options.planCoverImage,
+          onPick: (path) =>
+              _setOptions(_options.copyWith(planCoverImage: path)),
+          onClear: () =>
+              _setOptions(_options.copyWith(clearPlanCoverImage: true)),
+        ),
+        _planImageRow(
+          palette,
+          title: 'Fondo de las plantas',
+          empty: 'Negro',
+          path: _options.planBackdropImage,
+          onPick: (path) =>
+              _setOptions(_options.copyWith(planBackdropImage: path)),
+          onClear: () =>
+              _setOptions(_options.copyWith(clearPlanBackdropImage: true)),
+        ),
       ],
       ExportDocument.technicalScript => _scriptFormat(palette),
     };

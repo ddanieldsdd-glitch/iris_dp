@@ -237,6 +237,9 @@ class PlanThumbnail extends StatelessWidget {
     /// Con la luz que cae en el suelo; ver [CameraPlanPainter.showBeams].
     bool showBeams = true,
 
+    /// Imagen en lugar del fondo negro.
+    ui.Image? documentBackdrop,
+
     /// En JPEG: el PDF lo mete tal cual, y un PNG lo descomprime y lo vuelve
     /// a comprimir en el hilo de la interfaz.
     bool jpeg = false,
@@ -282,6 +285,7 @@ class PlanThumbnail extends StatelessWidget {
       backgroundRect: backgroundRect,
       backgroundOpacity: backgroundOpacity,
       documentMarks: documentMarks,
+      documentBackdrop: documentBackdrop,
       showBeams: showBeams,
     ).paint(canvas, size);
     for (final drawing in drawings) {

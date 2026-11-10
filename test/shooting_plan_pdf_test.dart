@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
+import 'package:iris_dp/features/export_center/export_options.dart';
 import 'package:iris_dp/shared/pdf_export/shooting_plan_pdf.dart';
 
 ShootingPlanBlock _block(int n) => ShootingPlanBlock(
@@ -24,6 +25,35 @@ void main() {
     ShootingPlanPdf.debugEntryPages = {};
   });
   tearDown(() => ShootingPlanPdf.debugEntryPages = null);
+
+  test('las imágenes del documento se recuerdan y se pueden quitar', () {
+    final chosen = const ExportOptions().copyWith(
+      planCoverImage: '/a/portada.jpg',
+      planBackdropImage: '/a/fondo.jpg',
+    );
+    final back = ExportOptions.fromJson(chosen.toJson());
+    expect(back.planCoverImage, '/a/portada.jpg');
+    expect(back.planBackdropImage, '/a/fondo.jpg');
+    final cleared = back.copyWith(clearPlanCoverImage: true);
+    expect(cleared.planCoverImage, isNull);
+    expect(cleared.planBackdropImage, '/a/fondo.jpg');
+  });
+
+  test('la portada admite una imagen', () async {
+    final bytes = await ShootingPlanPdf.compose(
+      projectName: 'Prueba',
+      days: [
+        ShootingPlanDay('Orden', [_entry('ESCENA 1 (1)', 1)]),
+      ],
+      coverImage: Uint8List.fromList(
+        img.encodeJpg(
+          img.Image(width: 32, height: 9)..clear(img.ColorRgb8(80, 40, 20)),
+        ),
+      ),
+    );
+    expect(bytes, isNotEmpty);
+    expect(latin1.decode(bytes), matches(RegExp(r'/Subtype\s*/Image')));
+  });
 
   test('un plano lleva todas sus imágenes en el PDF', () async {
     Uint8List frame(int shade) => Uint8List.fromList(

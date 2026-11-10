@@ -188,7 +188,8 @@ class PlanRenderer {
     );
   }
 
-  /// Pinta [picture]. Con [view], esa parte en lugar de su sección.
+  /// Pinta [picture]. Con [view], esa parte en lugar de su sección. Con
+  /// [backdrop], esa imagen en lugar del fondo negro.
   Future<Uint8List?> png(
     PlanPicture picture, {
     Size size = const Size(640, 420),
@@ -196,7 +197,8 @@ class PlanRenderer {
     Rect? view,
     bool jpeg = false,
     bool beams = true,
-  }) => PlanThumbnail.renderPng(
+    String? backdrop,
+  }) async => PlanThumbnail.renderPng(
     elements: picture.elements,
     inherited: picture.inherited,
     drawings: picture.drawings,
@@ -210,6 +212,7 @@ class PlanRenderer {
     backgroundOpacity: picture.backgroundOpacity,
     pixelRatio: pixelRatio,
     documentMarks: true,
+    documentBackdrop: await _decode(backdrop),
     showBeams: beams,
     jpeg: jpeg,
   );
@@ -221,12 +224,14 @@ class PlanRenderer {
     bool beams = true,
     Size size = const Size(640, 420),
     double pixelRatio = 1,
+    String? backdrop,
   }) async => png(
     await shotPicture(shot, light: light),
     size: size,
     pixelRatio: pixelRatio,
     jpeg: true,
     beams: beams,
+    backdrop: backdrop,
   );
 
   /// La planta general de un esquema de luz, con su sección si tiene.
@@ -236,12 +241,14 @@ class PlanRenderer {
     bool beams = true,
     Size size = const Size(640, 420),
     double pixelRatio = 1,
+    String? backdrop,
   }) async => png(
     await setupPicture(setup, light: light),
     size: size,
     pixelRatio: pixelRatio,
     jpeg: true,
     beams: beams,
+    backdrop: backdrop,
   );
 }
 
