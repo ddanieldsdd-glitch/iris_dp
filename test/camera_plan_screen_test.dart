@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -6,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:iris_dp/core/sync/plan_library_store.dart';
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
 import 'package:iris_dp/core/theme/app_theme.dart';
@@ -470,6 +473,11 @@ void main() {
         'arrastran a un set nuevo y a otro set de la localización', (
       tester,
     ) async {
+    // Sin canal de carpetas en la prueba: una biblioteca vacía y a mano.
+    PlanLibraryStore.local = PlanLibraryStore(
+      Directory('${Directory.systemTemp.path}/iris_sin_biblioteca'),
+    );
+    addTearDown(() => PlanLibraryStore.local = null);
       await seed(
         tester,
         siteJson: '{"version":2,"elements":[${element('wall', 300, 300)}]}',

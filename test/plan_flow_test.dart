@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:iris_dp/core/sync/plan_library_store.dart';
 import 'package:iris_dp/core/database/app_database.dart';
 import 'package:iris_dp/core/database/database_provider.dart';
 import 'package:iris_dp/core/settings/app_prefs.dart';
@@ -165,6 +168,11 @@ void main() {
   testWidgets('set nuevo: «Como el set anterior» copia sus luces', (
     tester,
   ) async {
+    // Sin canal de carpetas en la prueba: una biblioteca vacía y a mano.
+    PlanLibraryStore.local = PlanLibraryStore(
+      Directory('${Directory.systemTemp.path}/iris_sin_biblioteca'),
+    );
+    addTearDown(() => PlanLibraryStore.local = null);
     late LightSetup previous;
     await tester.runAsync(() async {
       final repo = FloorPlanRepository(db);
