@@ -8,27 +8,32 @@ import '../../core/theme/app_typography.dart';
 import 'camera_plan_editor.dart';
 import 'floor_plan_repository.dart';
 import 'plan_guide.dart';
+import 'plan_target.dart';
+import 'plan_workspace_screen.dart';
 
 enum CameraPlanStatus { empty, inheritable, hasPlan }
 
-/// Abre la planta de un plano. Si le falta la localización o el set, abre
-/// antes el plano maestro con la guía localización › sets › planos.
+/// Abre la planta de un plano en la pantalla de trabajo. Si le falta la
+/// localización o el set, abre antes el plano maestro con la guía
+/// localización › sets › planos. Con [fromScript], debajo queda el guion
+/// técnico y «Ver en el guion» vuelve a él.
 Future<void> openShotPlan(
   BuildContext context,
   AppDatabase db,
   Shot shot, {
   required String label,
+  bool fromScript = false,
 }) async {
   final navigator = Navigator.of(context);
   var state = await PlanEntryState.resolve(db, shot);
   if (!context.mounted) return;
   if (state.need == PlanEntryNeed.none) {
-    navigator.push(
+    await navigator.push(
       MaterialPageRoute<void>(
-        builder: (_) => CameraPlanEditor.shot(
+        builder: (_) => PlanWorkspaceScreen(
           projectId: shot.projectId,
-          shotId: shot.id,
-          shotLabel: label,
+          initial: PlanTarget.shot(shot.id, label),
+          fromScript: fromScript,
         ),
       ),
     );
@@ -43,7 +48,7 @@ Future<void> openShotPlan(
   }
   final site = state.site;
   if (site == null) return;
-  navigator.push(
+  await navigator.push(
     MaterialPageRoute<void>(
       builder: (_) => CameraPlanEditor.site(
         projectId: shot.projectId,
@@ -54,6 +59,7 @@ Future<void> openShotPlan(
           shotId: shot.id,
           shotLabel: label,
           startStep: state.startStep,
+          fromScript: fromScript,
         ),
       ),
     ),

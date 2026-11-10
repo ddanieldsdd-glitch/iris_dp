@@ -52,7 +52,7 @@ import 'plan_sketch.dart' show moveDrawingToFreehandSketch;
 import 'plan_data.dart';
 import 'plan_sketch_promote.dart';
 import 'plan_view_picker.dart';
-import 'plan_start_from.dart' show createSetupForSet;
+import 'plan_start_from.dart' show createSetupAsked;
 import 'plan_light_map.dart';
 import 'plan_project_gear_dialog.dart';
 import 'plan_marks.dart';
@@ -78,6 +78,8 @@ import 'plan_piece_controls.dart';
 import 'plan_segment.dart';
 import 'plan_strip_link.dart';
 import 'plan_target.dart';
+import 'plan_workspace_screen.dart';
+import '../technical_script/technical_script_screen.dart';
 import 'shot_route.dart';
 import '../locations/location_scan_service.dart';
 import 'plan_element_compat.dart';
@@ -1253,6 +1255,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
     final sitesById = {for (final s in sites) s.id: s};
     final targets = <CameraPlanNavTarget>[];
+    final shotsByScene = <int, List<Shot>>{};
+    for (final shot in await db.getShotsForProject(widget.projectId)) {
+      (shotsByScene[shot.sceneId] ??= []).add(shot);
+    }
+    for (final shots in shotsByScene.values) {
+      shots.sort((a, b) {
+        final byOrder = a.sortOrder.compareTo(b.sortOrder);
+        return byOrder != 0 ? byOrder : a.number.compareTo(b.number);
+      });
+    }
 
     for (final scene in scenes) {
       final color = colors.sceneColor(scene);
@@ -1264,8 +1276,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           (scene.locationPureName.trim().isNotEmpty
               ? scene.locationPureName.trim()
               : 'Sin localización');
-      final shots = await db.getShotsForScene(scene.id);
-      for (final shot in shots) {
+      for (final shot in shotsByScene[scene.id] ?? const <Shot>[]) {
         targets.add(
           CameraPlanNavTarget(
             shotId: shot.id,
@@ -1309,6 +1320,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     await db.saveShotRoute(shot.id, ShotRoute.encode(next));
     // El primer tramo es también el esquema «del plano».
     if (index == 0) await db.assignLightSetupToShot(shot.id, setupId);
+  }
+
+  /// Pasa al plano anterior o siguiente, en el orden del guion.
+  void _stepShot(int delta) {
+    final current = _navTargets.indexWhere((t) => t.shotId == widget.shotId);
+    if (current < 0) return;
+    final next = current + delta;
+    if (next < 0 || next >= _navTargets.length) return;
+    _jumpToShot(_navTargets[next]);
   }
 
   void _jumpToShot(CameraPlanNavTarget target) {
@@ -1429,17 +1449,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     LightSetup? chosen;
     if (choice == create) {
       final set = _linkedSet;
-      chosen = set != null
-          ? await createSetupForSet(
-              context,
-              ref.read(databaseProvider),
-              projectId: widget.projectId,
-              setId: set.id,
-            )
-          : await _repo.createLightSetup(
-              projectId: widget.projectId,
-              siteId: _linkedSite?.id,
-            );
+      final previous = await _previousShotSetup() ?? _lightSetup;
+      if (!mounted) return;
+      chosen = await createSetupAsked(
+        context,
+        ref.read(databaseProvider),
+        projectId: widget.projectId,
+        setId: set?.id,
+        siteId: set == null ? _linkedSite?.id : null,
+        previous: previous,
+      );
       if (chosen == null || !mounted) return;
     } else if (choice != none) {
       chosen = setups.firstWhere((s) => s.id == choice);
@@ -1459,9 +1478,68 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   /// El esquema de luz activo; lo crea si aún no hay ninguno.
+  /// El set del plano anterior de la escena que tenga uno.
+  Future<LightSetup?> _previousShotSetup() async {
+    final shot = _shot;
+    if (shot == null) return null;
+    final db = ref.read(databaseProvider);
+    final earlier = (await db.getShotsForScene(shot.sceneId))
+        .where(
+          (s) =>
+              s.id != shot.id &&
+              s.lightSetupId != null &&
+              s.sortOrder <= shot.sortOrder,
+        )
+        .toList();
+    if (earlier.isEmpty) return null;
+    earlier.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return db.getLightSetupById(earlier.last.lightSetupId!);
+  }
+
+  /// ¿La luz va al set del plano anterior o a uno nuevo?
+  Future<bool> _askUsePrevious(LightSetup previous) async {
+    final palette = context.palette;
+    final use = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.surfaceElevated,
+        title: Text(
+          'Este plano aún no tiene set',
+          style: AppTypography.titleMedium(palette),
+        ),
+        content: Text(
+          'La luz se guarda en un set. El plano anterior usa '
+          '«${previous.name}».',
+          style: AppTypography.bodyMedium(palette),
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('setup-new'),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Crear uno nuevo'),
+          ),
+          TextButton(
+            key: const ValueKey('setup-previous'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Usar «${previous.name}»'),
+          ),
+        ],
+      ),
+    );
+    return use ?? false;
+  }
+
   Future<LightSetup> _ensureLightSetup() async {
     final existing = _lightSetup;
     if (existing != null) return existing;
+    final previous = await _previousShotSetup();
+    if (previous != null && mounted && await _askUsePrevious(previous)) {
+      await _persistAllElements();
+      await _assignSetup(_shot!, previous.id);
+      if (mounted) await _load();
+      return previous;
+    }
     final created = await _repo.createLightSetup(
       projectId: widget.projectId,
       setId: _linkedSet?.id,
@@ -1981,6 +2059,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               camera: camera.cameraLetter,
               options: options,
               sceneId: _scene?.id,
+              onShowInScript: (shotId) {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => TechnicalScriptScreen(
+                      projectId: widget.projectId,
+                      initialShotId: shotId,
+                    ),
+                  ),
+                );
+              },
             ),
           );
     if (picked == null || !mounted) return;
@@ -3142,10 +3231,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
-        builder: (_) => CameraPlanEditor.shot(
+        builder: (_) => PlanWorkspaceScreen(
           projectId: widget.projectId,
-          shotId: shotId,
-          shotLabel: label,
+          initial: PlanTarget.shot(shotId, label),
+          fromScript: guide?.fromScript ?? false,
         ),
       ),
     );
@@ -4916,6 +5005,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       ('Mover 1 cm / 10 cm', 'Flechas / ⇧ + flechas'),
       ('Girar 15°', 'R / ⇧R (al arrastrar el asa, ⇧ va de 15 en 15)'),
       ('Herramientas', 'V mover · W pared · M medir · Esc soltar'),
+      ('Plano anterior / siguiente', '$modKey← / $modKey→'),
     ];
     final palette = context.palette;
     showDialog<void>(
@@ -5248,6 +5338,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     const SingleActivator(LogicalKeyboardKey.keyM): () =>
         _setTool(PlanTool.measure),
     for (final (meta, control) in const [(true, false), (false, true)]) ...{
+      SingleActivator(
+        LogicalKeyboardKey.arrowLeft,
+        meta: meta,
+        control: control,
+      ): () =>
+          _stepShot(-1),
+      SingleActivator(
+        LogicalKeyboardKey.arrowRight,
+        meta: meta,
+        control: control,
+      ): () =>
+          _stepShot(1),
       SingleActivator(LogicalKeyboardKey.keyC, meta: meta, control: control):
           _copySelection,
       SingleActivator(LogicalKeyboardKey.keyX, meta: meta, control: control):

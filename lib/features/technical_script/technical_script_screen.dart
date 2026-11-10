@@ -32,6 +32,9 @@ import '../../shared/history/shot_edits.dart';
 import '../camera_plan/plan_data.dart';
 import '../camera_plan/plan_sketch.dart';
 import '../camera_plan/plan_thumbnail.dart';
+import '../camera_plan/project_focus.dart';
+import '../camera_plan/shot_create.dart';
+import '../../core/navigation/route_observer.dart';
 import '../goodnotes/goodnotes_pdf_actions.dart';
 import '../look_bible/look_bible_model.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
@@ -194,7 +197,15 @@ Map<String, String> _cellStyles(Shot shot) {
 
 class TechnicalScriptScreen extends ConsumerWidget {
   final int projectId;
-  const TechnicalScriptScreen({super.key, required this.projectId});
+
+  /// El plano al que llevar al abrir; sin él, el último en el que se trabajó.
+  final int? initialShotId;
+
+  const TechnicalScriptScreen({
+    super.key,
+    required this.projectId,
+    this.initialShotId,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -323,7 +334,11 @@ class TechnicalScriptScreen extends ConsumerWidget {
                     theme: theme,
                     child: PlanDataScope(
                       data: data,
-                      child: _ScriptTable(data: data, settings: settings),
+                      child: _ScriptTable(
+                        data: data,
+                        settings: settings,
+                        initialShotId: initialShotId,
+                      ),
                     ),
                   );
                 },
@@ -1018,14 +1033,109 @@ class _ScriptReadList extends ConsumerWidget {
 class _ScriptTable extends ConsumerStatefulWidget {
   final PlanProjectData data;
   final TechnicalScriptSettings settings;
+  final int? initialShotId;
 
-  const _ScriptTable({required this.data, required this.settings});
+  const _ScriptTable({
+    required this.data,
+    required this.settings,
+    this.initialShotId,
+  });
 
   @override
   ConsumerState<_ScriptTable> createState() => _ScriptTableState();
 }
 
-class _ScriptTableState extends ConsumerState<_ScriptTable> {
+class _ScriptTableState extends ConsumerState<_ScriptTable> with RouteAware {
+  final _scroll = ScrollController();
+
+  /// Filas construidas ahora mismo, para encontrar una al volver a ella.
+  final _anchors = <int, BuildContext>{};
+
+  /// Posición de cada plano en la lista.
+  final _shotIndex = <int, int>{};
+
+  /// El plano en foco al salir a otra pantalla.
+  int? _focusWhenLeft;
+
+  int get _projectId => widget.data.scenes.first.projectId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealInitial());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) routeObserver.subscribe(this, route);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didPushNext() {
+    _focusWhenLeft = ref.read(projectFocusProvider(_projectId)).shotId;
+  }
+
+  @override
+  void didPopNext() {
+    final shotId = ref.read(projectFocusProvider(_projectId)).shotId;
+    if (shotId == null || shotId == _focusWhenLeft) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _reveal(shotId);
+    });
+  }
+
+  Future<void> _revealInitial() async {
+    if (!mounted) return;
+    final notifier = ref.read(projectFocusProvider(_projectId).notifier);
+    final provider = projectFocusProvider(_projectId);
+    await notifier.ready;
+    if (!mounted) return;
+    final shotId = widget.initialShotId ?? ref.read(provider).shotId;
+    if (shotId != null) await _reveal(shotId);
+  }
+
+  /// Lleva a la fila de [shotId] y la deja marcada. Las filas se construyen
+  /// a medida que se ven y miden distinto: se busca por mitades.
+  Future<void> _reveal(int shotId) async {
+    final index = _shotIndex[shotId];
+    if (index == null || !_scroll.hasClients) return;
+    ref.read(_activeShotProvider.notifier).state = shotId;
+    var low = 0.0;
+    var high = _scroll.position.maxScrollExtent;
+    for (var attempt = 0; attempt < 20 && mounted; attempt++) {
+      final row = _anchors[shotId]?.findRenderObject();
+      if (row != null) {
+        await _scroll.position.ensureVisible(
+          row,
+          alignment: 0.25,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
+        return;
+      }
+      final built = [for (final id in _anchors.keys) ?_shotIndex[id]];
+      if (built.isEmpty) return;
+      final position = _scroll.position;
+      if (index > built.reduce(math.max)) {
+        low = position.pixels;
+        high = math.max(high, position.maxScrollExtent);
+      } else {
+        high = position.pixels;
+      }
+      _scroll.jumpTo((low + high) / 2);
+      await WidgetsBinding.instance.endOfFrame;
+    }
+  }
+
   /// Orden recién soltado en cada escena, mientras la base de datos no lo
   /// devuelve.
   final _pendingOrders = <int, List<int>>{};
@@ -1120,6 +1230,7 @@ class _ScriptTableState extends ConsumerState<_ScriptTable> {
     final data = widget.data;
     final items = <({Key key, WidgetBuilder build})>[];
     final shown = <int>{};
+    _shotIndex.clear();
     for (final scene in data.scenes) {
       final shots = _orderedShots(scene.id);
       final sceneColor = data.colors.sceneColor(scene);
@@ -1150,9 +1261,14 @@ class _ScriptTableState extends ConsumerState<_ScriptTable> {
             sceneId: scene.id,
             shotId: shot.id,
             onDrop: (drag) => _dropBefore(scene, shots, drag, i),
-            child: _rowFor(shot, scene, cols),
+            child: _RowAnchor(
+              shotId: shot.id,
+              anchors: _anchors,
+              child: _rowFor(shot, scene, cols),
+            ),
           ),
         ));
+        _shotIndex[shot.id] = items.length - 1;
       }
       items.add((
         key: ValueKey<String>('add-${scene.id}'),
@@ -1168,14 +1284,7 @@ class _ScriptTableState extends ConsumerState<_ScriptTable> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
-                  onPressed: () => db.insertShot(
-                    ShotsCompanion.insert(
-                      sceneId: scene.id,
-                      projectId: scene.projectId,
-                      number: shots.length + 1,
-                      sortOrder: Value(shots.length),
-                    ),
-                  ),
+                  onPressed: () => createShotInScene(db, scene, shots),
                   icon: Icon(Icons.add, color: palette.accent, size: 16),
                   label: Text(
                     'Añadir plano',
@@ -1215,6 +1324,7 @@ class _ScriptTableState extends ConsumerState<_ScriptTable> {
         final items = _items(cols);
         final indexOf = {for (final (i, item) in items.indexed) item.key: i};
         final table = ListView.builder(
+          controller: _scroll,
           padding: const EdgeInsets.only(bottom: AppSpacing.xl),
           cacheExtent: 500,
           itemCount: items.length,
@@ -1240,6 +1350,41 @@ class _ScriptTableState extends ConsumerState<_ScriptTable> {
 
 const _newSceneKey = ValueKey<String>('new-scene');
 
+/// Apunta en [anchors] la fila mientras está construida.
+class _RowAnchor extends StatefulWidget {
+  final int shotId;
+  final Map<int, BuildContext> anchors;
+  final Widget child;
+
+  const _RowAnchor({
+    required this.shotId,
+    required this.anchors,
+    required this.child,
+  });
+
+  @override
+  State<_RowAnchor> createState() => _RowAnchorState();
+}
+
+class _RowAnchorState extends State<_RowAnchor> {
+  @override
+  void initState() {
+    super.initState();
+    widget.anchors[widget.shotId] = context;
+  }
+
+  @override
+  void dispose() {
+    if (identical(widget.anchors[widget.shotId], context)) {
+      widget.anchors.remove(widget.shotId);
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 /// Al final de la tabla: crear una escena diciendo solo dónde ocurre. Toma
 /// INT/EXT y el momento de la última escena; se cambian luego en la suya.
 class _NewSceneRow extends ConsumerStatefulWidget {
@@ -1256,6 +1401,16 @@ class _NewSceneRowState extends ConsumerState<_NewSceneRow> {
   final _where = GlobalKey<WhereFieldState>();
   bool _open = false;
   bool _creating = false;
+
+  /// El lugar de la última escena, si tiene.
+  LocationChoice? _samePlace(BuildContext context) {
+    final data = PlanDataScope.of(context);
+    final site = data.site(widget.last.locationSiteId);
+    final set = data.set(widget.last.locationId);
+    return site == null || set == null
+        ? null
+        : LocationChoice(site: site, set: set);
+  }
 
   Future<void> _create(LocationChoice choice) async {
     if (_creating) return;
@@ -1315,10 +1470,32 @@ class _NewSceneRowState extends ConsumerState<_NewSceneRow> {
           children: [
             Row(
               children: [
+                Text(
+                  'Nueva escena',
+                  style: AppTypography.titleMedium(palette),
+                ),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: Text(
-                    'Nueva escena',
-                    style: AppTypography.titleMedium(palette),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _samePlace(context) == null
+                        ? null
+                        : TextButton.icon(
+                            key: const ValueKey('new-scene-same-place'),
+                            onPressed: () => _create(_samePlace(context)!),
+                            icon: Icon(
+                              Icons.place_outlined,
+                              color: palette.accent,
+                              size: 16,
+                            ),
+                            label: Text(
+                              'Mismo lugar: ${_samePlace(context)!.label}',
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.label(
+                                palette,
+                              ).copyWith(color: palette.accent),
+                            ),
+                          ),
                   ),
                 ),
                 IconButton(
@@ -2268,6 +2445,7 @@ class _ShotRowState extends ConsumerState<_ShotRow> {
       onFocusChange: (focused) {
         if (focused) {
           ref.read(_activeShotProvider.notifier).state = shot.id;
+          ref.read(projectFocusProvider(shot.projectId).notifier).focusShot(shot);
           // Los demás equipos lo ven bloqueado mientras se trabaja en él.
           live.focusShot(shot.uid);
         } else {
@@ -2576,7 +2754,7 @@ class _PlanCell extends ConsumerWidget {
 
     final String caption;
     final IconData icon;
-    if (setId != null) {
+    if (setId != null || shot.lightSetupId != null) {
       caption = 'Abrir planta';
       icon = Icons.grid_on_outlined;
     } else if (scene.locationSiteId != null) {
@@ -2594,6 +2772,7 @@ class _PlanCell extends ConsumerWidget {
       ProviderScope.containerOf(context).read(databaseProvider),
       shot,
       label: 'Esc ${scene.label} · Plano ${shot.number}',
+      fromScript: true,
     );
 
     // Imágenes y bocetos dibujados que el plano ha elegido enseñar.

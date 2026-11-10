@@ -15,6 +15,7 @@ import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import 'shot_cover.dart';
 import '../../shared/rich_text/script_markup.dart';
+import 'plan_start_from.dart' show createSetupAsked;
 
 /// Tarjeta de un plano: miniatura de lo que se ve en él y la etiqueta de su
 /// esquema de luz. Tocar la tarjeta lo abre; tocar la etiqueta cambia el
@@ -133,13 +134,22 @@ class _SetupTag extends ConsumerWidget {
       onSelected: (choice) async {
         final db = ref.read(databaseProvider);
         if (choice == _create) {
-          final created = await FloorPlanRepository(db).createLightSetup(
+          final earlier = data
+              .shotsOfScene(shot.sceneId)
+              .where((s) => s.sortOrder <= shot.sortOrder && s.id != shot.id)
+              .map((s) => data.setup(s.lightSetupId))
+              .nonNulls;
+          final created = await createSetupAsked(
+            context,
+            db,
             projectId: shot.projectId,
             setId: data.set(scene?.locationId)?.id,
             siteId: data.set(scene?.locationId) == null
                 ? data.site(scene?.locationSiteId)?.id
                 : null,
+            previous: earlier.lastOrNull ?? options.lastOrNull,
           );
+          if (created == null) return;
           await db.assignLightSetupToShot(shot.id, created.id);
         } else {
           await db.assignLightSetupToShot(

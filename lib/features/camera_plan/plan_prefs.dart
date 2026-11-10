@@ -9,6 +9,12 @@ abstract final class PlanPrefs {
   static const exposureMap = PrefKey<bool>('plan.exposureMap', false);
   static const readings = PrefKey<bool>('plan.readings', true);
 
+  /// Un plano nuevo empieza con el set, la lente y la cámara del anterior.
+  static const newShotLikePrevious = PrefKey<bool>(
+    'plan.newShotLikePrevious',
+    true,
+  );
+
   /// 3D como el visor de Unreal (F6.22.6): botón derecho pulsado para mirar
   /// y W, A, S, D para moverse. Sin él, la órbita de antes.
   static const unrealNav = PrefKey<bool>('plan.nav.unreal', true);
@@ -28,6 +34,7 @@ abstract final class PlanPrefs {
     otherCameras,
     exposureMap,
     readings,
+    newShotLikePrevious,
     unrealNav,
     iso,
     shutterDeg,

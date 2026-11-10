@@ -55,6 +55,9 @@ class PlanEntryState {
   });
 
   PlanEntryNeed get need {
+    // Con su set ya elegido se abre sin más, aunque la localización no
+    // tenga planta maestra.
+    if (shot.lightSetupId != null) return PlanEntryNeed.none;
     if (site == null) return PlanEntryNeed.site;
     if (sitePlanEmpty) return PlanEntryNeed.sitePlan;
     if (sets.isEmpty) return PlanEntryNeed.sets;
@@ -109,11 +112,15 @@ class PlanGuide {
   final String? shotLabel;
   final PlanGuideStep startStep;
 
+  /// Debajo está el guion técnico: «Ver en el guion» vuelve a él.
+  final bool fromScript;
+
   const PlanGuide({
     required this.sceneId,
     this.shotId,
     this.shotLabel,
     this.startStep = PlanGuideStep.location,
+    this.fromScript = false,
   });
 }
 

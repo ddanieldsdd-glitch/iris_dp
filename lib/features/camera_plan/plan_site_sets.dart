@@ -8,7 +8,6 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'camera_plan_constants.dart';
 import 'floor_plan_json.dart';
-import 'floor_plan_repository.dart';
 import 'light_setup_actions.dart';
 import 'plan_data.dart';
 import 'plan_scene_board.dart' show PlanBoardShotCard, PlanNewSetColumn;
@@ -16,6 +15,8 @@ import 'plan_set_summary.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import 'set_group_actions.dart';
+import 'plan_start_from.dart' show createSetupAsked;
+import 'project_focus.dart';
 
 /// Los sets de una localización como tablero (SV.1): cada columna es un
 /// set con su planta arriba y sus planos debajo (imagen, número y tipo).
@@ -64,9 +65,20 @@ class _PlanSiteSetsState extends ConsumerState<PlanSiteSets> {
     if (mounted) setState(_picked.clear);
   }
 
-  Future<LightSetup> _newSet() => FloorPlanRepository(
+  /// El set que se estaba editando si es de aquí; si no, el último.
+  LightSetup? get _previousSet {
+    final focused = ref.read(projectFocusProvider(widget.projectId)).setupId;
+    return _ordered.where((s) => s.id == focused).firstOrNull ??
+        _ordered.lastOrNull;
+  }
+
+  Future<LightSetup?> _newSet() => createSetupAsked(
+    context,
     _db,
-  ).createLightSetup(projectId: widget.projectId, siteId: site.id);
+    projectId: widget.projectId,
+    siteId: site.id,
+    previous: _previousSet,
+  );
 
   /// Pone [moved] en el sitio de [target]: el orden pasa a ser «a mano».
   Future<void> _reorder(LightSetup moved, LightSetup target) async {
@@ -161,6 +173,7 @@ class _PlanSiteSetsState extends ConsumerState<PlanSiteSets> {
             FilledButton.tonalIcon(
               onPressed: () async {
                 final created = await _newSet();
+                if (created == null) return;
                 widget.onOpen(PlanTarget.lightSetup(created.id, created.name));
               },
               icon: const Icon(Icons.add, size: 16),
@@ -201,9 +214,13 @@ class _PlanSiteSetsState extends ConsumerState<PlanSiteSets> {
               key: const ValueKey('site-new-set'),
               onTap: () async {
                 final created = await _newSet();
+                if (created == null) return;
                 widget.onOpen(PlanTarget.lightSetup(created.id, created.name));
               },
-              onDrop: (shots) async => _move(shots, await _newSet()),
+              onDrop: (shots) async {
+                final created = await _newSet();
+                if (created != null) await _move(shots, created);
+              },
             ),
           ],
         ),

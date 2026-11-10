@@ -62,6 +62,20 @@ class CameraPlanSettingsSection extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         SettingsGroupBox(
+          title: 'Planos nuevos',
+          children: [
+            PrefSwitchRow(
+              pref: PlanPrefs.newShotLikePrevious,
+              scope: scope,
+              title: 'Como el plano anterior',
+              subtitle:
+                  'Empiezan con su set, su lente y su movimiento, y con la '
+                  'cámara en el mismo sitio. Apagado: en blanco',
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        SettingsGroupBox(
           title: 'Exposición de partida',
           footer:
               'Se usan cuando ni la cámara de la planta ni el plano dicen '

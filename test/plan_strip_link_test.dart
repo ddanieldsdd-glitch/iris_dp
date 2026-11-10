@@ -95,7 +95,7 @@ void main() {
         ).where((e) => e.type == ElementType.camera).toList();
       }))!;
 
-  testWidgets('desde la tira: + cámara, tocar para vincular y arrastrar', (
+  testWidgets('desde la tira: + cámara, Vincular y arrastrar', (
     tester,
   ) async {
     await seed(tester);
@@ -131,13 +131,13 @@ void main() {
     expect(CameraLinks.setupCameraOf(a.single), isNotNull);
     expect(find.text('CAM A'), findsOneWidget);
 
-    // Con la cámara seleccionada, tocar 11·P4 en la tira la vincula.
-    expect(find.textContaining('toca sus planos'), findsOneWidget);
-    await tester.tap(find.byKey(ValueKey('strip-shot-$shot2')));
+    // Con la cámara seleccionada, «Vincular» en 11·P4 la pone en ese plano.
+    expect(find.textContaining('vincula sus planos'), findsOneWidget);
+    await tester.tap(find.byKey(ValueKey('strip-link-$shot2')));
     await settle(tester);
     expect(await camerasOf(tester, shot2), hasLength(1));
-    // Y volver a tocarlo la desvincula.
-    await tester.tap(find.byKey(ValueKey('strip-shot-$shot2')));
+    // Y volver a pulsarlo la desvincula.
+    await tester.tap(find.byKey(ValueKey('strip-link-$shot2')));
     await settle(tester);
     expect(await camerasOf(tester, shot2), isEmpty);
 

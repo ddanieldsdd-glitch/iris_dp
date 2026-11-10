@@ -27,6 +27,8 @@ import 'shot_cover.dart';
 import 'shot_route.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
+import 'plan_start_from.dart' show createSetupAsked;
+import 'project_focus.dart';
 
 /// Tablero de una escena: sus planos repartidos por set y por esquema de
 /// luz. Cada plano es una tarjeta que se arrastra a la columna que toque.
@@ -81,12 +83,23 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
     if (mounted) setState(_picked.clear);
   }
 
-  Future<LightSetup> _newSetup(LocationBasePlan? set) =>
-      FloorPlanRepository(_db).createLightSetup(
-        projectId: widget.projectId,
-        setId: set?.id,
-        siteId: set == null ? _data.siteIdOfScene(_scene) : null,
-      );
+  /// El set que se estaba editando si vale para esta escena; si no, el
+  /// último de la escena.
+  LightSetup? get _previousSetup {
+    final options = _data.setupsForScene(_scene);
+    final focused = ref.read(projectFocusProvider(widget.projectId)).setupId;
+    return options.where((s) => s.id == focused).firstOrNull ??
+        options.lastOrNull;
+  }
+
+  Future<LightSetup?> _newSetup(LocationBasePlan? set) => createSetupAsked(
+    context,
+    _db,
+    projectId: widget.projectId,
+    setId: set?.id,
+    siteId: set == null ? _data.siteIdOfScene(_scene) : null,
+    previous: _previousSetup,
+  );
 
   /// Crea un boceto de la escena y lo abre. Con [shot], el boceto queda
   /// además a la vista en ese plano (en el guion técnico), pero no lleva
@@ -265,10 +278,12 @@ class _PlanSceneBoardState extends ConsumerState<PlanSceneBoard> {
                 children: [
                   PlanNewSetColumn(
                     onTap: () => _newSetup(_data.set(_scene.locationId)),
-                    onDrop: (shots) async => _move(
-                      shots,
-                      await _newSetup(_data.set(_scene.locationId)),
-                    ),
+                    onDrop: (shots) async {
+                      final created = await _newSetup(
+                        _data.set(_scene.locationId),
+                      );
+                      if (created != null) await _move(shots, created);
+                    },
                   ),
                   PlanPasteButton(
                     target: PlanPasteTarget(
@@ -874,7 +889,7 @@ class _SequenceCard extends StatelessWidget {
   final PlanProjectData data;
   final void Function(PlanTarget target) onOpen;
   final Future<void> Function(List<ShotLeg> legs) onSave;
-  final Future<LightSetup> Function(LocationBasePlan? set) onNewSetup;
+  final Future<LightSetup?> Function(LocationBasePlan? set) onNewSetup;
 
   const _SequenceCard({
     required this.shot,
@@ -981,6 +996,7 @@ class _SequenceCard extends StatelessWidget {
                       final next = [...legs];
                       if (id == -2) {
                         final created = await onNewSetup(set);
+                        if (created == null) return;
                         next[index] = leg.copyWith(lightSetupId: created.id);
                       } else if (id == -1) {
                         next[index] = leg.copyWith(clearSetup: true);

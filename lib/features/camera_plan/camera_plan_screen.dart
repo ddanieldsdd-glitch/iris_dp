@@ -24,6 +24,7 @@ import 'plan_scene_board.dart';
 import 'plan_target.dart';
 import 'plan_trash_ui.dart';
 import 'plan_workspace_screen.dart';
+import 'project_focus.dart';
 
 /// Entrada a las plantas de luz y cámara. A la izquierda, el índice
 /// (localizaciones, sets y escenas, o las escenas en orden de guion); a la
@@ -84,6 +85,14 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final focusProvider = projectFocusProvider(projectId);
+    final focusScene = ref.watch(focusProvider.select((f) => f.sceneId));
+    // Si se ha trabajado en otra escena, al volver se ve esa.
+    ref.listen(focusProvider.select((f) => f.sceneId), (_, next) {
+      if (next != null && _pick?.kind == PlanPickKind.scene) {
+        setState(() => _pick = null);
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -156,7 +165,9 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
                 _pick ??
                 (scenes.isEmpty
                     ? const PlanPick.overview()
-                    : PlanPick.scene(scenes.first.id));
+                    : PlanPick.scene(
+                        data.scene(focusScene)?.id ?? scenes.first.id,
+                      ));
             // Lo que se veía puede haberse borrado.
             if ((pick.kind == PlanPickKind.scene &&
                     data.scene(pick.id) == null) ||
@@ -175,6 +186,9 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
                   _pick = p;
                   _siteMap = false;
                 });
+                if (p.kind == PlanPickKind.scene) {
+                  ref.read(focusProvider.notifier).focusScene(p.id!);
+                }
                 if (!wide) Navigator.of(context).maybePop();
               },
             );

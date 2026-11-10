@@ -27,6 +27,7 @@ import '../../shared/shot_images/shot_image_menu.dart';
 import '../camera_plan/camera_plan_grouping.dart';
 import '../shots/shot_params_editor.dart';
 import 'shot_frames_export_sheet.dart';
+import '../camera_plan/shot_create.dart';
 
 /// Abre el visor del storyboard en [shot]: los planos del proyecto uno a
 /// uno, en orden de guion.
@@ -74,21 +75,7 @@ Future<int> createStoryboardShot(
   Scene scene,
   List<Shot> shots, {
   String? title,
-}) {
-  final last = shots.fold<int>(
-    -1,
-    (max, s) => s.sortOrder > max ? s.sortOrder : max,
-  );
-  return db.insertShot(
-    ShotsCompanion.insert(
-      sceneId: scene.id,
-      projectId: scene.projectId,
-      number: shots.length + 1,
-      sortOrder: Value(last + 1),
-      framing: Value(title == null || title.trim().isEmpty ? null : title),
-    ),
-  );
-}
+}) => createShotInScene(db, scene, shots, title: title);
 
 /// Visor del storyboard. La barra de arriba es fija (título del plano y
 /// «Cerrar»), y las flechas pasan de un plano al siguiente.

@@ -19,11 +19,15 @@ class LinkShotsDialog extends StatefulWidget {
   /// La escena que se está mirando: sus planos salen primero.
   final int? sceneId;
 
+  /// Lleva a la fila de un plano en el guion técnico.
+  final void Function(int shotId)? onShowInScript;
+
   const LinkShotsDialog({
     super.key,
     required this.camera,
     required this.options,
     this.sceneId,
+    this.onShowInScript,
   });
 
   @override
@@ -177,6 +181,18 @@ class _LinkShotsDialogState extends State<LinkShotsDialog> {
                             color: palette.textTertiary,
                           ),
                         ),
+                    if (widget.onShowInScript case final show?)
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        child: IconButton(
+                          key: ValueKey('link-script-${o.shot.id}'),
+                          tooltip: 'Ver en el guion',
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.table_rows_outlined, size: 18),
+                          onPressed: () => show(o.shot.id),
+                        ),
+                      ),
                     if (on)
                       Positioned(
                         top: 4,

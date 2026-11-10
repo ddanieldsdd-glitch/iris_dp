@@ -131,6 +131,18 @@ class CameraLinks {
     }
   }
 
+  /// Pone en [toShotId] una copia de las cámaras de [fromShotId], en el mismo
+  /// sitio. Las que eran de un set siguen vinculadas a él.
+  Future<void> copyCameras(int fromShotId, int toShotId) async {
+    final copies = [
+      for (final el in await _shotElements(fromShotId))
+        if (el.type == ElementType.camera) LightOverrides.clone(el),
+    ];
+    if (copies.isEmpty) return;
+    LightOverrides.renewUids(copies);
+    await _saveShot(toShotId, copies);
+  }
+
   /// Las copias siguen a sus cámaras: tras guardar el esquema [setupId],
   /// cada copia que estaba igual que la cámara de antes ([before]) toma
   /// cómo está ahora ([after]). Las que el plano ya movió se respetan.

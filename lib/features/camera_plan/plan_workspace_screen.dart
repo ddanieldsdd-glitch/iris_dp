@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
+import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_layout.dart';
 import '../../core/theme/app_spacing.dart';
@@ -14,31 +16,44 @@ import 'plan_strip_link.dart';
 import 'shot_cover.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
+import 'project_focus.dart';
+import '../technical_script/technical_script_screen.dart';
 import '../../shared/rich_text/script_markup.dart';
 
 /// Pantalla única de trabajo: el editor de la planta abierta y, al lado, un
 /// navegador para cambiar de set, esquema de luz, plano o localización sin
 /// volver al mapa global.
-class PlanWorkspaceScreen extends StatefulWidget {
+class PlanWorkspaceScreen extends ConsumerStatefulWidget {
   final int projectId;
   final PlanTarget initial;
+
+  /// Debajo está el guion técnico: «Ver en el guion» vuelve a él.
+  final bool fromScript;
 
   const PlanWorkspaceScreen({
     super.key,
     required this.projectId,
     required this.initial,
+    this.fromScript = false,
   });
 
   @override
-  State<PlanWorkspaceScreen> createState() => _PlanWorkspaceScreenState();
+  ConsumerState<PlanWorkspaceScreen> createState() =>
+      _PlanWorkspaceScreenState();
 }
 
-class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
+class _PlanWorkspaceScreenState extends ConsumerState<PlanWorkspaceScreen> {
   late PlanTarget _target = widget.initial;
   bool? _navigatorOpen;
 
   /// Une la tira de planos con el editor del set (SV.3).
   final _stripLink = PlanStripLink();
+
+  @override
+  void initState() {
+    super.initState();
+    _recordFocus(_target);
+  }
 
   @override
   void dispose() {
@@ -49,6 +64,38 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
   void _open(PlanTarget target) {
     if (target == _target) return;
     setState(() => _target = target);
+    _recordFocus(target);
+  }
+
+  /// El guion técnico y las plantas se abren luego donde se dejó.
+  Future<void> _recordFocus(PlanTarget target) async {
+    final focus = ref.read(projectFocusProvider(widget.projectId).notifier);
+    final db = ref.read(databaseProvider);
+    if (target.scope == FloorPlanScope.shot) {
+      final shot = await db.getShotById(target.id);
+      if (shot != null) focus.focusShot(shot);
+    } else if (target.scope == FloorPlanScope.lightSetup) {
+      await Future<void>.microtask(() {});
+      focus.focusSetup(target.id);
+    }
+  }
+
+  /// La fila del plano abierto en el guion técnico. Si se vino de él, se
+  /// vuelve; si no, lo sustituye para no apilar pantallas.
+  void _showInScript() {
+    final navigator = Navigator.of(context);
+    if (widget.fromScript) {
+      navigator.maybePop();
+      return;
+    }
+    navigator.pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => TechnicalScriptScreen(
+          projectId: widget.projectId,
+          initialShotId: _target.id,
+        ),
+      ),
+    );
   }
 
   /// El editor con la tira de planos encima (SG.5): en un plano, los de su
@@ -68,6 +115,7 @@ class _PlanWorkspaceScreenState extends State<PlanWorkspaceScreen> {
             target: _target,
             onOpen: _open,
             link: _stripLink,
+            onShowInScript: _showInScript,
           ),
         ),
         Expanded(child: _editor()),
@@ -655,12 +703,16 @@ class PlanShotStrip extends StatelessWidget {
   final void Function(PlanTarget target) onOpen;
   final PlanStripLink? link;
 
+  /// Lleva a la fila del plano abierto en el guion técnico.
+  final VoidCallback? onShowInScript;
+
   const PlanShotStrip({
     super.key,
     required this.data,
     required this.target,
     required this.onOpen,
     this.link,
+    this.onShowInScript,
   });
 
   /// Los planos de la tira y el título que llevan delante.
@@ -750,7 +802,7 @@ class PlanShotStrip extends StatelessWidget {
                           child: Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: Text(
-                              'Cámara $camera:\ntoca sus planos',
+                              'Cámara $camera:\nvincula sus planos',
                               style: AppTypography.caption(
                                 palette,
                               ).copyWith(color: palette.success, fontSize: 10),
@@ -790,9 +842,10 @@ class PlanShotStrip extends StatelessWidget {
                                     data.camerasOfShot(shot).isEmpty
                                 ? () => link.addCamera(shot.id)
                                 : null,
-                            onTap: camera != null
+                            onToggleLink: camera != null
                                 ? () => link!.toggle(shot.id)
-                                : () => go(i),
+                                : null,
+                            onTap: () => go(i),
                           ),
                         ),
                     ],
@@ -806,6 +859,14 @@ class PlanShotStrip extends StatelessWidget {
                 ? () => go(current + 1)
                 : null,
           ),
+          if (onShowInScript != null && target.scope == FloorPlanScope.shot)
+            IconButton(
+              key: const ValueKey('strip-show-in-script'),
+              tooltip: 'Ver en el guion',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.table_rows_outlined),
+              onPressed: onShowInScript,
+            ),
         ],
       ),
     );
@@ -956,6 +1017,9 @@ class _StripShotCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onAddCamera;
 
+  /// Con una cámara del set seleccionada: la pone o la quita de este plano.
+  final VoidCallback? onToggleLink;
+
   const _StripShotCard({
     super.key,
     required this.shot,
@@ -967,6 +1031,7 @@ class _StripShotCard extends StatelessWidget {
     required this.draggable,
     required this.onTap,
     this.onAddCamera,
+    this.onToggleLink,
   });
 
   @override
@@ -1036,6 +1101,24 @@ class _StripShotCard extends StatelessWidget {
                               cameras: data.camerasOfShot(shot),
                             ),
                           ),
+                          if (onToggleLink != null)
+                            InkWell(
+                              key: ValueKey('strip-link-${shot.id}'),
+                              onTap: onToggleLink,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 3),
+                                child: Text(
+                                  linked ? 'Desvincular' : 'Vincular',
+                                  style: TextStyle(
+                                    color: linked
+                                        ? palette.success
+                                        : palette.accent,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
                           if (onAddCamera != null)
                             InkWell(
                               key: ValueKey('strip-add-camera-${shot.id}'),

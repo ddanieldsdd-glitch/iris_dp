@@ -16,32 +16,51 @@ Future<LightSetup?> createSetupForSet(
   AppDatabase db, {
   required int projectId,
   required int setId,
+}) => createSetupAsked(context, db, projectId: projectId, setId: setId);
+
+/// Crea un set donde toque ([setId], o la luz general de [siteId], o libre)
+/// y pregunta con qué empieza si hay de dónde partir: como [previous] (el
+/// set que se estaba editando) o con la luz de su localización. Devuelve
+/// `null` si se cancela.
+Future<LightSetup?> createSetupAsked(
+  BuildContext context,
+  AppDatabase db, {
+  required int projectId,
+  int? setId,
+  int? siteId,
+  LightSetup? previous,
 }) async {
   final repo = FloorPlanRepository(db);
-  final set = await db.getLocationById(setId);
-  final siteId = set?.siteId;
-  final sources = siteId == null
+  Future<LightSetup> empty() =>
+      repo.createLightSetup(projectId: projectId, setId: setId, siteId: siteId);
+  final sourceSite = setId == null
+      ? null
+      : (await db.getLocationById(setId))?.siteId;
+  final sources = sourceSite == null
       ? const <LightSetup>[]
       : (await repo.siteLightSetups(
           projectId,
-          siteId,
+          sourceSite,
         )).where((s) => FloorPlanJson.decode(s.planJson).isNotEmpty).toList();
-  if (sources.isEmpty) {
-    return repo.createLightSetup(projectId: projectId, setId: setId);
-  }
-  final site = await db.getSiteById(siteId!);
+  final like =
+      previous != null &&
+          FloorPlanJson.decode(previous.planJson).isNotEmpty &&
+          !sources.any((s) => s.id == previous.id)
+      ? previous
+      : null;
+  if (sources.isEmpty && like == null) return empty();
+  final site = sourceSite == null ? null : await db.getSiteById(sourceSite);
   if (!context.mounted) return null;
   final choice = await pickLightSetupStart(
     context,
     sources: sources,
     siteName: site?.name ?? 'la localización',
+    previous: like,
   );
   if (choice == null) return null;
   final source = choice.source;
-  if (source == null) {
-    return repo.createLightSetup(projectId: projectId, setId: setId);
-  }
-  return repo.createLightSetupFrom(source, setId: setId);
+  if (source == null) return empty();
+  return repo.createLightSetupFrom(source, setId: setId, siteId: siteId);
 }
 
 /// Con qué empieza un esquema nuevo: vacío (`source == null`) o con las
@@ -53,6 +72,7 @@ Future<LightSetupStart?> pickLightSetupStart(
   BuildContext context, {
   required List<LightSetup> sources,
   required String siteName,
+  LightSetup? previous,
 }) {
   final palette = context.palette;
   return showModalBottomSheet<LightSetupStart>(
@@ -70,6 +90,21 @@ Future<LightSetupStart?> pickLightSetupStart(
               style: AppTypography.titleMedium(palette),
             ),
           ),
+          if (previous != null)
+            ListTile(
+              key: const ValueKey('setup-start-previous'),
+              leading: Icon(Icons.content_copy, color: palette.accent),
+              title: Text(
+                'Como el set anterior · ${previous.name}',
+                style: AppTypography.bodyLarge(palette),
+              ),
+              subtitle: Text(
+                '${_lightCount(previous)} · una copia: lo que cambies en '
+                'uno no pasa al otro',
+                style: AppTypography.caption(palette),
+              ),
+              onTap: () => Navigator.pop(ctx, (source: previous)),
+            ),
           ListTile(
             leading: Icon(Icons.crop_square, color: palette.textSecondary),
             title: Text('Vacío', style: AppTypography.bodyLarge(palette)),
