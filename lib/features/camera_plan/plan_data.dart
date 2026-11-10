@@ -45,6 +45,9 @@ class PlanProjectData {
   /// Elementos de planta de todos los planos.
   final List<CameraPlanElement> elementRows;
 
+  /// Recorridos de cámaras y personajes; los necesitan los documentos.
+  final List<CameraPathPoint> pathRows;
+
   /// Dibujos a mano de las plantas (bocetos), uno por planta.
   final List<ProjectAnnotationDocument> drawingRows;
   final ProjectColorScheme colors;
@@ -58,6 +61,7 @@ class PlanProjectData {
     required this.shots,
     this.groups = const [],
     this.elementRows = const [],
+    this.pathRows = const [],
     this.drawingRows = const [],
   }) : colors = ProjectColorScheme.resolve(
          sites: sites,
@@ -68,6 +72,7 @@ class PlanProjectData {
   /// Todas las plantas del proyecto, de una vez, para los documentos.
   static Future<PlanProjectData> load(AppDatabase db, int projectId) async =>
       PlanProjectData(
+        pathRows: await db.select(db.cameraPathPoints).get(),
         sites: await db.watchSitesForProject(projectId).first,
         sets: await db.watchLocationsForProject(projectId).first,
         setups: await db.getLightSetupsForProject(projectId),
@@ -95,6 +100,14 @@ class PlanProjectData {
     final map = <int, List<Shot>>{};
     for (final shot in shots) {
       map.putIfAbsent(shot.sceneId, () => []).add(shot);
+    }
+    return map;
+  }();
+
+  late final Map<int, List<CameraPathPoint>> _pathsByElement = () {
+    final map = <int, List<CameraPathPoint>>{};
+    for (final row in pathRows) {
+      map.putIfAbsent(row.elementId, () => []).add(row);
     }
     return map;
   }();
@@ -366,13 +379,17 @@ class PlanProjectData {
     final rows = _rowsByShot[shot.id] ?? const <CameraPlanElement>[];
     if (!tagged) {
       return _ownOfShot[shot.id] ??= List.unmodifiable([
-        for (final row in rows) PlanElement.fromDb(row),
+        for (final row in rows)
+          PlanElement.fromDb(
+            row,
+            pathRows: _pathsByElement[row.id] ?? const [],
+          ),
       ]);
     }
     final sceneNumber = scene(shot.sceneId)?.number;
     return [
       for (final row in rows)
-        PlanElement.fromDb(row)
+        PlanElement.fromDb(row, pathRows: _pathsByElement[row.id] ?? const [])
           ..props.addAll({
             if (row.type == 'camera')
               'shotTag': sceneNumber == null
@@ -488,12 +505,15 @@ class PlanProjectData {
   }
 
   /// Lo que se ve debajo de un plano, sin la luz: entorno y set.
-  List<PlanElement> baseOfShot(Shot shot) => _baseOfShot[(
-    shot.id,
-    shot.lightSetupId,
-    shot.locationBasePlanId,
-    shot.lightOverridesJson,
-  )] ??= List.unmodifiable(_resolveBaseOfShot(shot));
+  List<PlanElement> baseOfShot(Shot shot) =>
+      _baseOfShot[(
+        shot.id,
+        shot.lightSetupId,
+        shot.locationBasePlanId,
+        shot.lightOverridesJson,
+      )] ??= List.unmodifiable(
+        _resolveBaseOfShot(shot),
+      );
 
   List<PlanElement> _resolveBaseOfShot(Shot shot) {
     // Con su set: el entorno como lo ve el set (lo que apaga o quita) y lo

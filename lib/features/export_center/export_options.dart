@@ -87,6 +87,12 @@ class ExportOptions {
 
   /// La planta general de cada esquema al final del documento de planta.
   final bool planOverviews;
+
+  /// Imagen de la portada del documento de planta, en lugar de la banda negra.
+  final String? planCoverImage;
+
+  /// Imagen detrás de las plantas, en lugar del fondo negro.
+  final String? planBackdropImage;
   final ScriptExportOptions script;
 
   const ExportOptions({
@@ -98,6 +104,8 @@ class ExportOptions {
     this.planWithLight = true,
     this.planBeams = true,
     this.planOverviews = true,
+    this.planCoverImage,
+    this.planBackdropImage,
     this.script = const ScriptExportOptions(),
   });
 
@@ -118,6 +126,10 @@ class ExportOptions {
     bool? planWithLight,
     bool? planBeams,
     bool? planOverviews,
+    String? planCoverImage,
+    bool clearPlanCoverImage = false,
+    String? planBackdropImage,
+    bool clearPlanBackdropImage = false,
     ScriptExportOptions? script,
   }) => ExportOptions(
     document: document ?? this.document,
@@ -128,6 +140,12 @@ class ExportOptions {
     planWithLight: planWithLight ?? this.planWithLight,
     planBeams: planBeams ?? this.planBeams,
     planOverviews: planOverviews ?? this.planOverviews,
+    planCoverImage: clearPlanCoverImage
+        ? null
+        : planCoverImage ?? this.planCoverImage,
+    planBackdropImage: clearPlanBackdropImage
+        ? null
+        : planBackdropImage ?? this.planBackdropImage,
     script: script ?? this.script,
   );
 
@@ -140,6 +158,8 @@ class ExportOptions {
     'planWithLight': planWithLight,
     'planBeams': planBeams,
     'planOverviews': planOverviews,
+    'planCoverImage': planCoverImage,
+    'planBackdropImage': planBackdropImage,
     'script': script.toJson(),
   };
 
@@ -156,6 +176,8 @@ class ExportOptions {
       planWithLight: json['planWithLight'] != false,
       planBeams: json['planBeams'] != false,
       planOverviews: json['planOverviews'] != false,
+      planCoverImage: json['planCoverImage'] as String?,
+      planBackdropImage: json['planBackdropImage'] as String?,
       script: script is Map
           ? ScriptExportOptions.fromJson(Map<String, dynamic>.from(script))
           : d.script,

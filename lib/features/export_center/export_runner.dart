@@ -74,6 +74,8 @@ class ExportRunner {
     withLight: options.planWithLight,
     withBeams: options.planBeams,
     withOverviews: options.planOverviews,
+    coverImagePath: options.planCoverImage,
+    planBackdropPath: options.planBackdropImage,
   );
 
   Future<Uint8List> _script(

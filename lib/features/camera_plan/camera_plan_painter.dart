@@ -27,6 +27,7 @@ import 'plan_sun_painter.dart';
 import 'plan_terrain_painter.dart';
 import 'plan_segment.dart';
 import 'plan_street.dart';
+import 'plan_document_labels.dart';
 import 'prop_box.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
@@ -220,6 +221,9 @@ class CameraPlanPainter extends CustomPainter {
   /// sin el mapa de luz del editor.
   final bool documentMarks;
 
+  /// Imagen que sustituye al fondo negro en un documento.
+  final ui.Image? documentBackdrop;
+
   /// Pinta la luz que cae en el suelo: haces, charcos y sol. Sin ella quedan
   /// los aparatos sobre la planta limpia.
   final bool showBeams;
@@ -262,6 +266,7 @@ class CameraPlanPainter extends CustomPainter {
     this.images = const [],
     this.interacting = false,
     this.documentMarks = false,
+    this.documentBackdrop,
     this.showBeams = true,
   }) : _fixedScale = scale,
        _fixedOffset = offset,
@@ -305,7 +310,12 @@ class CameraPlanPainter extends CustomPainter {
     final mpu = metersPerUnit ?? defaultMetersPerUnit;
     _resolvedDraft = draft;
     return _resolvedScene =
-        lightMap?.scene(_lit, metersPerUnit: mpu, ambient: ambient, draft: draft) ??
+        lightMap?.scene(
+          _lit,
+          metersPerUnit: mpu,
+          ambient: ambient,
+          draft: draft,
+        ) ??
         LightScene.from(_lit, metersPerUnit: mpu, ambient: ambient);
   }
 
@@ -358,7 +368,10 @@ class CameraPlanPainter extends CustomPainter {
   /// De la planta, lo que va encima de la luz: recorridos, elementos,
   /// imágenes y nombres.
   void _paintOverLight(Canvas canvas) {
-    for (final el in elements.where(PlanMarks.supports)) {
+    for (final el in [
+      if (documentMarks) ...inheritedElements,
+      ...elements,
+    ].where(PlanMarks.supports)) {
       final isSelected = el.id == selectedElement?.id;
       _drawCameraPath(
         canvas,
@@ -492,6 +505,7 @@ class CameraPlanPainter extends CustomPainter {
     _drawOverlays(canvas);
     canvas.restore();
 
+    if (documentMarks) _drawDocumentLabels(canvas, size);
     if (metersPerUnit != null) _drawScaleBar(canvas, size);
     if (exposureMap && exposure != null) _drawExposureLegend(canvas, size);
     if (ambient?.hasSun ?? false) _drawSunCompass(canvas, size);
@@ -509,7 +523,8 @@ class CameraPlanPainter extends CustomPainter {
   /// Debajo del elemento, el color de su categoría: un halo en lo que es un
   /// punto, una franja a lo largo de paredes, telas y truss.
   void _drawCategoryTint(Canvas canvas, PlanElement el) {
-    if (PlanTerrainPainter.isTerrain(el) || RigTypeCodec.of(el) == RigType.hall) {
+    if (PlanTerrainPainter.isTerrain(el) ||
+        RigTypeCodec.of(el) == RigType.hall) {
       return;
     }
     final color = PlanCategory.of(el).color;
@@ -1676,7 +1691,25 @@ class CameraPlanPainter extends CustomPainter {
       Offset.zero & size,
       Paint()..color = _CanvasColors.background,
     );
+    final image = documentBackdrop;
+    if (image == null) return;
+    // La imagen llena el lienzo y se oscurece para que la planta se lea.
+    final source = Size(image.width.toDouble(), image.height.toDouble());
+    final fitted = applyBoxFit(BoxFit.cover, source, size);
+    canvas.drawImageRect(
+      image,
+      Alignment.center.inscribe(fitted.source, Offset.zero & source),
+      Offset.zero & size,
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..color = _CanvasColors.background.withValues(alpha: _backdropVeil),
+    );
   }
+
+  static const _backdropVeil = 0.55;
 
   void _drawPlanImage(Canvas canvas, PlanImageDraw draw) {
     final rect = draw.rect;
@@ -1864,6 +1897,10 @@ class CameraPlanPainter extends CustomPainter {
     bool showHandles = false,
   }) {
     if (camera.pathPoints.isEmpty) return;
+    if (documentMarks) {
+      _drawDocumentPath(canvas, camera);
+      return;
+    }
 
     final camColor = camera.type == ElementType.camera
         ? cameraColorForLetter(camera.cameraLetter)
@@ -1938,6 +1975,167 @@ class CameraPlanPainter extends CustomPainter {
     }
   }
 
+  /// El recorrido en papel: el grosor y las flechas no encogen con la
+  /// planta, y cada parada enseña la figura hacia donde mira.
+  void _drawDocumentPath(Canvas canvas, PlanElement el) {
+    final color = _pathColor(el);
+    final point = 1 / scale;
+    final stops = [el.position, ...el.pathPoints];
+    final route = Path()..moveTo(stops.first.dx, stops.first.dy);
+    for (final stop in stops.skip(1)) {
+      route.lineTo(stop.dx, stop.dy);
+    }
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    // Un filo oscuro la separa de las manchas de luz.
+    canvas.drawPath(
+      route,
+      stroke
+        ..color = _CanvasColors.background.withValues(alpha: 0.8)
+        ..strokeWidth = 3.4 * point,
+    );
+    stroke
+      ..color = color
+      ..strokeWidth = 1.7 * point;
+    if (el.type == ElementType.camera) {
+      // La cámara, a trazos: puede compartir color con un personaje.
+      for (var i = 0; i < stops.length - 1; i++) {
+        final span = stops[i + 1] - stops[i];
+        if (span.distance == 0) continue;
+        final dir = span / span.distance;
+        for (var along = 0.0; along < span.distance; along += 8.5 * point) {
+          canvas.drawLine(
+            stops[i] + dir * along,
+            stops[i] + dir * math.min(along + 5 * point, span.distance),
+            stroke,
+          );
+        }
+      }
+    } else {
+      canvas.drawPath(route, stroke);
+    }
+
+    for (final (i, stop) in el.pathPoints.indexed) {
+      final rotation = PlanMarks.rotationAt(el, i);
+      canvas.saveLayer(null, Paint()..color = const Color(0x99FFFFFF));
+      canvas.translate(stop.dx, stop.dy);
+      canvas.rotate(rotation * math.pi / 180);
+      canvas.scale(_documentFigureScale(el));
+      if (el.type == ElementType.camera) {
+        _drawCamera(canvas, el);
+      } else {
+        _drawActor(canvas, el, rotation: rotation);
+      }
+      canvas.restore();
+    }
+
+    final head = Paint()..color = color;
+    for (var i = 0; i < stops.length - 1; i++) {
+      final span = stops[i + 1] - stops[i];
+      if (span.distance * scale < 14) continue;
+      final dir = span / span.distance;
+      final side = Offset(-dir.dy, dir.dx);
+      final tip = stops[i] + span * 0.6 + dir * 4.5 * point;
+      final back = tip - dir * 8 * point;
+      canvas.drawPath(
+        Path()
+          ..moveTo(tip.dx, tip.dy)
+          ..lineTo(
+            back.dx + side.dx * 3.8 * point,
+            back.dy + side.dy * 3.8 * point,
+          )
+          ..lineTo(
+            back.dx - side.dx * 3.8 * point,
+            back.dy - side.dy * 3.8 * point,
+          )
+          ..close(),
+        head,
+      );
+    }
+  }
+
+  Color _pathColor(PlanElement el) => el.type == ElementType.camera
+      ? cameraColorForLetter(el.cameraLetter)
+      : el.actorColor;
+
+  static const _documentStopRadius = 4.4;
+
+  /// Los números de orden de los recorridos, cada uno en una esquina de su
+  /// figura sin tapar otro número.
+  List<_DocumentStop> _layoutDocumentStops(List<PlanElement> moving) {
+    const corners = [
+      Offset(1, -1),
+      Offset(-1, -1),
+      Offset(1, 1),
+      Offset(-1, 1),
+    ];
+    final stops = <_DocumentStop>[];
+    for (final el in moving) {
+      final reach =
+          _documentMarkRadius * _documentFigureScale(el) * scale * 0.72;
+      for (final (i, stop) in [el.position, ...el.pathPoints].indexed) {
+        final at = offset + stop * scale;
+        final center = at + corners.first * reach;
+        final free = corners
+            .map((c) => at + c * reach)
+            .where(
+              (c) => stops.every(
+                (s) => (s.center - c).distance >= _documentStopRadius * 2 + 0.6,
+              ),
+            );
+        stops.add(
+          _DocumentStop(
+            free.isEmpty ? center : free.first,
+            i + 1,
+            _pathColor(el),
+            square: el.type == ElementType.camera,
+          ),
+        );
+      }
+    }
+    return stops;
+  }
+
+  /// Encima de todas las figuras. Las cámaras, con número cuadrado.
+  void _drawDocumentStops(Canvas canvas, List<_DocumentStop> stops) {
+    const r = _documentStopRadius;
+    for (final stop in stops) {
+      final rim = Paint()..color = _CanvasColors.background;
+      final fill = Paint()..color = stop.color;
+      if (stop.square) {
+        canvas.drawRect(
+          Rect.fromCircle(center: stop.center, radius: r * 0.86 + 0.6),
+          rim,
+        );
+        canvas.drawRect(
+          Rect.fromCircle(center: stop.center, radius: r * 0.86),
+          fill,
+        );
+      } else {
+        canvas.drawCircle(stop.center, r + 0.6, rim);
+        canvas.drawCircle(stop.center, r, fill);
+      }
+      final number = TextPainter(
+        text: TextSpan(
+          text: '${stop.number}',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 6,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      number.paint(
+        canvas,
+        stop.center - Offset(number.width / 2, number.height / 2),
+      );
+      number.dispose();
+    }
+  }
+
   void _drawPathWaypoint(
     Canvas canvas,
     Offset pt, {
@@ -1999,8 +2197,203 @@ class CameraPlanPainter extends CustomPainter {
       ? (_documentMarkSize / scale).clamp(1.0, _documentMarkMax).toDouble()
       : 1;
 
-  static const _documentMarkSize = 0.52;
+  /// Tamaño de las marcas: el mayor que deja separadas las que están más
+  /// juntas, para que un rincón lleno de luces no sea una sola mancha.
+  late final double _documentMarkSize = _fitDocumentMarkSize();
+
+  double _fitDocumentMarkSize() {
+    final points = [
+      for (final el in _lit)
+        if (_growsInDocument(el)) el.position * scale,
+    ];
+    if (points.length < 2) return _documentMarkLargest;
+    final nearest = [
+      for (final a in points)
+        points
+            .where((b) => !identical(a, b))
+            .map((b) => (a - b).distance)
+            .reduce(math.min),
+    ]..sort();
+    final typical = nearest[nearest.length ~/ 4];
+    return (typical / (_documentMarkRadius * 2) * 1.1)
+        .clamp(_documentMarkSmallest, _documentMarkLargest)
+        .toDouble();
+  }
+
+  /// Cámaras y personajes son pocos y lo primero que se busca: van mayores
+  /// que las luces.
+  double _documentFigureScale(PlanElement el) =>
+      _documentMarkScale *
+      (el.type == ElementType.camera || el.type == ElementType.actor
+          ? 1.35
+          : 1);
+
+  bool _growsInDocument(PlanElement el) =>
+      el.type == ElementType.camera ||
+      el.type == ElementType.actor ||
+      (el.type == ElementType.light && !_isGripBar(el));
+
+  static const _documentMarkLargest = 0.52;
+  static const _documentMarkSmallest = 0.32;
+  static const _documentMarkRadius = 18.0;
   static const _documentMarkMax = 3.0;
+
+  /// Texto, color y si puede omitirse del rótulo de [el] en un documento.
+  (String, Color, bool)? _documentLabelOf(PlanElement el) {
+    switch (el.type) {
+      case ElementType.camera:
+        final tag = el.props['shotTag'] as String?;
+        final detail = '${el.stabilization ?? ''} ${el.lens ?? ''}'.trim();
+        return (
+          [
+            el.customName ?? tag ?? el.cameraLabel,
+            if (detail.isNotEmpty) detail,
+          ].join(' · '),
+          cameraColorForLetter(el.cameraLetter),
+          false,
+        );
+      case ElementType.light:
+        final lines = _lightLabelLines(el);
+        return lines.isEmpty
+            ? null
+            : (lines.join(' · '), _CanvasColors.ink, false);
+      case ElementType.actor:
+        return el.label?.isNotEmpty == true
+            ? (el.displayLabel, _CanvasColors.ink, false)
+            : null;
+      case ElementType.prop:
+      case ElementType.wall:
+        if (PlanOpening.isOpening(el)) return null;
+        if (el.label == null || el.label!.isEmpty) return null;
+        final text = el.displayLabel;
+        return text == 'Rectángulo' || text == 'Pared'
+            ? null
+            : (text, _CanvasColors.inkSecondary, true);
+    }
+  }
+
+  /// Los rótulos de un documento, colocados entre todos para que no se
+  /// pisen entre ellos ni tapen las marcas.
+  void _drawDocumentLabels(Canvas canvas, Size size) {
+    final entries = <_DocumentLabelEntry>[];
+    final marks = <Rect>[];
+    final moving = <PlanElement>[];
+    for (final el in [...inheritedElements, ...elements]) {
+      if (PlanTerrainPainter.isTerrain(el)) continue;
+      final at = offset + el.position * scale;
+      final grows = _growsInDocument(el);
+      final radius = _documentMarkRadius * _documentFigureScale(el) * scale;
+      if (PlanMarks.supports(el) && el.pathPoints.isNotEmpty) {
+        moving.add(el);
+        for (final stop in el.pathPoints) {
+          marks.add(
+            Rect.fromCircle(center: offset + stop * scale, radius: radius),
+          );
+        }
+      }
+      if (grows) marks.add(Rect.fromCircle(center: at, radius: radius));
+      final found = _documentLabelOf(el);
+      if (found == null) continue;
+      final (text, color, optional) = found;
+      // Aparatos iguales y cercanos comparten rótulo.
+      _DocumentLabelEntry? same;
+      if (el.type == ElementType.light) {
+        for (final entry in entries) {
+          if (entry.text == text &&
+              entry.anchors.any((a) => (a - at).distance < 120)) {
+            same = entry;
+            break;
+          }
+        }
+      }
+      if (same != null) {
+        same.anchors.add(at);
+      } else {
+        entries.add(
+          _DocumentLabelEntry(text, color, optional, [at], grows ? radius : 0),
+        );
+      }
+    }
+    final stops = _layoutDocumentStops(moving);
+    marks.addAll([
+      for (final stop in stops)
+        Rect.fromCircle(center: stop.center, radius: _documentStopRadius),
+    ]);
+    _drawDocumentStops(canvas, stops);
+    if (entries.isEmpty) return;
+
+    const padding = EdgeInsets.symmetric(horizontal: 3, vertical: 1);
+    final base = (size.width * 0.0155).clamp(6.5, 9.0).toDouble();
+    final painters = <DocumentLabel, (TextPainter, _DocumentLabelEntry)>{};
+    late List<PlacedDocumentLabel> placed;
+    for (final shrink in const [1.0, 0.88, 0.76]) {
+      for (final (painter, _) in painters.values) {
+        painter.dispose();
+      }
+      painters.clear();
+      final labels = <DocumentLabel>[];
+      for (final entry in entries) {
+        final copies = entry.anchors.length;
+        final painter = TextPainter(
+          text: TextSpan(
+            text: copies > 1 ? '${entry.text} ×$copies' : entry.text,
+            style: TextStyle(
+              color: entry.color,
+              fontSize: base * shrink * (entry.optional ? 0.85 : 1),
+
+              fontWeight: entry.optional ? FontWeight.w400 : FontWeight.w600,
+              height: 1.1,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+          maxLines: 2,
+          ellipsis: '…',
+        )..layout(maxWidth: math.max(120, size.width * 0.36));
+        final label = DocumentLabel(
+          anchors: entry.anchors,
+          radius: entry.radius,
+          size: Size(
+            painter.width + padding.horizontal,
+            painter.height + padding.vertical,
+          ),
+          optional: entry.optional,
+        );
+        labels.add(label);
+        painters[label] = (painter, entry);
+      }
+      final result = layoutDocumentLabels(labels, size, marks: marks);
+      placed = result.placed;
+      if (!result.overflow) break;
+    }
+
+    // Primero las líneas: ningún rótulo queda cruzado por una.
+    for (final item in placed.where((p) => p.leader)) {
+      final color = painters[item.label]!.$2.color;
+      final line = Paint()
+        ..color = color.withValues(alpha: 0.75)
+        ..strokeWidth = 0.5;
+      final start = item.leaderStart;
+      for (final anchor in item.label.anchors) {
+        final span = start - anchor;
+        if (span.distance <= item.label.radius) continue;
+        final end = anchor + span / span.distance * item.label.radius;
+        canvas.drawLine(start, end, line);
+      }
+    }
+    for (final item in placed) {
+      final (painter, entry) = painters[item.label]!;
+      if (!entry.optional) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(item.rect, const Radius.circular(2)),
+          Paint()..color = _CanvasColors.background.withValues(alpha: 0.85),
+        );
+      }
+      painter.paint(canvas, item.rect.topLeft + padding.topLeft);
+    }
+    for (final (painter, _) in painters.values) {
+      painter.dispose();
+    }
+  }
 
   void _drawElement(
     Canvas canvas,
@@ -2031,11 +2424,8 @@ class CameraPlanPainter extends CustomPainter {
           ..strokeWidth = 2,
       );
     }
-    final grows =
-        el.type == ElementType.camera ||
-        el.type == ElementType.actor ||
-        (el.type == ElementType.light && !_isGripBar(el));
-    final marks = _documentMarkScale;
+    final grows = _growsInDocument(el);
+    final marks = documentMarks ? _documentFigureScale(el) : 1.0;
     canvas.save();
     canvas.translate(el.position.dx, el.position.dy);
     canvas.rotate(el.rotation * math.pi / 180);
@@ -2086,74 +2476,85 @@ class CameraPlanPainter extends CustomPainter {
     canvas.translate(el.position.dx, el.position.dy);
     if (el.type != ElementType.wall && marks != 1) canvas.scale(marks);
     if (PlanCategory.hasUnrealAsset(el)) _drawUnrealBadge(canvas);
-    switch (el.type) {
-      case ElementType.camera:
-        final camColor = cameraColorForLetter(el.cameraLetter);
-        // Con varias cámaras de distintos planos en la misma planta, cada
-        // una se rotula con su plano.
-        final tag = el.props['shotTag'] as String?;
-        final labelText =
-            '${el.customName ?? tag ?? el.cameraLabel}\n'
-                    '${el.stabilization ?? ''} ${el.lens ?? ''}'
-                .trim();
-        if (labelText.isNotEmpty) {
-          _drawLabelBelow(canvas, labelText, camColor, yOffset: 28);
-        }
-      case ElementType.light:
-        _drawLightLabel(canvas, el);
-      case ElementType.actor:
-        // Con lecturas, el actor enseña el diafragma que le llega.
-        final reading = showReadings ? _readingAt(el.position) : null;
-        final name = el.label?.isNotEmpty == true ? el.displayLabel : null;
-        // Con varias posiciones, el diafragma de cada una: se ve si el
-        // actor cambia de exposición al moverse.
-        final marks = showReadings && el.pathPoints.isNotEmpty
-            ? [
-                for (final (i, at) in [el.position, ...el.pathPoints].indexed)
-                  if (_readingAt(at) case final r?)
-                    '${i + 1}: ${r.lux > 0.5 ? formatStop(r.stop) : 'sin luz'}',
-              ].join(' · ')
-            : null;
-        final text = [
-          ?name,
-          if (marks != null && marks.isNotEmpty)
-            marks
-          else if (reading != null && reading.lux > 0.5)
-            '${formatStop(reading.stop)} '
-                '(${formatStopDifference(reading.stopsOverTarget)})',
-        ].join('\n');
-        if (text.isNotEmpty) {
-          _drawLabelBelow(
-            canvas,
-            text,
-            _CanvasColors.inkSecondary,
-            maxWidth: marks == null ? 110 : 220,
-          );
-        }
-      case ElementType.prop:
-        if (el.propType == PropType.meter) {
-          final reading = _readingAt(el.position);
-          _drawLabelBelow(
-            canvas,
-            reading == null
-                ? 'Fotómetro'
-                : reading.lux < 0.05
-                ? 'sin luz'
-                : '${reading.shortLabel}\n'
-                      '${formatStopDifference(reading.stopsOverTarget)} stops',
-            _CanvasColors.accent,
-            yOffset: 16,
-            maxWidth: 130,
-          );
-        } else if (el.label != null && el.label!.isNotEmpty) {
-          _drawLabelBelow(canvas, el.displayLabel, _CanvasColors.inkSecondary);
-        }
-      case ElementType.wall:
-        // Puertas y ventanas se entienden solas: sin rótulo.
-        if (PlanOpening.isOpening(el)) break;
-        if (el.label != null && el.label!.isNotEmpty) {
-          _drawLabelBelow(canvas, el.displayLabel, _CanvasColors.inkSecondary);
-        }
+    // En un documento los rótulos se colocan al final, todos a la vez.
+    if (!documentMarks) {
+      switch (el.type) {
+        case ElementType.camera:
+          final camColor = cameraColorForLetter(el.cameraLetter);
+          // Con varias cámaras de distintos planos en la misma planta, cada
+          // una se rotula con su plano.
+          final tag = el.props['shotTag'] as String?;
+          final labelText =
+              '${el.customName ?? tag ?? el.cameraLabel}\n'
+                      '${el.stabilization ?? ''} ${el.lens ?? ''}'
+                  .trim();
+          if (labelText.isNotEmpty) {
+            _drawLabelBelow(canvas, labelText, camColor, yOffset: 28);
+          }
+        case ElementType.light:
+          _drawLightLabel(canvas, el);
+        case ElementType.actor:
+          // Con lecturas, el actor enseña el diafragma que le llega.
+          final reading = showReadings ? _readingAt(el.position) : null;
+          final name = el.label?.isNotEmpty == true ? el.displayLabel : null;
+          // Con varias posiciones, el diafragma de cada una: se ve si el
+          // actor cambia de exposición al moverse.
+          final marks = showReadings && el.pathPoints.isNotEmpty
+              ? [
+                  for (final (i, at) in [el.position, ...el.pathPoints].indexed)
+                    if (_readingAt(at) case final r?)
+                      '${i + 1}: ${r.lux > 0.5 ? formatStop(r.stop) : 'sin luz'}',
+                ].join(' · ')
+              : null;
+          final text = [
+            ?name,
+            if (marks != null && marks.isNotEmpty)
+              marks
+            else if (reading != null && reading.lux > 0.5)
+              '${formatStop(reading.stop)} '
+                  '(${formatStopDifference(reading.stopsOverTarget)})',
+          ].join('\n');
+          if (text.isNotEmpty) {
+            _drawLabelBelow(
+              canvas,
+              text,
+              _CanvasColors.inkSecondary,
+              maxWidth: marks == null ? 110 : 220,
+            );
+          }
+        case ElementType.prop:
+          if (el.propType == PropType.meter) {
+            final reading = _readingAt(el.position);
+            _drawLabelBelow(
+              canvas,
+              reading == null
+                  ? 'Fotómetro'
+                  : reading.lux < 0.05
+                  ? 'sin luz'
+                  : '${reading.shortLabel}\n'
+                        '${formatStopDifference(reading.stopsOverTarget)} stops',
+              _CanvasColors.accent,
+              yOffset: 16,
+              maxWidth: 130,
+            );
+          } else if (el.label != null && el.label!.isNotEmpty) {
+            _drawLabelBelow(
+              canvas,
+              el.displayLabel,
+              _CanvasColors.inkSecondary,
+            );
+          }
+        case ElementType.wall:
+          // Puertas y ventanas se entienden solas: sin rótulo.
+          if (PlanOpening.isOpening(el)) break;
+          if (el.label != null && el.label!.isNotEmpty) {
+            _drawLabelBelow(
+              canvas,
+              el.displayLabel,
+              _CanvasColors.inkSecondary,
+            );
+          }
+      }
     }
 
     canvas.restore();
@@ -2212,25 +2613,35 @@ class CameraPlanPainter extends CustomPainter {
       );
       return;
     }
-    final name = beam == null || light == null
-        ? base
-        : beam.off
-        ? '$base\napagada'
-        : [
-            base,
-            if (filters.isNotEmpty) filters,
-            '${light.colorLabel} · '
-                '${beam.intensity.round()}%',
-            if (PlanLight.isOverhead(el))
-              'techo · ${PlanLight.heightOf(el).toStringAsFixed(1)} m',
-          ].join('\n');
     _drawLabelBelow(
       canvas,
-      name,
-      documentMarks ? _CanvasColors.ink : _CanvasColors.inkSecondary,
+      _lightLabelLines(el).join('\n'),
+      _CanvasColors.inkSecondary,
       yOffset: 20,
       maxWidth: 110,
     );
+  }
+
+  /// Nombre, filtros, color e intensidad de una luz; vacío si no tiene nombre.
+  List<String> _lightLabelLines(PlanElement el) {
+    final base =
+        el.customName ??
+        (el.props['name'] as String?) ??
+        el.lightType?.label ??
+        el.label;
+    if (base == null || base.isEmpty) return const [];
+    final beam = LightBeam.of(el);
+    final light = PlanLight.of(el);
+    if (beam == null || light == null) return [base];
+    if (beam.off) return [base, 'apagada'];
+    final filters = light.modifiers.map((m) => m.name).join(' + ');
+    return [
+      base,
+      if (filters.isNotEmpty) filters,
+      '${light.colorLabel} · ${beam.intensity.round()}%',
+      if (PlanLight.isOverhead(el))
+        'techo · ${PlanLight.heightOf(el).toStringAsFixed(1)} m',
+    ];
   }
 
   void _drawRotationHandle(Canvas canvas, Color color, double degrees) {
@@ -3101,6 +3512,17 @@ class CameraPlanPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5,
       );
+      // Una punta hacia donde apunta el foco, salvo si alumbra a todos lados.
+      if (beam.spread < 300 && !PlanLight.isOverhead(el)) {
+        canvas.drawPath(
+          Path()
+            ..moveTo(0, -31)
+            ..lineTo(-7.5, -19.5)
+            ..lineTo(7.5, -19.5)
+            ..close(),
+          Paint()..color = beam.color,
+        );
+      }
     }
     final stroke = lit
         ? Color.lerp(LightSymbolColors.darkStroke, beam.color, 0.35)!
@@ -3458,4 +3880,36 @@ class CameraPlanPainter extends CustomPainter {
       old.backgroundImage != backgroundImage ||
       old.backgroundRect != backgroundRect ||
       old.backgroundOpacity != backgroundOpacity;
+}
+
+/// Un rótulo de documento antes de medirlo: puede señalar varios aparatos.
+class _DocumentLabelEntry {
+  final String text;
+  final Color color;
+  final bool optional;
+  final List<Offset> anchors;
+  final double radius;
+
+  _DocumentLabelEntry(
+    this.text,
+    this.color,
+    this.optional,
+    this.anchors,
+    this.radius,
+  );
+}
+
+/// Número de una parada de un recorrido, ya colocado.
+class _DocumentStop {
+  final Offset center;
+  final int number;
+  final Color color;
+  final bool square;
+
+  const _DocumentStop(
+    this.center,
+    this.number,
+    this.color, {
+    this.square = false,
+  });
 }

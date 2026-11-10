@@ -189,6 +189,8 @@ class ShootingPlanPdf {
     bool withLight = true,
     bool withBeams = true,
     bool withOverviews = true,
+    String? coverImagePath,
+    String? planBackdropPath,
   }) async {
     final renderer = await PlanRenderer.load(db, project.id);
     final days = <ShootingPlanDay>[];
@@ -214,6 +216,7 @@ class ShootingPlanPdf {
                 item,
                 withLight,
                 withBeams,
+                planBackdropPath,
               ),
             ),
           ),
@@ -238,9 +241,19 @@ class ShootingPlanPdf {
       projectName: project.name,
       days: days,
       overviews: withOverviews
-          ? await _overviews(renderer, sections, withLight, withBeams)
+          ? await _overviews(
+              renderer,
+              sections,
+              withLight,
+              withBeams,
+              planBackdropPath,
+            )
           : const [],
       withLight: withLight,
+      coverImage: await PdfSafeImage.loadFromPathMaxEdge(
+        coverImagePath,
+        maxEdge: 1800,
+      ),
     );
   }
 
@@ -307,6 +320,7 @@ class ShootingPlanPdf {
     ExportShot item,
     bool withLight,
     bool withBeams,
+    String? backdrop,
   ) async {
     final shot = item.shot;
     final slug = [
@@ -333,7 +347,8 @@ class ShootingPlanPdf {
         light: withLight,
         beams: withBeams,
         size: Size(_planWidth, _blockHeight),
-        pixelRatio: 2.5,
+        pixelRatio: 4,
+        backdrop: backdrop,
       ),
       frames: await _frames(db, shot),
     );
@@ -345,6 +360,7 @@ class ShootingPlanPdf {
     List<ExportDaySection> sections,
     bool withLight,
     bool withBeams,
+    String? backdrop,
   ) async {
     final data = renderer.data;
     final scenesOf = <int, List<String>>{};
@@ -375,7 +391,8 @@ class ShootingPlanPdf {
               light: withLight,
               beams: withBeams,
               size: Size(_bodyWidth, _bodyHeight - 22),
-              pixelRatio: 2,
+              pixelRatio: 3,
+              backdrop: backdrop,
             ),
           ),
     ];
@@ -387,6 +404,7 @@ class ShootingPlanPdf {
     required List<ShootingPlanDay> days,
     List<ShootingPlanOverview> overviews = const [],
     bool withLight = true,
+    Uint8List? coverImage,
   }) async {
     final fonts = await PdfExportFonts.load();
     final theme = PdfExportFonts.theme(
@@ -426,11 +444,9 @@ class ShootingPlanPdf {
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
-            pw.Container(
-              height: 170,
-              color: PdfColors.black,
-              padding: const pw.EdgeInsets.fromLTRB(36, 30, 36, 24),
-              child: pw.Column(
+            _coverBand(
+              coverImage,
+              pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 mainAxisAlignment: pw.MainAxisAlignment.end,
                 children: [
@@ -582,6 +598,39 @@ class ShootingPlanPdf {
       );
     }
     return doc.save();
+  }
+
+  /// La banda de la portada: negra o con la imagen elegida, oscurecida para
+  /// que el título se lea.
+  static pw.Widget _coverBand(Uint8List? image, pw.Widget title) {
+    const height = 170.0;
+    final content = pw.Padding(
+      padding: const pw.EdgeInsets.fromLTRB(36, 30, 36, 24),
+      child: title,
+    );
+    if (image == null) {
+      return pw.Container(
+        height: height,
+        color: PdfColors.black,
+        child: content,
+      );
+    }
+    return pw.SizedBox(
+      height: height,
+      child: pw.ClipRect(
+        child: pw.Stack(
+          fit: pw.StackFit.expand,
+          children: [
+            pw.Image(pw.MemoryImage(image), fit: pw.BoxFit.cover),
+            pw.Opacity(
+              opacity: 0.5,
+              child: pw.Container(color: PdfColors.black),
+            ),
+            content,
+          ],
+        ),
+      ),
+    );
   }
 
   /// Destino de la línea del índice, si el bloque abre una entrada.
