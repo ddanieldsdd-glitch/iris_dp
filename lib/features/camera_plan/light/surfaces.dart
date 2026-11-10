@@ -22,6 +22,18 @@ class SurfaceMaterial {
     this.beamDeg = 120,
   });
 
+  /// Color de la superficie como 0xRRGGBB, con el brillo de [reflectance] y
+  /// teñido según [miredShift]. Va en valores lineales: es como lo leen el
+  /// visor y el `baseColor` del glTF que llega a Unreal, así que una pared
+  /// del 35 % devuelve allí un 35 %.
+  int get albedoRgb {
+    final k = (miredShift / 250).clamp(-0.35, 0.35);
+    final r = 1 + k, b = 1 - k;
+    final scale = reflectance / (0.2126 * r + 0.7152 + 0.0722 * b);
+    int byte(double v) => ((v * scale).clamp(0.0, 1.0) * 255).round();
+    return byte(r) << 16 | byte(1) << 8 | byte(b);
+  }
+
   static SurfaceMaterial byId(String? id, List<SurfaceMaterial> from) {
     for (final m in from) {
       if (m.id == id) return m;

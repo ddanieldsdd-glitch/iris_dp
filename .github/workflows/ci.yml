@@ -35,6 +35,13 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
+      # Donde se juegan los datos del usuario, un aviso también para el CI.
+      - name: Analyze (sin avisos en datos y actualizador)
+        run: flutter analyze lib/core/sync lib/core/database lib/core/update --no-fatal-infos
+
+      - name: Architecture
+        run: dart run tool/check_architecture.dart
+
       - name: Test
         run: flutter test
 
@@ -58,6 +65,26 @@ jobs:
 
       - name: Build iOS (sin firmar)
         run: flutter build ios --release --no-codesign --no-tree-shake-icons
+
+  # El Mac es la plataforma principal: que un PR no la rompa sin que se vea.
+  build-macos:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.8
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build macOS
+        run: flutter build macos --release --no-tree-shake-icons
 
   # Compila la app de Windows para que una rotura se vea en el PR y no meses
   # después (estuvo rota desde v1.0.18 sin que se notara). Deja el zip para

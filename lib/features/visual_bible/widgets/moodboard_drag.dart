@@ -53,7 +53,13 @@ class MoodboardDraggableThumb extends StatelessWidget {
     final thumb = ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: file.existsSync()
-          ? Image.file(file, width: width, height: height, fit: BoxFit.cover)
+          ? Image.file(
+              file,
+              width: width,
+              height: height,
+              cacheWidth: (width * 3).round(),
+              fit: BoxFit.cover,
+            )
           : Container(
               width: width,
               height: height,
@@ -75,7 +81,13 @@ class MoodboardDraggableThumb extends StatelessWidget {
         child: Opacity(
           opacity: 0.92,
           child: file.existsSync()
-              ? Image.file(file, width: width, height: height, fit: BoxFit.cover)
+              ? Image.file(
+                  file,
+                  width: width,
+                  height: height,
+                  cacheWidth: (width * 3).round(),
+                  fit: BoxFit.cover,
+                )
               : SizedBox(width: width, height: height),
         ),
       ),

@@ -123,6 +123,7 @@ class MoodboardStrip extends ConsumerWidget {
                             file,
                             width: _thumbW,
                             height: _thumbH,
+                            cacheWidth: (_thumbW * 3).round(),
                             fit: BoxFit.cover,
                           )
                         : Container(

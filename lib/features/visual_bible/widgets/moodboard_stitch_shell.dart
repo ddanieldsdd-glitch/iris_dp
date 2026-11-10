@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -421,14 +422,17 @@ class MoodboardMasonryGrid extends StatelessWidget {
           }
 
           final isExtra = i >= itemCount;
-          final child = isExtra
-              ? extras[i - itemCount]
-              : itemBuilder(context, i);
-
           final aspect = isExtra
               ? 1.0
               : (imageAspectOf?.call(i) ?? fallbackAspectForIndex(i));
           final estH = isExtra ? 320.0 : colWidth / aspect;
+
+          final child = isExtra
+              ? extras[i - itemCount]
+              : MoodboardLazyTile(
+                  height: estH,
+                  builder: (context) => itemBuilder(context, i),
+                );
 
           columnChildren[bestCol].add(
             Padding(
@@ -457,6 +461,85 @@ class MoodboardMasonryGrid extends StatelessWidget {
       },
     );
   }
+}
+
+/// Una baldosa que no se construye hasta que está cerca de verse.
+///
+/// Con cientos de referencias, construirlas todas al abrir decodifica cientos
+/// de fotos. Hasta entonces ocupa su alto estimado, y una vez construida ya
+/// no se quita: así el desplazamiento no da saltos al volver atrás.
+class MoodboardLazyTile extends StatefulWidget {
+  final double height;
+  final WidgetBuilder builder;
+
+  /// Pantallas de margen alrededor de lo visible.
+  static const reach = 1.0;
+
+  const MoodboardLazyTile({
+    super.key,
+    required this.height,
+    required this.builder,
+  });
+
+  @override
+  State<MoodboardLazyTile> createState() => _MoodboardLazyTileState();
+}
+
+class _MoodboardLazyTileState extends State<MoodboardLazyTile> {
+  bool _built = false;
+  ScrollPosition? _position;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_built) return;
+    final position = Scrollable.maybeOf(context)?.position;
+    if (position == null) {
+      // Sin nada que desplazar (un PDF, una prueba) se ve todo.
+      _built = true;
+      _attach(null);
+      return;
+    }
+    _attach(position);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+  }
+
+  void _attach(ScrollPosition? position) {
+    if (identical(position, _position)) return;
+    _position?.removeListener(_check);
+    _position = position;
+    position?.addListener(_check);
+  }
+
+  void _check() {
+    if (!mounted || _built) return;
+    final position = _position;
+    final box = context.findRenderObject();
+    if (position == null || box is! RenderBox || !box.hasSize) return;
+    final viewport = RenderAbstractViewport.maybeOf(box);
+    var near = true;
+    if (viewport != null && position.hasContentDimensions) {
+      final top = viewport.getOffsetToReveal(box, 0).offset;
+      final margin = position.viewportDimension * MoodboardLazyTile.reach;
+      near =
+          top < position.pixels + position.viewportDimension + margin &&
+          top + box.size.height > position.pixels - margin;
+    }
+    if (!near) return;
+    _attach(null);
+    setState(() => _built = true);
+  }
+
+  @override
+  void dispose() {
+    _position?.removeListener(_check);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _built
+      ? widget.builder(context)
+      : SizedBox(height: widget.height);
 }
 
 /// Tarjeta "Project Palette" embebida en el masonry.

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/sized_file_image.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/clipboard_image_reader.dart';
@@ -1102,6 +1103,7 @@ class _MoodboardSectionState extends ConsumerState<MoodboardSection> {
                             File(c.path),
                             width: 56,
                             height: 40,
+                            cacheWidth: 168,
                             fit: BoxFit.cover,
                           ),
                         );
@@ -1398,10 +1400,9 @@ class _MoodboardImageCardState extends State<_MoodboardImageCard> {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Image.file(
-                        File(image.imagePath),
+                      SizedFileImage(
+                        image.imagePath,
                         fit: BoxFit.cover,
-                        alignment: Alignment.center,
                         errorBuilder: (_, __, ___) => ColoredBox(
                           color: palette.surfaceElevated,
                           child: Icon(

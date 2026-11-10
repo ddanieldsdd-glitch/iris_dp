@@ -56,17 +56,17 @@ Comprobación: pruebas de widget por recorrido (plano→planta→plano; plano nu
 - 🟡 `updated_at` lo pone el servidor y la mezcla corrige el desfase del reloj (`ServerClock`); necesita la misma migración 013. **FI.3 Reloj.** Decidir el ganador con hora del servidor o contador de revisión, no con `DateTime.now()` local.
 - 🟡 Cola, borrados, copias y volcado de la base van a `ErrorLog` (sin los fallos de red); quedan las lápidas en la base (exige subir el esquema, choca con la rama de rodaje) y el lint por carpetas (el analizador no lo permite por carpeta). **FI.4 Errores a la vista.** La cola de subida y los borrados escriben en `ErrorLog`; lápidas de borrado a la base (hoy en SharedPreferences); lint `avoid_catches_without_on_clauses` por carpetas, empezando por `core/sync` y `core/database`. Envío de informe de fallos **solo si Daniel lo activa**.
 - 🟡 Copia diaria, segunda carpeta en ordenador y pantalla de restaurar hechas; falta el archivo `.iris`, y las copias no incluyen imágenes. **FI.5 Copias.** Copia diaria automática, segunda ubicación elegible (iCloud Drive o disco), pantalla «Restaurar copia», y archivo de proyecto `.iris` para traspasar o archivar.
-- **FI.6 Actualizador.** SHA-256 en `app_releases` y comprobación antes de instalar; validar rutas del zip en Windows; conservar la versión anterior para poder volver. Notarización: decisión de Daniel (cuenta de desarrollador de pago).
-- **FI.7 Base.** `PRAGMA integrity_check` y revisión de huérfanos al arrancar (informar, no borrar); instantáneas de esquema de Drift con pruebas de migración por versión.
-- **FI.8 CI.** `tool/check_architecture.dart`, build de macOS en cada PR, avisos fatales por carpetas. Actualizar `AI_CONTEXT.md`.
+- 🟡 Huella, rutas del zip y copia de la versión anterior hechas; falta un botón para volver a ella (choca con la actualización automática) y notarizar. La huella necesita la migración 014. **FI.6 Actualizador.** SHA-256 en `app_releases` y comprobación antes de instalar; validar rutas del zip en Windows; conservar la versión anterior para poder volver. Notarización: decisión de Daniel (cuenta de desarrollador de pago).
+- 🟡 Revisión al arrancar y en Ajustes, e instantánea del esquema 62. No hay instantáneas de versiones anteriores, así que las pruebas de migración por versión empiezan a partir de aquí. **FI.7 Base.** `PRAGMA integrity_check` y revisión de huérfanos al arrancar (informar, no borrar); instantáneas de esquema de Drift con pruebas de migración por versión.
+- ✅ **FI.8 CI.** `tool/check_architecture.dart`, build de macOS en cada PR, avisos fatales por carpetas. Actualizar `AI_CONTEXT.md`.
 
 ## RD · Rendimiento y limpieza
 
 - 🟡 Solo se baja el contenido de lo que puede haber cambiado y la huella se calcula fuera de la interfaz; la exportación local sigue en el hilo principal. **RD.1** Sync: comparar por hash y fecha sin bajar el contenido; hash local guardado y recalculado solo si algo cambió; exportación en isolate.
-- **RD.2** Mapa de luz en isolate (B5) y lienzo como imagen (R5).
-- **RD.3** Moodboard perezoso con `cacheWidth`; `MediaOptimizer` en isolate.
-- **RD.4** Partir `camera_plan_editor.dart` (8.127 líneas), aprovechando FL.6.
-- **RD.5** Fase 5: borrar V2, Look Bible, ~6.000 líneas sin uso, activos PHFX huérfanos, tarjetas «Próximamente» ya resueltas; podar worktrees y ramas fusionadas.
+- ✅ El mapa fino va en otro hilo; el lienzo como imagen (R5) ya estaba. **RD.2** Mapa de luz en isolate (B5) y lienzo como imagen (R5).
+- ✅ **RD.3** Moodboard perezoso con `cacheWidth`; `MediaOptimizer` en isolate.
+- 🟡 Las clases de abajo pasan a archivos `part` (6.775 líneas quedan en el principal); el `State` sigue entero, y con él lo que falta de FL.6. **RD.4** Partir `camera_plan_editor.dart` (8.127 líneas), aprovechando FL.6.
+- 🟡 Borrados 37 archivos (5.577 líneas) que nadie importa ni en la app, ni en pruebas, ni en otras ramas. V2 no se puede borrar entero: la biblia usa partes. Look Bible (pantalla) borrada. PHFX se queda: lo usa `tools/import_phfx_shotprep.py` y no entra en la app. Worktrees y ramas sin podar: hay sesiones que pueden estar usándolos. **RD.5** Fase 5: borrar V2, Look Bible, ~6.000 líneas sin uso, activos PHFX huérfanos, tarjetas «Próximamente» ya resueltas; podar worktrees y ramas fusionadas.
 
 ## ES · Escaneo de localizaciones
 
@@ -81,9 +81,9 @@ Comprobación: pruebas de widget por recorrido (plano→planta→plano; plano nu
 
 - 🟡 Hecho en la app, el visor, el MVR y el script de Unreal; sin probar dentro de Unreal. **UN.1 RGB de los focos** a Unreal, al MVR y al visor 3D (hoy solo viaja la temperatura).
 - 🟡 Alto de sensor, squeeze y actores (bloque con altura, orientación y pose) hechos, sin probar dentro de Unreal; sigue sin haber modo de cámara por elemento (se usa el sensor de la cámara) y un actor con modelo propio no cambia de pose. **UN.2 Cámara completa.** Alto de sensor y squeeze desde el modo del catálogo; fuera el 16:9 forzado; orientación, altura y pose de actores.
-- **UN.3 Paquete `.irisstage` portable** (F6.16.1): escena v2 en unidades reales + estructura GLB + escaneos + miniaturas; el plugin lo importa sin enlace vivo. Después, valorar salida USD.
+- 🟡 Paquete, botón en Exportar e `import_package` hechos, sin miniaturas ni USD; sin probar dentro de Unreal. **UN.3 Paquete `.irisstage` portable** (F6.16.1): escena v2 en unidades reales + estructura GLB + escaneos + miniaturas; el plugin lo importa sin enlace vivo. Después, valorar salida USD.
 - **UN.4 Fotometría real.** Archivo IES por foco en el catálogo, usado por el motor de luz y asignado en Unreal; GDTF real en el MVR donde exista. Requiere rellenar el Excel (87 focos pendientes).
-- **UN.5 Materiales.** Fab/Megascans en paredes y suelos (F6.20 D3), tabla material IRIS ↔ material Unreal con reflectancia, y comparación de lux IRIS ↔ Unreal (F6.21.4).
+- 🟡 Las paredes con material llevan su reflectancia y su tinte al visor y al glTF de Unreal. Fab/Megascans por superficie y la comparación de lux necesitan Unreal delante. **UN.5 Materiales.** Fab/Megascans en paredes y suelos (F6.20 D3), tabla material IRIS ↔ material Unreal con reflectancia, y comparación de lux IRIS ↔ Unreal (F6.21.4).
 - **UN.6 Ver algo parecido en Mac e iPad.** Packs CC0 (Poly Haven, ambientCG) con texturas PBR y HDRI en el visor, emparejados por tipo de superficie con el material de Unreal. A verificar: si la licencia actual de Fab permite cargar en IRIS el GLB que Daniel descarga con su cuenta (sin redistribuirlo); si es así, se revisa la decisión «solo dentro de Unreal».
 - **UN.7 Base del visor** (F6.0): three.js moderno, más de 14 luces, luces de área; habilita splats reales.
 - **UN.8 Level Sequence** a partir de recorridos de cámara y actores (F6.16.7).

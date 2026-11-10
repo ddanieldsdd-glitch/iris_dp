@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
@@ -37,6 +38,7 @@ import '../../unreal_link/unreal_link_button.dart';
 import '../../unreal_link/unreal_asset_tile.dart';
 import '../../unreal_link/unreal_render_view.dart';
 import '../../unreal_link/unreal_return.dart';
+import '../../unreal_link/unreal_stage_package.dart';
 import '../../unreal_link/unreal_stage_payload.dart';
 import '../../unreal_link/unreal_thumbs.dart';
 import '../../../core/sync/plan_scan_store.dart';
@@ -308,17 +310,19 @@ class _Plan3dViewState extends State<Plan3dView> {
     _debounce = Timer(const Duration(milliseconds: 150), _push);
   }
 
+  Map<String, dynamic> _buildScene() => PlanScene3d.build(
+    widget.elements,
+    metersPerUnit: widget.metersPerUnit,
+    exposure: widget.exposure,
+    stop: widget.stop,
+    environment: widget.environment,
+    name: widget.name,
+    ambient: widget.ambient,
+  );
+
   Future<void> _push() async {
     if (!mounted) return;
-    final scene = PlanScene3d.build(
-      widget.elements,
-      metersPerUnit: widget.metersPerUnit,
-      exposure: widget.exposure,
-      stop: widget.stop,
-      environment: widget.environment,
-      name: widget.name,
-      ambient: widget.ambient,
-    );
+    final scene = _buildScene();
     // Unreal recibe la misma escena, esté o no listo el visor (siempre con
     // la exposición: la luz de trabajo es solo para el visor).
     // Otra estructura (otro set, o una pared movida): la anterior no se
@@ -1213,6 +1217,73 @@ class _Plan3dViewState extends State<Plan3dView> {
     );
   }
 
+  /// Todo el set en un archivo que Unreal abre sin enlace en vivo: para
+  /// llevarlo a otro PC o guardarlo con el proyecto.
+  Future<void> _exportStagePackage() async {
+    final web = _web;
+    if (web == null || !_ready) return;
+    setState(() => _status = 'Preparando el paquete…');
+    final result = await web.callAsyncJavaScript(
+      functionBody: 'return await iris.structureGlb();',
+    );
+    final b64 = result?.value;
+    await _shareScanFolders();
+    final payload = UnrealStagePayload.build(
+      _buildScene(),
+      world: widget.unrealWorld,
+    );
+    final bytes = await UnrealStagePackage.buildInBackground(
+      payload: payload,
+      structureGlb: b64 is String && b64.isNotEmpty ? base64Decode(b64) : null,
+      scans: await UnrealStagePackage.collectScans(
+        (payload['scans'] as List).cast<Map>(),
+        UnrealStagePayload.scanFolders,
+      ),
+    );
+    final base = (widget.name ?? 'planta').replaceAll(RegExp(r'[^\w\- ]'), '');
+    final path = await ExportFileSaver.saveBytes(
+      bytes: bytes,
+      dialogTitle: 'Guardar el paquete para Unreal',
+      fileName: base,
+      extension: UnrealStagePackage.extension,
+    );
+    if (!mounted) return;
+    setState(() => _status = null);
+    if (path == null) return;
+    final command = UnrealStagePackage.importCommand(path);
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Paquete guardado'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'En Unreal, con IRIS Stage instalado, pega esto en la consola '
+              'de Python. Si llevas el archivo a otro equipo, cambia la ruta.',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            SelectableText(command),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: command));
+              Navigator.pop(context);
+            },
+            child: const Text('Copiar orden'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Guarda lo que se ve en un glTF binario, para Unreal o cualquier
   /// programa 3D.
   Future<void> _exportGlb() async {
@@ -1788,6 +1859,12 @@ class _Plan3dViewState extends State<Plan3dView> {
           icon: const Icon(Icons.lightbulb_outline, size: 16),
           label: const Text('MVR con la nave y la estructura'),
           onPressed: _exportMvr,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.inventory_2_outlined, size: 16),
+          label: const Text('Paquete para Unreal (.irisstage)'),
+          onPressed: _exportStagePackage,
         ),
         header('Unreal en vivo'),
         ListenableBuilder(

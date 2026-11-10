@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -6,6 +7,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import '../../core/utils/error_log.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/ambient.dart';
@@ -627,9 +629,25 @@ class PlanLightMapCache extends ChangeNotifier {
   final int coarseBudget;
   final int fineBudget;
 
-  PlanLightMapCache({this.coarseBudget = 60000, this.fineBudget = 240000});
+  /// Afinar en otro hilo: el lienzo pinta el mapa grueso y se repinta solo
+  /// cuando llega el fino. Es lo que usa el editor; quien necesite la
+  /// respuesta exacta en el momento (fotómetro, PDF) calcula en el sitio.
+  final bool background;
+
+  PlanLightMapCache({
+    this.coarseBudget = 60000,
+    this.fineBudget = 240000,
+    this.background = false,
+  });
 
   int? _key;
+
+  /// La luz a la que corresponde [_map], sea fino o borrador.
+  int? _baseKey;
+  int _job = 0;
+  int? _pendingKey;
+  double? _pendingExposure;
+  bool _backgroundBroken = false;
   PlanLightMap? _map;
   bool _disposed = false;
 
@@ -696,14 +714,79 @@ class PlanLightMapCache extends ChangeNotifier {
     // Se mira algo más abajo de lo que hace falta: así un cambio pequeño de
     // ISO o de diafragma no obliga a rehacerlo.
     final reach = exposureKeyLux == null ? null : exposureKeyLux / 2;
-    _key = wanted;
+    if (!background || draft || _backgroundBroken) {
+      // Lo que quedara por llegar ya es de otra luz.
+      _job++;
+      _pendingKey = null;
+      _key = wanted;
+      _baseKey = key;
+      return _map = PlanLightMap.compute(
+        scene,
+        rect,
+        budget: draft ? coarseBudget : fineBudget,
+        exposureKeyLux: reach,
+      );
+    }
+    if (_pendingKey != wanted || _pendingExposure != exposureKeyLux) {
+      _refineElsewhere(scene, key, wanted, rect, exposureKeyLux, reach);
+    }
+    if (current != null && _baseKey == key) return current;
+    // Mientras llega el fino hace falta algo de esta luz, y no de la anterior.
+    _key = Object.hash(key, true);
+    _baseKey = key;
     return _map = PlanLightMap.compute(
       scene,
       rect,
-      budget: draft ? coarseBudget : fineBudget,
+      budget: coarseBudget,
       exposureKeyLux: reach,
     );
   }
+
+  void _refineElsewhere(
+    LightScene scene,
+    int key,
+    int wanted,
+    Rect rect,
+    double? exposureKeyLux,
+    double? reach,
+  ) {
+    final job = ++_job;
+    _pendingKey = wanted;
+    _pendingExposure = exposureKeyLux;
+    _computeInIsolate(scene, rect, fineBudget, reach).then(
+      (map) {
+        if (_disposed || job != _job) return;
+        _pendingKey = null;
+        _key = wanted;
+        _baseKey = key;
+        _map = map;
+        notifyListeners();
+      },
+      onError: (Object error, StackTrace stack) {
+        if (_disposed || job != _job) return;
+        // Si no se puede enviar a otro hilo, se calcula aquí como antes.
+        _pendingKey = null;
+        _backgroundBroken = true;
+        ErrorLog.record(error, stack, context: 'Mapa de luz en segundo plano');
+        notifyListeners();
+      },
+    );
+  }
+
+  /// Función estática para que el cierre no arrastre el objeto entero.
+  static Future<PlanLightMap> _computeInIsolate(
+    LightScene scene,
+    Rect rect,
+    int budget,
+    double? reach,
+  ) => Isolate.run(
+    () => PlanLightMap.compute(
+      scene,
+      rect,
+      budget: budget,
+      exposureKeyLux: reach,
+    ),
+  );
 
   /// Tras cuánto tiempo sin cambios se afina la luz.
   static const settleDelay = Duration(milliseconds: 280);

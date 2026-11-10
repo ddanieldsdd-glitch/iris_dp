@@ -48,11 +48,13 @@ import struct
 import time
 import unicodedata
 import uuid
+import zipfile
 import zlib
 
 import unreal
 
 VERSION = 1
+PACKAGE_VERSION = 1
 FOLDER = "IRIS"
 TAG_PREFIX = "iris:"
 SUN_ID = "_sun"
@@ -881,6 +883,45 @@ def _remove(ids):
             _actors.pop(str(uid), None)
 
 
+def read_package(path, dest):
+    """Abre un paquete .irisstage en la carpeta `dest` y devuelve la escena
+    lista para aplicar, con sus rutas apuntando a lo extraído."""
+    with zipfile.ZipFile(path) as package:
+        manifest = json.loads(package.read("manifest.json").decode("utf-8"))
+        if manifest.get("format") != "irisstage":
+            raise ValueError("Este archivo no es un paquete de IRIS.")
+        if int(manifest.get("version", 0)) > PACKAGE_VERSION:
+            raise ValueError("El paquete es más nuevo que el plugin: actualízalo.")
+        wanted = [n for n in package.namelist()
+                  if n == manifest.get("structure") or n.startswith("scans/")]
+        # extractall limpia los «..» y las rutas absolutas.
+        package.extractall(dest, members=wanted)
+    data = manifest["payload"]
+    data["full"] = True
+    data.pop("structure", None)
+    if manifest.get("structure"):
+        data["structure"] = {"file": manifest["structure"], "folder": dest}
+    data["scanFolders"] = [os.path.join(dest, "scans")]
+    return data
+
+
+def import_package(path):
+    """Monta en el nivel abierto (o en el suyo, si trae mundo) un paquete
+    .irisstage, sin enlace en vivo con IRIS. Desde la consola Python:
+    import iris_stage_link; iris_stage_link.import_package(r"C:\\ruta\\a.irisstage")
+    """
+    saved = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir())
+    stem = re.sub(r"[^0-9a-zA-Z_-]", "_", os.path.splitext(os.path.basename(path))[0])
+    dest = os.path.join(saved, "IRIS", "Paquetes", stem)
+    os.makedirs(dest, exist_ok=True)
+    data = read_package(path, dest)
+    if int(data.get("v", 0)) > VERSION:
+        raise ValueError("IRIS es más nuevo que el plugin: actualízalo.")
+    lights = _apply(data)
+    unreal.log("[IRIS Stage] Paquete montado: %d luces." % lights)
+    return lights
+
+
 def _apply(data):
     lights = data.get("lights", [])
     cameras = data.get("cameras", [])
@@ -971,6 +1012,16 @@ class IrisStageLink(unreal.BlueprintFunctionLibrary):
             n = _apply(data)
             ms = (time.perf_counter() - t0) * 1000
             return json.dumps({"ok": True, "lights": n, "ms": round(ms, 1),
+                               "world": _current_world()})
+        except Exception as exc:
+            unreal.log_error("[IRIS Stage] %s" % exc)
+            return json.dumps({"ok": False, "error": str(exc)})
+
+    @unreal.ufunction(static=True, params=[str], ret=str,
+                      meta=dict(Category="IRIS Stage"))
+    def ImportPackage(path):
+        try:
+            return json.dumps({"ok": True, "lights": import_package(path),
                                "world": _current_world()})
         except Exception as exc:
             unreal.log_error("[IRIS Stage] %s" % exc)

@@ -58,7 +58,7 @@ class CloudMediaService {
     if (!File(localPath).existsSync()) return null;
 
     final rawBytes = await File(localPath).readAsBytes();
-    final optimized = MediaOptimizer.optimizeBytes(
+    final optimized = await MediaOptimizer.optimizeInBackground(
       rawBytes,
       extension: _extFromPath(localPath),
     );

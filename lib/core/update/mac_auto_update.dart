@@ -333,7 +333,9 @@ fi
 OLD="$DEST.anterior"
 rm -rf "$OLD"
 if mv "$DEST" "$OLD" && mv "$STAGED" "$DEST" && verify "$DEST"; then
-  rm -rf "$OLD"
+  # La que había se guarda fuera de Aplicaciones, por si hay que volver a ella.
+  PREV="$(dirname "$DIR")/version-anterior"
+  mkdir -p "$PREV" && rm -rf "$PREV/IRIS.app" && mv "$OLD" "$PREV/IRIS.app" || rm -rf "$OLD"
   rm -f "$MARKER"
   log "Actualizada: $DEST"
 elif [ -d "$OLD" ]; then

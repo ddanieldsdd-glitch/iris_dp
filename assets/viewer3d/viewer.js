@@ -495,6 +495,24 @@
 
   const wallMat = new THREE.MeshStandardMaterial({ color: 0xc3c9ce, roughness: 0.85, side: THREE.DoubleSide, transparent: true, opacity: 0.6, depthWrite: false });
   const wallSolid = new THREE.MeshStandardMaterial({ color: 0xd9dcdf, roughness: 0.9, side: THREE.DoubleSide });
+  // Paredes con material elegido en la planta: su color, tanto aquí como en
+  // el glTF que va a Unreal. Allí van siempre opacas (solidOf).
+  const surfaceMats = new Map();
+  const solidOf = new WeakMap();
+  function wallMaterial(w) {
+    if (w.rgb == null) return clearView ? wallSolid : wallMat;
+    let m = surfaceMats.get(w.rgb);
+    if (!m) {
+      const solid = wallSolid.clone();
+      solid.color.setHex(w.rgb);
+      const seen = wallMat.clone();
+      seen.color.setHex(w.rgb);
+      solidOf.set(seen, solid);
+      m = { solid, seen };
+      surfaceMats.set(w.rgb, m);
+    }
+    return clearView ? m.solid : m.seen;
+  }
   const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fc7d6, roughness: 0.1, metalness: 0.1, side: THREE.DoubleSide, transparent: true, opacity: 0.25, depthWrite: false });
 
   // Un tramo de pared con grosor (CA.1): las dos caras, el canto de arriba,
@@ -683,7 +701,7 @@
         }
       }
     }
-    L.walls.add(meshFrom(pos, clearView ? wallSolid : wallMat, w.id));
+    L.walls.add(meshFrom(pos, wallMaterial(w), w.id));
     for (const o of holes) addLeaves(o, z0, w.tops[0]);
     if (glass.length) L.glass.add(meshFrom(glass, glassMat, null));
   }
@@ -1707,7 +1725,7 @@
       g.updateWorldMatrix(true, true);
       g.traverse((o) => {
         if (!o.isMesh || !o.geometry) return;
-        const mat = o.material;
+        const mat = solidOf.get(o.material) || o.material;
         if (mat && mat.blending === THREE.AdditiveBlending) return;
         const geo = o.geometry.clone();
         geo.applyMatrix4(o.matrixWorld);

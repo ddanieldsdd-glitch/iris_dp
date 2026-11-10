@@ -5,7 +5,7 @@
 * App Flutter de preproducción cinematográfica (guion, localizaciones, biblia visual, moodboard, equipo, export PDF, colaboración nube).
 * Stack: Flutter 3.8+ / Dart, Riverpod, Drift+SQLite, Supabase Auth+Postgres+Storage, Cloudinary (media), Syncfusion/pdf, GitHub Actions release.
 * Plataformas: macOS (principal), Windows, iPad/iOS (SideStore IPA). Sin Android en árbol.
-* Estado: v1.0.19+16; nube opcional; Fase 3 piloto Camera cerrado (Format + Camera); rama `cursor/fase3-format-pilot` con cambios locales no commit.
+* Estado (noviembre de 2026): v1.7.4+35; nube opcional. La versión y el esquema exactos están en `pubspec.yaml` y en `kSchemaVersion`; los planes vivos, en `docs/PLAN_*.md`.
 
 ## 2. ARCHITECTURE
 
@@ -13,7 +13,7 @@ UI (Screens/widgets en `lib/features/*`)
 → State (Riverpod Notifiers/Providers; `setState` OK para UI pura)
 → Services (`lib/core/sync`, `lib/core/cloud`, `lib/core/storage`, `lib/core/update`, feature services)
 → Repositories (parcial: VB, shoot_documents, floor_plan; muchas screens aún tocan DB)
-→ Local DB / Cache (`AppDatabase` Drift schema **41**, SharedPreferences estilos/compositor)
+→ Local DB / Cache (`AppDatabase` Drift schema `kSchemaVersion`, con instantáneas en `drift_schemas/`, SharedPreferences estilos/compositor)
 → Supabase (`cloud_projects`, snapshots, media metadata) + Cloudinary (bytes)
 
 Reglas oficiales: `ARCHITECTURE.md` — `core` ↛ `features` (aún hay excepción en `app_database.dart`); features ↛ features salvo dominio justificado; UI ↛ Drift/Supabase directo (objetivo, no realidad total). Prioridad: estabilidad → mantenibilidad → features → UI.
@@ -36,7 +36,7 @@ lib/
 │                               pdf_export, luka_export, onboarding, migration, …
 └── shared/                   → auth, visual_bible (pilots resolve), annotations,
                                 equipment, pdf_export, look_bible
-supabase/migrations/          → SQL+RLS (001…010)
+supabase/migrations/          → SQL+RLS (001…014)
 docs/                         → release, bible state, cloudinary (no es código)
 test/                         → suite amplia
 scripts/                      → build dmg/windows/ipad, register release

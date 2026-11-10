@@ -36,8 +36,16 @@ abstract final class FileExistsCache {
 class SizedFileImage extends StatelessWidget {
   final String path;
   final BoxFit fit;
+  final Alignment alignment;
+  final ImageErrorWidgetBuilder? errorBuilder;
 
-  const SizedFileImage(this.path, {super.key, this.fit = BoxFit.contain});
+  const SizedFileImage(
+    this.path, {
+    super.key,
+    this.fit = BoxFit.contain,
+    this.alignment = Alignment.center,
+    this.errorBuilder,
+  });
 
   /// Se decodifica por tramos: cambiar un poco el tamaño de la ventana no
   /// vuelve a decodificar nada.
@@ -60,6 +68,8 @@ class SizedFileImage extends StatelessWidget {
       builder: (context, constraints) => Image.file(
         File(path),
         fit: fit,
+        alignment: alignment,
+        errorBuilder: errorBuilder,
         gaplessPlayback: true,
         cacheWidth: constraints.hasBoundedWidth
             ? decodeWidth(constraints.maxWidth, pixelRatio, fit)

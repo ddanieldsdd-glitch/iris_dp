@@ -1434,7 +1434,7 @@ class ProjectContentBundle {
               if (t.actualTableName == table) t,
           },
         );
-        if (table == 'shot_references' && imported != null) {
+        if (table == 'shot_references') {
           await db.customUpdate(
             'UPDATE shots SET reference_image_path = ? '
             'WHERE reference_image_path = ? AND project_id = ?',

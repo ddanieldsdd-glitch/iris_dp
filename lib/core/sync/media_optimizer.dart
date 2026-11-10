@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:image/image.dart' as img;
 
 import '../cloud/cloudinary_config.dart';
@@ -22,6 +23,16 @@ class MediaOptimizeResult {
 
 /// Redimensiona y comprime imágenes antes de subir a Cloudinary.
 abstract final class MediaOptimizer {
+  /// Como [optimizeBytes], en otro hilo: decodificar una foto grande tarda
+  /// lo bastante como para que se note en la interfaz.
+  static Future<MediaOptimizeResult> optimizeInBackground(
+    Uint8List input, {
+    String extension = '.jpg',
+  }) => compute(_optimize, (input, extension));
+
+  static MediaOptimizeResult _optimize((Uint8List, String) job) =>
+      optimizeBytes(job.$1, extension: job.$2);
+
   static MediaOptimizeResult optimizeBytes(
     Uint8List input, {
     String extension = '.jpg',

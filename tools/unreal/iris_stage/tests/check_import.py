@@ -3,11 +3,16 @@ mentira, para pillar fallos al importarlo (un nombre usado antes de
 definirlo, una errata): en Unreal, un fallo así deja a IRIS sin «IRIS Stage
 Link» y no lo dice en ningún sitio que se vea.
 
-Uso: python check_import.py <ruta a iris_stage_link.py>
+Uso: python check_import.py <ruta a iris_stage_link.py> [paquete.irisstage]
+
+Con un paquete, comprueba además que se abre y que sus archivos están donde
+la escena dice.
 """
 
 import importlib.util
+import os
 import sys
+import tempfile
 import types
 
 
@@ -43,4 +48,14 @@ spec = importlib.util.spec_from_file_location("iris_stage_link", path)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 assert hasattr(module, "IrisStageLink"), "falta la clase IrisStageLink"
+if len(sys.argv) > 2:
+    with tempfile.TemporaryDirectory() as dest:
+        data = module.read_package(sys.argv[2], dest)
+        assert data["full"] is True, "el paquete debe ser la escena entera"
+        structure = data.get("structure")
+        if structure:
+            assert os.path.isfile(os.path.join(structure["folder"], structure["file"]))
+        for scan in data.get("scans", []):
+            name = os.path.basename(scan["file"])
+            assert os.path.isfile(os.path.join(data["scanFolders"][0], name)), name
 print("OK")

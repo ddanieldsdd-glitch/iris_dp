@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../cloud/cloud_providers.dart';
 import '../database/app_database.dart';
+import '../database/database_health.dart';
 import '../database/database_provider.dart';
 import '../database/local_database_backup.dart';
 import '../sync/project_content_sync_service.dart';
@@ -146,6 +147,16 @@ class _SettingsBackupsSectionState
     );
   }
 
+  Future<void> _checkDatabase() async {
+    final report = await DatabaseHealth.check(ref.read(databaseProvider));
+    if (!mounted) return;
+    if (report.damaged) {
+      AppSnackBar.showError(context, report.summary);
+    } else {
+      AppSnackBar.show(context, report.summary);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -184,6 +195,15 @@ class _SettingsBackupsSectionState
                 key: const ValueKey('backup-now'),
                 onPressed: _backupNow,
                 child: const Text('Copiar'),
+              ),
+            ),
+            SettingsRow(
+              title: 'Comprobar la base de datos',
+              subtitle: 'También se revisa sola cada vez que abres IRIS.',
+              trailing: TextButton(
+                key: const ValueKey('database-check'),
+                onPressed: _checkDatabase,
+                child: const Text('Comprobar'),
               ),
             ),
             if (BackupPrefs.supported)

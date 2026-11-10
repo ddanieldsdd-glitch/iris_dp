@@ -17,7 +17,7 @@ Future<AppRelease?> fetchLatestReleaseForPlatform(
   try {
     final row = await supabase
         .from('app_releases')
-        .select('platform, version, build_number, download_url, release_notes')
+        .select('*') // Con «*» sigue funcionando si aún no existe la columna sha256.
         .eq('platform', platform)
         .order('build_number', ascending: false)
         .limit(1)

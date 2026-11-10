@@ -17,6 +17,7 @@ import '../light/plan_grip.dart';
 import '../camera_aim.dart';
 import '../light/meter.dart';
 import '../light/plan_light.dart';
+import '../light/surfaces.dart';
 import '../light/wall_mount.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
@@ -755,6 +756,9 @@ class PlanScene3d {
       'tops': tops,
       'thick': _r(thickM ?? PlanSegment.thicknessM(el)),
       'openings': holes,
+      // Solo si se le ha elegido material: sin él, el color neutro de siempre.
+      if (el.props[LightScene.materialKey] case final String material)
+        'rgb': SurfaceMaterial.byId(material, kWallMaterials).albedoRgb,
     };
   }
 
