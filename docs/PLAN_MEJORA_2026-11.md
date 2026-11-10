@@ -45,24 +45,24 @@ Respeta lo ya decidido: capas por referencia, un solo lienzo, nada superpuesto, 
 - ✅ **FL.5 Set nuevo acorde.** `pickLightSetupStart` gana «Como el set anterior» (vía `createLightSetupFrom(renewUids)`), además de «Luz de la localización» y «Vacío», y se usa en los 4 puntos de «Set nuevo». Escena nueva: `WhereField(initial:)` con el lugar de la escena anterior.
 - 🟡 Atajos, tira y carga de la lista de planos hechos; que el editor no se reconstruya va con RD.4. **FL.6 Pasar de plano sin esperar.** Atajos ⌘← / ⌘→ (y en la hoja de atajos). El cambio de plano no reconstruye el editor: se separa la carga del proyecto (ya en `PlanProjectData`) de la del plano. En la tira, tocar siempre abre; vincular pasa a un botón explícito cuando hay cámara seleccionada.
 - ✅ **FL.7 Quitar la puerta falsa.** `PlanEntryState.need` devuelve `none` si el plano ya tiene set, aunque la localización no tenga planta maestra.
-- **FL.8 Saltar a cualquier sitio.** Paleta ⌘K global (escenas, planos, sets, localizaciones) reutilizando el patrón de `bible_command_palette.dart`. Después, vista partida guion | planta en Mac e iPad ancho. Se retira el ajuste muerto «Cámaras de otros planos».
+- 🟡 Paleta ⌘K en guion y plantas hecha y ajuste muerto retirado; falta la vista partida guion | planta. **FL.8 Saltar a cualquier sitio.** Paleta ⌘K global (escenas, planos, sets, localizaciones) reutilizando el patrón de `bible_command_palette.dart`. Después, vista partida guion | planta en Mac e iPad ancho. Se retira el ajuste muerto «Cámaras de otros planos».
 
 Comprobación: pruebas de widget por recorrido (plano→planta→plano; plano nuevo con set y cámara heredados; set nuevo desde el anterior) y recuento de toques antes/después: a) 2→1, b) sin camino→1, c) ~8→1, d) ~6→2, e) con teclado.
 
 ## FI · Fiabilidad de datos
 
 - 🟡 Rechazar paquetes más nuevos ya está en `plan/rc-rodaje-control` (`assertReadable`), sin fusionar; la versión mínima en `app_releases` sigue pendiente porque exige cambiar Supabase. **FI.1 Versión de paquete (pequeño y crítico; primero junto a FL).** Al importar, rechazar un `bundleVersion` mayor que el conocido y no subir desde una app por debajo de la versión mínima publicada en `app_releases`. Antes, comprobar qué cubre ya el «P0.3 version guard» de la rama de rodaje.
-- **FI.2 Historial en la nube.** Tabla `cloud_project_snapshot_history` con disparador (últimas N versiones por proyecto) y pantalla «Restaurar versión».
-- **FI.3 Reloj.** Decidir el ganador con hora del servidor o contador de revisión, no con `DateTime.now()` local.
-- **FI.4 Errores a la vista.** La cola de subida y los borrados escriben en `ErrorLog`; lápidas de borrado a la base (hoy en SharedPreferences); lint `avoid_catches_without_on_clauses` por carpetas, empezando por `core/sync` y `core/database`. Envío de informe de fallos **solo si Daniel lo activa**.
-- **FI.5 Copias.** Copia diaria automática, segunda ubicación elegible (iCloud Drive o disco), pantalla «Restaurar copia», y archivo de proyecto `.iris` para traspasar o archivar.
+- 🟡 Hecho en la app y en `supabase/migrations/013`; funciona cuando se ejecute esa migración en Supabase. **FI.2 Historial en la nube.** Tabla `cloud_project_snapshot_history` con disparador (últimas N versiones por proyecto) y pantalla «Restaurar versión».
+- 🟡 `updated_at` lo pone el servidor y la mezcla corrige el desfase del reloj (`ServerClock`); necesita la misma migración 013. **FI.3 Reloj.** Decidir el ganador con hora del servidor o contador de revisión, no con `DateTime.now()` local.
+- 🟡 Cola, borrados, copias y volcado de la base van a `ErrorLog` (sin los fallos de red); quedan las lápidas en la base (exige subir el esquema, choca con la rama de rodaje) y el lint por carpetas (el analizador no lo permite por carpeta). **FI.4 Errores a la vista.** La cola de subida y los borrados escriben en `ErrorLog`; lápidas de borrado a la base (hoy en SharedPreferences); lint `avoid_catches_without_on_clauses` por carpetas, empezando por `core/sync` y `core/database`. Envío de informe de fallos **solo si Daniel lo activa**.
+- 🟡 Copia diaria, segunda carpeta en ordenador y pantalla de restaurar hechas; falta el archivo `.iris`, y las copias no incluyen imágenes. **FI.5 Copias.** Copia diaria automática, segunda ubicación elegible (iCloud Drive o disco), pantalla «Restaurar copia», y archivo de proyecto `.iris` para traspasar o archivar.
 - **FI.6 Actualizador.** SHA-256 en `app_releases` y comprobación antes de instalar; validar rutas del zip en Windows; conservar la versión anterior para poder volver. Notarización: decisión de Daniel (cuenta de desarrollador de pago).
 - **FI.7 Base.** `PRAGMA integrity_check` y revisión de huérfanos al arrancar (informar, no borrar); instantáneas de esquema de Drift con pruebas de migración por versión.
 - **FI.8 CI.** `tool/check_architecture.dart`, build de macOS en cada PR, avisos fatales por carpetas. Actualizar `AI_CONTEXT.md`.
 
 ## RD · Rendimiento y limpieza
 
-- **RD.1** Sync: comparar por hash y fecha sin bajar el contenido; hash local guardado y recalculado solo si algo cambió; exportación en isolate.
+- 🟡 Solo se baja el contenido de lo que puede haber cambiado y la huella se calcula fuera de la interfaz; la exportación local sigue en el hilo principal. **RD.1** Sync: comparar por hash y fecha sin bajar el contenido; hash local guardado y recalculado solo si algo cambió; exportación en isolate.
 - **RD.2** Mapa de luz en isolate (B5) y lienzo como imagen (R5).
 - **RD.3** Moodboard perezoso con `cacheWidth`; `MediaOptimizer` en isolate.
 - **RD.4** Partir `camera_plan_editor.dart` (8.127 líneas), aprovechando FL.6.

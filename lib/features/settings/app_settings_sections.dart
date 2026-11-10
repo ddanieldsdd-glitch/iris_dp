@@ -1,3 +1,4 @@
+import '../../core/settings/settings_backups_section.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/cloud/cloud_runtime_config.dart';
@@ -32,6 +33,7 @@ abstract final class SettingsSectionIds {
   static const status = 'status';
   static const updates = 'updates';
   static const storage = 'storage';
+  static const backups = 'backups';
   static const help = 'help';
   static const cameraPlan = 'camera_plan';
   static const bible = 'bible';
@@ -87,6 +89,16 @@ List<SettingsSectionSpec> appSettingsSections() => [
     group: SettingsGroup.app,
     keywords: const ['carpeta', 'ruta', 'datos'],
     builder: (context, _) => const SettingsStorageSection(),
+  ),
+  SettingsSectionSpec(
+    id: SettingsSectionIds.backups,
+    title: 'Copias de seguridad',
+    icon: Icons.history,
+    color: const Color(0xFF8E8E93),
+    group: SettingsGroup.app,
+    description: 'Volver a como estaban tus proyectos.',
+    keywords: const ['restaurar', 'versiones', 'recuperar', 'historial'],
+    builder: (context, _) => const SettingsBackupsSection(),
   ),
   SettingsSectionSpec(
     id: SettingsSectionIds.help,

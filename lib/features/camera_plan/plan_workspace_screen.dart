@@ -17,6 +17,7 @@ import 'shot_cover.dart';
 import 'plan_target.dart';
 import 'plan_thumbnail.dart';
 import 'project_focus.dart';
+import 'project_jump.dart';
 import '../technical_script/technical_script_screen.dart';
 import '../../shared/rich_text/script_markup.dart';
 
@@ -205,7 +206,13 @@ class _PlanWorkspaceScreenState extends ConsumerState<PlanWorkspaceScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ProjectJumpShortcut(
+    projectId: widget.projectId,
+    onPick: _open,
+    child: _buildScreen(context),
+  );
+
+  Widget _buildScreen(BuildContext context) {
     final palette = context.palette;
     if (AppLayout.isCompact(context)) {
       return Material(color: palette.background, child: _buildCompact(context));

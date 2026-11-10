@@ -11,6 +11,8 @@ import '../cloud/cloud_session.dart';
 import '../cloud/connectivity_status_provider.dart';
 import '../database/app_database.dart';
 import '../database/database_provider.dart';
+import '../database/local_database_backup.dart';
+import '../settings/settings_backups_section.dart';
 import '../utils/error_log.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/sync/sync_conflict_history_sheet.dart';
@@ -48,6 +50,8 @@ class AutoSyncScheduler extends ConsumerStatefulWidget {
 class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
     with WidgetsBindingObserver {
   Timer? _ticker;
+  Timer? _backupFirst;
+  Timer? _backupTicker;
   Timer? _editDebounce;
   StreamSubscription<int>? _queueWatch;
   int _lastQueueCount = 0;
@@ -60,6 +64,13 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
     WidgetsBinding.instance.addObserver(this);
     EditingGuard.active.addListener(_onEditingChanged);
     _startTicker();
+    // Sin estorbar el arranque; y otra vez de vez en cuando por si la app
+    // pasa días abierta.
+    _backupFirst = Timer(const Duration(seconds: 30), _dailyBackup);
+    _backupTicker = Timer.periodic(
+      const Duration(minutes: 30),
+      (_) => _dailyBackup(),
+    );
     unawaited(_connectLive());
     // Al abrir, la sesión aún se está cargando: el canal en vivo se abre en
     // cuanto hay usuario o vuelve la red (antes solo al volver a la app, y
@@ -86,10 +97,19 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
     ProjectContentSyncService.onUploaded = null;
     MediaUploadQueue.onProjectUploaded = null;
     _ticker?.cancel();
+    _backupFirst?.cancel();
+    _backupTicker?.cancel();
     _editDebounce?.cancel();
     _queueWatch?.cancel();
     super.dispose();
   }
+
+  void _dailyBackup() => unawaited(
+    LocalDatabaseBackup.createDailyIfDue(
+      ref.read(databaseProvider),
+      secondFolder: BackupPrefs.secondFolder(),
+    ),
+  );
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {

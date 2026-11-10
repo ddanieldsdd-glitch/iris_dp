@@ -33,12 +33,6 @@ class CameraPlanSettingsSection extends StatelessWidget {
                   'otros tramos',
             ),
             PrefSwitchRow(
-              pref: PlanPrefs.otherCameras,
-              scope: scope,
-              title: 'Cámaras de otros planos',
-              subtitle: 'Las de los planos que comparten el esquema de luz',
-            ),
-            PrefSwitchRow(
               pref: PlanPrefs.exposureMap,
               scope: scope,
               title: 'Mapa de exposición',

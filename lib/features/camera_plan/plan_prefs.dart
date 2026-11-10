@@ -5,7 +5,6 @@ import 'light/ambient.dart';
 /// empiezan las cámaras y los esquemas de luz nuevos.
 abstract final class PlanPrefs {
   static const snap = PrefKey<bool>('plan.snap', true);
-  static const otherCameras = PrefKey<bool>('plan.otherCameras', true);
   static const exposureMap = PrefKey<bool>('plan.exposureMap', false);
   static const readings = PrefKey<bool>('plan.readings', true);
 
@@ -31,7 +30,6 @@ abstract final class PlanPrefs {
 
   static const all = <PrefKey>[
     snap,
-    otherCameras,
     exposureMap,
     readings,
     newShotLikePrevious,
@@ -52,7 +50,6 @@ abstract final class PlanPrefs {
     T v<T extends Object>(PrefKey<T> k) => p.get(k, projectId: projectId);
     return (
       snap: v(snap),
-      otherCameras: v(otherCameras),
       exposureMap: v(exposureMap),
       readings: v(readings),
       iso: v(iso),
@@ -79,7 +76,6 @@ abstract final class PlanPrefs {
 
 typedef PlanPrefValues = ({
   bool snap,
-  bool otherCameras,
   bool exposureMap,
   bool readings,
   double iso,

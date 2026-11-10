@@ -10,6 +10,7 @@ import 'content_sync_base_store.dart';
 import 'device_label.dart';
 import 'project_content_bundle.dart';
 import 'project_content_sync_service.dart';
+import 'server_clock.dart';
 import 'sync_merge_store.dart';
 
 class MergeOutcome {
@@ -48,7 +49,9 @@ class ContentMergeService {
     final sync = ProjectContentSyncService(_db, _client);
     final project = await _db.getProject(localProjectId);
     // La última edición de aquí: se fija antes de importar la mezcla.
-    final localAt = project?.contentSyncUpdatedAt ?? project?.updatedAt;
+    final localEdit = project?.contentSyncUpdatedAt ?? project?.updatedAt;
+    // En hora del servidor, como la de la nube.
+    final localAt = localEdit?.add(await ServerClock.offset(_client));
     final local = await ProjectContentBundle.export(_db, localProjectId);
 
     for (var attempt = 0; attempt < maxAttempts; attempt++) {

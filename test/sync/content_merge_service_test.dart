@@ -57,7 +57,8 @@ class _Cloud {
           return _json(matching, request);
         case 'POST':
           beforeWrite?.call();
-          final row = Map<String, dynamic>.from(jsonDecode(request.body) as Map);
+          final row = Map<String, dynamic>.from(jsonDecode(request.body) as Map)
+            ..['updated_at'] = DateTime.now().toUtc().toIso8601String();
           if (rows.containsKey(row['project_id'])) {
             return _json({'code': '23505', 'message': 'duplicate'}, request, 409);
           }
@@ -66,7 +67,8 @@ class _Cloud {
         case 'PATCH':
           beforeWrite?.call();
           final again = rows.values.where((r) => _matches(r, q)).toList();
-          final patch = Map<String, dynamic>.from(jsonDecode(request.body) as Map);
+          final patch = Map<String, dynamic>.from(jsonDecode(request.body) as Map)
+            ..['updated_at'] = DateTime.now().toUtc().toIso8601String();
           for (final row in again) {
             row.addAll(patch);
           }

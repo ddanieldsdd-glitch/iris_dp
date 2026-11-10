@@ -91,6 +91,26 @@ abstract final class ErrorLog {
     }
   }
 
+  /// Sin red, un fallo se repetiría en cada pasada y no dice nada.
+  static bool isOffline(Object error) {
+    final text = '$error';
+    return error is SocketException ||
+        error is TimeoutException ||
+        text.contains('SocketException') ||
+        text.contains('ClientException') ||
+        text.contains('Failed host lookup') ||
+        text.contains('Connection closed');
+  }
+
+  /// Como [record], salvo los fallos por falta de red.
+  static Future<void> recordUnlessOffline(
+    Object error,
+    StackTrace? stack, {
+    Object? context,
+  }) => isOffline(error)
+      ? Future.value()
+      : record(error, stack, context: context);
+
   /// Añade un error al registro. Nunca lanza: un fallo al escribir el
   /// registro no puede tapar el error original.
   static Future<void> record(

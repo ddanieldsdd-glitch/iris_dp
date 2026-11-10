@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../utils/error_log.dart';
 import '../database/app_database.dart';
 import '../database/local_database_backup.dart';
 import 'content_sync_base_store.dart';
@@ -97,7 +98,7 @@ class ProjectContentSyncService {
       'content_hash': hash,
       'scene_count': summary.sceneCount,
       'shot_count': summary.shotCount,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
+      // `updated_at` lo pone el servidor: el reloj de este equipo no cuenta.
       if (hasDeviceColumn) 'updated_device': deviceLabel(),
     };
 
@@ -273,8 +274,88 @@ class ProjectContentSyncService {
           .from('cloud_project_snapshots')
           .delete()
           .eq('project_id', projectCloudId);
-    } catch (_) {}
+    } catch (e, st) {
+      await ErrorLog.recordUnlessOffline(e, st, context: 'Borrar de la nube');
+    }
   }
+
+  /// Solo la huella de cada copia, sin el contenido: basta para saber si
+  /// algo ha cambiado.
+  Future<Map<String, String?>> fetchSnapshotHashes(
+    List<String> projectCloudIds,
+  ) async {
+    if (projectCloudIds.isEmpty) return {};
+    try {
+      final rows = await _client
+          .from('cloud_project_snapshots')
+          .select('project_id, content_hash')
+          .inFilter('project_id', projectCloudIds);
+      return {
+        for (final row in rows as List)
+          row['project_id'] as String: row['content_hash'] as String?,
+      };
+    } catch (e) {
+      if (isMissingSnapshotsTable(e)) throw const SnapshotsTableMissing();
+      rethrow;
+    }
+  }
+
+  /// Versiones guardadas de un proyecto, de la más nueva a la más antigua.
+  /// `null` si Supabase aún no tiene la migración 013.
+  Future<List<CloudVersion>?> listVersions(String projectCloudId) async {
+    try {
+      final rows = await _client
+          .from('cloud_project_snapshot_history')
+          .select('id, saved_at, scene_count, shot_count, updated_device')
+          .eq('project_id', projectCloudId)
+          .order('saved_at', ascending: false);
+      return [
+        for (final row in rows as List)
+          CloudVersion(
+            id: row['id'] as int,
+            savedAt: DateTime.parse(row['saved_at'] as String).toLocal(),
+            sceneCount: row['scene_count'] as int? ?? 0,
+            shotCount: row['shot_count'] as int? ?? 0,
+            device: row['updated_device'] as String?,
+          ),
+      ];
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST205' || e.code == '42P01') return null;
+      rethrow;
+    }
+  }
+
+  /// Vuelve la nube a [versionId] y lo trae a este equipo (antes de bajarlo
+  /// se guarda una copia local). Lo que había en la nube queda en el
+  /// historial.
+  Future<bool> restoreVersion(
+    int localProjectId,
+    String projectCloudId,
+    int versionId,
+  ) async {
+    await _client.rpc(
+      'iris_restore_snapshot',
+      params: {'p_version': versionId},
+    );
+    return download(localProjectId, projectCloudId);
+  }
+}
+
+/// Una versión anterior del contenido de un proyecto en la nube.
+class CloudVersion {
+  final int id;
+  final DateTime savedAt;
+  final int sceneCount;
+  final int shotCount;
+  final String? device;
+
+  const CloudVersion({
+    required this.id,
+    required this.savedAt,
+    required this.sceneCount,
+    required this.shotCount,
+    this.device,
+  });
 }
 
 /// Cola offline de subidas de contenido pendientes.
@@ -342,13 +423,18 @@ class CloudSyncQueueService {
               ..where((q) => q.id.equals(item.id)))
             .write(const CloudSyncQueueCompanion(processed: Value(true)));
         processed++;
-      } catch (e) {
+      } catch (e, st) {
         if (e is CloudContentChanged) continue;
         if (e is SnapshotsTableMissing || isMissingSnapshotsTable(e)) {
           // Migración 007 pendiente en Supabase; se reintentará luego.
           break;
         }
-        // Otros errores: se reintentará en el próximo sync.
+        // Se reintentará en la próxima pasada, pero queda constancia.
+        await ErrorLog.recordUnlessOffline(
+          e,
+          st,
+          context: 'Subir el proyecto ${item.localEntityId}',
+        );
       }
     }
     return processed;

@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import '../database/app_database.dart';
 import '../cloud/cloud_session.dart';
 import 'content_sync_base_store.dart';
@@ -166,6 +168,30 @@ class SyncPlanBuilder {
     return SyncPlan(items: items);
   }
 
+  /// Proyectos ya comparados entero con la nube en esta sesión, por huella.
+  static final _verified = Expando<Set<String>>();
+
+  /// El cálculo de la huella recorre todo el proyecto: fuera de la interfaz.
+  static Future<String> _hashAside(Map<String, dynamic> bundle) =>
+      Isolate.run(() => ProjectContentBundle.hashBundle(bundle));
+
+  /// Ni aquí ni en la nube ha cambiado nada desde la última vez que
+  /// coincidieron y se comprobó con el contenido delante.
+  Future<bool> _isUnchanged(
+    Project local,
+    String localHash,
+    String? cloudHash,
+  ) async {
+    if (cloudHash == null || cloudHash != localHash) return false;
+    if (!(_verified[_db]?.contains('${local.cloudId}:$cloudHash') ?? false)) {
+      return false;
+    }
+    final base = await ContentSyncBaseStore.load(_db, local.id);
+    return base?.localHash == localHash &&
+        base?.cloudHash == cloudHash &&
+        await ContentBaseBundleStore.has(_db, local.id);
+  }
+
   Future<void> _appendContentItems(
     List<SyncPlanItem> items,
     List<Project> locals,
@@ -178,10 +204,28 @@ class SyncPlanBuilder {
 
     final contentSync = ProjectContentSyncService(_db, _client);
     final Map<String, Map<String, dynamic>> snapshots;
+    final bundles = <int, Map<String, dynamic>>{};
+    final hashes = <int, String>{};
+    final unchanged = <String>{};
     try {
-      snapshots = await contentSync.fetchAllSnapshots(
+      // Primero solo las huellas: el contenido entero (varios MB por
+      // proyecto) se baja únicamente de los que pueden haber cambiado.
+      final cloudHashes = await contentSync.fetchSnapshotHashes(
         linked.map((p) => p.cloudId!).toList(),
       );
+      for (final local in linked) {
+        final bundle = await ProjectContentBundle.export(_db, local.id);
+        final hash = await _hashAside(bundle);
+        bundles[local.id] = bundle;
+        hashes[local.id] = hash;
+        if (await _isUnchanged(local, hash, cloudHashes[local.cloudId])) {
+          unchanged.add(local.cloudId!);
+        }
+      }
+      snapshots = await contentSync.fetchAllSnapshots([
+        for (final p in linked)
+          if (!unchanged.contains(p.cloudId)) p.cloudId!,
+      ]);
     } on SnapshotsTableMissing {
       // Migración 007 no aplicada: sync de metadatos sigue funcionando.
       return;
@@ -189,10 +233,11 @@ class SyncPlanBuilder {
 
     for (final local in linked) {
       final cloudId = local.cloudId!;
+      if (unchanged.contains(cloudId)) continue;
       final localSummary =
           await ProjectContentBundle.summarizeLocal(_db, local.id);
-      final localBundle = await ProjectContentBundle.export(_db, local.id);
-      final localHash = ProjectContentBundle.hashBundle(localBundle);
+      final localBundle = bundles[local.id]!;
+      final localHash = hashes[local.id]!;
       final snap = snapshots[cloudId];
 
       if (snap == null) {
@@ -274,6 +319,10 @@ class SyncPlanBuilder {
               cloudContentHash: cloudHash,
             ),
           );
+        } else if (cloudHash != null && cloudContent is Map) {
+          // Comprobado con el contenido a mano: mientras no cambie, las
+          // próximas pasadas no necesitan bajarlo.
+          (_verified[_db] ??= <String>{}).add('$cloudId:$cloudHash');
         }
         continue;
       }

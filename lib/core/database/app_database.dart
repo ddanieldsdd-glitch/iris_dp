@@ -1,3 +1,4 @@
+import 'local_database_backup.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:drift/drift.dart';
@@ -5355,9 +5356,11 @@ LazyDatabase _openConnection() {
     final oldRoot = IosContainerPaths.previousRoot;
     final newRoot = IosContainerPaths.currentRoot;
     final markerPath = IosContainerPaths.markerPath;
+    final restored = LocalDatabaseBackup.applyPendingRestore(path);
     return NativeDatabase.createInBackground(
       file,
       setup: (raw) {
+        if (restored) LocalDatabaseBackup.forgetSyncBases(raw.execute);
         final version =
             raw.select('PRAGMA user_version').first.values.first as int;
         backupBeforeSchemaUpgrade(path, version);
@@ -5434,7 +5437,8 @@ String? backupBeforeSchemaUpgrade(
     }
     _pruneSchemaBackups(databasePath);
     return copyPath;
-  } catch (_) {
+  } catch (e, st) {
+    ErrorLog.record(e, st, context: 'Copia antes de actualizar la base');
     return null;
   }
 }

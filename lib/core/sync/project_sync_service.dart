@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../database/app_database.dart';
 import '../cloud/cloud_session.dart';
+import '../utils/error_log.dart';
 
 /// Push/pull de proyectos entre Drift (cache) y Supabase.
 class ProjectSyncService {
@@ -20,8 +21,13 @@ class ProjectSyncService {
       try {
         await _client.from('cloud_projects').delete().eq('id', cloudId);
         await CloudSessionStore.clearTombstone(cloudId);
-      } catch (_) {
-        // Se reintentará en el próximo sync.
+      } catch (e, st) {
+        // Se reintentará en la próxima pasada, pero queda constancia.
+        await ErrorLog.recordUnlessOffline(
+          e,
+          st,
+          context: 'Borrar un proyecto de la nube',
+        );
       }
     }
   }

@@ -29,7 +29,11 @@ import '../../core/widgets/stable_stream_builder.dart';
 import '../camera_plan/camera_plan_status_cell.dart';
 import '../../shared/history/edit_history.dart';
 import '../../shared/history/shot_edits.dart';
+import '../camera_plan/floor_plan_scope.dart';
 import '../camera_plan/plan_data.dart';
+import '../camera_plan/plan_target.dart';
+import '../camera_plan/plan_workspace_screen.dart';
+import '../camera_plan/project_jump.dart';
 import '../camera_plan/plan_sketch.dart';
 import '../camera_plan/plan_thumbnail.dart';
 import '../camera_plan/project_focus.dart';
@@ -170,6 +174,9 @@ class _LockedShot extends StatelessWidget {
 /// de formato actúa sobre él.
 final _activeShotProvider = StateProvider.autoDispose<int?>((ref) => null);
 
+/// Plano elegido en la búsqueda, para que la tabla lo enseñe.
+final _scriptJumpProvider = StateProvider.autoDispose<int?>((ref) => null);
+
 /// Celda en la que se está trabajando; el color de celda actúa sobre ella.
 final _activeCellProvider =
     StateProvider.autoDispose<({int shotId, String column})?>((ref) => null);
@@ -207,6 +214,25 @@ class TechnicalScriptScreen extends ConsumerWidget {
     this.initialShotId,
   });
 
+  /// Un plano se enseña en su fila; lo demás se abre en la planta. En el
+  /// móvil no hay tabla: también va a la planta.
+  void _jumpTo(BuildContext context, WidgetRef ref, PlanTarget target) {
+    if (target.scope == FloorPlanScope.shot &&
+        !AppLayout.isCompact(context)) {
+      ref.read(_scriptJumpProvider.notifier).state = target.id;
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlanWorkspaceScreen(
+          projectId: projectId,
+          initial: target,
+          fromScript: target.scope == FloorPlanScope.shot,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
@@ -214,11 +240,24 @@ class TechnicalScriptScreen extends ConsumerWidget {
     final theme = ScriptSheetTheme.resolve(settings, palette);
 
     // Al salir del guion, el plano que se editaba queda libre al momento.
-    return LiveEditingScope(child: Scaffold(
+    return ProjectJumpShortcut(
+      projectId: projectId,
+      onPick: (target) => _jumpTo(context, ref, target),
+      child: LiveEditingScope(child: Scaffold(
       appBar: AppBar(
         backgroundColor: palette.surface,
         title: Text('Guion técnico', style: AppTypography.titleLarge(palette)),
         actions: [
+          IconButton(
+            key: const ValueKey('script-jump'),
+            tooltip: 'Buscar en el proyecto (⌘K)',
+            icon: Icon(Icons.search, color: palette.accent),
+            onPressed: () => showProjectJump(
+              context,
+              projectId: projectId,
+              onPick: (target) => _jumpTo(context, ref, target),
+            ),
+          ),
           GoodNotesPdfActions(
             projectId: projectId,
             moduleType: GoodNotesModuleType.guionTecnico,
@@ -348,7 +387,7 @@ class TechnicalScriptScreen extends ConsumerWidget {
           ),
         ),
       ),
-    ));
+    )));
   }
 
   void _export(BuildContext context) => ExportCenterScreen.open(
@@ -1084,6 +1123,17 @@ class _ScriptTableState extends ConsumerState<_ScriptTable> with RouteAware {
     _focusWhenLeft = ref.read(projectFocusProvider(_projectId)).shotId;
   }
 
+  Future<void> _revealJump(int shotId) async {
+    Future.microtask(() {
+      if (mounted) ref.read(_scriptJumpProvider.notifier).state = null;
+    });
+    final focus = ref.read(projectFocusProvider(_projectId).notifier);
+    final db = ref.read(databaseProvider);
+    await _reveal(shotId);
+    final shot = await db.getShotById(shotId);
+    if (shot != null) focus.focusShot(shot);
+  }
+
   @override
   void didPopNext() {
     final shotId = ref.read(projectFocusProvider(_projectId)).shotId;
@@ -1315,6 +1365,9 @@ class _ScriptTableState extends ConsumerState<_ScriptTable> with RouteAware {
   @override
   Widget build(BuildContext context) {
     final settings = widget.settings;
+    ref.listen(_scriptJumpProvider, (_, shotId) {
+      if (shotId != null) _revealJump(shotId);
+    });
 
     return LayoutBuilder(
       builder: (context, constraints) {

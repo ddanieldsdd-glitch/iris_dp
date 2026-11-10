@@ -25,6 +25,7 @@ import 'plan_target.dart';
 import 'plan_trash_ui.dart';
 import 'plan_workspace_screen.dart';
 import 'project_focus.dart';
+import 'project_jump.dart';
 
 /// Entrada a las plantas de luz y cámara. A la izquierda, el índice
 /// (localizaciones, sets y escenas, o las escenas en orden de guion); a la
@@ -83,7 +84,13 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ProjectJumpShortcut(
+    projectId: projectId,
+    onPick: _open,
+    child: _buildScreen(context),
+  );
+
+  Widget _buildScreen(BuildContext context) {
     final palette = context.palette;
     final focusProvider = projectFocusProvider(projectId);
     final focusScene = ref.watch(focusProvider.select((f) => f.sceneId));
@@ -102,6 +109,15 @@ class _CameraPlanScreenState extends ConsumerState<CameraPlanScreen> {
           style: AppTypography.titleLarge(palette),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Buscar en el proyecto (⌘K)',
+            icon: Icon(Icons.search, color: palette.textSecondary),
+            onPressed: () => showProjectJump(
+              context,
+              projectId: projectId,
+              onPick: _open,
+            ),
+          ),
           PopupMenuButton<String>(
             tooltip: 'Nuevo',
             icon: Icon(Icons.add, color: palette.textSecondary),

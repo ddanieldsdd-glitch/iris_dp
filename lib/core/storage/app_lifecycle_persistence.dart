@@ -1,3 +1,4 @@
+import '../utils/error_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -41,7 +42,9 @@ class _AppLifecyclePersistenceState extends ConsumerState<AppLifecyclePersistenc
     try {
       final db = ref.read(databaseProvider);
       await db.customStatement('PRAGMA wal_checkpoint(FULL);');
-    } catch (_) {}
+    } catch (e, st) {
+      await ErrorLog.record(e, st, context: 'Volcar la base al salir');
+    }
   }
 
   @override
