@@ -18,6 +18,10 @@ abstract final class PlanPrefs {
   /// y W, A, S, D para moverse. Sin él, la órbita de antes.
   static const unrealNav = PrefKey<bool>('plan.nav.unreal', true);
 
+  /// Tensión y calibre con los que se reparten los circuitos.
+  static const powerVolts = PrefKey<double>('plan.power.volts', 230);
+  static const powerBreaker = PrefKey<double>('plan.power.breaker', 16);
+
   static const iso = PrefKey<double>('plan.iso', 800);
   static const shutterDeg = PrefKey<double>('plan.shutterDeg', 180);
   static const fps = PrefKey<double>('plan.fps', 24);

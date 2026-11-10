@@ -1,10 +1,16 @@
+import 'dart:convert' show latin1;
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_snackbar.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'camera_plan_element_model.dart';
 import 'light/exposure.dart';
+import 'light/ies_profile.dart';
 import 'light/modifiers.dart';
 import 'light/photometry.dart';
 import 'light/plan_light.dart';
@@ -94,6 +100,30 @@ class _PlanLightControlsState extends State<PlanLightControls> {
       final spread = LightBeam.of(_el)?.spread;
       if (spread != null) _el.props[PlanLight.measuredBeamKey] = spread;
     }
+    setState(() {});
+    widget.onUpdate();
+  }
+
+  /// Fotometría del fabricante desde un archivo IES: el pico a 1 m, el haz
+  /// y, si los trae, los vatios.
+  Future<void> _loadIes() async {
+    final picked = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Archivo IES del fabricante',
+      type: FileType.any,
+    );
+    final path = picked?.files.single.path;
+    if (path == null) return;
+    final IesProfile profile;
+    try {
+      // Muchos IES antiguos están en Latin-1.
+      profile = IesProfile.parse(latin1.decode(await File(path).readAsBytes()));
+    } on FormatException catch (e) {
+      if (mounted) AppSnackBar.showError(context, e.message);
+      return;
+    }
+    if (!mounted) return;
+    PlanLight.applyIes(_el, profile);
+    _syncFields();
     setState(() {});
     widget.onUpdate();
   }
@@ -378,6 +408,15 @@ class _PlanLightControlsState extends State<PlanLightControls> {
           Text(
             'Dato medido o del fabricante',
             style: AppTypography.caption(palette),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('light-load-ies'),
+              icon: const Icon(Icons.upload_file, size: 16),
+              label: const Text('Cargar archivo IES…'),
+              onPressed: _loadIes,
+            ),
           ),
           Row(
             children: [

@@ -6,7 +6,8 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, PlatformException;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
@@ -47,6 +48,7 @@ import '../plan_segment.dart';
 import 'scan_builder_sheet.dart';
 import 'scan_capture_channel.dart';
 import 'scan_store.dart';
+import 'scan_usdz.dart';
 import 'scan_capture.dart';
 import 'scan_review.dart';
 import 'scan_review_sheet.dart';
@@ -564,11 +566,24 @@ class _Plan3dViewState extends State<Plan3dView> {
     final picked = await FilePicker.platform.pickFiles(
       dialogTitle: 'Importar un escaneo',
       type: FileType.custom,
-      allowedExtensions: PlanScan.formats,
+      allowedExtensions: [...PlanScan.formats, if (ScanUsdz.supported) 'usdz'],
     );
     final path = picked?.files.single.path;
     if (path == null) return;
-    await _addScan(path, path.split(Platform.pathSeparator).last);
+    final name = path.split(Platform.pathSeparator).last;
+    if (!ScanUsdz.isUsdz(path)) return _addScan(path, name);
+    setState(() => _status = 'Convirtiendo el USDZ…');
+    final String obj;
+    try {
+      obj = await ScanUsdz.toObj(path);
+    } on PlatformException catch (e) {
+      if (mounted) {
+        setState(() => _status = 'No se pudo abrir el USDZ: ${e.message}');
+      }
+      return;
+    }
+    await _addScan(obj, name);
+    await ScanUsdz.discard(obj);
   }
 
   /// Crea un escaneo con RealityScan a partir de fotos o vídeo (F6.20 E) y

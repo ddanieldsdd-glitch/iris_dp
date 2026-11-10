@@ -218,3 +218,13 @@ la altura del corte.
   menos de 5 cm de error en paredes y menos de 10 cm en huecos.
 - **Motor de luz**: el recinto escaneado tiene techo automático y la luz entra
   por la ventana detectada.
+
+## Prueba previa de Object Capture (ES.B)
+
+Antes de ofrecer la reconstrucción en el Mac junto a RealityScan hay que ver si compensa en interiores. Con una captura real del iPhone, descomprimida:
+
+```bash
+swift tools/object_capture/object_capture_test.swift <carpeta de fotos> /tmp/prueba.usdz medium
+```
+
+Se compara el USDZ con lo que da RealityScan de esas mismas fotos: paredes rectas, huecos, escala y tiempo. Si compensa, se integra en la cola de `scan_jobs`; si no, se descarta.

@@ -8,6 +8,7 @@ import 'camera_plan_element_model.dart';
 import 'light/ambient.dart';
 import '../equipment/lens_set_utils.dart';
 import 'plan_equipment.dart';
+import 'plan_sun_dialog.dart';
 
 /// Ambiente del esquema de luz: día o noche, sol, cielo y rebote de
 /// paredes.
@@ -15,10 +16,18 @@ class PlanAmbientSheet extends StatefulWidget {
   final PlanAmbient initial;
   final ValueChanged<PlanAmbient> onChanged;
 
+  /// Dónde está el set, si la localización lo sabe.
+  final double? latitude;
+  final double? longitude;
+  final String? place;
+
   const PlanAmbientSheet({
     super.key,
     required this.initial,
     required this.onChanged,
+    this.latitude,
+    this.longitude,
+    this.place,
   });
 
   @override
@@ -31,6 +40,29 @@ class _PlanAmbientSheetState extends State<PlanAmbientSheet> {
   void _set(PlanAmbient next) {
     setState(() => _ambient = next);
     widget.onChanged(next);
+  }
+
+  Future<void> _pickRealSun() async {
+    final pick = await showDialog<SunPick>(
+      context: context,
+      builder: (_) => PlanSunDialog(
+        latitude: widget.latitude,
+        longitude: widget.longitude,
+        place: widget.place,
+        northDeg: _ambient.northDeg,
+      ),
+    );
+    if (pick == null || !mounted) return;
+    _set(
+      _ambient.copyWith(
+        day: true,
+        sunOn: true,
+        sunAzimuth: pick.azimuth.roundToDouble(),
+        // Lo que permiten los deslizadores y el motor de luz.
+        sunElevation: pick.elevation.clamp(5.0, 85.0).roundToDouble(),
+        northDeg: pick.northDeg,
+      ),
+    );
   }
 
   @override
@@ -98,6 +130,12 @@ class _PlanAmbientSheetState extends State<PlanAmbientSheet> {
                 (v) => _set(a.copyWith(sunOn: v)),
               ),
               if (a.hasSun) ...[
+                TextButton.icon(
+                  key: const ValueKey('ambient-real-sun'),
+                  icon: const Icon(Icons.public, size: 16),
+                  label: const Text('Calcular por lugar, día y hora…'),
+                  onPressed: _pickRealSun,
+                ),
                 Text(
                   'De dónde viene: ${a.sunAzimuth.round()}° '
                   '(0° arriba del plano, 90° derecha)',

@@ -20,6 +20,7 @@
 		A1IRIS001ED2DC5600515810 /* IrisClipboardPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1IRIS002ED2DC5600515810 /* IrisClipboardPlugin.swift */; };
 		A1IRIS003ED2DC5600515810 /* IrisCapturePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1IRIS004ED2DC5600515810 /* IrisCapturePlugin.swift */; };
 		A1IRIS005ED2DC5600515810 /* IrisQuickLookPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1IRIS006ED2DC5600515810 /* IrisQuickLookPlugin.swift */; };
+		A1IRIS007ED2DC5600515810 /* IrisUsdzPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1IRIS008ED2DC5600515810 /* IrisUsdzPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +70,7 @@
 		A1IRIS002ED2DC5600515810 /* IrisClipboardPlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = IrisClipboardPlugin.swift; sourceTree = "<group>"; };
 		A1IRIS004ED2DC5600515810 /* IrisCapturePlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = IrisCapturePlugin.swift; sourceTree = "<group>"; };
 		A1IRIS006ED2DC5600515810 /* IrisQuickLookPlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = IrisQuickLookPlugin.swift; sourceTree = "<group>"; };
+		A1IRIS008ED2DC5600515810 /* IrisUsdzPlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = IrisUsdzPlugin.swift; sourceTree = "<group>"; };
 		AE4E1226209F9DD791168BB6 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		BE5D57395C65A2082FB0BF1A /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		C4459B4DEDB27FB40E6D667C /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -150,6 +152,7 @@
 				A1IRIS002ED2DC5600515810 /* IrisClipboardPlugin.swift */,
 				A1IRIS004ED2DC5600515810 /* IrisCapturePlugin.swift */,
 				A1IRIS006ED2DC5600515810 /* IrisQuickLookPlugin.swift */,
+				A1IRIS008ED2DC5600515810 /* IrisUsdzPlugin.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
@@ -400,6 +403,7 @@
 				A1IRIS001ED2DC5600515810 /* IrisClipboardPlugin.swift in Sources */,
 				A1IRIS003ED2DC5600515810 /* IrisCapturePlugin.swift in Sources */,
 				A1IRIS005ED2DC5600515810 /* IrisQuickLookPlugin.swift in Sources */,
+				A1IRIS007ED2DC5600515810 /* IrisUsdzPlugin.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

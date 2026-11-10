@@ -112,6 +112,10 @@ class PlanAmbient {
 
   /// Altura del sol sobre el horizonte, en grados. Bajo alarga las sombras.
   final double sunElevation;
+
+  /// Dónde está el norte en la planta: grados desde arriba del plano, en el
+  /// sentido de las agujas. Lo usa el cálculo del sol real.
+  final double northDeg;
   final SkyCondition condition;
   final bool skyOn;
 
@@ -133,6 +137,7 @@ class PlanAmbient {
     this.sunOn = true,
     this.sunAzimuth = 135,
     this.sunElevation = 35,
+    this.northDeg = 0,
     this.condition = SkyCondition.clear,
     this.skyOn = true,
     this.wallBounce = true,
@@ -167,6 +172,7 @@ class PlanAmbient {
     bool? sunOn,
     double? sunAzimuth,
     double? sunElevation,
+    double? northDeg,
     SkyCondition? condition,
     bool? skyOn,
     bool? wallBounce,
@@ -178,6 +184,7 @@ class PlanAmbient {
     sunOn: sunOn ?? this.sunOn,
     sunAzimuth: sunAzimuth ?? this.sunAzimuth,
     sunElevation: sunElevation ?? this.sunElevation,
+    northDeg: northDeg ?? this.northDeg,
     condition: condition ?? this.condition,
     skyOn: skyOn ?? this.skyOn,
     wallBounce: wallBounce ?? this.wallBounce,
@@ -191,6 +198,7 @@ class PlanAmbient {
     'sunOn': sunOn,
     'sunAzimuth': sunAzimuth,
     'sunElevation': sunElevation,
+    if (northDeg != 0) 'northDeg': northDeg,
     'condition': condition.name,
     'skyOn': skyOn,
     'wallBounce': wallBounce,
@@ -205,6 +213,7 @@ class PlanAmbient {
       sunOn: raw['sunOn'] as bool? ?? true,
       sunAzimuth: (raw['sunAzimuth'] as num?)?.toDouble() ?? 135,
       sunElevation: (raw['sunElevation'] as num?)?.toDouble() ?? 35,
+      northDeg: (raw['northDeg'] as num?)?.toDouble() ?? 0,
       condition: SkyCondition.values.firstWhere(
         (c) => c.name == raw['condition'],
         orElse: () => SkyCondition.clear,
@@ -230,6 +239,7 @@ class PlanAmbient {
       other.sunOn == sunOn &&
       other.sunAzimuth == sunAzimuth &&
       other.sunElevation == sunElevation &&
+      other.northDeg == northDeg &&
       other.condition == condition &&
       other.skyOn == skyOn &&
       other.wallBounce == wallBounce &&
@@ -246,6 +256,7 @@ class PlanAmbient {
     sunOn,
     sunAzimuth,
     sunElevation,
+    northDeg,
     condition,
     skyOn,
     wallBounce,

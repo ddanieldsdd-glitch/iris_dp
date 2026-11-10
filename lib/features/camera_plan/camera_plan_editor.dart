@@ -71,6 +71,7 @@ import 'light/light_scene.dart';
 import 'light/meter.dart';
 import 'plan_light_color_control.dart';
 import 'plan_light_controls.dart';
+import 'plan_power_sheet.dart';
 import 'plan_meter_panel.dart';
 import 'plan_opening.dart';
 import 'plan_palette.dart';
@@ -2445,6 +2446,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       isScrollControlled: true,
       builder: (_) => PlanAmbientSheet(
         initial: _ambient,
+        latitude: _linkedSite?.latitude,
+        longitude: _linkedSite?.longitude,
+        place: _linkedSite?.placeLabel ?? _linkedSite?.name,
         onChanged: (next) {
           setState(() => _ambient = next);
           _repo.saveAmbient(setup.id, next);
@@ -3812,6 +3816,24 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     // Lo oculto con el ojo sigue colgado: cuenta en la carga.
     rigging: RigReport.rigging(_layerElementsShown, _metersPerUnit),
   );
+
+  /// Reparto de los aparatos en circuitos: el circuito se guarda en cada
+  /// luz de la planta.
+  Future<void> _openPower() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.palette.surface,
+      isScrollControlled: true,
+      builder: (_) => PlanPowerSheet(
+        elements: _elements,
+        title: _gearTitle,
+        onChanged: () {
+          unawaited(_persistAllElements());
+          _commitHistory();
+        },
+      ),
+    );
+  }
 
   /// Tocar una línea de la lista de material selecciona en la planta lo
   /// que suma; tocarla otra vez pasa al siguiente.
@@ -6753,6 +6775,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   gear: _gearList,
                                   title: _gearTitle,
                                   onPick: _pickGearLine,
+                                  onPower: _openPower,
                                 ),
                               ),
                           ],

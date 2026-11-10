@@ -271,11 +271,15 @@ class PlanGearListPanel extends StatelessWidget {
   /// Tocar una línea señala en la planta lo que suma.
   final ValueChanged<GearLine>? onPick;
 
+  /// Abre el reparto eléctrico.
+  final VoidCallback? onPower;
+
   const PlanGearListPanel({
     super.key,
     required this.gear,
     required this.title,
     this.onPick,
+    this.onPower,
   });
 
   @override
@@ -357,6 +361,12 @@ class PlanGearListPanel extends StatelessWidget {
                               Text(
                                 line,
                                 style: AppTypography.bodyMedium(palette),
+                              ),
+                            if (onPower != null)
+                              TextButton(
+                                key: const ValueKey('gear-power'),
+                                onPressed: onPower,
+                                child: const Text('Repartir en circuitos…'),
                               ),
                           ],
                         ),

@@ -7,6 +7,7 @@ import '../camera_plan_element_model.dart';
 import '../light_beam.dart';
 import 'light_color.dart';
 import 'modifiers.dart';
+import 'ies_profile.dart';
 import 'photometry.dart';
 
 /// Una luz de la planta lista para calcular: su fuente con todo aplicado
@@ -160,6 +161,18 @@ class PlanLight {
 
   /// Fotometría del fabricante en varios haces: `[[haz, lux, metros], …]`.
   static const curveKey = 'photometryCurve';
+
+  /// Pone en [el] la fotometría de un archivo IES. Manda sobre la curva del
+  /// catálogo: quien lo carga está eligiendo ese dato.
+  static void applyIes(PlanElement el, IesProfile profile) {
+    el.props[measuredLuxKey] = profile.peakCandela;
+    el.props[measuredMetersKey] = 1.0;
+    el.props[measuredBeamKey] = profile.beamDeg;
+    el.props[photometrySourceKey] = PhotometryStatus.manufacturer.name;
+    el.props[LightBeam.spreadKey] = profile.beamDeg.clamp(5.0, 360.0);
+    el.props.remove(curveKey);
+    if (profile.inputWatts case final watts?) el.props[wattsKey] = watts;
+  }
 
   /// La óptica guardada en la planta para esta luz.
   static LightOptics opticsOf(PlanElement el) {

@@ -8,6 +8,7 @@ class AppDelegate: FlutterAppDelegate {
       ExportFileSaverPlugin.register(
         with: controller.registrar(forPlugin: "ExportFileSaverPlugin")
       )
+      IrisUsdzPlugin.register(with: controller.registrar(forPlugin: "IrisUsdzPlugin"))
     }
     super.applicationDidFinishLaunching(notification)
   }

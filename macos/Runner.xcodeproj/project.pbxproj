@@ -31,6 +31,7 @@
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		A56A00E69A0FA869EAA576E0 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7BEA97E8187EBA1C1D6283F9 /* Pods_Runner.framework */; };
 		E8F4A1B22C3D4E5F67890123 /* ExportFileSaverPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8F4A1B12C3D4E5F67890123 /* ExportFileSaverPlugin.swift */; };
+		E8F4A1B42C3D4E5F67890123 /* IrisUsdzPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8F4A1B32C3D4E5F67890123 /* IrisUsdzPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -91,6 +92,7 @@
 		CFDB02B9A36D76104FD70D82 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		E1EEF7F0DF3F506A29127637 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		E8F4A1B12C3D4E5F67890123 /* ExportFileSaverPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportFileSaverPlugin.swift; sourceTree = "<group>"; };
+		E8F4A1B32C3D4E5F67890123 /* IrisUsdzPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IrisUsdzPlugin.swift; sourceTree = "<group>"; };
 		F2ADFD9B041647CE2DFCC28C /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -184,6 +186,7 @@
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
 				E8F4A1B12C3D4E5F67890123 /* ExportFileSaverPlugin.swift */,
+				E8F4A1B32C3D4E5F67890123 /* IrisUsdzPlugin.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
@@ -454,6 +457,7 @@
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 				E8F4A1B22C3D4E5F67890123 /* ExportFileSaverPlugin.swift in Sources */,
+				E8F4A1B42C3D4E5F67890123 /* IrisUsdzPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
