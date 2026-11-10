@@ -78,11 +78,7 @@ void main() {
 
     // Reordenar en el guion técnico renumera, y el documento lo refleja sin
     // cambiar su propio orden.
-    await db.reorderShotsInScene(sceneId, [
-      shotIds[2],
-      shotIds[0],
-      shotIds[1],
-    ]);
+    await db.reorderShotsInScene(sceneId, [shotIds[2], shotIds[0], shotIds[1]]);
     expect(await titles(), [
       'Esc. 7 · Plano 1',
       'Esc. 7 · Plano 3',
