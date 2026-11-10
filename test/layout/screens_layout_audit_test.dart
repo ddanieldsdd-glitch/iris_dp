@@ -112,7 +112,7 @@ void main() {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      AppButton(label: 'Actualizar desde el Mac', onTap: () {}),
+                      AppButton(label: 'Actualizar', onTap: () {}),
                       AppButton(label: 'Más tarde', onTap: () {}),
                     ],
                   ),

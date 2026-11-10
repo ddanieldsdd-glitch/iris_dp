@@ -50,12 +50,17 @@ class DeviceUpdateButton extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppButton(
-            label: 'Actualizar desde el Mac',
-            icon: Icons.laptop_mac_outlined,
-            onTap: update.hostAvailable
-                ? () => unawaited(update.request())
-                : null,
+          // Con letra grande del sistema, se encoge en vez de desbordar.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: AppButton(
+              label: 'Actualizar desde el Mac',
+              icon: Icons.laptop_mac_outlined,
+              onTap: update.hostAvailable
+                  ? () => unawaited(update.request())
+                  : null,
+            ),
           ),
           if (note != null) ...[
             const SizedBox(height: AppSpacing.xs),
