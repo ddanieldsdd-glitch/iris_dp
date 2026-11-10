@@ -8,6 +8,7 @@ App Flutter de dirección de fotografía (guion técnico, planta de cámara y lu
 - `docs/PLAN_F6_3D_PREVIS.md`: planta 2D, 3D, IRIS Stage y Unreal (F6.20 lleva los assets, Fab/Quixel y RealityScan).
 - `docs/PLAN_IPHONE.md`: IRIS en el iPhone (IP.x).
 - `docs/PLAN_IRIS_PC.md`: Windows.
+- `docs/PLAN_MEJORA_2026-11.md`: repaso general tras el rodaje; flujo guion ↔ planta (FL), fiabilidad (FI), rendimiento (RD), escaneo (ES), Unreal (UN) e ideas nuevas (NF).
 
 Al terminar un punto, marca su estado en el plan en el mismo PR.
 
