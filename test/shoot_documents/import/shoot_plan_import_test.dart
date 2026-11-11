@@ -133,12 +133,12 @@ void main() {
       final sheet = book['Sheet1'];
       sheet.appendRow([TextCellValue('DÍA 1 - 13 NOVIEMBRE (7:30 - 17:00)')]);
       sheet.appendRow([
-        TimeCellValue(hour: 7, minute: 30),
-        TimeCellValue(hour: 8, minute: 30),
+        const TimeCellValue(hour: 7, minute: 30),
+        const TimeCellValue(hour: 8, minute: 30),
         TextCellValue('Llegada de camión'),
       ]);
       sheet.appendRow([
-        DoubleCellValue(10.25 / 24),
+        const DoubleCellValue(10.25 / 24),
         TextCellValue('8.1'),
         TextCellValue('PMC de Ali (35 min)'),
       ]);
