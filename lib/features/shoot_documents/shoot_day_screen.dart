@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart' show Value;
+import 'shoot_documents_export.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -144,6 +145,15 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
     title: day.name,
   );
 
+  Future<void> _order(ShootDocument day, [BuildContext? from]) =>
+      exportShootDayOrder(
+        from ?? context,
+        ref.read(databaseProvider),
+        projectId: widget.projectId,
+        dayIds: {day.id},
+        dayName: day.name,
+      );
+
   void _export() => ExportCenterScreen.open(
     context,
     projectId: widget.projectId,
@@ -180,6 +190,11 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
                       icon: const Icon(Icons.checklist),
                     ),
                     IconButton(
+                      tooltip: 'Orden del día (PDF)',
+                      onPressed: () => _order(day),
+                      icon: const Icon(Icons.assignment_outlined),
+                    ),
+                    IconButton(
                       tooltip: 'Exportar',
                       onPressed: _export,
                       icon: const Icon(Icons.ios_share),
@@ -190,6 +205,13 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
                       onPressed: () => _openOnSet(day),
                       icon: const Icon(Icons.checklist, size: 18),
                       label: const Text('En set'),
+                    ),
+                    Builder(
+                      builder: (context) => TextButton.icon(
+                        onPressed: () => _order(day, context),
+                        icon: const Icon(Icons.assignment_outlined, size: 18),
+                        label: const Text('Orden del día'),
+                      ),
                     ),
                     Padding(
                       padding: const EdgeInsets.only(right: 8),

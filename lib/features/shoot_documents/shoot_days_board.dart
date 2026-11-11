@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart' show Value;
+import 'shoot_documents_export.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -71,6 +72,12 @@ class ShootDaysBoardScreen extends ConsumerWidget {
             tooltip: 'Deshacer',
             icon: const Icon(Icons.undo),
             onPressed: history.canUndo ? history.undo : null,
+          ),
+          IconButton(
+            tooltip: 'Orden del día de todas las jornadas (PDF)',
+            icon: const Icon(Icons.assignment_outlined),
+            onPressed: () =>
+                exportShootDayOrder(context, service.db, projectId: projectId),
           ),
           IconButton(
             tooltip: 'Importar plan de rodaje',

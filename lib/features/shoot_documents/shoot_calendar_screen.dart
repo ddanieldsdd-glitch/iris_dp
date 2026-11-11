@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'shoot_documents_export.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -257,6 +258,31 @@ class _ShootCalendarScreenState extends ConsumerState<ShootCalendarScreen> {
           appBar: AppBar(
             title: const Text('Calendario de rodaje'),
             actions: [
+              PopupMenuButton<String>(
+                tooltip: 'Exportar',
+                icon: const Icon(Icons.ios_share),
+                onSelected: (v) => v == 'ics'
+                    ? exportShootCalendarIcs(
+                        context,
+                        _db,
+                        projectId: widget.projectId,
+                      )
+                    : exportShootDayOrder(
+                        context,
+                        _db,
+                        projectId: widget.projectId,
+                      ),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'ics',
+                    child: Text('Calendario (.ics) para el móvil'),
+                  ),
+                  PopupMenuItem(
+                    value: 'order',
+                    child: Text('Orden del día de todas las jornadas (PDF)'),
+                  ),
+                ],
+              ),
               ListenableBuilder(
                 listenable: _history,
                 builder: (context, _) => Row(
