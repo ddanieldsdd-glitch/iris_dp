@@ -29,6 +29,18 @@ Código revisado: `main` v1.8.0 (schema 63), en `iris_dp_release`.
 
 ## Tanda 1 · antes del rodaje (publicar el 12-11 por la mañana)
 
+**Estado (11-11, desde el Mac):** Tanda 1 entera hecha en la rama `plan/dr-documentos-rodaje`, sin publicar.
+
+| Punto | Commit | Notas |
+|---|---|---|
+| DR.4 Importar plan | a9b1399 | Lee el plan escrito («DÍA 1 - 13 NOVIEMBRE (7:30 - 17:00)», horas, planos «13b.5», duraciones «(35 min)», madrugada) desde texto pegado, .txt, Word, Excel y PDF con texto. Revisión antes de guardar, «Deshacer» propio (no `saveImportSnapshot`, que pierde datos), conserva las marcas de En set. Cada plano guarda su hora y su apunte (`shotTime`) y se ven en la jornada, el tablero y En set. Probado con el plan tentativo de Kebab Khaled (`test/fixtures/shoot_plan/`, nombres del equipo cambiados). |
+| DR.1 Calendario editable | 652adcb | Día, Semana, Mes (y Lista/Día en iPhone). Mover, estirar, dibujar para crear (franja en la jornada, o jornada nueva), escenas con hora y panel «Sin hora», jornadas arrastrables en el mes, ⌘Z/Ctrl+Z, línea de «ahora». Con el dedo se arrastra tras mantener pulsado. |
+| DR.2 Marcas de En set | d8132f3 | Las marcas guardan `at`; la mezcla las conserva emparejando por jornada (nombre+fecha, o nombre) y plano. |
+| DR.3 Orden del día e .ics | 2557bd5 | PDF A4 por jornada desde la jornada, el tablero (todas o una) y el calendario. `.ics` desde el calendario. No se añadió al centro de exportación (pendiente). |
+| DR.5 Arreglos rápidos | 7960fac | Todo lo previsto. Las líneas propias de una reserva llevan uid `manual-…` y reimportar no las toca. |
+
+Pendiente de la Tanda 1: el orden del día dentro del centro de exportación; probar con dedo en iPad e iPhone; el lector de PDF solo se ha probado con texto (sin muestra real en PDF).
+
 Regla: **sin subir el esquema y sin cambiar el formato de sincronización**. Todo usa campos que ya existen (`contentOverridesJson`, `shootDate`, `shootFromTime/ToTime`). Orden de prioridad; lo último es lo primero que se recorta si no llega en verde.
 
 **DR.1 Calendario editable.**
