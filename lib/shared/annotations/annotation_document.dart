@@ -357,6 +357,11 @@ class AnnotationLayer {
   /// Máscara de recorte: solo se ve donde hay pintura en la capa de abajo.
   final bool clip;
 
+  /// Trazos antiguos ya fundidos en una imagen (PNG en base64). Se pinta
+  /// debajo de los trazos de la capa; así un dibujo largo no pesa más
+  /// cuanto más se dibuja.
+  final String? baked;
+
   const AnnotationLayer({
     required this.id,
     required this.name,
@@ -366,6 +371,7 @@ class AnnotationLayer {
     this.blend = AnnotationLayerBlend.normal,
     this.alphaLock = false,
     this.clip = false,
+    this.baked,
   });
 
   /// Capa de los documentos anteriores a las capas.
@@ -379,6 +385,8 @@ class AnnotationLayer {
     AnnotationLayerBlend? blend,
     bool? alphaLock,
     bool? clip,
+    String? baked,
+    bool clearBaked = false,
   }) => AnnotationLayer(
     id: id,
     name: name ?? this.name,
@@ -388,6 +396,7 @@ class AnnotationLayer {
     blend: blend ?? this.blend,
     alphaLock: alphaLock ?? this.alphaLock,
     clip: clip ?? this.clip,
+    baked: clearBaked ? null : (baked ?? this.baked),
   );
 
   Map<String, dynamic> toJson() => {
@@ -399,6 +408,7 @@ class AnnotationLayer {
     if (blend != AnnotationLayerBlend.normal) 'blend': blend.name,
     if (alphaLock) 'alphaLock': true,
     if (clip) 'clip': true,
+    if (baked != null) 'baked': baked,
   };
 
   factory AnnotationLayer.fromJson(Map<String, dynamic> json) =>
@@ -414,6 +424,9 @@ class AnnotationLayer {
         ),
         alphaLock: json['alphaLock'] == true,
         clip: json['clip'] == true,
+        baked: json['baked'] is String && (json['baked'] as String).isNotEmpty
+            ? json['baked'] as String
+            : null,
       );
 }
 
@@ -510,7 +523,11 @@ class AnnotationDocument {
     this.paperImage,
   });
 
-  bool get isEmpty => strokes.isEmpty && notes.isEmpty && stamps.isEmpty;
+  bool get isEmpty =>
+      strokes.isEmpty && notes.isEmpty && stamps.isEmpty && !hasBaked;
+
+  /// ¿Hay trazos ya fundidos en alguna capa?
+  bool get hasBaked => layers.any((layer) => layer.baked != null);
 
   /// Capas que se pintan; nunca vacío.
   List<AnnotationLayer> get effectiveLayers =>

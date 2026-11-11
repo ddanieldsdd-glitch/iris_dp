@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:pdf/pdf.dart';
@@ -8,6 +9,39 @@ import 'annotation_document.dart';
 /// Render vectorial portable de tinta para documentos PDF.
 abstract final class AnnotationPdfRenderer {
   static pw.Widget build(
+    AnnotationDocument document, {
+    required double width,
+    required double height,
+  }) {
+    final paint = _strokes(document, width: width, height: height);
+    final baked = [
+      for (final layer in document.layers)
+        if (layer.visible && layer.baked != null) layer,
+    ];
+    if (baked.isEmpty) return paint;
+    // La parte aplanada de cada capa va como imagen, debajo de los trazos.
+    return pw.SizedBox(
+      width: width,
+      height: height,
+      child: pw.Stack(
+        children: [
+          for (final layer in baked)
+            pw.Positioned.fill(
+              child: pw.Opacity(
+                opacity: layer.opacity.clamp(0.0, 1.0),
+                child: pw.Image(
+                  pw.MemoryImage(base64Decode(layer.baked!)),
+                  fit: pw.BoxFit.fill,
+                ),
+              ),
+            ),
+          paint,
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _strokes(
     AnnotationDocument document, {
     required double width,
     required double height,

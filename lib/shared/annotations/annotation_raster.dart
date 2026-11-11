@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'annotation_canvas.dart';
 import 'annotation_document.dart';
+import 'annotation_layers.dart';
 
 /// Pasa un documento de dibujo a PNG (viñeta de storyboard, PDF…).
 abstract final class AnnotationRaster {
@@ -13,6 +14,8 @@ abstract final class AnnotationRaster {
     required Size size,
     Color? background = Colors.white,
   }) async {
+    // La parte aplanada de las capas tiene que estar leída para pintarla.
+    await BakedLayerImages.ensure(document);
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     if (background != null) {
