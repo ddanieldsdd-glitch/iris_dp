@@ -45,6 +45,11 @@ import '../../unreal_link/unreal_thumbs.dart';
 import '../../../core/sync/plan_scan_store.dart';
 import '../../../core/utils/media_storage.dart';
 import '../plan_segment.dart';
+import '../plan_data.dart';
+import '../plan_target.dart';
+import 'plan_3d_shots.dart';
+import 'plan_transform.dart';
+import 'plan_transform_fields.dart';
 import 'scan_builder_sheet.dart';
 import 'scan_capture_channel.dart';
 import 'scan_store.dart';
@@ -140,6 +145,16 @@ class Plan3dView extends StatefulWidget {
   /// escaneo, ES.3).
   final Future<void> Function(RoomSetting)? onRoom;
 
+  /// La planta abierta (un set o un plano): con ella, el 3D lleva encima la
+  /// tira de planos y salta a sus cámaras sin volver al 2D (ED.3).
+  final PlanTarget? navTarget;
+
+  /// Abre otra planta (un plano, un set o una escena) sin salir del 3D.
+  final ValueChanged<PlanTarget>? onNavigate;
+
+  /// Al cargar, mirar por la cámara del plano abierto.
+  final bool lookThrough;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -163,6 +178,9 @@ class Plan3dView extends StatefulWidget {
     this.stop,
     this.environment,
     this.onRoom,
+    this.navTarget,
+    this.onNavigate,
+    this.lookThrough = false,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -182,6 +200,9 @@ class _Plan3dViewState extends State<Plan3dView> {
   Timer? _debounce;
   String _view = 'iso';
   bool _cones = true;
+
+  /// Ya se miró por la cámara del plano al abrirlo ([Plan3dView.lookThrough]).
+  bool _lookedThrough = false;
 
   /// Luz real (con la exposición de la cámara) o luz de trabajo (F6.21.4).
   bool _realLight = true;
@@ -342,6 +363,10 @@ class _Plan3dViewState extends State<Plan3dView> {
     _sent = json;
     setState(() => _scene = scene);
     await web.evaluateJavascript(source: 'iris.load($json);');
+    if (widget.lookThrough && !_lookedThrough && _cameras.isNotEmpty) {
+      _lookedThrough = true;
+      _setView('cam:${_cameras.first.$1}');
+    }
     unawaited(_sendThumbs());
     await _pushSelection();
     if (_floor) unawaited(_pushFloor());
@@ -481,7 +506,7 @@ class _Plan3dViewState extends State<Plan3dView> {
         if (mounted) {
           setState(() => _status = 'Escaneo: ${message['message']}');
         }
-      case 'move' || 'aim':
+      case 'move' || 'aim' || 'rotate' || 'lift':
         _applyFrom3d(message);
       case 'view':
         if (mounted) setState(() => _view = message['view'] as String);
@@ -518,6 +543,11 @@ class _Plan3dViewState extends State<Plan3dView> {
       if (!PlanScene3d.moveBy(el, n('dx'), n('dy'), widget.elements, mpu)) {
         return;
       }
+    } else if (message['type'] == 'rotate') {
+      if (!PlanTransform.canRotate(el)) return;
+      PlanTransform.setRotation(el, el.rotation + n('deg'));
+    } else if (message['type'] == 'lift') {
+      PlanTransform.liftBy(el, n('dz'));
     } else if (el.type == ElementType.light) {
       PlanScene3d.aimAt(el, n('x'), n('y'), n('z'), mpu);
     } else {
@@ -1359,6 +1389,24 @@ class _Plan3dViewState extends State<Plan3dView> {
           ),
       ],
     );
+    final navTarget = widget.navTarget, projectId = widget.projectId;
+    final Widget stage = navTarget == null || projectId == null
+        ? viewer
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PlanDataBuilder(
+                projectId: projectId,
+                builder: (context, data) => Plan3dShotStrip(
+                  nav: Plan3dNav.of(data, navTarget, widget.elements),
+                  view: _view,
+                  onView: _setView,
+                  onNavigate: widget.onNavigate,
+                ),
+              ),
+              Expanded(child: viewer),
+            ],
+          );
     if (widget.full) {
       return LayoutBuilder(
         builder: (context, constraints) {
@@ -1368,7 +1416,7 @@ class _Plan3dViewState extends State<Plan3dView> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: viewer),
+                  Expanded(child: stage),
                   VerticalDivider(width: 1, color: palette.divider),
                   SizedBox(width: 300, child: _sidebar(palette)),
                 ],
@@ -1391,7 +1439,7 @@ class _Plan3dViewState extends State<Plan3dView> {
                   child: LayoutBuilder(
                     builder: (context, area) => Stack(
                       children: [
-                        Positioned.fill(child: viewer),
+                        Positioned.fill(child: stage),
                         if (_panelOpen)
                           Positioned(
                             left: 0,
@@ -1417,7 +1465,7 @@ class _Plan3dViewState extends State<Plan3dView> {
         children: [
           _compactBar(palette),
           Divider(height: 1, color: palette.divider),
-          Expanded(child: viewer),
+          Expanded(child: stage),
         ],
       ),
     );
@@ -1831,16 +1879,22 @@ class _Plan3dViewState extends State<Plan3dView> {
               element: _selected!,
               onCommit: _update,
             ),
-          Text(
-            _selected!.type == ElementType.light
-                ? 'Arrástralo para moverlo; el asa naranja cambia adónde '
-                      'apunta. Cerca de un truss se cuelga de él.'
-                : 'Arrástralo para moverlo por el suelo.',
-            style: AppTypography.caption(
-              palette,
-            ).copyWith(color: palette.textTertiary),
-          ),
+          if (_selected!.type == ElementType.light)
+            Text(
+              'El asa naranja cambia adónde apunta. Cerca de un truss se '
+              'cuelga de él.',
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textTertiary),
+            ),
           const SizedBox(height: AppSpacing.sm),
+          if (PlanTransform.applies(_selected!))
+            PlanTransformFields(
+              element: _selected!,
+              elements: widget.elements,
+              metersPerUnit: widget.metersPerUnit,
+              onUpdate: _update,
+            ),
           if (_selected!.type == ElementType.light)
             _LightControls(
               element: _selected!,
@@ -2200,6 +2254,222 @@ class _ViewTile extends StatelessWidget {
   }
 }
 
+/// La tira de planos encima del 3D (ED.3): cada plano salta a su cámara
+/// (tocarlo otra vez pasa a la siguiente); si su cámara no está en este 3D,
+/// abre su planta. El menú del título cambia de set o de escena.
+class Plan3dShotStrip extends StatelessWidget {
+  final Plan3dNav? nav;
+  final String view;
+  final ValueChanged<String> onView;
+  final ValueChanged<PlanTarget>? onNavigate;
+
+  const Plan3dShotStrip({
+    super.key,
+    required this.nav,
+    required this.view,
+    required this.onView,
+    required this.onNavigate,
+  });
+
+  void _tap(Plan3dShot shot) {
+    final ids = shot.cameraIds;
+    if (ids.isEmpty) {
+      if (!shot.open) onNavigate?.call(shot.target);
+      return;
+    }
+    final at = ids.indexOf(view.startsWith('cam:') ? view.substring(4) : '');
+    onView('cam:${ids[(at + 1) % ids.length]}');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final nav = this.nav;
+    if (nav == null) return const SizedBox.shrink();
+    final palette = context.palette;
+    final looking = view.startsWith('cam:') ? view.substring(4) : null;
+    final jumps = onNavigate == null
+        ? const <PopupMenuEntry<PlanTarget>>[]
+        : <PopupMenuEntry<PlanTarget>>[
+            if (nav.sets.length > 1) ...[
+              const PopupMenuItem(enabled: false, child: Text('Sets')),
+              for (final s in nav.sets)
+                CheckedPopupMenuItem(
+                  value: s.target,
+                  checked: s.current,
+                  child: Text(s.label),
+                ),
+            ],
+            if (nav.scenes.length > 1) ...[
+              if (nav.sets.length > 1) const PopupMenuDivider(),
+              const PopupMenuItem(enabled: false, child: Text('Escenas')),
+              for (final s in nav.scenes)
+                CheckedPopupMenuItem(
+                  value: s.target,
+                  checked: s.current,
+                  child: Text(s.label),
+                ),
+            ],
+          ];
+    final title = Text(
+      nav.title,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.label(palette),
+    );
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(bottom: BorderSide(color: palette.divider)),
+      ),
+      child: Row(
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 160),
+            child: jumps.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: title,
+                  )
+                : PopupMenuButton<PlanTarget>(
+                    key: const ValueKey('strip3d-jump'),
+                    tooltip: 'Cambiar de set o de escena',
+                    itemBuilder: (_) => jumps,
+                    onSelected: onNavigate,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(child: title),
+                          Icon(
+                            Icons.arrow_drop_down,
+                            size: 18,
+                            color: palette.textSecondary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+          ),
+          Expanded(
+            child: nav.shots.isEmpty
+                ? Text(
+                    'Sin planos todavía',
+                    style: AppTypography.caption(
+                      palette,
+                    ).copyWith(color: palette.textTertiary),
+                  )
+                : ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    children: [
+                      for (final shot in nav.shots)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: _ShotChip3d(
+                            key: ValueKey('strip3d-${shot.target.id}'),
+                            shot: shot,
+                            active:
+                                looking != null &&
+                                shot.cameraIds.contains(looking),
+                            onTap: () => _tap(shot),
+                            onOpen: shot.open || onNavigate == null
+                                ? null
+                                : () => onNavigate!(shot.target),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShotChip3d extends StatelessWidget {
+  final Plan3dShot shot;
+
+  /// Se está mirando por una de sus cámaras.
+  final bool active;
+  final VoidCallback onTap;
+
+  /// Abre su planta (pulsación larga).
+  final VoidCallback? onOpen;
+
+  const _ShotChip3d({
+    super.key,
+    required this.shot,
+    required this.active,
+    required this.onTap,
+    this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final here = shot.cameraIds.isNotEmpty;
+    final color = active
+        ? palette.accent
+        : shot.open
+        ? palette.textPrimary
+        : here
+        ? palette.textSecondary
+        : palette.textTertiary;
+    final tip = here
+        ? '${shot.target.label}: ver por su cámara'
+              '${shot.cameraIds.length > 1 ? ' (otra vez, la siguiente)' : ''}'
+        : shot.open
+        ? '${shot.target.label}: aún no tiene cámara'
+        : '${shot.target.label}: abrir su planta';
+    return Tooltip(
+      message: onOpen == null || !here
+          ? tip
+          : '$tip · mantén pulsado para abrir su planta',
+      child: Material(
+        color: active
+            ? palette.accent.withValues(alpha: 0.18)
+            : palette.surfaceElevated,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: active || shot.open ? color : palette.border,
+            width: shot.open ? 1.5 : 1,
+          ),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          onLongPress: onOpen,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  here ? Icons.videocam_outlined : Icons.open_in_new,
+                  size: 14,
+                  color: color,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  shot.letters.isEmpty
+                      ? shot.tag
+                      : '${shot.tag} ${shot.letters.join()}',
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: color, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// El 3D a pantalla entera, con todas las opciones a la vista. En el iPad
 /// es la pantalla del 3D; en el Mac se abre desde el panel. Lo que se
 /// mueve o se retoca aquí se guarda en la planta.
@@ -2222,6 +2492,9 @@ class Plan3dScreen extends StatefulWidget {
   final double? stop;
   final SetEnvironment? environment;
   final Future<void> Function(RoomSetting)? onRoom;
+  final PlanTarget? navTarget;
+  final ValueChanged<PlanTarget>? onNavigate;
+  final bool lookThrough;
 
   const Plan3dScreen({
     super.key,
@@ -2243,6 +2516,9 @@ class Plan3dScreen extends StatefulWidget {
     this.stop,
     this.environment,
     this.onRoom,
+    this.navTarget,
+    this.onNavigate,
+    this.lookThrough = false,
   });
 
   static Future<void> show(
@@ -2265,6 +2541,9 @@ class Plan3dScreen extends StatefulWidget {
     double? stop,
     SetEnvironment? environment,
     Future<void> Function(RoomSetting)? onRoom,
+    PlanTarget? navTarget,
+    ValueChanged<PlanTarget>? onNavigate,
+    bool lookThrough = false,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -2286,6 +2565,9 @@ class Plan3dScreen extends StatefulWidget {
         stop: stop,
         environment: environment,
         onRoom: onRoom,
+        navTarget: navTarget,
+        onNavigate: onNavigate,
+        lookThrough: lookThrough,
       ),
     ),
   );
@@ -2336,6 +2618,9 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       stop: widget.stop,
       environment: widget.environment,
       onRoom: widget.onRoom,
+      navTarget: widget.navTarget,
+      onNavigate: widget.onNavigate,
+      lookThrough: widget.lookThrough,
     ),
   );
 }
