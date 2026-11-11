@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../unreal_link/unreal_asset_ref.dart';
 import 'camera_plan_element_model.dart';
 import 'plan_category.dart';
 
@@ -37,10 +38,35 @@ class PlanOutliner extends StatefulWidget {
       el.typeLabel,
       el.model ?? '',
       PlanCategory.of(el).label,
-      if (PlanCategory.hasUnrealAsset(el)) 'ue unreal',
+      if (UnrealAssetRef.of(el) case final asset?) ...[
+        'ue unreal',
+        asset.source.label,
+        asset.name,
+      ],
     ].join(' ').toLowerCase();
     return q.split(RegExp(r'\s+')).every(hay.contains);
   }
+
+  /// Cuántas piezas llevan asset de cada origen (Fab, Megascans…), para la
+  /// cabecera: «2 de Fab · 1 de Megascans». Vacío si ninguna lleva.
+  static String assetSummary(Iterable<PlanElement> elements) {
+    final by = <UnrealAssetSource, int>{};
+    for (final el in elements) {
+      final asset = UnrealAssetRef.of(el);
+      if (asset != null) by[asset.source] = (by[asset.source] ?? 0) + 1;
+    }
+    return [
+      for (final s in UnrealAssetSource.values)
+        if (by[s] case final n?) '$n de ${s.label}',
+    ].join(' · ');
+  }
+
+  /// Rótulo corto del origen de un asset en su fila.
+  static String badgeOf(UnrealAssetRef asset) => switch (asset.source) {
+    UnrealAssetSource.fab => 'Fab',
+    UnrealAssetSource.megascans => 'MS',
+    _ => 'UE',
+  };
 
   /// Agrupa por categoría, en el orden de [PlanCategory], y por nombre.
   static List<(PlanCategory, List<PlanElement>)> group(
@@ -83,7 +109,7 @@ class _PlanOutlinerState extends State<PlanOutliner> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final groups = PlanOutliner.group(widget.elements, _query.text);
-    final withUe = widget.elements.where(PlanCategory.hasUnrealAsset).length;
+    final assets = PlanOutliner.assetSummary(widget.elements);
     return Material(
       color: palette.surface,
       child: Column(
@@ -116,7 +142,9 @@ class _PlanOutlinerState extends State<PlanOutliner> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             child: Text(
-              '$withUe con asset de Unreal',
+              assets.isEmpty
+                  ? 'Ninguna con asset de Unreal, Fab o Megascans'
+                  : 'Assets: $assets',
               style: AppTypography.caption(
                 palette,
               ).copyWith(color: palette.textTertiary),
@@ -227,8 +255,10 @@ class _PlanOutlinerState extends State<PlanOutliner> {
                   ],
                 ),
               ),
-              if (PlanCategory.hasUnrealAsset(el))
-                Container(
+              if (UnrealAssetRef.of(el) case final asset?)
+                Tooltip(
+                  message: '${asset.source.label}: ${asset.name}',
+                  child: Container(
                   margin: const EdgeInsets.only(left: 4),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 4,
@@ -239,11 +269,12 @@ class _PlanOutlinerState extends State<PlanOutliner> {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    'UE',
+                    PlanOutliner.badgeOf(asset),
                     style: AppTypography.caption(
                       palette,
                     ).copyWith(fontSize: 9, fontWeight: FontWeight.w800),
                   ),
+                ),
                 ),
               IconButton(
                 tooltip: hidden

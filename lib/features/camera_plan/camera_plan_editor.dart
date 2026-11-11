@@ -224,6 +224,11 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<CameraPlanEditor> createState() => _CameraPlanEditorState();
+
+  /// La próxima planta que se abra lo hace en IRIS Stage, el 3D a pantalla
+  /// entera (ED.4).
+  static void openStageOnNextLoad() =>
+      _CameraPlanEditorState._reopen3dScreen = true;
 }
 
 extension on PlanElement {
@@ -4214,6 +4219,25 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       delete: _selection.isEmpty ? null : _deleteSelected,
       undo: _undoStack.isEmpty ? null : _undo,
       redo: _redoStack.isEmpty ? null : _redo,
+      pickAsset: _pickLibraryAsset,
+    );
+  }
+
+  /// Un asset de la biblioteca de Unreal para soltarlo en el 3D (ED.4).
+  Future<Plan3dAddItem?> _pickLibraryAsset() async {
+    UnrealAssetRef? picked;
+    await UnrealLibraryScreen.open(
+      context,
+      projectId: widget.projectId,
+      onPlace: (r) => picked = r,
+    );
+    final asset = picked;
+    if (asset == null) return null;
+    return Plan3dAddItem(
+      group: asset.source.label,
+      label: asset.name,
+      icon: Icons.inventory_2_outlined,
+      add: (at) => _addAt(at, () => _placeFromLibrary(asset)),
     );
   }
 
@@ -4286,6 +4310,19 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       editing: () => _editing3d,
       liveElements: () => _visibleElements,
       liveSelected: () => _selected,
+      outliner: (changed) => PlanOutliner(
+        elements: _elements,
+        selected: _selected,
+        hidden: _hiddenElements,
+        onSelect: (el) {
+          _selectFrom3d(el);
+          changed();
+        },
+        onToggleHidden: (el) {
+          _toggleHidden(el);
+          changed();
+        },
+      ),
     );
   }
 
@@ -5670,6 +5707,19 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           children: [
+            // El atajo a IRIS Stage (ED.4): el 3D a pantalla entera, con la
+            // tira de planos, la lista de la escena y la biblioteca de Unreal.
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ActionChip(
+                key: const ValueKey('plan-open-stage'),
+                tooltip: 'El 3D a pantalla entera',
+                visualDensity: VisualDensity.compact,
+                avatar: Icon(Icons.view_in_ar, size: 16, color: palette.accent),
+                label: const Text('IRIS Stage'),
+                onPressed: _open3dScreen,
+              ),
+            ),
             if (_linkedSite != null)
               chip(PlanLayer.environment, 'Entorno', palette.textSecondary),
             if (_linkedSet != null) chip(PlanLayer.set, 'Set', _sceneColor),

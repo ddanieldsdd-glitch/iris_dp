@@ -34,6 +34,7 @@ import '../plan_piece_controls.dart';
 import 'light_floor.dart';
 import 'plan_rig.dart';
 import 'plan_scene3d.dart';
+import '../../unreal_link/unreal_library_screen.dart';
 import '../../unreal_link/unreal_link.dart';
 import '../../unreal_link/unreal_link_button.dart';
 import '../../unreal_link/unreal_asset_tile.dart';
@@ -1442,6 +1443,12 @@ class _Plan3dViewState extends State<Plan3dView> {
               placing: _placing,
               onPick: _startPlacing,
               onCancel: _stopPlacing,
+              onLibrary: edit.pickAsset == null
+                  ? null
+                  : () async {
+                      final item = await edit.pickAsset!();
+                      if (item != null && mounted) _startPlacing(item);
+                    },
             ),
           ),
         if (_status != null)
@@ -1702,7 +1709,7 @@ class _Plan3dViewState extends State<Plan3dView> {
           ),
         if (widget.onExpand != null)
           IconButton(
-            tooltip: 'Abrir el 3D a pantalla entera',
+            tooltip: 'Abrir en IRIS Stage, a pantalla entera',
             icon: Icon(
               Icons.open_in_full,
               size: 18,
@@ -2331,6 +2338,9 @@ class Plan3dEditBar extends StatelessWidget {
   final ValueChanged<Plan3dAddItem> onPick;
   final VoidCallback onCancel;
 
+  /// Abre la biblioteca de Unreal para soltar uno de sus assets.
+  final VoidCallback? onLibrary;
+
   const Plan3dEditBar({
     super.key,
     required this.editing,
@@ -2338,6 +2348,7 @@ class Plan3dEditBar extends StatelessWidget {
     required this.placing,
     required this.onPick,
     required this.onCancel,
+    this.onLibrary,
   });
 
   @override
@@ -2405,6 +2416,16 @@ class Plan3dEditBar extends StatelessWidget {
                   ),
                   itemBuilder: (_) => entries,
                   onSelected: onPick,
+                ),
+              if (onLibrary case final open?)
+                IconButton(
+                  key: const ValueKey('edit3d-library'),
+                  tooltip: 'Desde la biblioteca de Unreal (Fab, Megascans)',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 18,
+                  color: palette.textSecondary,
+                  onPressed: open,
+                  icon: const Icon(Icons.collections_outlined),
                 ),
               button(
                 'Duplicar (⌘D)',
@@ -2719,6 +2740,10 @@ class Plan3dScreen extends StatefulWidget {
   final List<PlanElement> Function()? liveElements;
   final PlanElement? Function()? liveSelected;
 
+  /// La lista de todo lo de la planta (ED.4), como el Outliner de Unreal:
+  /// [changed] avisa de que se tocó una fila (seleccionar, ocultar).
+  final Widget Function(VoidCallback changed)? outliner;
+
   const Plan3dScreen({
     super.key,
     required this.elements,
@@ -2745,6 +2770,7 @@ class Plan3dScreen extends StatefulWidget {
     this.editing,
     this.liveElements,
     this.liveSelected,
+    this.outliner,
   });
 
   static Future<void> show(
@@ -2773,6 +2799,7 @@ class Plan3dScreen extends StatefulWidget {
     Plan3dEditing Function()? editing,
     List<PlanElement> Function()? liveElements,
     PlanElement? Function()? liveSelected,
+    Widget Function(VoidCallback changed)? outliner,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -2800,6 +2827,7 @@ class Plan3dScreen extends StatefulWidget {
         editing: editing,
         liveElements: liveElements,
         liveSelected: liveSelected,
+        outliner: outliner,
       ),
     ),
   );
@@ -2818,12 +2846,77 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
     });
   }
 
+  /// La lista va al lado en pantallas anchas; en el iPhone, en una hoja.
+  bool _showList = true;
+
+  void _toggleList(bool wide) {
+    final outliner = widget.outliner;
+    if (outliner == null) return;
+    if (wide) {
+      setState(() => _showList = !_showList);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheet) => SizedBox(
+        height: MediaQuery.sizeOf(sheet).height * 0.7,
+        child: StatefulBuilder(
+          builder: (_, again) => outliner(() {
+            _refresh();
+            again(() {});
+          }),
+        ),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text(widget.name == null ? '3D' : '3D · ${widget.name}'),
-    ),
-    body: Plan3dView(
+  Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final outliner = widget.outliner;
+    final projectId = widget.projectId;
+    final palette = context.palette;
+    final view = _view();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          widget.name == null ? 'IRIS Stage' : 'IRIS Stage · ${widget.name}',
+        ),
+        actions: [
+          if (outliner != null)
+            IconButton(
+              key: const ValueKey('stage-outliner'),
+              tooltip: 'Elementos de la escena',
+              icon: Icon(
+                Icons.account_tree_outlined,
+                color: wide && _showList ? palette.accent : null,
+              ),
+              onPressed: () => _toggleList(wide),
+            ),
+          if (projectId != null)
+            IconButton(
+              tooltip: 'Biblioteca de Unreal (Fab, Megascans)',
+              icon: const Icon(Icons.collections_outlined),
+              onPressed: () =>
+                  UnrealLibraryScreen.open(context, projectId: projectId),
+            ),
+        ],
+      ),
+      body: outliner == null || !wide || !_showList
+          ? view
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(width: 280, child: outliner(_refresh)),
+                VerticalDivider(width: 1, color: palette.divider),
+                Expanded(child: view),
+              ],
+            ),
+    );
+  }
+
+  Widget _view() => Plan3dView(
       elements: widget.liveElements?.call() ?? widget.elements,
       metersPerUnit: widget.metersPerUnit,
       name: widget.name,
@@ -2861,6 +2954,5 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       onNavigate: widget.onNavigate,
       lookThrough: widget.lookThrough,
       editing: widget.editing?.call().then(_refresh),
-    ),
   );
 }

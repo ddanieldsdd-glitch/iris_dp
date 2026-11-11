@@ -38,6 +38,22 @@ class PlanWorkspaceScreen extends ConsumerStatefulWidget {
     this.fromScript = false,
   });
 
+  /// Abre [target] directamente en IRIS Stage, el 3D a pantalla entera
+  /// (ED.4); al cerrarlo queda su planta.
+  static Future<void> openStage(
+    BuildContext context, {
+    required int projectId,
+    required PlanTarget target,
+  }) {
+    CameraPlanEditor.openStageOnNextLoad();
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            PlanWorkspaceScreen(projectId: projectId, initial: target),
+      ),
+    );
+  }
+
   @override
   ConsumerState<PlanWorkspaceScreen> createState() =>
       _PlanWorkspaceScreenState();

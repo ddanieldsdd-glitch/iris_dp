@@ -27,12 +27,17 @@ class Plan3dEditing {
   final Future<void> Function()? undo;
   final Future<void> Function()? redo;
 
+  /// Elige un asset de la biblioteca de Unreal (Fab, Megascans, el
+  /// proyecto) y devuelve la pieza que se suelta con él.
+  final Future<Plan3dAddItem?> Function()? pickAsset;
+
   const Plan3dEditing({
     this.items = const [],
     this.duplicate,
     this.delete,
     this.undo,
     this.redo,
+    this.pickAsset,
   });
 
   /// El punto de la planta de un punto del suelo del visor ([x], [y] en
@@ -48,19 +53,24 @@ class Plan3dEditing {
             await f();
             done();
           };
+    Plan3dAddItem item(Plan3dAddItem i) => Plan3dAddItem(
+      group: i.group,
+      label: i.label,
+      icon: i.icon,
+      add: (at) async {
+        await i.add(at);
+        done();
+      },
+    );
+    final pick = pickAsset;
     return Plan3dEditing(
-      items: [
-        for (final i in items)
-          Plan3dAddItem(
-            group: i.group,
-            label: i.label,
-            icon: i.icon,
-            add: (at) async {
-              await i.add(at);
-              done();
+      items: [for (final i in items) item(i)],
+      pickAsset: pick == null
+          ? null
+          : () async {
+              final picked = await pick();
+              return picked == null ? null : item(picked);
             },
-          ),
-      ],
       duplicate: wrap(duplicate),
       delete: wrap(delete),
       undo: wrap(undo),
