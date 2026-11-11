@@ -76,6 +76,8 @@ class OnSetMark {
       all[_key] = {
         'status': status.name,
         if (note.trim().isNotEmpty) 'note': note.trim(),
+        // Cuándo se apuntó: si dos aparatos marcan distinto, gana la última.
+        'at': DateTime.now().toUtc().toIso8601String(),
       };
     }
     return jsonEncode(all);
