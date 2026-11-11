@@ -7,12 +7,14 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../core/database/app_database.dart';
+import '../../core/utils/distinct_images.dart';
 import '../../core/utils/export_cancel.dart';
 import '../../core/utils/pdf_export_fonts.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../../features/camera_plan/plan_renderer.dart';
 import '../../features/export_center/export_selection.dart';
+import '../../features/storyboard/shot_export_layout.dart';
 import '../../features/technical_script/technical_script_export.dart'
     show formatShootDate;
 import '../rich_text/script_markup.dart';
@@ -35,6 +37,9 @@ class ShootingPlanBlock {
   final String? notes;
   final Uint8List? plan;
 
+  /// Las luces de la planta: su número y lo que son.
+  final List<ShootingPlanLegendLine> legend;
+
   /// El storyboard y todas las referencias del plano.
   final List<Uint8List> frames;
 
@@ -53,8 +58,17 @@ class ShootingPlanBlock {
     this.action,
     this.notes,
     this.plan,
+    this.legend = const [],
     this.frames = const [],
   });
+}
+
+/// Una luz de la leyenda: el número que lleva en la planta y lo que es.
+class ShootingPlanLegendLine {
+  final int number;
+  final String text;
+
+  const ShootingPlanLegendLine(this.number, this.text);
 }
 
 /// Planta general de un set, para el cierre.
@@ -62,8 +76,14 @@ class ShootingPlanOverview {
   final String title;
   final String? scenes;
   final Uint8List? plan;
+  final List<ShootingPlanLegendLine> legend;
 
-  const ShootingPlanOverview(this.title, {this.scenes, this.plan});
+  const ShootingPlanOverview(
+    this.title, {
+    this.scenes,
+    this.plan,
+    this.legend = const [],
+  });
 }
 
 /// Un tramo del índice con sus planos.
@@ -295,10 +315,19 @@ class ShootingPlanPdf {
   /// Las imágenes del plano: primero su storyboard y luego todas sus
   /// referencias, sin repetir.
   static Future<List<Uint8List>> _frames(AppDatabase db, Shot shot) async {
-    final paths = <String>{
-      ?shot.storyboardImagePath,
-      ...referenceImagesOf(shot, await db.getReferencesForShot(shot.id)),
+    final refs = await db.getReferencesForShot(shot.id);
+    // Las que se dejaron «Fuera» al preparar la hoja del plano.
+    final excluded = ShotExportLayout.decode(shot.exportLayoutJson)?.excluded;
+    final hidden = {
+      if (excluded != null && excluded.isNotEmpty)
+        for (final image in shotLayoutImages(shot, refs))
+          if (excluded.contains(image.id)) image.path,
     };
+    final paths = await distinctImagePaths([
+      shot.storyboardImagePath,
+      ...referenceImagesOf(shot, refs),
+    ]);
+    paths.removeWhere(hidden.contains);
     if (paths.isEmpty) {
       final fallback = referenceImageOf(shot);
       if (fallback != null) paths.add(fallback);
@@ -328,6 +357,14 @@ class ShootingPlanPdf {
       scene.locationPureName.trim(),
       scene.dayNight.trim(),
     ].where((s) => s.isNotEmpty).join(' ');
+    final sheet = await renderer.shotSheet(
+      shot,
+      light: withLight,
+      beams: withBeams,
+      size: Size(_planWidth - (withLight ? legendWidth : 0), _blockHeight),
+      pixelRatio: 4,
+      backdrop: backdrop,
+    );
     return ShootingPlanBlock(
       sceneLabel: scene.label,
       shotNumber: shot.number,
@@ -342,14 +379,8 @@ class ShootingPlanPdf {
       stop: _plain(shot.fStop),
       action: _plain(shot.action),
       notes: _plain(shot.notes),
-      plan: await renderer.shot(
-        shot,
-        light: withLight,
-        beams: withBeams,
-        size: Size(_planWidth, _blockHeight),
-        pixelRatio: 4,
-        backdrop: backdrop,
-      ),
+      plan: sheet.image,
+      legend: _legendOf(sheet),
       frames: await _frames(db, shot),
     );
   }
@@ -376,27 +407,116 @@ class ShootingPlanPdf {
         }
       }
     }
-    return [
-      for (final entry in scenesOf.entries)
-        if (data.setup(entry.key) case final setup?)
-          ShootingPlanOverview(
-            [
-              if (data.set(setup.locationBasePlanId) case final set?)
-                set.locationName,
-              setup.name,
-            ].join(' · '),
-            scenes: 'Esc ${entry.value.join(', ')}',
-            plan: await renderer.setup(
-              setup,
-              light: withLight,
-              beams: withBeams,
-              size: Size(_bodyWidth, _bodyHeight - 22),
-              pixelRatio: 3,
-              backdrop: backdrop,
+    final overviews = <ShootingPlanOverview>[];
+    for (final entry in scenesOf.entries) {
+      final setup = data.setup(entry.key);
+      if (setup == null) continue;
+      final sheet = await renderer.setupSheet(
+        setup,
+        light: withLight,
+        beams: withBeams,
+        size: Size(
+          _bodyWidth - (withLight ? _overviewLegendWidth : 0),
+          _bodyHeight - 22,
+        ),
+        pixelRatio: 3,
+        backdrop: backdrop,
+      );
+      overviews.add(
+        ShootingPlanOverview(
+          [
+            if (data.set(setup.locationBasePlanId) case final set?)
+              set.locationName,
+            setup.name,
+          ].join(' · '),
+          scenes: 'Esc ${entry.value.join(', ')}',
+          plan: sheet.image,
+          legend: _legendOf(sheet),
+        ),
+      );
+    }
+    return overviews;
+  }
+
+  static List<ShootingPlanLegendLine> _legendOf(PlanSheet sheet) => [
+    for (final entry in sheet.legend)
+      ShootingPlanLegendLine(entry.number, entry.label),
+  ];
+
+  /// Ancho de la leyenda de luces junto a la planta de un plano y junto a
+  /// una planta general.
+  @visibleForTesting
+  static const legendWidth = 118.0;
+  static const _overviewLegendWidth = 170.0;
+
+  /// Las luces numeradas, al lado de la planta: lo que antes eran rótulos
+  /// con su línea encima de la planta.
+  static pw.Widget _legend(List<ShootingPlanLegendLine> lines, double width) =>
+      pw.Container(
+        width: width,
+        padding: const pw.EdgeInsets.fromLTRB(6, 5, 5, 5),
+        decoration: const pw.BoxDecoration(
+          border: pw.Border(
+            left: pw.BorderSide(color: PdfColors.grey400, width: 0.5),
+          ),
+        ),
+        alignment: pw.Alignment.topLeft,
+        child: pw.FittedBox(
+          fit: pw.BoxFit.scaleDown,
+          alignment: pw.Alignment.topLeft,
+          child: pw.SizedBox(
+            width: width - 11,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'LUCES',
+                  style: pw.TextStyle(
+                    fontSize: 6.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.grey700,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                pw.SizedBox(height: 3),
+                for (final line in lines)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 2.5),
+                    child: pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Container(
+                          width: 10,
+                          height: 10,
+                          alignment: pw.Alignment.center,
+                          decoration: const pw.BoxDecoration(
+                            color: PdfColor.fromInt(0xFF111114),
+                            shape: pw.BoxShape.circle,
+                          ),
+                          child: pw.Text(
+                            '${line.number}',
+                            style: pw.TextStyle(
+                              fontSize: line.number > 9 ? 5 : 6,
+                              color: PdfColors.white,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        pw.SizedBox(width: 4),
+                        pw.Expanded(
+                          child: pw.Text(
+                            line.text,
+                            style: const pw.TextStyle(fontSize: 6.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           ),
-    ];
-  }
+        ),
+      );
 
   /// Compone el PDF con todo ya preparado.
   static Future<Uint8List> compose({
@@ -762,19 +882,32 @@ class ShootingPlanPdf {
         children: [
           pw.Container(
             width: _planWidth,
-            alignment: pw.Alignment.center,
             decoration: pw.BoxDecoration(
               border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
             ),
-            child: block.plan == null
-                ? pw.Text(
-                    'Sin planta',
-                    style: const pw.TextStyle(
-                      fontSize: 9,
-                      color: PdfColors.grey600,
-                    ),
-                  )
-                : pw.Image(pw.MemoryImage(block.plan!), fit: pw.BoxFit.contain),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                pw.Expanded(
+                  child: pw.Container(
+                    alignment: pw.Alignment.center,
+                    child: block.plan == null
+                        ? pw.Text(
+                            'Sin planta',
+                            style: const pw.TextStyle(
+                              fontSize: 9,
+                              color: PdfColors.grey600,
+                            ),
+                          )
+                        : pw.Image(
+                            pw.MemoryImage(block.plan!),
+                            fit: pw.BoxFit.contain,
+                          ),
+                  ),
+                ),
+                if (block.legend.isNotEmpty) _legend(block.legend, legendWidth),
+              ],
+            ),
           ),
           pw.SizedBox(width: 12),
           pw.Expanded(
@@ -905,31 +1038,54 @@ class ShootingPlanPdf {
       ('ANGULACIÓN', block.angle),
       ('DIAFRAGMA', block.stop),
     ];
-    pw.Widget cell(String text, {bool head = false}) => pw.Container(
-      color: head ? PdfColors.black : null,
-      padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 3),
-      alignment: pw.Alignment.center,
-      child: pw.Text(
+    // Una palabra sola nunca se parte por la mitad («LEN TE»): si no cabe,
+    // se encoge. Lo que tiene espacios reparte líneas como siempre.
+    pw.Widget cell(String text, {bool head = false, bool wide = false}) {
+      final label = pw.Text(
         text,
         textAlign: pw.TextAlign.center,
-        maxLines: 2,
+        maxLines: head || !text.contains(' ') ? 1 : 3,
         style: pw.TextStyle(
           fontSize: head ? 6.5 : 8.5,
           color: head ? PdfColors.white : PdfColors.black,
           fontWeight: head ? pw.FontWeight.bold : null,
         ),
-      ),
-    );
+      );
+      return pw.Container(
+        color: head ? PdfColors.black : null,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+        alignment: pw.Alignment.center,
+        child: !wide && (head || !text.contains(' '))
+            ? pw.FittedBox(fit: pw.BoxFit.scaleDown, child: label)
+            : label,
+      );
+    }
+
     return pw.Table(
+      columnWidths: {
+        0: const pw.FlexColumnWidth(),
+        for (final (i, width) in tableColumnWidths.indexed)
+          i + 1: pw.FixedColumnWidth(width),
+      },
       border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
       children: [
         pw.TableRow(
           children: [for (final c in columns) cell(c.$1, head: true)],
         ),
-        pw.TableRow(children: [for (final c in columns) cell(c.$2 ?? '—')]),
+        pw.TableRow(
+          children: [
+            for (final (i, c) in columns.indexed)
+              cell(c.$2 ?? '—', wide: i == 0),
+          ],
+        ),
       ],
     );
   }
+
+  /// Anchos de LENTE, SOPORTE / MOV., ANGULACIÓN y DIAFRAGMA; el
+  /// ENCUADRE se queda el resto.
+  @visibleForTesting
+  static const tableColumnWidths = [40.0, 66.0, 54.0, 50.0];
 
   static pw.Widget _overviewView(
     ShootingPlanOverview overview, {
@@ -955,22 +1111,33 @@ class ShootingPlanPdf {
         pw.SizedBox(height: 6),
         pw.Expanded(
           child: pw.Container(
-            alignment: pw.Alignment.center,
             decoration: pw.BoxDecoration(
               border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
             ),
-            child: overview.plan == null
-                ? pw.Text(
-                    'Sin planta',
-                    style: const pw.TextStyle(
-                      fontSize: 9,
-                      color: PdfColors.grey600,
-                    ),
-                  )
-                : pw.Image(
-                    pw.MemoryImage(overview.plan!),
-                    fit: pw.BoxFit.contain,
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                pw.Expanded(
+                  child: pw.Container(
+                    alignment: pw.Alignment.center,
+                    child: overview.plan == null
+                        ? pw.Text(
+                            'Sin planta',
+                            style: const pw.TextStyle(
+                              fontSize: 9,
+                              color: PdfColors.grey600,
+                            ),
+                          )
+                        : pw.Image(
+                            pw.MemoryImage(overview.plan!),
+                            fit: pw.BoxFit.contain,
+                          ),
                   ),
+                ),
+                if (overview.legend.isNotEmpty)
+                  _legend(overview.legend, _overviewLegendWidth),
+              ],
+            ),
           ),
         ),
       ],
