@@ -550,6 +550,51 @@ class _DayColumn extends StatelessWidget {
             ),
           ),
         ),
+        _ActionsMenu(
+          actions: [
+            _MenuAction(
+              'Orden del día (PDF)',
+              (context) => exportShootDayOrder(
+                context,
+                board.service.db,
+                projectId: board.projectId,
+                dayIds: {day.id},
+                dayName: day.name,
+              ),
+            ),
+            _MenuAction(
+              'Duplicar jornada',
+              (_) => board.service.duplicateDay(board.projectId, day.id),
+            ),
+            _MenuAction('Borrar jornada', (context) async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text('¿Borrar ${day.name}?'),
+                  content: Text(
+                    shotCount == 0
+                        ? 'La jornada está vacía.'
+                        : 'Sus $shotCount planos vuelven a «Sin asignar». '
+                              'Puedes deshacerlo mientras sigas en el plan.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Borrar'),
+                    ),
+                  ],
+                ),
+              );
+              if (ok == true) {
+                await board.service.deleteDay(board.projectId, day.id);
+              }
+            }),
+          ],
+        ),
       ],
     );
 

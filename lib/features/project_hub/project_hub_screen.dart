@@ -11,6 +11,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/compact_nav_shell.dart';
+import '../shoot_documents/shoot_day_screen.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
 import '../shoot_documents/state/shoot_document_providers.dart';
 import 'project_hub_destinations.dart';
@@ -243,11 +244,22 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
                   if (_stats.isShooting && _primaryShootDoc != null) ...[
                     const SizedBox(height: AppSpacing.md),
                     AppCard(
-                      onTap: () => ShootDocumentImportActions.openEditor(
-                        context,
-                        projectId: widget.project.id,
-                        documentId: _primaryShootDoc!.id,
-                      ),
+                      // Una jornada se abre como jornada, no como documento
+                      // libre.
+                      onTap: () => _primaryShootDoc!.kind == kShootDayKind
+                          ? Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => ShootDayScreen(
+                                  projectId: widget.project.id,
+                                  documentId: _primaryShootDoc!.id,
+                                ),
+                              ),
+                            )
+                          : ShootDocumentImportActions.openEditor(
+                              context,
+                              projectId: widget.project.id,
+                              documentId: _primaryShootDoc!.id,
+                            ),
                       padding: const EdgeInsets.all(AppSpacing.md),
                       focused: true,
                       child: Row(

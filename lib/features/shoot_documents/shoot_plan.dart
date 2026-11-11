@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show Value;
 
 import '../../core/database/app_database.dart';
+import '../../core/database/shoot_block_overrides.dart';
 import '../../shared/history/edit_history.dart';
 import '../camera_plan/camera_plan_grouping.dart';
 import 'shoot_day_timeline.dart';
@@ -128,6 +131,81 @@ class ShootPlanService {
         projectId: projectId,
         name: nextShootDayName(existing.where((d) => d.kind == kShootDayKind)),
         kind: const Value(kShootDayKind),
+      ),
+    );
+  }
+
+  /// Una copia de [dayId] justo detrás, con su orden, horas y franjas, y sin
+  /// las marcas de En set ni la fecha. Devuelve la jornada nueva.
+  Future<int> duplicateDay(int projectId, int dayId) async {
+    Future<int> make() async {
+      final day = (await db.getShootDocument(dayId))!;
+      final all = sortShootDays(await db.getShootDocumentsForProject(projectId));
+      final id = await db.insertShootDocument(
+        ShootDocumentsCompanion.insert(
+          projectId: projectId,
+          name: nextShootDayName(all),
+          kind: const Value(kShootDayKind),
+          description: Value(day.description),
+          locationSiteId: Value(day.locationSiteId),
+          shootFromTime: Value(day.shootFromTime),
+          shootToTime: Value(day.shootToTime),
+        ),
+      );
+      for (final b in await db.getBlocksForShootDocument(dayId)) {
+        final json = decodeBlockOverrides(b.contentOverridesJson)
+          ..remove('onSet');
+        await db.insertShootDocumentBlock(
+          b
+              .toCompanion(true)
+              .copyWith(
+                id: const Value.absent(),
+                documentId: Value(id),
+                contentOverridesJson: Value(
+                  json.isEmpty ? null : jsonEncode(json),
+                ),
+              ),
+        );
+      }
+      final order = [for (final d in all) d.id];
+      order.insert(order.indexOf(dayId) + 1, id);
+      await reorderDays(projectId, order);
+      return id;
+    }
+
+    var id = await make();
+    history?.record(
+      EditStep(
+        label: 'duplicar jornada',
+        undo: () => db.deleteShootDocument(id),
+        redo: () async => id = await make(),
+      ),
+    );
+    return id;
+  }
+
+  /// Borra la jornada; sus planos vuelven a «Sin asignar». Se puede deshacer
+  /// mientras la pantalla esté abierta.
+  Future<void> deleteDay(int projectId, int dayId) async {
+    final day = await db.getShootDocument(dayId);
+    if (day == null) return;
+    final blocks = await db.getShootDayBlocks(projectId);
+    final order = [
+      for (final d in sortShootDays(
+        await db.getShootDocumentsForProject(projectId),
+      ))
+        d.id,
+    ];
+    await db.deleteShootDocument(dayId);
+    history?.record(
+      EditStep(
+        label: 'borrar ${day.name}',
+        undo: () async {
+          await db.into(db.shootDocuments).insert(day);
+          await db.restoreShootDayBlocks(projectId, blocks);
+          await reorderDays(projectId, order);
+        },
+        redo: () => db.deleteShootDocument(dayId),
       ),
     );
   }
