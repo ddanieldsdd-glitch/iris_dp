@@ -34,6 +34,7 @@ import '../plan_piece_controls.dart';
 import 'light_floor.dart';
 import 'plan_rig.dart';
 import 'plan_scene3d.dart';
+import '../../unreal_link/unreal_library_screen.dart';
 import '../../unreal_link/unreal_link.dart';
 import '../../unreal_link/unreal_link_button.dart';
 import '../../unreal_link/unreal_asset_tile.dart';
@@ -47,6 +48,7 @@ import '../../../core/utils/media_storage.dart';
 import '../plan_segment.dart';
 import '../plan_data.dart';
 import '../plan_target.dart';
+import 'plan_3d_edit.dart';
 import 'plan_3d_shots.dart';
 import 'plan_transform.dart';
 import 'plan_transform_fields.dart';
@@ -155,6 +157,13 @@ class Plan3dView extends StatefulWidget {
   /// Al cargar, mirar por la cámara del plano abierto.
   final bool lookThrough;
 
+  /// Añadir, duplicar, borrar y deshacer desde el 3D (ED.2).
+  final Plan3dEditing? editing;
+
+  /// Guarda lo que ve una cámara, para dibujar el storyboard encima (ED.5).
+  /// Devuelve el aviso que se enseña.
+  final Future<String> Function(Uint8List png, String cameraId)? onCameraStill;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -181,6 +190,8 @@ class Plan3dView extends StatefulWidget {
     this.navTarget,
     this.onNavigate,
     this.lookThrough = false,
+    this.editing,
+    this.onCameraStill,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -203,6 +214,74 @@ class _Plan3dViewState extends State<Plan3dView> {
 
   /// Ya se miró por la cámara del plano al abrirlo ([Plan3dView.lookThrough]).
   bool _lookedThrough = false;
+
+  bool _stillBusy = false;
+
+  /// Lo que ve la cámara por la que se mira, para el storyboard (ED.5).
+  Future<void> _saveStill() async {
+    final save = widget.onCameraStill;
+    if (save == null || !_view.startsWith('cam:') || _stillBusy) return;
+    final id = _view.substring(4);
+    setState(() => _stillBusy = true);
+    try {
+      final data = await _ask('iris.cameraStill(${jsonEncode(id)});');
+      final png = data is Map ? data['png'] : null;
+      if (png is! String) throw StateError('El 3D no ha dado imagen.');
+      final notice = await save(base64Decode(png), id);
+      if (mounted) setState(() => _status = notice);
+    } catch (e) {
+      if (mounted) setState(() => _status = 'No se ha podido guardar: $e');
+    } finally {
+      if (mounted) setState(() => _stillBusy = false);
+    }
+  }
+
+  /// Lo que se va a soltar en el suelo con el próximo toque (ED.2).
+  Plan3dAddItem? _placing;
+
+  void _startPlacing(Plan3dAddItem item) {
+    if (_measuring) _toggle('measure');
+    setState(() => _placing = item);
+    _set({'place': true});
+  }
+
+  void _stopPlacing() {
+    if (_placing == null) return;
+    setState(() => _placing = null);
+    _set({'place': false});
+  }
+
+  Future<void> _placeAt(Map message) async {
+    final item = _placing;
+    if (item == null) return;
+    _stopPlacing();
+    final x = (message['x'] as num?)?.toDouble() ?? 0;
+    final y = (message['y'] as num?)?.toDouble() ?? 0;
+    await item.add(Plan3dEditing.canvasAt(x, y, widget.metersPerUnit));
+  }
+
+  /// Atajos de teclado del visor: Supr, ⌘D, ⌘Z, ⇧⌘Z y Esc.
+  void _onKey(String? key) {
+    final edit = widget.editing;
+    switch (key) {
+      case 'escape':
+        if (_placing != null) {
+          _stopPlacing();
+        } else if (_selected != null) {
+          widget.onSelect?.call(null);
+          setState(() => _selected = null);
+          _pushSelection();
+        }
+      case 'delete' when _selected != null:
+        edit?.delete?.call();
+      case 'duplicate' when _selected != null:
+        edit?.duplicate?.call();
+      case 'undo':
+        edit?.undo?.call();
+      case 'redo':
+        edit?.redo?.call();
+    }
+  }
 
   /// Luz real (con la exposición de la cámara) o luz de trabajo (F6.21.4).
   bool _realLight = true;
@@ -468,6 +547,10 @@ class _Plan3dViewState extends State<Plan3dView> {
               : 'orbit',
         });
         _push();
+      case 'place':
+        _placeAt(message);
+      case 'key':
+        _onKey(message['key'] as String?);
       case 'select':
         final id = message['id'];
         PlanElement? hit;
@@ -1376,6 +1459,41 @@ class _Plan3dViewState extends State<Plan3dView> {
             );
           },
         ),
+        if (widget.editing case final edit?)
+          Positioned(
+            left: AppSpacing.sm,
+            top: AppSpacing.sm,
+            child: Plan3dEditBar(
+              editing: edit,
+              hasSelection: _selected != null,
+              placing: _placing,
+              onPick: _startPlacing,
+              onCancel: _stopPlacing,
+              onLibrary: edit.pickAsset == null
+                  ? null
+                  : () async {
+                      final item = await edit.pickAsset!();
+                      if (item != null && mounted) _startPlacing(item);
+                    },
+            ),
+          ),
+        if (widget.onCameraStill != null && _view.startsWith('cam:'))
+          Positioned(
+            right: AppSpacing.sm,
+            bottom: AppSpacing.sm,
+            child: FilledButton.tonalIcon(
+              key: const ValueKey('still-for-storyboard'),
+              onPressed: _stillBusy ? null : _saveStill,
+              icon: _stillBusy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.photo_camera_back_outlined, size: 18),
+              label: const Text('Para el storyboard'),
+            ),
+          ),
         if (_status != null)
           Positioned(
             left: AppSpacing.sm,
@@ -1634,7 +1752,7 @@ class _Plan3dViewState extends State<Plan3dView> {
           ),
         if (widget.onExpand != null)
           IconButton(
-            tooltip: 'Abrir el 3D a pantalla entera',
+            tooltip: 'Abrir en IRIS Stage, a pantalla entera',
             icon: Icon(
               Icons.open_in_full,
               size: 18,
@@ -2254,6 +2372,169 @@ class _ViewTile extends StatelessWidget {
   }
 }
 
+/// La barra de edición del 3D (ED.2): añadir (se elige y se toca el suelo),
+/// duplicar, borrar, deshacer y rehacer.
+class Plan3dEditBar extends StatelessWidget {
+  final Plan3dEditing editing;
+  final bool hasSelection;
+  final Plan3dAddItem? placing;
+  final ValueChanged<Plan3dAddItem> onPick;
+  final VoidCallback onCancel;
+
+  /// Abre la biblioteca de Unreal para soltar uno de sus assets.
+  final VoidCallback? onLibrary;
+
+  const Plan3dEditBar({
+    super.key,
+    required this.editing,
+    required this.hasSelection,
+    required this.placing,
+    required this.onPick,
+    required this.onCancel,
+    this.onLibrary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final placing = this.placing;
+    Widget button(
+      String tip,
+      IconData icon,
+      Future<void> Function()? action, {
+      Key? key,
+    }) => IconButton(
+      key: key,
+      tooltip: tip,
+      visualDensity: VisualDensity.compact,
+      iconSize: 18,
+      color: palette.textSecondary,
+      onPressed: action == null ? null : () => action(),
+      icon: Icon(icon),
+    );
+    final entries = <PopupMenuEntry<Plan3dAddItem>>[];
+    String? group;
+    for (final item in editing.items) {
+      if (item.group != group) {
+        if (group != null) entries.add(const PopupMenuDivider());
+        group = item.group;
+        entries.add(PopupMenuItem(enabled: false, height: 28, child: Text(group)));
+      }
+      entries.add(
+        PopupMenuItem(
+          value: item,
+          height: 36,
+          child: Row(
+            children: [
+              Icon(item.icon, size: 16, color: palette.textSecondary),
+              const SizedBox(width: 8),
+              Flexible(child: Text(item.label, overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+        ),
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Material(
+          color: palette.surface.withValues(alpha: 0.92),
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: BorderSide(color: palette.border),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (entries.isNotEmpty)
+                PopupMenuButton<Plan3dAddItem>(
+                  key: const ValueKey('edit3d-add'),
+                  tooltip: 'Añadir: elige y toca el suelo',
+                  icon: Icon(
+                    Icons.add_circle_outline,
+                    size: 20,
+                    color: placing != null ? palette.accent : palette.textSecondary,
+                  ),
+                  itemBuilder: (_) => entries,
+                  onSelected: onPick,
+                ),
+              if (onLibrary case final open?)
+                IconButton(
+                  key: const ValueKey('edit3d-library'),
+                  tooltip: 'Desde la biblioteca de Unreal (Fab, Megascans)',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 18,
+                  color: palette.textSecondary,
+                  onPressed: open,
+                  icon: const Icon(Icons.collections_outlined),
+                ),
+              button(
+                'Duplicar (⌘D)',
+                Icons.copy_all_outlined,
+                hasSelection ? editing.duplicate : null,
+                key: const ValueKey('edit3d-duplicate'),
+              ),
+              button(
+                'Borrar (Supr)',
+                Icons.delete_outline,
+                hasSelection ? editing.delete : null,
+                key: const ValueKey('edit3d-delete'),
+              ),
+              button(
+                'Deshacer (⌘Z)',
+                Icons.undo,
+                editing.undo,
+                key: const ValueKey('edit3d-undo'),
+              ),
+              button(
+                'Rehacer (⇧⌘Z)',
+                Icons.redo,
+                editing.redo,
+                key: const ValueKey('edit3d-redo'),
+              ),
+            ],
+          ),
+        ),
+        if (placing != null) ...[
+          const SizedBox(width: 8),
+          Material(
+            color: palette.surface.withValues(alpha: 0.92),
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: palette.accent),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(placing.icon, size: 16, color: palette.accent),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Toca el suelo donde va «${placing.label}»',
+                    style: AppTypography.caption(palette),
+                  ),
+                  IconButton(
+                    key: const ValueKey('edit3d-cancel'),
+                    tooltip: 'Cancelar (Esc)',
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 16,
+                    onPressed: onCancel,
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 /// La tira de planos encima del 3D (ED.3): cada plano salta a su cámara
 /// (tocarlo otra vez pasa a la siguiente); si su cámara no está en este 3D,
 /// abre su planta. El menú del título cambia de set o de escena.
@@ -2495,6 +2776,17 @@ class Plan3dScreen extends StatefulWidget {
   final PlanTarget? navTarget;
   final ValueChanged<PlanTarget>? onNavigate;
   final bool lookThrough;
+  final Plan3dEditing Function()? editing;
+
+  /// Lo que hay ahora en la planta y lo seleccionado: tras añadir, borrar o
+  /// deshacer desde aquí, el 3D se rehace con ello.
+  final List<PlanElement> Function()? liveElements;
+  final PlanElement? Function()? liveSelected;
+
+  /// La lista de todo lo de la planta (ED.4), como el Outliner de Unreal:
+  /// [changed] avisa de que se tocó una fila (seleccionar, ocultar).
+  final Widget Function(VoidCallback changed)? outliner;
+  final Future<String> Function(Uint8List png, String cameraId)? onCameraStill;
 
   const Plan3dScreen({
     super.key,
@@ -2519,6 +2811,11 @@ class Plan3dScreen extends StatefulWidget {
     this.navTarget,
     this.onNavigate,
     this.lookThrough = false,
+    this.editing,
+    this.liveElements,
+    this.liveSelected,
+    this.outliner,
+    this.onCameraStill,
   });
 
   static Future<void> show(
@@ -2544,6 +2841,11 @@ class Plan3dScreen extends StatefulWidget {
     PlanTarget? navTarget,
     ValueChanged<PlanTarget>? onNavigate,
     bool lookThrough = false,
+    Plan3dEditing Function()? editing,
+    List<PlanElement> Function()? liveElements,
+    PlanElement? Function()? liveSelected,
+    Widget Function(VoidCallback changed)? outliner,
+    Future<String> Function(Uint8List png, String cameraId)? onCameraStill,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -2568,6 +2870,11 @@ class Plan3dScreen extends StatefulWidget {
         navTarget: navTarget,
         onNavigate: onNavigate,
         lookThrough: lookThrough,
+        editing: editing,
+        liveElements: liveElements,
+        liveSelected: liveSelected,
+        outliner: outliner,
+        onCameraStill: onCameraStill,
       ),
     ),
   );
@@ -2579,13 +2886,85 @@ class Plan3dScreen extends StatefulWidget {
 class _Plan3dScreenState extends State<Plan3dScreen> {
   late PlanElement? _selected = widget.selected;
 
+  void _refresh() {
+    if (!mounted) return;
+    setState(() {
+      if (widget.liveSelected case final live?) _selected = live();
+    });
+  }
+
+  /// La lista va al lado en pantallas anchas; en el iPhone, en una hoja.
+  bool _showList = true;
+
+  void _toggleList(bool wide) {
+    final outliner = widget.outliner;
+    if (outliner == null) return;
+    if (wide) {
+      setState(() => _showList = !_showList);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheet) => SizedBox(
+        height: MediaQuery.sizeOf(sheet).height * 0.7,
+        child: StatefulBuilder(
+          builder: (_, again) => outliner(() {
+            _refresh();
+            again(() {});
+          }),
+        ),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text(widget.name == null ? '3D' : '3D · ${widget.name}'),
-    ),
-    body: Plan3dView(
-      elements: widget.elements,
+  Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final outliner = widget.outliner;
+    final projectId = widget.projectId;
+    final palette = context.palette;
+    final view = _view();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          widget.name == null ? 'IRIS Stage' : 'IRIS Stage · ${widget.name}',
+        ),
+        actions: [
+          if (outliner != null)
+            IconButton(
+              key: const ValueKey('stage-outliner'),
+              tooltip: 'Elementos de la escena',
+              icon: Icon(
+                Icons.account_tree_outlined,
+                color: wide && _showList ? palette.accent : null,
+              ),
+              onPressed: () => _toggleList(wide),
+            ),
+          if (projectId != null)
+            IconButton(
+              tooltip: 'Biblioteca de Unreal (Fab, Megascans)',
+              icon: const Icon(Icons.collections_outlined),
+              onPressed: () =>
+                  UnrealLibraryScreen.open(context, projectId: projectId),
+            ),
+        ],
+      ),
+      body: outliner == null || !wide || !_showList
+          ? view
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(width: 280, child: outliner(_refresh)),
+                VerticalDivider(width: 1, color: palette.divider),
+                Expanded(child: view),
+              ],
+            ),
+    );
+  }
+
+  Widget _view() => Plan3dView(
+      elements: widget.liveElements?.call() ?? widget.elements,
       metersPerUnit: widget.metersPerUnit,
       name: widget.name,
       ambient: widget.ambient,
@@ -2621,6 +3000,7 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       navTarget: widget.navTarget,
       onNavigate: widget.onNavigate,
       lookThrough: widget.lookThrough,
-    ),
+      editing: widget.editing?.call().then(_refresh),
+      onCameraStill: widget.onCameraStill,
   );
 }

@@ -194,6 +194,32 @@
   // Aro para girar y flecha para subir lo seleccionado (como en Unreal).
   let gizmo = null;
   const UP = new THREE.Vector3(0, 1, 0);
+
+  // Colocar algo nuevo (ED.2): una diana naranja sigue al puntero por el
+  // suelo y el toque dice dónde va.
+  let placing = false;
+  let placeGhost = null;
+  function setPlacing(on) {
+    placing = on;
+    renderer.domElement.style.cursor = on ? 'crosshair' : '';
+    if (on && !placeGhost) {
+      placeGhost = new THREE.Group();
+      const m = new THREE.MeshBasicMaterial({ color: 0xe8963f, transparent: true, opacity: 0.85, depthTest: false });
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.34, 40), m);
+      ring.rotation.x = -Math.PI / 2;
+      placeGhost.add(ring);
+      for (const r of [0, Math.PI / 2]) {
+        const bar = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.04), m);
+        bar.rotation.set(-Math.PI / 2, 0, r);
+        placeGhost.add(bar);
+      }
+      placeGhost.renderOrder = 12;
+      placeGhost.traverse((o) => (o.renderOrder = 12));
+      placeGhost.visible = false;
+      scene.add(placeGhost);
+    }
+    if (placeGhost && !on) placeGhost.visible = false;
+  }
   const ray = new THREE.Raycaster();
 
   function rayAt(e) {
@@ -217,7 +243,19 @@
   let flySpeed = 3;
   const keys = new Set();
   renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
-  window.addEventListener('keydown', (e) => { if (fly) { keys.add(e.code); e.preventDefault(); } });
+  window.addEventListener('keydown', (e) => {
+    if (fly) { keys.add(e.code); e.preventDefault(); return; }
+    // Atajos del editor (ED.2): los resuelve la app.
+    const cmd = e.metaKey || e.ctrlKey;
+    let key = null;
+    if (e.code === 'Escape') key = 'escape';
+    else if (!cmd && (e.code === 'Delete' || e.code === 'Backspace')) key = 'delete';
+    else if (cmd && e.code === 'KeyD') key = 'duplicate';
+    else if (cmd && e.code === 'KeyZ') key = e.shiftKey ? 'redo' : 'undo';
+    if (!key) return;
+    e.preventDefault();
+    post({ type: 'key', key });
+  });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
   window.addEventListener('blur', () => keys.clear());
   renderer.domElement.addEventListener('wheel', (e) => {
@@ -298,6 +336,8 @@
       return;
     }
     down = { x, y };
+    // Colocando algo nuevo (ED.2): el toque es para soltarlo.
+    if (placing) return;
     // ¿Empieza un arrastre? El aro o la flecha, el asa de puntería, o lo ya
     // seleccionado.
     const gHit = gizmo && rayAt(e).intersectObject(gizmo, true).find((h) => h.object.userData.gizmo);
@@ -335,6 +375,11 @@
   }, true);
 
   renderer.domElement.addEventListener('pointermove', (e) => {
+    if (placing && placeGhost) {
+      const p = onPlane(e, 0);
+      placeGhost.visible = !!p;
+      if (p) placeGhost.position.set(p.x, 0.01, p.z);
+    }
     if (!drag) return;
     if (drag.mode === 'lift') {
       const p = rayAt(e).ray.intersectPlane(drag.vplane, new THREE.Vector3());
@@ -401,6 +446,11 @@
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
     down = null;
     if (moved > 5) return;
+    if (placing) {
+      const p = onPlane(e, 0);
+      if (p) post({ type: 'place', x: p.x, y: -p.z });
+      return;
+    }
     if (measuring) {
       measureAt(e);
       return;
@@ -1640,6 +1690,42 @@
     post({ type: 'view', view: 'cam:' + id });
   }
 
+  // Lo que ve la cámara `id`, en 16:9, como PNG en base64 dentro de un JSON (ED.5): para
+  // dibujar el storyboard encima. Se pinta en el lienzo y se lee en el
+  // mismo instante, sin los conos, la propia cámara ni los mandos.
+  function cameraStill(id) {
+    const q = lastScene && (lastScene.cameras || []).find((k) => k.id === id);
+    if (!q) return null;
+    const { w, h } = size();
+    const pr = renderer.getPixelRatio();
+    const aspect = 16 / 9;
+    let bw = w, bh = w / aspect;
+    if (bh > h) { bh = h; bw = h * aspect; }
+    const x0 = (w - bw) / 2, y0 = (h - bh) / 2;
+    const hfov = (q.hfovDeg || 40) * Math.PI / 180;
+    const vfov = 2 * Math.atan(Math.tan(hfov / 2) / aspect) * 180 / Math.PI;
+    const c = new THREE.PerspectiveCamera(vfov, aspect, 0.05, 4000);
+    const z = (q.z0 || 0) + (q.z || 1.5);
+    c.position.copy(V(q.at[0], q.at[1], z));
+    const tilt = (q.tiltDeg || 0) * Math.PI / 180;
+    c.lookAt(V(q.at[0] + q.dir[0] * 5 * Math.cos(tilt), q.at[1] + q.dir[1] * 5 * Math.cos(tilt), z + 5 * Math.sin(tilt)));
+    const hide = [gizmo, selectedBox, aimHandle, placeGhost, labelsGroup, measureGroup, ...cones, ...picks.filter((o) => o.userData.id === id)]
+      .filter((o) => o && o.visible);
+    hide.forEach((o) => (o.visible = false));
+    renderer.setViewport(x0, y0, bw, bh);
+    renderer.setScissor(x0, y0, bw, bh);
+    renderer.setScissorTest(true);
+    renderer.clear();
+    renderer.render(scene, c);
+    renderer.setScissorTest(false);
+    hide.forEach((o) => (o.visible = true));
+    const out = document.createElement('canvas');
+    out.width = Math.round(bw * pr);
+    out.height = Math.round(bh * pr);
+    out.getContext('2d').drawImage(renderer.domElement, x0 * pr, y0 * pr, bw * pr, bh * pr, 0, 0, out.width, out.height);
+    return JSON.stringify({ png: out.toDataURL('image/png').split(',')[1], w: out.width, h: out.height });
+  }
+
   function placeFrame() {
     if (!camView) { frame.style.display = 'none'; return; }
     const { w, h } = size();
@@ -2233,6 +2319,7 @@
       if (lastScene) load(lastScene);
     },
     view: (v) => setView(v),
+    cameraStill,
     select: (id) => highlight(id),
     floor: (f) => setFloorLight(f),
     exportGlb,
@@ -2267,6 +2354,7 @@
         if (!env || env === 'interior') scene.background = new THREE.Color(o.bg);
       }
       if ('names' in o) { showNames = !!o.names; updateLabels(); }
+      if ('place' in o) setPlacing(!!o.place);
       if ('measure' in o) {
         measuring = !!o.measure;
         if (!measuring) clearMeasure();

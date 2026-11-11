@@ -95,6 +95,7 @@ import 'rig/hall_builder_sheet.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
 import 'plan_outliner.dart';
+import 'rig/plan_3d_edit.dart';
 import 'rig/plan_3d_view.dart';
 import '../scan_jobs/capture_store.dart';
 import '../../core/utils/shot_reference_import.dart';
@@ -223,6 +224,13 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<CameraPlanEditor> createState() => _CameraPlanEditorState();
+
+  /// La próxima planta que se abra lo hace en IRIS Stage, el 3D a pantalla
+  /// entera (ED.4).
+  static void openStageOnNextLoad({bool lookThrough = false}) {
+    _CameraPlanEditorState._reopen3dScreen = true;
+    _CameraPlanEditorState._lookThroughNext = lookThrough;
+  }
 }
 
 extension on PlanElement {
@@ -3296,9 +3304,23 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   /// Centro de lo que se ve, en coordenadas del plano.
-  Offset get _viewCenter => _canvasSize.isEmpty
-      ? const Offset(300, 250)
-      : _toCanvasCoords(_canvasSize.center(Offset.zero));
+  Offset get _viewCenter =>
+      _placeAt ??
+      (_canvasSize.isEmpty
+          ? const Offset(300, 250)
+          : _toCanvasCoords(_canvasSize.center(Offset.zero)));
+
+  /// Punto del suelo tocado en el 3D donde va lo que se añade (ED.2).
+  Offset? _placeAt;
+
+  Future<void> _addAt(Offset at, Future<void> Function() add) async {
+    _placeAt = at;
+    try {
+      await add();
+    } finally {
+      _placeAt = null;
+    }
+  }
 
   void _showSnack(String message) {
     AppSnackBar.show(context, message);
@@ -3741,7 +3763,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (!mounted) return;
     el.layer = layer;
     if (layer != PlanLayer.shot) el.id = --_tempId;
-    if (!keepPosition) {
+    if (_placeAt case final at? when !keepPosition) {
+      el.position = at;
+    } else if (!keepPosition) {
       // Lo nuevo aparece en lo que se está viendo.
       final same = _elements.where((e) => e.type == el.type).length;
       el.position = _snapToGrid(
@@ -4116,12 +4140,110 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// y, si estaba a pantalla entera, se vuelve a abrir así.
   static bool _lookThroughNext = false;
   static bool _reopen3dScreen = false;
-  late final bool _lookThrough = () {
+  // Se toma al crear el editor, para que no le quede a otra planta.
+  final bool _lookThrough = _takeLookThrough();
+  static bool _takeLookThrough() {
     final v = _lookThroughNext;
     _lookThroughNext = false;
     return v;
-  }();
+  }
   bool _loadedOnce = false;
+
+  /// Lo que se puede añadir y editar desde el 3D (ED.2): lo mismo que la
+  /// paleta de la planta, en corto, y se suelta donde se toca el suelo.
+  Plan3dEditing get _editing3d {
+    Plan3dAddItem item(
+      String group,
+      String label,
+      IconData icon,
+      Future<void> Function() add,
+    ) => Plan3dAddItem(
+      group: group,
+      label: label,
+      icon: icon,
+      add: (at) => _addAt(at, add),
+    );
+    const people = 'Cámara y reparto';
+    const lights = 'Luces';
+    const grip = 'Grip';
+    const props = 'Atrezzo';
+    return Plan3dEditing(
+      items: [
+        item(people, 'Cámara', Icons.videocam_outlined, _addCamera),
+        item(
+          people,
+          'Personaje',
+          Icons.person_outline,
+          () => _addActor(_nextActorColor),
+        ),
+        for (final (name, color) in _paletteCast.take(8))
+          item(
+            people,
+            name,
+            Icons.person,
+            () => _addActor(color, name: name),
+          ),
+        for (final light in _gear.lights.take(10))
+          item(
+            lights,
+            light.model,
+            Icons.highlight_outlined,
+            () => _addCatalogLight(light),
+          ),
+        for (final type in const [
+          LightType.fresnelSmall,
+          LightType.fresnelMedium,
+          LightType.fresnelLarge,
+          LightType.lightPanel,
+          LightType.led1x1,
+          LightType.openFace,
+          LightType.par,
+          LightType.flo4Tubes,
+        ])
+          item(lights, type.label, Icons.highlight_outlined, () => _addLight(type)),
+        for (final type in const [
+          LightType.flag,
+          LightType.cutter,
+          LightType.diffusionFrame,
+          LightType.net,
+          LightType.bounce,
+          LightType.cStand,
+        ])
+          item(grip, type.label, Icons.crop_square, () => _addLight(type)),
+        item(grip, 'Palio', Icons.crop_din, _addPalio),
+        for (final type in PropType.values)
+          if (type != PropType.meter)
+            item(props, type.label, type.icon, () => _addProp(type)),
+        for (final (name, shape, _, _, _, _) in PropBox.presets)
+          if (shape != PropBox.box)
+            item(props, name, Icons.table_bar_outlined, () => _addBox(shape)),
+        item('Medición', 'Fotómetro', Icons.speed_outlined, _addMeter),
+      ],
+      duplicate: _selection.isEmpty ? null : _duplicateSelection,
+      delete: _selection.isEmpty ? null : _deleteSelected,
+      undo: _undoStack.isEmpty ? null : _undo,
+      redo: _redoStack.isEmpty ? null : _redo,
+      pickAsset: _pickLibraryAsset,
+    );
+  }
+
+  /// Un asset de la biblioteca de Unreal para soltarlo en el 3D (ED.4).
+  Future<Plan3dAddItem?> _pickLibraryAsset() async {
+    UnrealAssetRef? picked;
+    await UnrealLibraryScreen.open(
+      context,
+      projectId: widget.projectId,
+      onPlace: (r) => picked = r,
+    );
+    final asset = picked;
+    if (asset == null) return null;
+    return Plan3dAddItem(
+      group: asset.source.label,
+      label: asset.name,
+      icon: Icons.inventory_2_outlined,
+      add: (at) => _addAt(at, () => _placeFromLibrary(asset)),
+    );
+  }
 
   /// La planta abierta, para la tira del 3D.
   PlanTarget? get _navTarget {
@@ -4189,6 +4311,23 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       navTarget: _navTarget,
       onNavigate: (t) => _navigateFrom3d(t, fullScreen: true),
       lookThrough: _lookThrough,
+      editing: () => _editing3d,
+      liveElements: () => _visibleElements,
+      liveSelected: () => _selected,
+      onCameraStill: widget.shotId == null ? null : _saveCameraStill,
+      outliner: (changed) => PlanOutliner(
+        elements: _elements,
+        selected: _selected,
+        hidden: _hiddenElements,
+        onSelect: (el) {
+          _selectFrom3d(el);
+          changed();
+        },
+        onToggleHidden: (el) {
+          _toggleHidden(el);
+          changed();
+        },
+      ),
     );
   }
 
@@ -4290,6 +4429,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       return UnrealWorld(key: 'site${site.id}', name: site.name, site: site.name);
     }
     return null;
+  }
+
+  /// Lo que ve la cámara del plano en el 3D (ED.5): se guarda como su
+  /// referencia «cámara 3D», en lugar de la anterior, para dibujar el
+  /// storyboard encima.
+  Future<String> _saveCameraStill(Uint8List png, String cameraId) async {
+    final shotId = widget.shotId;
+    if (shotId == null) throw StateError('Esta planta no es de un plano.');
+    final db = ref.read(databaseProvider);
+    final shot = await db.getShotById(shotId);
+    if (shot == null) throw StateError('No se encuentra el plano.');
+    await replaceShotCamera3dView(db: db, shot: shot, png: png);
+    return 'Vista guardada: en el storyboard del plano ${shot.number}, '
+        '«Dibujar» la pone debajo.';
   }
 
   /// Una captura RTX de Unreal va al storyboard de este plano, como los
@@ -5573,6 +5726,19 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           children: [
+            // El atajo a IRIS Stage (ED.4): el 3D a pantalla entera, con la
+            // tira de planos, la lista de la escena y la biblioteca de Unreal.
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ActionChip(
+                key: const ValueKey('plan-open-stage'),
+                tooltip: 'El 3D a pantalla entera',
+                visualDensity: VisualDensity.compact,
+                avatar: Icon(Icons.view_in_ar, size: 16, color: palette.accent),
+                label: const Text('IRIS Stage'),
+                onPressed: _open3dScreen,
+              ),
+            ),
             if (_linkedSite != null)
               chip(PlanLayer.environment, 'Entorno', palette.textSecondary),
             if (_linkedSet != null) chip(PlanLayer.set, 'Set', _sceneColor),
@@ -6716,6 +6882,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   navTarget: _navTarget,
                                   onNavigate: _navigateFrom3d,
                                   lookThrough: _lookThrough,
+                                  editing: _editing3d,
+                                  onCameraStill: widget.shotId == null
+                                      ? null
+                                      : _saveCameraStill,
                                 ),
                               ),
                             ],

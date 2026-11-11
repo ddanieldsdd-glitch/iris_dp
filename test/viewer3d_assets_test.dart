@@ -37,6 +37,14 @@ void main() {
     }
   });
 
+  test('el visor responde a lo que le pide el editor 3D (ED.2, ED.5)', () {
+    // Colocar, atajos y la vista de la cámara para el storyboard.
+    expect(viewer, contains("if ('place' in o) setPlacing"));
+    expect(viewer, contains("type: 'place'"));
+    expect(viewer, contains("type: 'key'"));
+    expect(viewer, contains('    cameraStill,'));
+  });
+
   test('sin las API retiradas de three', () {
     for (final old in [
       'sRGBEncoding',

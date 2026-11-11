@@ -79,6 +79,11 @@ class SketchSheetScreen extends StatefulWidget {
   /// De dónde es esa viñeta («Plano 1»), para la etiqueta del folio.
   final String? onionSkinLabel;
 
+  /// Lo que ve la cámara del plano en el 3D (ED.5), atenuado encima para
+  /// dibujar con las proporciones de la planta. Nunca entra en el dibujo.
+  final ImageProvider? underlay;
+  final String? underlayLabel;
+
   /// Dibujo compartido por turnos con otros equipos (nulo: solo aquí).
   final LiveDrawingLink? live;
 
@@ -92,6 +97,8 @@ class SketchSheetScreen extends StatefulWidget {
     this.onionSkin,
     this.onionSkinLabel,
     this.live,
+    this.underlay,
+    this.underlayLabel,
   });
 
   static Future<SketchSheetResult?> open(
@@ -104,6 +111,8 @@ class SketchSheetScreen extends StatefulWidget {
     ImageProvider? onionSkin,
     String? onionSkinLabel,
     LiveDrawingLink? live,
+    ImageProvider? underlay,
+    String? underlayLabel,
   }) {
     return Navigator.of(context, rootNavigator: true).push<SketchSheetResult>(
       MaterialPageRoute(
@@ -119,6 +128,8 @@ class SketchSheetScreen extends StatefulWidget {
           onionSkin: onionSkin,
           onionSkinLabel: onionSkinLabel,
           live: live,
+          underlay: underlay,
+          underlayLabel: underlayLabel,
         ),
       ),
     );
@@ -155,6 +166,10 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   bool _magnet = true;
   bool _onion = CustomBrushStore.instance.onionSkinOn;
   double _onionOpacity = 0.3;
+
+  /// La vista 3D de la cámara, encima y atenuada (ED.5).
+  bool _underlayOn = true;
+  double _underlayOpacity = 0.4;
   bool _gridMagnet = false;
   double _metersPerSquare = 1;
   bool _fullFrame = false;
@@ -439,6 +454,38 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   void _setOnion(bool on) {
     setState(() => _onion = on);
     CustomBrushStore.instance.setOnionSkin(on);
+  }
+
+  /// Etiqueta de la vista 3D de la cámara: se quita y se pone de un toque.
+  Widget _buildUnderlayChip() {
+    final label = widget.underlayLabel ?? 'la cámara en 3D';
+    return Material(
+      color: _underlayOn ? const Color(0xE6E8963F) : const Color(0xCC202124),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        key: const ValueKey('sketch-underlay'),
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => setState(() => _underlayOn = !_underlayOn),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _underlayOn ? Icons.videocam_off_outlined : Icons.videocam_outlined,
+                size: 16,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _underlayOn ? 'Vista 3D · $label  ✕' : 'Ver $label debajo',
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Etiqueta del papel cebolla: se ve qué hay encima y se quita de un toque.
@@ -1161,11 +1208,23 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
                               bottom: 16,
                               child: Center(child: _buildStyleChooser()),
                             ),
-                          if (widget.onionSkin != null)
+                          if (widget.onionSkin != null ||
+                              widget.underlay != null)
                             Positioned(
                               left: 76,
                               top: 10,
-                              child: _buildOnionChip(),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (widget.underlay != null)
+                                    _buildUnderlayChip(),
+                                  if (widget.underlay != null &&
+                                      widget.onionSkin != null)
+                                    const SizedBox(width: 8),
+                                  if (widget.onionSkin != null)
+                                    _buildOnionChip(),
+                                ],
+                              ),
                             ),
                           if (_layerBlocked && !_watching)
                             Positioned(
@@ -1516,6 +1575,13 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
             fit: StackFit.expand,
             children: [
               RepaintBoundary(key: _sheetKey, child: canvas),
+              if (widget.underlay != null && _underlayOn)
+                IgnorePointer(
+                  child: Opacity(
+                    opacity: _underlayOpacity,
+                    child: Image(image: widget.underlay!, fit: BoxFit.cover),
+                  ),
+                ),
               if (widget.onionSkin != null && _onion)
                 IgnorePointer(
                   child: Opacity(
@@ -1812,6 +1878,26 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
               value: _magnet,
               onChanged: (v) => setState(() => _magnet = v),
             ),
+          if (widget.underlay != null) ...[
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Vista 3D de la cámara'),
+              subtitle: const Text(
+                'Lo que ve la cámara del plano en la planta, atenuado encima. '
+                'No entra en el dibujo.',
+              ),
+              value: _underlayOn,
+              onChanged: (v) => setState(() => _underlayOn = v),
+            ),
+            if (_underlayOn)
+              Slider(
+                value: _underlayOpacity,
+                min: 0.1,
+                max: 0.8,
+                onChanged: (v) => setState(() => _underlayOpacity = v),
+              ),
+          ],
           if (widget.onionSkin != null) ...[
             SwitchListTile(
               dense: true,

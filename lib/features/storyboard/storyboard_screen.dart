@@ -41,7 +41,9 @@ import '../../shared/history/shot_edits.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
 import '../camera_plan/plan_data.dart';
+import '../camera_plan/plan_target.dart';
 import '../camera_plan/plan_view_picker.dart';
+import '../camera_plan/plan_workspace_screen.dart';
 import '../camera_plan/shot_plan_preview.dart';
 import '../shots/shot_params_editor.dart';
 
@@ -1080,6 +1082,15 @@ class _StoryboardFrame extends ConsumerWidget {
         await showShotParamsSheet(context, shot);
       case 'section':
         await showPlanViewPicker(context, data: plans, shot: shot);
+      case 'camera3d':
+        // ED.5: el 3D del plano mirando por su cámara; «Para el storyboard»
+        // guarda esa vista y «Dibujar» la pone debajo.
+        await PlanWorkspaceScreen.openStage(
+          context,
+          projectId: scene.projectId,
+          target: PlanTarget.shot(shot.id, plans.shotLabel(shot)),
+          lookThrough: true,
+        );
       case 'export':
         await _exportFrame(context, ref);
     }
@@ -1428,6 +1439,7 @@ class _FrameMenu extends StatelessWidget {
         item('paste', Icons.content_paste, 'Pegar imagen'),
         if (hasImage) item('remove', Icons.delete_outline, 'Quitar imagen'),
         item('section', Icons.crop_free, 'Sección de la planta'),
+        item('camera3d', Icons.videocam_outlined, 'Ver su cámara en 3D'),
         item('export', Icons.ios_share_outlined, 'Exportar plano'),
       ],
       child: Container(

@@ -21,6 +21,10 @@ abstract final class ShotReferenceSource {
 
   /// El dibujo del storyboard del plano, puesto también como referencia.
   static const storyboard = 'storyboard';
+
+  /// Lo que ve la cámara del plano en el 3D (ED.5): fondo para dibujar el
+  /// storyboard con las proporciones de la planta. Hay una por plano.
+  static const camera3d = 'camara_3d';
 }
 
 /// Importa una imagen y la vincula al plano (miniatura + registro en [ShotReferences]).
@@ -425,4 +429,28 @@ Future<void> reorderShotReference({
     ShotsCompanion(referenceImagePath: Value(ordered.first.imagePath)),
   );
   await db.setShotReferenceOrder([for (final r in ordered) r.id]);
+}
+
+/// Guarda lo que ve la cámara del plano en el 3D (ED.5) como su referencia
+/// [ShotReferenceSource.camera3d], en lugar de la que hubiera. No le quita
+/// el puesto a la imagen principal.
+Future<String> replaceShotCamera3dView({
+  required AppDatabase db,
+  required Shot shot,
+  required Uint8List png,
+}) async {
+  var current = shot;
+  for (final old in await db.getReferencesForShot(shot.id)) {
+    if (old.source != ShotReferenceSource.camera3d) continue;
+    await deleteShotReferenceEntry(db: db, shot: current, reference: old);
+    current = await db.getShotById(shot.id) ?? current;
+  }
+  return importShotReferenceImage(
+    db: db,
+    shot: current,
+    sourceBytes: png,
+    fileName: 'camara_3d.png',
+    source: ShotReferenceSource.camera3d,
+    keepPrimary: true,
+  );
 }

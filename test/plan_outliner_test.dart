@@ -65,7 +65,34 @@ void main() {
     expect(found('sofá'), 'Sofá');
     expect(found('mobiliario'), 'Mesa,Sofá');
     expect(found('ue'), 'Sofá');
+    expect(found('fab'), 'Sofá');
     expect(found('nada así'), '');
+  });
+
+  test('cuenta los assets por origen: Fab, Megascans, Unreal', () {
+    PlanElement prop(String path) => PlanElement(
+      id: 0,
+      type: ElementType.prop,
+      position: Offset.zero,
+      label: PropType.rock.dbValue,
+      props: {'unrealAsset': path},
+    );
+    final els = [
+      ..._plan(),
+      prop('/Game/Megascans/3D_Assets/Rock/S_Rock.S_Rock'),
+      prop('/Game/Quixel/Rock2.Rock2'),
+      prop('/Game/Props/Barril.Barril'),
+    ];
+    expect(
+      PlanOutliner.assetSummary(els),
+      '1 de Fab · 2 de Megascans · 1 de Proyecto',
+    );
+    expect(PlanOutliner.assetSummary(_plan().take(1)), '');
+    String found(String q) => [
+      for (final (_, list) in PlanOutliner.group(els, q))
+        for (final el in list) el.displayLabel,
+    ].join(',');
+    expect(found('megascans').split(','), hasLength(2));
   });
 
   test('distintivo «UE» solo con asset de Unreal', () {
@@ -126,7 +153,9 @@ void main() {
     );
     expect(find.text('Elementos · 5'), findsOneWidget);
     expect(find.text('Principal'), findsOneWidget);
-    expect(find.text('UE'), findsOneWidget);
+    // El sofá es de Fab (ED.4).
+    expect(find.text('Fab'), findsOneWidget);
+    expect(find.text('Assets: 1 de Fab'), findsOneWidget);
     await tester.tap(find.text('Sofá'));
     expect(picked?.propType, PropType.sofa);
     await tester.tap(find.byTooltip(RegExp('^Ocultar')).first);
