@@ -9,6 +9,7 @@ import '../../shared/annotations/annotation_document.dart';
 import '../locations/location_scan_service.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
+import 'camera_plan_painter.dart';
 import 'plan_data.dart';
 import 'plan_images.dart';
 import 'plan_segment.dart';
@@ -189,7 +190,8 @@ class PlanRenderer {
   }
 
   /// Pinta [picture]. Con [view], esa parte en lugar de su sección. Con
-  /// [backdrop], esa imagen en lugar del fondo negro.
+  /// [backdrop], esa imagen en lugar del fondo negro. Con [lightNumbers],
+  /// cada luz lleva su número de [legendOf] en vez de su rótulo.
   Future<Uint8List?> png(
     PlanPicture picture, {
     Size size = const Size(640, 420),
@@ -198,6 +200,7 @@ class PlanRenderer {
     bool jpeg = false,
     bool beams = true,
     String? backdrop,
+    bool lightNumbers = false,
   }) async => PlanThumbnail.renderPng(
     elements: picture.elements,
     inherited: picture.inherited,
@@ -215,7 +218,66 @@ class PlanRenderer {
     documentBackdrop: await _decode(backdrop),
     showBeams: beams,
     jpeg: jpeg,
+    documentLightNumbers: lightNumbers,
   );
+
+  /// Las luces numeradas de [picture], en el mismo orden que sus números
+  /// en la planta pintada con `lightNumbers`.
+  static List<PlanLightLegendEntry> legendOf(PlanPicture picture) =>
+      CameraPlanPainter.documentLightLegend([
+        ...picture.inherited,
+        ...picture.elements,
+      ]);
+
+  /// La planta de un plano para un documento: luces numeradas y su
+  /// leyenda aparte.
+  Future<PlanSheet> shotSheet(
+    Shot shot, {
+    bool light = true,
+    bool beams = true,
+    Size size = const Size(640, 420),
+    double pixelRatio = 1,
+    String? backdrop,
+  }) async {
+    final picture = await shotPicture(shot, light: light);
+    return PlanSheet(
+      await png(
+        picture,
+        size: size,
+        pixelRatio: pixelRatio,
+        jpeg: true,
+        beams: beams,
+        backdrop: backdrop,
+        lightNumbers: true,
+      ),
+      legendOf(picture),
+    );
+  }
+
+  /// La planta general de un esquema de luz para un documento, como
+  /// [shotSheet].
+  Future<PlanSheet> setupSheet(
+    LightSetup setup, {
+    bool light = true,
+    bool beams = true,
+    Size size = const Size(640, 420),
+    double pixelRatio = 1,
+    String? backdrop,
+  }) async {
+    final picture = await setupPicture(setup, light: light);
+    return PlanSheet(
+      await png(
+        picture,
+        size: size,
+        pixelRatio: pixelRatio,
+        jpeg: true,
+        beams: beams,
+        backdrop: backdrop,
+        lightNumbers: true,
+      ),
+      legendOf(picture),
+    );
+  }
 
   /// La planta de un plano, con su sección elegida. Nula si no hay nada.
   Future<Uint8List?> shot(
@@ -250,6 +312,14 @@ class PlanRenderer {
     beams: beams,
     backdrop: backdrop,
   );
+}
+
+/// Una planta pintada para un documento y la leyenda de sus luces.
+class PlanSheet {
+  final Uint8List? image;
+  final List<PlanLightLegendEntry> legend;
+
+  const PlanSheet(this.image, this.legend);
 }
 
 /// Lo que se pinta de una planta, sin decidir aún qué parte se ve.

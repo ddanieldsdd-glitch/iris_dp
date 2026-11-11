@@ -153,8 +153,13 @@ class PlanThumbnail extends StatelessWidget {
     return bounds;
   }
 
-  /// Mayor acercamiento de una sección elegida a mano.
+  /// Mayor acercamiento de una sección elegida a mano, y de una planta de
+  /// documento.
   static const double _maxCropScale = 4;
+  static const double documentMaxScale = _maxCropScale;
+
+  /// Margen de una planta de documento: lo justo para las marcas del borde.
+  static const double documentMargin = 40;
 
   /// Escala y desplazamiento para que todo quepa en [size].
   static ({double scale, Offset offset}) frame(
@@ -164,6 +169,10 @@ class PlanThumbnail extends StatelessWidget {
     required List<PlanZone> zones,
     required Rect? drawn,
     Rect? crop,
+
+    /// Mayor acercamiento sin sección elegida. En pantalla 1; en los
+    /// documentos la planta llena su hueco aunque el decorado sea pequeño.
+    double maxScale = 1.0,
   }) {
     if (crop != null) {
       final scale = math.min(
@@ -203,9 +212,15 @@ class PlanThumbnail extends StatelessWidget {
     // Lo dibujado a mano entra siempre en el encuadre, aunque se salga de
     // la zona del set.
     if (drawn != null) bounds = bounds.expandToInclude(drawn);
-    bounds = bounds.inflate(focus == null ? _margin : 30);
+    bounds = bounds.inflate(
+      focus != null
+          ? 30
+          : maxScale > 1
+          ? documentMargin
+          : _margin,
+    );
     final scale = math.min(
-      1.0,
+      maxScale,
       math.min(size.width / bounds.width, size.height / bounds.height),
     );
     return (
@@ -240,6 +255,10 @@ class PlanThumbnail extends StatelessWidget {
     /// Imagen en lugar del fondo negro.
     ui.Image? documentBackdrop,
 
+    /// Luces con número y sin rótulo; ver
+    /// [CameraPlanPainter.documentLightNumbers].
+    bool documentLightNumbers = false,
+
     /// En JPEG: el PDF lo mete tal cual, y un PNG lo descomprime y lo vuelve
     /// a comprimir en el hilo de la interfaz.
     bool jpeg = false,
@@ -265,6 +284,7 @@ class PlanThumbnail extends StatelessWidget {
       zones: zones,
       drawn: drawn,
       crop: crop,
+      maxScale: documentMarks ? documentMaxScale : 1.0,
     );
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder, Offset.zero & (size * pixelRatio));
@@ -287,6 +307,7 @@ class PlanThumbnail extends StatelessWidget {
       documentMarks: documentMarks,
       documentBackdrop: documentBackdrop,
       showBeams: showBeams,
+      documentLightNumbers: documentLightNumbers,
     ).paint(canvas, size);
     for (final drawing in drawings) {
       AnnotationPainter(

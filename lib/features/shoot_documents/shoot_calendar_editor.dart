@@ -46,13 +46,11 @@ class ShootCalendarEditor {
         if (times == null) return null;
         final block = await db.getShootDocumentBlock(blockId);
         if (block == null) return null;
+        // Lo que se suelta a una hora en el calendario queda fijado a ella,
+        // y su largo pasa a ser su duración en el orden de rodaje.
         final json = entry.kind == ShootCalendarKind.strip
             ? _stripWith(block, times.from, times.to)
-            : SceneSchedule(
-                from: times.from,
-                to: times.to,
-                note: SceneSchedule.of(block).note,
-              ).writeInto(block.contentOverridesJson);
+            : _sceneWith(block, times.from, times.to);
         return _setJson(block, json, 'hora de ${entry.title}');
       case ShootCalendarKind.pickup || ShootCalendarKind.ret:
         return null;
@@ -88,11 +86,7 @@ class ShootCalendarEditor {
     if (block == null) return null;
     return _setJson(
       block,
-      SceneSchedule(
-        from: times.from,
-        to: times.to,
-        note: SceneSchedule.of(block).note,
-      ).writeInto(block.contentOverridesJson),
+      _sceneWith(block, times.from, times.to),
       'hora de la escena',
     );
   }
@@ -114,7 +108,13 @@ class ShootCalendarEditor {
     if (times == null) return null;
     final doc = await db.getShootDocument(dayId);
     final draft = ShootStripDraft(
-      strip: ShootStrip(kind: kind, from: times.from, to: times.to),
+      strip: ShootStrip(
+        kind: kind,
+        from: times.from,
+        to: times.to,
+        minutes: clockSpan(times.from, times.to),
+        pinned: true,
+      ),
     );
     Future<int> add() async {
       final blocks = await db.getBlocksForShootDocument(dayId);
@@ -176,6 +176,19 @@ class ShootCalendarEditor {
       from: from,
       to: to,
       siteUid: old.siteUid,
+      minutes: clockSpan(from, to),
+      pinned: true,
+    ).writeInto(block.contentOverridesJson);
+  }
+
+  static String _sceneWith(ShootDocumentBlock block, String from, String to) {
+    final old = SceneSchedule.of(block);
+    return SceneSchedule(
+      from: from,
+      to: to,
+      note: old.note,
+      minutes: clockSpan(from, to),
+      pinned: true,
     ).writeInto(block.contentOverridesJson);
   }
 

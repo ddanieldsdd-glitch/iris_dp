@@ -19,6 +19,7 @@ import '../locations/site_place.dart';
 import '../export_center/export_center_screen.dart';
 import '../export_center/export_selection.dart';
 import '../technical_script/technical_script_export.dart';
+import 'shoot_day_duration.dart';
 import 'shoot_day_on_set.dart';
 import 'shoot_day_order.dart';
 import 'shoot_day_timeline.dart';
@@ -238,6 +239,8 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
                   Widget order({required bool embedded}) => _DayOrder(
                     projectId: widget.projectId,
                     documentId: widget.documentId,
+                    dayStart: day.shootFromTime,
+                    dayEnd: day.shootToTime,
                     blocks: blocks,
                     sites: sites,
                     embedded: embedded,
@@ -510,6 +513,11 @@ class _FlatRow {
 class _DayOrder extends ConsumerStatefulWidget {
   final int projectId;
   final int documentId;
+
+  /// «Se rueda desde / hasta»: de dónde arranca la cadena de horas y
+  /// hasta dónde debería llegar.
+  final String? dayStart;
+  final String? dayEnd;
   final List<ShootDocumentBlock> blocks;
   final List<LocationSite> sites;
   final VoidCallback onAdd;
@@ -520,6 +528,8 @@ class _DayOrder extends ConsumerStatefulWidget {
   const _DayOrder({
     required this.projectId,
     required this.documentId,
+    required this.dayStart,
+    required this.dayEnd,
     required this.blocks,
     required this.sites,
     required this.onAdd,
@@ -533,8 +543,94 @@ class _DayOrder extends ConsumerStatefulWidget {
 class _DayOrderState extends ConsumerState<_DayOrder> {
   bool _byScene = true;
 
+  /// El bloque del plano abierto en el panel de al lado.
+  int? _selectedBlockId;
+
+  /// Los planos de la última vez que se pintó, para recalcular al cambiar
+  /// la hora de inicio de la jornada.
+  Map<int, Shot> _shots = const {};
+
   AppDatabase get _db => ref.read(databaseProvider);
   ShootDayScheduleService get _service => ShootDayScheduleService(_db);
+
+  @override
+  void didUpdateWidget(_DayOrder old) {
+    super.didUpdateWidget(old);
+    if (old.dayStart != widget.dayStart && _shots.isNotEmpty) {
+      // La jornada empieza a otra hora: todo lo encadenado se mueve.
+      _service.edit(
+        widget.documentId,
+        widget.blocks,
+        _shots,
+        dayStart: widget.dayStart,
+        dayEnd: widget.dayEnd,
+      );
+    }
+  }
+
+  /// Escribe lo elegido en el chip de [block] y recalcula la jornada.
+  Future<void> _pickTime(
+    ShootDocumentBlock block,
+    ShootDurationPick pick,
+    Map<int, Shot> shots, {
+    required _TimeTarget target,
+  }) async {
+    final json = block.contentOverridesJson;
+    final String next;
+    switch (target) {
+      case _TimeTarget.strip:
+        final strip = ShootStrip.of(block);
+        next = switch (pick) {
+          ShootDurationSet(:final minutes) => strip.copyWith(
+            minutes: Value(minutes),
+            to: minutes == null ? const Value<String?>(null) : null,
+            pinned: stripIsPinned(strip),
+          ),
+          ShootDurationPin(:final at) => strip.copyWith(
+            pinned: at != null,
+            from: at == null ? null : Value(at),
+          ),
+        }.writeInto(json);
+      case _TimeTarget.scene:
+        final scene = SceneSchedule.of(block);
+        next = switch (pick) {
+          ShootDurationSet(:final minutes) => scene.copyWith(
+            minutes: Value(minutes),
+            to: minutes == null ? const Value<String?>(null) : null,
+            pinned: sceneIsPinned(scene),
+          ),
+          ShootDurationPin(:final at) => scene.copyWith(
+            pinned: at != null,
+            from: at == null ? null : Value(at),
+          ),
+        }.writeInto(json);
+      case _TimeTarget.shot:
+        if (pick is! ShootDurationSet) return;
+        final time = ShotTime.of(block);
+        next = time
+            .copyWith(
+              minutes: Value(pick.minutes),
+              from: pick.minutes == null ? const Value(null) : null,
+              to: pick.minutes == null ? const Value(null) : null,
+            )
+            .writeInto(json);
+    }
+    final undo = await _service.edit(
+      widget.documentId,
+      widget.blocks,
+      shots,
+      edits: {block.id: next},
+      dayStart: widget.dayStart,
+      dayEnd: widget.dayEnd,
+    );
+    if (!mounted) return;
+    AppSnackBar.show(
+      context,
+      'Horario recalculado.',
+      actionLabel: 'Deshacer',
+      onAction: () => undo(),
+    );
+  }
 
   Future<void> _apply(Map<int, Shot> shots, List<int> next) async {
     final undo = await _service.applyOrder(
@@ -542,6 +638,8 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
       widget.blocks,
       next,
       shots,
+      dayStart: widget.dayStart,
+      dayEnd: widget.dayEnd,
     );
     if (!mounted) return;
     AppSnackBar.show(
@@ -559,6 +657,8 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
     for (final b in removed) {
       await db.deleteShootDocumentBlock(b.id);
     }
+    if (!mounted) return;
+    await _recalculate();
     if (!mounted) return;
     final n = removed.length;
     AppSnackBar.show(
@@ -579,14 +679,51 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
     );
   }
 
+  /// Una franja de la hoja con su tiempo: una hora de inicio escrita a
+  /// mano la fija; sin tiempo, dura 15 min.
+  ShootStripDraft _timed(ShootStripDraft draft, {ShootStrip? before}) {
+    final s = draft.strip;
+    final span = clockSpan(s.from, s.to);
+    final startChanged = s.from != null && s.from != before?.from;
+    return ShootStripDraft(
+      label: draft.label,
+      note: draft.note,
+      strip: s.copyWith(
+        minutes: Value(span ?? before?.minutes ?? 15),
+        pinned: startChanged || (before?.pinned ?? false),
+      ),
+    );
+  }
+
+  /// Vuelve a calcular las horas con los bloques tal como están ahora.
+  Future<void> _recalculate() async {
+    if (_shots.isEmpty && widget.blocks.isEmpty) return;
+    // Todo lo que hace falta, antes de esperar: la pantalla puede cerrarse.
+    final db = _db;
+    final service = _service;
+    final documentId = widget.documentId;
+    final shots = _shots;
+    final dayStart = widget.dayStart;
+    final dayEnd = widget.dayEnd;
+    final fresh = await db.getBlocksForShootDocument(documentId);
+    await service.edit(
+      documentId,
+      fresh,
+      shots,
+      dayStart: dayStart,
+      dayEnd: dayEnd,
+    );
+  }
+
   Future<void> _addStrip({int? beforeBlockId}) async {
     final edit = await showShootStripSheet(context, sites: widget.sites);
     if (edit?.draft case final draft?) {
       await _service.addStrip(
         widget.documentId,
-        draft,
+        _timed(draft),
         beforeBlockId: beforeBlockId,
       );
+      await _recalculate();
     }
   }
 
@@ -598,19 +735,35 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
     );
     if (edit == null) return;
     if (edit.draft case final draft?) {
-      await _service.updateStrip(block, draft);
+      await _service.updateStrip(
+        block,
+        _timed(draft, before: ShootStrip.of(block)),
+      );
     } else {
       await _remove([block]);
     }
+    await _recalculate();
   }
 
   Future<void> _editScene(ShootDocumentBlock first, String title) async {
+    final before = SceneSchedule.of(first);
     final next = await showSceneScheduleSheet(
       context,
       title: title,
-      initial: SceneSchedule.of(first),
+      initial: before,
     );
-    if (next != null) await _service.setSceneSchedule(first, next);
+    if (next == null) return;
+    // La hora de inicio escrita a mano la fija; el fin da la duración.
+    final span = clockSpan(next.from, next.to);
+    await _service.setSceneSchedule(
+      first,
+      next.copyWith(
+        minutes: Value(span ?? before.minutes),
+        pinned: (next.from != null && next.from != before.from) ||
+            (before.pinned && next.from != null),
+      ),
+    );
+    await _recalculate();
   }
 
   Future<void> _confirmRemoveScene(
@@ -700,8 +853,15 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
           final shots = {
             for (final s in shotSnap.data ?? const <Shot>[]) s.id: s,
           };
+          _shots = shots;
           final blocks = widget.blocks;
           final entries = buildShootDayEntries(blocks, shots);
+          final schedule = scheduleShootDay(
+            entries,
+            shots,
+            dayStart: widget.dayStart,
+            dayEnd: widget.dayEnd,
+          );
           final sceneCount = entries.whereType<ShootSceneEntry>().length;
           final flat = _flatRows(entries, shots);
           final shotBlocks = [
@@ -763,7 +923,7 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
                     ),
                   ),
                   itemBuilder: (context, i) =>
-                      _entry(entries, i, shots, scenes),
+                      _entry(entries, i, shots, scenes, schedule),
                 )
               : SafeReorderableColumn(
                   scrollable: !widget.embedded,
@@ -783,8 +943,18 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
                         if (!seen.contains(b.id)) b.id,
                     ]);
                   },
-                  itemBuilder: (context, i) => _flatRow(flat, i, shots, scenes),
+                  itemBuilder: (context, i) =>
+                      _flatRow(flat, i, shots, scenes, schedule),
                 );
+
+          // El plano abierto: al lado en pantalla ancha.
+          final selected = widget.blocks
+              .where((b) => b.id == _selectedBlockId)
+              .firstOrNull;
+          final selectedShot = shots[selected?.shotId];
+          final panel = selected == null || selectedShot == null
+              ? null
+              : _panel(selected, selectedShot, shots, scenes, schedule);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -805,10 +975,25 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
                       style: AppTypography.titleMedium(palette),
                     ),
                     Text(
-                      'Arrastra escenas, planos y franjas. Así se ve en el '
-                      'plan, en el set y en los documentos.',
+                      'Arrastra escenas, planos y franjas y pon a cada uno su '
+                      'tiempo: las horas se calculan solas desde «Se rueda '
+                      'desde». Fija una hora (la comida) desde su tiempo. '
+                      'Toca un plano para ver su planta y su storyboard.',
                       style: AppTypography.caption(palette),
                     ),
+                    if (schedule.end != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          'Termina a las ${formatClock(schedule.end!)}',
+                          style: AppTypography.caption(palette).copyWith(
+                            color: schedule.warnings.isEmpty
+                                ? palette.accent
+                                : const Color(0xFFF2B84B),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: AppSpacing.sm),
                     Wrap(
                       spacing: 8,
@@ -866,7 +1051,21 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
                   ],
                 ),
               ),
-              if (widget.embedded) list else Expanded(child: list),
+              if (widget.embedded)
+                list
+              else
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: list),
+                      if (panel != null) ...[
+                        VerticalDivider(width: 1, color: palette.divider),
+                        SizedBox(width: 380, child: panel),
+                      ],
+                    ],
+                  ),
+                ),
             ],
           );
         },
@@ -874,26 +1073,119 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
     );
   }
 
+  /// El panel del plano [block]: planta, imágenes, técnica y su tiempo.
+  Widget _panel(
+    ShootDocumentBlock block,
+    Shot shot,
+    Map<int, Shot> shots,
+    Map<int, Scene> scenes,
+    ShootDaySchedule schedule, {
+    bool sheet = false,
+  }) => ShootShotPanel(
+    key: ValueKey('panel-${block.id}'),
+    projectId: widget.projectId,
+    shot: shot,
+    sceneTitle: _sceneTitle(scenes[shot.sceneId]),
+    span: schedule.spans[block.id],
+    minutes:
+        ShotTime.of(block).minutes ??
+        clockSpan(ShotTime.of(block).from, ShotTime.of(block).to),
+    onPick: (pick) {
+      if (sheet) Navigator.pop(context);
+      _pickTime(block, pick, shots, target: _TimeTarget.shot);
+    },
+    onClose: sheet
+        ? () => Navigator.pop(context)
+        : () => setState(() => _selectedBlockId = null),
+  );
+
+  /// Abre el plano: al lado en pantalla ancha y en una hoja en el móvil.
+  void _openShot(
+    ShootDocumentBlock block,
+    Map<int, Shot> shots,
+    Map<int, Scene> scenes,
+    ShootDaySchedule schedule,
+  ) {
+    final shot = shots[block.shotId];
+    if (shot == null) return;
+    if (!widget.embedded) {
+      setState(
+        () => _selectedBlockId = _selectedBlockId == block.id ? null : block.id,
+      );
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.palette.surfaceElevated,
+      builder: (_) => FractionallySizedBox(
+        heightFactor: 0.85,
+        child: _panel(block, shot, shots, scenes, schedule, sheet: true),
+      ),
+    );
+  }
+
+  /// La columna de horas de una franja o una escena.
+  Widget _timeColumn(
+    ShootDocumentBlock block,
+    ShootDaySchedule schedule,
+    Map<int, Shot> shots, {
+    required _TimeTarget target,
+    int? minutes,
+    bool pinned = false,
+    bool fromShots = false,
+  }) => ShootTimeColumn(
+    span: target == _TimeTarget.scene
+        ? schedule.sceneSpans[block.id]
+        : schedule.spans[block.id],
+    minutes: minutes,
+    pinned: pinned,
+    fromShots: fromShots,
+    warning: schedule.warningOf(block.id),
+    onPick: (pick) => _pickTime(block, pick, shots, target: target),
+  );
+
   Widget _entry(
     List<ShootDayEntry> entries,
     int i,
     Map<int, Shot> shots,
     Map<int, Scene> scenes,
+    ShootDaySchedule schedule,
   ) {
     final common = _commonActions(entries, i, shots);
     switch (entries[i]) {
       case ShootStripEntry(:final block, :final strip):
         return Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: ShootStripCard(
-            block: block,
-            siteName: _siteNameOf(strip),
-            padding: const EdgeInsets.fromLTRB(10, 8, 40, 8),
-            trailing: _menu([
-              (label: 'Editar', run: () => _editStrip(block)),
-              ...common,
-              (label: 'Quitar', run: () => _remove([block])),
-            ]),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: _timeColumn(
+                  block,
+                  schedule,
+                  shots,
+                  target: _TimeTarget.strip,
+                  minutes: strip.minutes ?? clockSpan(strip.from, strip.to),
+                  pinned: stripIsPinned(strip),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ShootStripCard(
+                  block: block,
+                  showTime: false,
+                  siteName: _siteNameOf(strip),
+                  padding: const EdgeInsets.fromLTRB(10, 8, 40, 8),
+                  trailing: _menu([
+                    (label: 'Editar', run: () => _editStrip(block)),
+                    ...common,
+                    (label: 'Quitar', run: () => _remove([block])),
+                  ]),
+                ),
+              ),
+            ],
           ),
         );
       case final ShootSceneEntry entry:
@@ -901,12 +1193,39 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
         final order = entries.take(i + 1).whereType<ShootSceneEntry>().length;
         final shotBlocks = entry.shotBlocks(shots);
         final title = _sceneTitle(scene);
+        final first = entry.blocks.first;
+        final own = SceneSchedule.of(first);
+        final fromShots = shotBlocks.any(
+          (b) =>
+              ShotTime.of(b).minutes != null ||
+              clockSpan(ShotTime.of(b).from, ShotTime.of(b).to) != null,
+        );
         return _SceneCard(
           position: order,
           title: title,
-          schedule: SceneSchedule.of(entry.blocks.first),
+          schedule: own,
+          timeColumn: _timeColumn(
+            first,
+            schedule,
+            shots,
+            target: _TimeTarget.scene,
+            minutes: sceneDurationOf(entry, shots),
+            pinned: sceneIsPinned(own),
+            fromShots: fromShots,
+          ),
           shots: [for (final b in shotBlocks) shots[b.shotId]!],
           times: [for (final b in shotBlocks) ShotTime.of(b)],
+          spans: [for (final b in shotBlocks) schedule.spans[b.id]],
+          selected: [for (final b in shotBlocks) b.id == _selectedBlockId],
+          onShotTap: [
+            for (final b in shotBlocks)
+              () => _openShot(b, shots, scenes, schedule),
+          ],
+          onShotPick: [
+            for (final b in shotBlocks)
+              (ShootDurationPick pick) =>
+                  _pickTime(b, pick, shots, target: _TimeTarget.shot),
+          ],
           menu: _menu([
             (
               label: 'Hora y aclaración',
@@ -974,26 +1293,48 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
     int i,
     Map<int, Shot> shots,
     Map<int, Scene> scenes,
+    ShootDaySchedule schedule,
   ) {
     final palette = context.palette;
     final row = rows[i];
     if (ShootStrip.isStrip(row.block)) {
       final block = row.block;
+      final strip = ShootStrip.of(block);
       return Padding(
         padding: const EdgeInsets.only(bottom: 4),
-        child: ShootStripCard(
-          block: block,
-          siteName: _siteNameOf(ShootStrip.of(block)),
-          padding: const EdgeInsets.fromLTRB(10, 8, 40, 8),
-          trailing: IconButton(
-            tooltip: 'Editar',
-            icon: Icon(
-              Icons.edit_outlined,
-              size: 16,
-              color: palette.textSecondary,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: _timeColumn(
+                block,
+                schedule,
+                shots,
+                target: _TimeTarget.strip,
+                minutes: strip.minutes ?? clockSpan(strip.from, strip.to),
+                pinned: stripIsPinned(strip),
+              ),
             ),
-            onPressed: () => _editStrip(block),
-          ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ShootStripCard(
+                block: block,
+                showTime: false,
+                siteName: _siteNameOf(strip),
+                padding: const EdgeInsets.fromLTRB(10, 8, 40, 8),
+                trailing: IconButton(
+                  tooltip: 'Editar',
+                  icon: Icon(
+                    Icons.edit_outlined,
+                    size: 16,
+                    color: palette.textSecondary,
+                  ),
+                  onPressed: () => _editStrip(block),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -1025,33 +1366,77 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
               ).copyWith(color: palette.accent),
             ),
           ),
-        Container(
-          margin: const EdgeInsets.only(bottom: 4),
-          padding: const EdgeInsets.fromLTRB(8, 6, 40, 6),
-          decoration: BoxDecoration(
-            color: palette.surfaceElevated,
-            border: Border.all(color: palette.border),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: row.shot == null
-              ? Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Escena sin planos todavía',
-                        style: AppTypography.caption(palette),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (row.shot == null)
+              const SizedBox(width: 64)
+            else
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: ShootTimeColumn(
+                  span: schedule.spans[row.block.id],
+                  minutes:
+                      ShotTime.of(row.block).minutes ??
+                      clockSpan(
+                        ShotTime.of(row.block).from,
+                        ShotTime.of(row.block).to,
                       ),
-                    ),
-                    _removeButton(palette, removed),
-                  ],
-                )
-              : ShootShotRow(
-                  shot: row.shot!,
-                  thumbWidth: 72,
-                  time: ShotTime.of(row.block),
-                  trailing: [_removeButton(palette, removed)],
+                  canPin: false,
+                  onPick: (pick) => _pickTime(
+                    row.block,
+                    pick,
+                    shots,
+                    target: _TimeTarget.shot,
+                  ),
                 ),
+              ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Material(
+                color: row.block.id == _selectedBlockId
+                    ? palette.accent.withValues(alpha: 0.12)
+                    : palette.surfaceElevated,
+                shape: RoundedRectangleBorder(
+                  side: BorderSide(
+                    color: row.block.id == _selectedBlockId
+                        ? palette.accent
+                        : palette.border,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: row.shot == null
+                      ? null
+                      : () => _openShot(row.block, shots, scenes, schedule),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 6, 40, 6),
+                    child: row.shot == null
+                        ? Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Escena sin planos todavía',
+                                  style: AppTypography.caption(palette),
+                                ),
+                              ),
+                              _removeButton(palette, removed),
+                            ],
+                          )
+                        : ShootShotRow(
+                            shot: row.shot!,
+                            thumbWidth: 72,
+                            time: ShotTime(note: ShotTime.of(row.block).note),
+                            trailing: [_removeButton(palette, removed)],
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
+        const SizedBox(height: 4),
       ],
     );
   }
@@ -1077,26 +1462,48 @@ class _SceneCard extends StatelessWidget {
   final int position;
   final String title;
   final SceneSchedule schedule;
+  final Widget timeColumn;
   final List<Shot> shots;
   final List<ShotTime> times;
+  final List<ShootSpan?> spans;
+  final List<bool> selected;
+  final List<VoidCallback> onShotTap;
+  final List<ValueChanged<ShootDurationPick>> onShotPick;
   final Widget menu;
 
   const _SceneCard({
     required this.position,
     required this.title,
     required this.schedule,
+    required this.timeColumn,
     required this.shots,
     required this.times,
+    required this.spans,
+    required this.selected,
+    required this.onShotTap,
+    required this.onShotPick,
     required this.menu,
   });
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final time = shootTimeRange(schedule.from, schedule.to);
     final note = schedule.note.trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(padding: const EdgeInsets.only(top: 10), child: timeColumn),
+          const SizedBox(width: 8),
+          Expanded(child: _card(context, palette, note)),
+        ],
+      ),
+    );
+  }
+
+  Widget _card(BuildContext context, AppPalette palette, String note) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.fromLTRB(12, 10, 40, 10),
       decoration: BoxDecoration(
         color: palette.surfaceElevated,
@@ -1135,13 +1542,6 @@ class _SceneCard extends StatelessWidget {
                         palette,
                       ).copyWith(color: palette.textPrimary),
                     ),
-                    if (time.isNotEmpty)
-                      Text(
-                        time,
-                        style: AppTypography.caption(
-                          palette,
-                        ).copyWith(color: palette.accent),
-                      ),
                     if (note.isNotEmpty)
                       Text(note, style: AppTypography.caption(palette)),
                   ],
@@ -1156,14 +1556,79 @@ class _SceneCard extends StatelessWidget {
           else
             Wrap(
               spacing: 8,
-              runSpacing: 8,
+              runSpacing: 10,
               children: [
                 for (final (i, shot) in shots.indexed)
-                  ShootShotTile(shot: shot, time: times[i]),
+                  _shotTile(palette, i, shot),
               ],
             ),
         ],
       ),
     );
   }
+
+  /// Un plano: se toca para ver su planta; debajo, su hora y su tiempo.
+  Widget _shotTile(AppPalette palette, int i, Shot shot) {
+    final span = spans[i];
+    final time = times[i];
+    final minutes = time.minutes ?? clockSpan(time.from, time.to);
+    return SizedBox(
+      width: 112,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Material(
+            color: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(
+                color: selected[i] ? palette.accent : Colors.transparent,
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: onShotTap[i],
+              child: Padding(
+                padding: const EdgeInsets.all(2),
+                child: ShootShotTile(
+                  shot: shot,
+                  width: 108,
+                  time: ShotTime(note: time.note),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Row(
+            children: [
+              if (span != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Text(
+                    formatClock(span.start),
+                    style: AppTypography.mono(palette).copyWith(
+                      color: palette.accent,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              Flexible(
+                child: ShootDurationChip(
+                  minutes: minutes,
+                  canPin: false,
+                  dense: true,
+                  onPick: onShotPick[i],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+/// Qué se está cambiando con el chip de tiempo.
+enum _TimeTarget { strip, scene, shot }
