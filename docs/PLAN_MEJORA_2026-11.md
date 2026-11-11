@@ -88,6 +88,17 @@ Comprobación: pruebas de widget por recorrido (plano→planta→plano; plano nu
 - 🟡 three.js 0.187 con la calibración de r147, hasta 40 luces (24 en iPad e iPhone) y telas mate como luces de área, comparado en el navegador del Mac; sin probar en iPad ni en Windows. **UN.7 Base del visor** (F6.0): three.js moderno, más de 14 luces, luces de área; habilita splats reales.
 - ⛔ Sin datos: la planta no guarda recorridos de cámara ni de actores (`ShotRoute` son tramos de sets). Hay que crearlos antes. **UN.8 Level Sequence** a partir de recorridos de cámara y actores (F6.16.7).
 
+## ED · Editor 3D al estilo de Unreal (pedido el 11-11)
+
+Trabajar todo en el 3D sin volver a la planta. Rama `plan/stage-editor-3d`.
+
+- 🟡 Sin probar en iPad ni en Windows. **ED.0 Maqueta legible.** La luz de trabajo ya no quema los blancos, cada cara lleva su tono y las paredes, sus aristas.
+- 🟡 Probado en el navegador del Mac; sin probar en la app, el iPad ni Windows. **ED.1 Transformar.** Panel con X, Y, giro, altura y cota con números y pasos ±; en el visor, un aro azul que gira y una flecha verde que sube y baja. Las medidas siguen en los controles de cada pieza.
+- **ED.2 Añadir desde el 3D.** Paleta de focos, cámaras, personas, atrezzo y grip que se sueltan en el suelo; duplicar, borrar y deshacer.
+- **ED.3 Planos y escenas en el 3D.** Tira con los planos del set: tocar uno salta a su cámara con lente y encuadre; cambiar de set o escena sin salir.
+- **ED.4 IRIS Stage como casa del 3D.** Atajo desde la planta 2D y «outliner» con todo lo de la escena, incluidos los assets de Unreal, Fab y Megascans.
+- **ED.5 Storyboard sobre la cámara.** En cada viñeta, la cámara del plano y su vista 3D como fondo para dibujar encima con proporciones reales.
+
 ## NF · Ideas de funciones nuevas (por valor)
 
 1. ✅ (sin PDF) Planificador eléctrico: consumo real, reparto por circuito, generadores (L7).

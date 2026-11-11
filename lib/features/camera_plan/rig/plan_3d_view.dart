@@ -45,6 +45,8 @@ import '../../unreal_link/unreal_thumbs.dart';
 import '../../../core/sync/plan_scan_store.dart';
 import '../../../core/utils/media_storage.dart';
 import '../plan_segment.dart';
+import 'plan_transform.dart';
+import 'plan_transform_fields.dart';
 import 'scan_builder_sheet.dart';
 import 'scan_capture_channel.dart';
 import 'scan_store.dart';
@@ -481,7 +483,7 @@ class _Plan3dViewState extends State<Plan3dView> {
         if (mounted) {
           setState(() => _status = 'Escaneo: ${message['message']}');
         }
-      case 'move' || 'aim':
+      case 'move' || 'aim' || 'rotate' || 'lift':
         _applyFrom3d(message);
       case 'view':
         if (mounted) setState(() => _view = message['view'] as String);
@@ -518,6 +520,11 @@ class _Plan3dViewState extends State<Plan3dView> {
       if (!PlanScene3d.moveBy(el, n('dx'), n('dy'), widget.elements, mpu)) {
         return;
       }
+    } else if (message['type'] == 'rotate') {
+      if (!PlanTransform.canRotate(el)) return;
+      PlanTransform.setRotation(el, el.rotation + n('deg'));
+    } else if (message['type'] == 'lift') {
+      PlanTransform.liftBy(el, n('dz'));
     } else if (el.type == ElementType.light) {
       PlanScene3d.aimAt(el, n('x'), n('y'), n('z'), mpu);
     } else {
@@ -1831,16 +1838,22 @@ class _Plan3dViewState extends State<Plan3dView> {
               element: _selected!,
               onCommit: _update,
             ),
-          Text(
-            _selected!.type == ElementType.light
-                ? 'Arrástralo para moverlo; el asa naranja cambia adónde '
-                      'apunta. Cerca de un truss se cuelga de él.'
-                : 'Arrástralo para moverlo por el suelo.',
-            style: AppTypography.caption(
-              palette,
-            ).copyWith(color: palette.textTertiary),
-          ),
+          if (_selected!.type == ElementType.light)
+            Text(
+              'El asa naranja cambia adónde apunta. Cerca de un truss se '
+              'cuelga de él.',
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textTertiary),
+            ),
           const SizedBox(height: AppSpacing.sm),
+          if (PlanTransform.applies(_selected!))
+            PlanTransformFields(
+              element: _selected!,
+              elements: widget.elements,
+              metersPerUnit: widget.metersPerUnit,
+              onUpdate: _update,
+            ),
           if (_selected!.type == ElementType.light)
             _LightControls(
               element: _selected!,

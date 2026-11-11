@@ -191,6 +191,9 @@
   let drag = null;
   let selectedId = null;
   let aimHandle = null;
+  // Aro para girar y flecha para subir lo seleccionado (como en Unreal).
+  let gizmo = null;
+  const UP = new THREE.Vector3(0, 1, 0);
   const ray = new THREE.Raycaster();
 
   function rayAt(e) {
@@ -295,8 +298,24 @@
       return;
     }
     down = { x, y };
-    // ¿Empieza un arrastre? El asa de puntería, o lo ya seleccionado.
-    if (aimHandle && rayAt(e).intersectObject(aimHandle).length) {
+    // ¿Empieza un arrastre? El aro o la flecha, el asa de puntería, o lo ya
+    // seleccionado.
+    const gHit = gizmo && rayAt(e).intersectObject(gizmo, true).find((h) => h.object.userData.gizmo);
+    if (gHit) {
+      const t = gizmo.userData.target, g = gizmo.userData;
+      if (gHit.object.userData.gizmo === 'rotate') {
+        const at = onPlane(e, g.ringY);
+        if (at) drag = { mode: 'rotate', target: t, plane: g.ringY, last: angleAround(at, g.center), total: 0 };
+      } else {
+        const n = new THREE.Vector3();
+        cam.getWorldDirection(n);
+        n.y = 0;
+        if (n.lengthSq() < 1e-6) n.set(0, 0, 1);
+        const vplane = new THREE.Plane().setFromNormalAndCoplanarPoint(n.normalize(), g.center);
+        const p = rayAt(e).ray.intersectPlane(vplane, new THREE.Vector3());
+        if (p) drag = { mode: 'lift', target: t, vplane, lastY: p.y, total: 0 };
+      }
+    } else if (aimHandle && rayAt(e).intersectObject(aimHandle).length) {
       const at = onPlane(e, aimHandle.position.y);
       if (at) drag = { mode: 'aim', target: aimHandle, plane: aimHandle.position.y, last: at };
     } else if (selectedId) {
@@ -317,11 +336,39 @@
 
   renderer.domElement.addEventListener('pointermove', (e) => {
     if (!drag) return;
+    if (drag.mode === 'lift') {
+      const p = rayAt(e).ray.intersectPlane(drag.vplane, new THREE.Vector3());
+      if (!p) return;
+      const d = p.y - drag.lastY;
+      drag.lastY = p.y;
+      drag.total += d;
+      drag.target.position.y += d;
+      if (gizmo) gizmo.position.y += d;
+      if (selectedBox) selectedBox.update();
+      return;
+    }
+    if (drag.mode === 'rotate') {
+      const at = onPlane(e, drag.plane);
+      if (!at) return;
+      const a = angleAround(at, gizmo.userData.center);
+      let d = a - drag.last;
+      if (d > Math.PI) d -= 2 * Math.PI;
+      if (d < -Math.PI) d += 2 * Math.PI;
+      drag.last = a;
+      drag.total += d;
+      drag.target.rotateOnWorldAxis(UP, d);
+      if (selectedBox) selectedBox.update();
+      return;
+    }
     const at = onPlane(e, drag.plane);
     if (!at) return;
     const d = at.clone().sub(drag.last);
     drag.last = at;
     drag.target.position.add(new THREE.Vector3(d.x, 0, d.z));
+    if (drag.mode === 'move' && gizmo) {
+      gizmo.position.add(new THREE.Vector3(d.x, 0, d.z));
+      gizmo.userData.center.add(new THREE.Vector3(d.x, 0, d.z));
+    }
     if (drag.mode === 'aim' && aimHandle.userData.line) {
       const pos = aimHandle.userData.line.geometry.attributes.position;
       pos.setXYZ(1, aimHandle.position.x, aimHandle.position.y, aimHandle.position.z);
@@ -339,6 +386,11 @@
       if (d.mode === 'move') {
         const dx = d.last.x - d.start.x, dz = d.last.z - d.start.z;
         if (Math.hypot(dx, dz) > 0.01) post({ type: 'move', id: selectedId, dx, dy: -dz });
+      } else if (d.mode === 'rotate') {
+        // En planta el giro va al revés que en three (y hacia el fondo).
+        if (Math.abs(d.total) > 0.002) post({ type: 'rotate', id: selectedId, deg: -d.total * 180 / Math.PI });
+      } else if (d.mode === 'lift') {
+        if (Math.abs(d.total) > 0.005) post({ type: 'lift', id: selectedId, dz: d.total });
       } else {
         const p = aimHandle.position;
         post({ type: 'aim', id: selectedId, x: p.x, y: -p.z, z: p.y });
@@ -393,6 +445,11 @@
       aimHandle.geometry.dispose();
       aimHandle = null;
     }
+    if (gizmo) {
+      scene.remove(gizmo);
+      dispose(gizmo);
+      gizmo = null;
+    }
     if (!id) return;
     const target = picks.find((o) => o.userData.id === id);
     if (!target) return;
@@ -410,6 +467,55 @@
       aimHandle.userData.line = line;
       scene.add(aimHandle, line);
     }
+    if (target.userData.movable && (target.userData.rotatable || target.userData.liftable)) addGizmo(target);
+  }
+
+  // Ángulo en planta (en contra de las agujas, con y hacia el fondo) de p
+  // alrededor de c.
+  function angleAround(p, c) { return Math.atan2(-(p.z - c.z), p.x - c.x); }
+
+  function addGizmo(target) {
+    target.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(target);
+    if (box.isEmpty()) return;
+    const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+    const base = target.userData.dragY !== undefined ? target.userData.dragY : box.min.y;
+    const flat = (color) => new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.95 });
+    const pickMat = new THREE.MeshBasicMaterial({ visible: false });
+    gizmo = new THREE.Group();
+    gizmo.userData = { target, center: new THREE.Vector3(c.x, base, c.z), ringY: base + 0.03 };
+    if (target.userData.rotatable) {
+      const r = Math.max(s.x, s.z) / 2 + 0.25;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.03, 8, 72), flat(0x3d8bfd));
+      // Más gordo e invisible: para acertar con el dedo.
+      const grab = new THREE.Mesh(new THREE.TorusGeometry(r, 0.14, 6, 48), pickMat);
+      for (const m of [ring, grab]) {
+        m.rotation.x = Math.PI / 2;
+        m.position.set(c.x, base + 0.03, c.z);
+        m.renderOrder = 11;
+        m.userData.gizmo = 'rotate';
+        gizmo.add(m);
+      }
+    }
+    if (target.userData.liftable) {
+      const top = box.max.y + 0.2, len = 0.6;
+      const mat = flat(0x3fbf6a);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, len, 10), mat);
+      shaft.position.set(c.x, top + len / 2, c.z);
+      const upTip = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 14), mat);
+      upTip.position.set(c.x, top + len + 0.09, c.z);
+      const downTip = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 14), mat);
+      downTip.rotation.x = Math.PI;
+      downTip.position.set(c.x, top - 0.09, c.z);
+      const grab = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, len + 0.4, 8), pickMat);
+      grab.position.copy(shaft.position);
+      for (const m of [shaft, upTip, downTip, grab]) {
+        m.renderOrder = 11;
+        m.userData.gizmo = 'lift';
+        gizmo.add(m);
+      }
+    }
+    scene.add(gizmo);
   }
 
   // ── Construcción ─────────────────────────────────────────────────────────
@@ -1193,7 +1299,7 @@
       const geo = p.shape === 'round' ? new THREE.CylinderGeometry(p.sizeM / 2, p.sizeM / 2, h, 16) : new THREE.BoxGeometry(p.sizeM, h, p.sizeM);
       const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xa9b0b6, metalness: 0.3, roughness: 0.6 }));
       m.position.copy(V(p.at[0], p.at[1], z0 + h / 2));
-      m.userData.id = p.id; m.userData.movable = true; m.userData.dragY = z0; picks.push(m);
+      m.userData.id = p.id; m.userData.movable = true; m.userData.dragY = z0; m.userData.liftable = true; picks.push(m);
       L.pillars.add(m);
     }
 
@@ -1255,7 +1361,7 @@
       body.position.copy(p);
       if (body.userData.lookAt) body.lookAt(a);
       body.name = (f.name || 'Foco') + ' · ' + f.id;
-      body.userData.id = f.id; body.userData.movable = true; body.userData.dragY = p.y; body.userData.aim = a.clone(); picks.push(body);
+      body.userData.id = f.id; body.userData.movable = true; body.userData.dragY = p.y; body.userData.aim = a.clone(); body.userData.liftable = true; picks.push(body);
       L.fixtures.add(body);
       if (!f.on || clearView) return;
       if (i >= next && lit < maxLights) {
@@ -1312,7 +1418,7 @@
       hd.position.y = 1.6;
       g.add(b, hd);
       g.position.copy(V(q.at[0], q.at[1], q.z0 || 0));
-      g.userData.id = q.id; g.userData.movable = true; g.userData.dragY = q.z0 || 0; picks.push(g);
+      g.userData.id = q.id; g.userData.movable = true; g.userData.dragY = q.z0 || 0; g.userData.liftable = true; picks.push(g);
       L.people.add(g);
     }
     for (const q of sc.cameras || []) {
@@ -1323,7 +1429,7 @@
       const tilt = (q.tiltDeg || 0) * Math.PI / 180;
       g.position.copy(V(q.at[0], q.at[1], cz));
       g.lookAt(V(q.at[0] + q.dir[0] * Math.cos(tilt), q.at[1] + q.dir[1] * Math.cos(tilt), cz + Math.sin(tilt)));
-      g.userData.id = q.id; g.userData.movable = true; g.userData.dragY = q.z0 || 0; picks.push(g);
+      g.userData.id = q.id; g.userData.movable = true; g.userData.dragY = q.z0 || 0; g.userData.rotatable = true; g.userData.liftable = true; picks.push(g);
       L.people.add(g);
     }
     for (const p of sc.props || []) {
@@ -1344,7 +1450,7 @@
       g.position.copy(V(p.at[0], p.at[1], p.z0 || 0));
       g.rotation.y = -(p.yawDeg || 0) * Math.PI / 180;
       g.name = (p.name || 'Pieza') + ' · ' + p.id;
-      g.userData.id = p.id; g.userData.movable = true; g.userData.dragY = p.z0 || 0; picks.push(g);
+      g.userData.id = p.id; g.userData.movable = true; g.userData.dragY = p.z0 || 0; g.userData.rotatable = true; g.userData.liftable = true; picks.push(g);
       L.props.add(g);
     }
 
@@ -1418,7 +1524,7 @@
       grp.position.copy(V(g.at[0], g.at[1], g.z0 || 0));
       grp.rotation.y = -(g.yawDeg || 0) * Math.PI / 180;
       grp.name = (g.name || 'Grip') + ' · ' + g.id;
-      grp.userData.id = g.id; grp.userData.movable = true; grp.userData.dragY = g.z0 || 0;
+      grp.userData.id = g.id; grp.userData.movable = true; grp.userData.dragY = g.z0 || 0; grp.userData.rotatable = true; grp.userData.liftable = true;
       picks.push(grp);
       root.add(grp);
     }
@@ -1718,6 +1824,8 @@
         w = new THREE.Group();
         w.userData.id = q.id;
         w.userData.movable = true;
+        w.userData.rotatable = true;
+        w.userData.liftable = true;
         w.userData.file = q.file;
         w.name = 'Escaneo · ' + q.id;
         scanWrappers[q.id] = w;
