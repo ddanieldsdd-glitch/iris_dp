@@ -1690,6 +1690,42 @@
     post({ type: 'view', view: 'cam:' + id });
   }
 
+  // Lo que ve la cámara `id`, en 16:9, como PNG en base64 dentro de un JSON (ED.5): para
+  // dibujar el storyboard encima. Se pinta en el lienzo y se lee en el
+  // mismo instante, sin los conos, la propia cámara ni los mandos.
+  function cameraStill(id) {
+    const q = lastScene && (lastScene.cameras || []).find((k) => k.id === id);
+    if (!q) return null;
+    const { w, h } = size();
+    const pr = renderer.getPixelRatio();
+    const aspect = 16 / 9;
+    let bw = w, bh = w / aspect;
+    if (bh > h) { bh = h; bw = h * aspect; }
+    const x0 = (w - bw) / 2, y0 = (h - bh) / 2;
+    const hfov = (q.hfovDeg || 40) * Math.PI / 180;
+    const vfov = 2 * Math.atan(Math.tan(hfov / 2) / aspect) * 180 / Math.PI;
+    const c = new THREE.PerspectiveCamera(vfov, aspect, 0.05, 4000);
+    const z = (q.z0 || 0) + (q.z || 1.5);
+    c.position.copy(V(q.at[0], q.at[1], z));
+    const tilt = (q.tiltDeg || 0) * Math.PI / 180;
+    c.lookAt(V(q.at[0] + q.dir[0] * 5 * Math.cos(tilt), q.at[1] + q.dir[1] * 5 * Math.cos(tilt), z + 5 * Math.sin(tilt)));
+    const hide = [gizmo, selectedBox, aimHandle, placeGhost, labelsGroup, measureGroup, ...cones, ...picks.filter((o) => o.userData.id === id)]
+      .filter((o) => o && o.visible);
+    hide.forEach((o) => (o.visible = false));
+    renderer.setViewport(x0, y0, bw, bh);
+    renderer.setScissor(x0, y0, bw, bh);
+    renderer.setScissorTest(true);
+    renderer.clear();
+    renderer.render(scene, c);
+    renderer.setScissorTest(false);
+    hide.forEach((o) => (o.visible = true));
+    const out = document.createElement('canvas');
+    out.width = Math.round(bw * pr);
+    out.height = Math.round(bh * pr);
+    out.getContext('2d').drawImage(renderer.domElement, x0 * pr, y0 * pr, bw * pr, bh * pr, 0, 0, out.width, out.height);
+    return JSON.stringify({ png: out.toDataURL('image/png').split(',')[1], w: out.width, h: out.height });
+  }
+
   function placeFrame() {
     if (!camView) { frame.style.display = 'none'; return; }
     const { w, h } = size();
@@ -2283,6 +2319,7 @@
       if (lastScene) load(lastScene);
     },
     view: (v) => setView(v),
+    cameraStill,
     select: (id) => highlight(id),
     floor: (f) => setFloorLight(f),
     exportGlb,

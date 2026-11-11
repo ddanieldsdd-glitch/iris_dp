@@ -160,6 +160,10 @@ class Plan3dView extends StatefulWidget {
   /// Añadir, duplicar, borrar y deshacer desde el 3D (ED.2).
   final Plan3dEditing? editing;
 
+  /// Guarda lo que ve una cámara, para dibujar el storyboard encima (ED.5).
+  /// Devuelve el aviso que se enseña.
+  final Future<String> Function(Uint8List png, String cameraId)? onCameraStill;
+
   const Plan3dView({
     super.key,
     required this.elements,
@@ -187,6 +191,7 @@ class Plan3dView extends StatefulWidget {
     this.onNavigate,
     this.lookThrough = false,
     this.editing,
+    this.onCameraStill,
   });
 
   static const asset = 'assets/viewer3d/index.html';
@@ -209,6 +214,27 @@ class _Plan3dViewState extends State<Plan3dView> {
 
   /// Ya se miró por la cámara del plano al abrirlo ([Plan3dView.lookThrough]).
   bool _lookedThrough = false;
+
+  bool _stillBusy = false;
+
+  /// Lo que ve la cámara por la que se mira, para el storyboard (ED.5).
+  Future<void> _saveStill() async {
+    final save = widget.onCameraStill;
+    if (save == null || !_view.startsWith('cam:') || _stillBusy) return;
+    final id = _view.substring(4);
+    setState(() => _stillBusy = true);
+    try {
+      final data = await _ask('iris.cameraStill(${jsonEncode(id)});');
+      final png = data is Map ? data['png'] : null;
+      if (png is! String) throw StateError('El 3D no ha dado imagen.');
+      final notice = await save(base64Decode(png), id);
+      if (mounted) setState(() => _status = notice);
+    } catch (e) {
+      if (mounted) setState(() => _status = 'No se ha podido guardar: $e');
+    } finally {
+      if (mounted) setState(() => _stillBusy = false);
+    }
+  }
 
   /// Lo que se va a soltar en el suelo con el próximo toque (ED.2).
   Plan3dAddItem? _placing;
@@ -1449,6 +1475,23 @@ class _Plan3dViewState extends State<Plan3dView> {
                       final item = await edit.pickAsset!();
                       if (item != null && mounted) _startPlacing(item);
                     },
+            ),
+          ),
+        if (widget.onCameraStill != null && _view.startsWith('cam:'))
+          Positioned(
+            right: AppSpacing.sm,
+            bottom: AppSpacing.sm,
+            child: FilledButton.tonalIcon(
+              key: const ValueKey('still-for-storyboard'),
+              onPressed: _stillBusy ? null : _saveStill,
+              icon: _stillBusy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.photo_camera_back_outlined, size: 18),
+              label: const Text('Para el storyboard'),
             ),
           ),
         if (_status != null)
@@ -2743,6 +2786,7 @@ class Plan3dScreen extends StatefulWidget {
   /// La lista de todo lo de la planta (ED.4), como el Outliner de Unreal:
   /// [changed] avisa de que se tocó una fila (seleccionar, ocultar).
   final Widget Function(VoidCallback changed)? outliner;
+  final Future<String> Function(Uint8List png, String cameraId)? onCameraStill;
 
   const Plan3dScreen({
     super.key,
@@ -2771,6 +2815,7 @@ class Plan3dScreen extends StatefulWidget {
     this.liveElements,
     this.liveSelected,
     this.outliner,
+    this.onCameraStill,
   });
 
   static Future<void> show(
@@ -2800,6 +2845,7 @@ class Plan3dScreen extends StatefulWidget {
     List<PlanElement> Function()? liveElements,
     PlanElement? Function()? liveSelected,
     Widget Function(VoidCallback changed)? outliner,
+    Future<String> Function(Uint8List png, String cameraId)? onCameraStill,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Plan3dScreen(
@@ -2828,6 +2874,7 @@ class Plan3dScreen extends StatefulWidget {
         liveElements: liveElements,
         liveSelected: liveSelected,
         outliner: outliner,
+        onCameraStill: onCameraStill,
       ),
     ),
   );
@@ -2954,5 +3001,6 @@ class _Plan3dScreenState extends State<Plan3dScreen> {
       onNavigate: widget.onNavigate,
       lookThrough: widget.lookThrough,
       editing: widget.editing?.call().then(_refresh),
+      onCameraStill: widget.onCameraStill,
   );
 }

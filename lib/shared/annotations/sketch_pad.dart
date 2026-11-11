@@ -60,6 +60,8 @@ Future<SketchResult?> showSketchPad(
   ImageProvider? onionSkin,
   String? onionSkinLabel,
   LiveDrawingLink? live,
+  ImageProvider? underlay,
+  String? underlayLabel,
 }) async {
   final result = await SketchSheetScreen.open(
     context,
@@ -71,6 +73,8 @@ Future<SketchResult?> showSketchPad(
     onionSkin: onionSkin,
     onionSkinLabel: onionSkinLabel,
     live: live,
+    underlay: underlay,
+    underlayLabel: underlayLabel,
   );
   final png = result?.png;
   if (result == null || png == null) return null;

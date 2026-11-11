@@ -44,8 +44,9 @@ class PlanWorkspaceScreen extends ConsumerStatefulWidget {
     BuildContext context, {
     required int projectId,
     required PlanTarget target,
+    bool lookThrough = false,
   }) {
-    CameraPlanEditor.openStageOnNextLoad();
+    CameraPlanEditor.openStageOnNextLoad(lookThrough: lookThrough);
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) =>

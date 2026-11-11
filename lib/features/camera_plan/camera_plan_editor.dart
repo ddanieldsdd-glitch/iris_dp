@@ -227,8 +227,10 @@ class CameraPlanEditor extends ConsumerStatefulWidget {
 
   /// La próxima planta que se abra lo hace en IRIS Stage, el 3D a pantalla
   /// entera (ED.4).
-  static void openStageOnNextLoad() =>
-      _CameraPlanEditorState._reopen3dScreen = true;
+  static void openStageOnNextLoad({bool lookThrough = false}) {
+    _CameraPlanEditorState._reopen3dScreen = true;
+    _CameraPlanEditorState._lookThroughNext = lookThrough;
+  }
 }
 
 extension on PlanElement {
@@ -4138,11 +4140,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// y, si estaba a pantalla entera, se vuelve a abrir así.
   static bool _lookThroughNext = false;
   static bool _reopen3dScreen = false;
-  late final bool _lookThrough = () {
+  // Se toma al crear el editor, para que no le quede a otra planta.
+  final bool _lookThrough = _takeLookThrough();
+  static bool _takeLookThrough() {
     final v = _lookThroughNext;
     _lookThroughNext = false;
     return v;
-  }();
+  }
   bool _loadedOnce = false;
 
   /// Lo que se puede añadir y editar desde el 3D (ED.2): lo mismo que la
@@ -4310,6 +4314,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       editing: () => _editing3d,
       liveElements: () => _visibleElements,
       liveSelected: () => _selected,
+      onCameraStill: widget.shotId == null ? null : _saveCameraStill,
       outliner: (changed) => PlanOutliner(
         elements: _elements,
         selected: _selected,
@@ -4424,6 +4429,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       return UnrealWorld(key: 'site${site.id}', name: site.name, site: site.name);
     }
     return null;
+  }
+
+  /// Lo que ve la cámara del plano en el 3D (ED.5): se guarda como su
+  /// referencia «cámara 3D», en lugar de la anterior, para dibujar el
+  /// storyboard encima.
+  Future<String> _saveCameraStill(Uint8List png, String cameraId) async {
+    final shotId = widget.shotId;
+    if (shotId == null) throw StateError('Esta planta no es de un plano.');
+    final db = ref.read(databaseProvider);
+    final shot = await db.getShotById(shotId);
+    if (shot == null) throw StateError('No se encuentra el plano.');
+    await replaceShotCamera3dView(db: db, shot: shot, png: png);
+    return 'Vista guardada: en el storyboard del plano ${shot.number}, '
+        '«Dibujar» la pone debajo.';
   }
 
   /// Una captura RTX de Unreal va al storyboard de este plano, como los
@@ -6864,6 +6883,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   onNavigate: _navigateFrom3d,
                                   lookThrough: _lookThrough,
                                   editing: _editing3d,
+                                  onCameraStill: widget.shotId == null
+                                      ? null
+                                      : _saveCameraStill,
                                 ),
                               ),
                             ],

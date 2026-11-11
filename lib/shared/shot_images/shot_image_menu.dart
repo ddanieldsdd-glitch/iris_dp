@@ -477,6 +477,20 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
     return null;
   }
 
+  /// Lo que ve la cámara del plano en el 3D (ED.5), si se guardó: fondo
+  /// para dibujar la viñeta.
+  Future<ImageProvider?> _camera3dView() async {
+    if (widget.target != ShotImageTarget.storyboard) return null;
+    final refs = await _db.getReferencesForShot(widget.shot.id);
+    for (final r in refs.reversed) {
+      if (r.source == ShotReferenceSource.camera3d &&
+          File(r.imagePath).existsSync()) {
+        return FileImage(File(r.imagePath));
+      }
+    }
+    return null;
+  }
+
   /// Abre el lienzo blanco y guarda el dibujo como imagen del plano. Con
   /// [editing], sigue un dibujo que ya estaba: el nuevo ocupa su sitio.
   /// El folio de este plano y este destino, compartido entre equipos.
@@ -487,6 +501,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
   Future<void> _draw({String? editing}) async {
     if (_busy) return;
     final onionSkin = await _previousStoryboardFrame();
+    final camera3d = await _camera3dView();
     if (!mounted) return;
     final result = await showSketchPad(
       context,
@@ -501,6 +516,8 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
       onionSkin: onionSkin?.$1,
       onionSkinLabel: onionSkin?.$2,
       live: liveDrawingLinkFor(context, _liveKey),
+      underlay: camera3d,
+      underlayLabel: camera3d == null ? null : 'su cámara',
     );
     if (result == null || !mounted) return;
     await _run(() async {
