@@ -39,6 +39,8 @@ Código revisado: `main` v1.8.0 (schema 63), en `iris_dp_release`.
 | DR.3 Orden del día e .ics | 2557bd5 | PDF A4 por jornada desde la jornada, el tablero (todas o una) y el calendario. `.ics` desde el calendario. No se añadió al centro de exportación (pendiente). |
 | DR.5 Arreglos rápidos | 7960fac | Todo lo previsto. Las líneas propias de una reserva llevan uid `manual-…` y reimportar no las toca. |
 
+Tras probarla (12-11): el orden de rodaje pasa a duraciones encadenadas con horas fijables y panel del plano (G13 en `PLAN_ACCION.md`, rama `plan/jornada-horario`); el calendario fija lo que se suelta en él.
+
 Pendiente de la Tanda 1: el orden del día dentro del centro de exportación; probar con dedo en iPad e iPhone; el lector de PDF solo se ha probado con texto (sin muestra real en PDF).
 
 Regla: **sin subir el esquema y sin cambiar el formato de sincronización**. Todo usa campos que ya existen (`contentOverridesJson`, `shootDate`, `shootFromTime/ToTime`). Orden de prioridad; lo último es lo primero que se recorta si no llega en verde.
