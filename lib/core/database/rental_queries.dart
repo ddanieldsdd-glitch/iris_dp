@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 
 import 'app_database.dart';
 
@@ -120,5 +121,84 @@ extension RentalQueries on AppDatabase {
           .write(RentalItemsCompanion(deletedAt: Value(at)));
     });
     await touchProjectContent(r.projectId);
+  }
+
+  /// Las líneas añadidas a mano empiezan así: reimportar la lista no las
+  /// toca.
+  static const manualItemPrefix = 'manual-';
+
+  /// Nombre, fechas («2026-11-13T09:00») y notas de la reserva.
+  Future<void> updateRentalReservationInfo(
+    RentalReservation r, {
+    required String title,
+    required String? pickupAt,
+    required String? returnAt,
+    required String? notes,
+  }) async {
+    await (update(rentalReservations)..where((x) => x.id.equals(r.id))).write(
+      RentalReservationsCompanion(
+        title: Value(title.trim().isEmpty ? r.title : title.trim()),
+        pickupAt: Value(pickupAt),
+        returnAt: Value(returnAt),
+        notes: Value(
+          notes == null || notes.trim().isEmpty ? null : notes.trim(),
+        ),
+      ),
+    );
+    await touchProjectContent(r.projectId);
+  }
+
+  Future<void> addManualRentalItem(
+    RentalReservation r, {
+    required String name,
+    double? quantity,
+    String? note,
+  }) async {
+    final last =
+        await (select(rentalItems)
+              ..where(
+                (x) =>
+                    x.projectId.equals(r.projectId) &
+                    x.reservationUid.equals(r.uid),
+              )
+              ..orderBy([(x) => OrderingTerm.desc(x.sortOrder)])
+              ..limit(1))
+            .getSingleOrNull();
+    await into(rentalItems).insert(
+      RentalItemsCompanion.insert(
+        uid: '$manualItemPrefix${const Uuid().v4()}',
+        projectId: r.projectId,
+        reservationUid: r.uid,
+        name: name.trim(),
+        quantity: Value(quantity),
+        note: Value(note == null || note.trim().isEmpty ? null : note.trim()),
+        section: const Value('Añadido a mano'),
+        sortOrder: Value((last?.sortOrder ?? 0) + 1),
+      ),
+    );
+    await touchProjectContent(r.projectId);
+  }
+
+  Future<void> updateRentalItemText(
+    RentalItem item, {
+    required String name,
+    double? quantity,
+    String? note,
+  }) async {
+    await (update(rentalItems)..where((x) => x.id.equals(item.id))).write(
+      RentalItemsCompanion(
+        name: Value(name.trim().isEmpty ? item.name : name.trim()),
+        quantity: Value(quantity),
+        note: Value(note == null || note.trim().isEmpty ? null : note.trim()),
+      ),
+    );
+    await touchProjectContent(item.projectId);
+  }
+
+  Future<void> softDeleteRentalItem(RentalItem item, String at) async {
+    await (update(rentalItems)..where((x) => x.id.equals(item.id))).write(
+      RentalItemsCompanion(deletedAt: Value(at)),
+    );
+    await touchProjectContent(item.projectId);
   }
 }

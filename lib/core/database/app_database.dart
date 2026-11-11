@@ -1673,8 +1673,7 @@ class AppDatabase extends _$AppDatabase {
         await (update(shots)..where((s) => s.id.isIn(ids))).write(
           ShotsCompanion(sceneId: Value(id)),
         );
-        await (update(shootDocumentBlocks)
-              ..where((b) => b.shotId.isIn(ids)))
+        await (update(shootDocumentBlocks)..where((b) => b.shotId.isIn(ids)))
             .write(ShootDocumentBlocksCompanion(sceneId: Value(id)));
       }
       await _renumberShotsInScene(scene.id);
@@ -2316,6 +2315,10 @@ class AppDatabase extends _$AppDatabase {
     return id;
   }
 
+  Future<ShootDocumentBlock?> getShootDocumentBlock(int id) => (select(
+    shootDocumentBlocks,
+  )..where((b) => b.id.equals(id))).getSingleOrNull();
+
   Future<bool> updateShootDocumentBlock(ShootDocumentBlock block) async {
     final ok = await update(shootDocumentBlocks).replace(block);
     final doc = await getShootDocument(block.documentId);
@@ -2364,9 +2367,8 @@ class AppDatabase extends _$AppDatabase {
   ) async {
     await transaction(() async {
       for (final (i, id) in blockIds.indexed) {
-        await (update(shootDocumentBlocks)..where(
-              (b) => b.id.equals(id) & b.documentId.equals(documentId),
-            ))
+        await (update(shootDocumentBlocks)
+              ..where((b) => b.id.equals(id) & b.documentId.equals(documentId)))
             .write(
               ShootDocumentBlocksCompanion(
                 sortOrder: Value(i),

@@ -109,11 +109,15 @@ class ShootShotRow extends StatelessWidget {
   final double thumbWidth;
   final List<Widget> trailing;
 
+  /// Hora y apunte del plan de rodaje.
+  final ShotTime time;
+
   const ShootShotRow({
     super.key,
     required this.shot,
     this.thumbWidth = 64,
     this.trailing = const [],
+    this.time = const ShotTime(),
   });
 
   @override
@@ -128,13 +132,19 @@ class ShootShotRow extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: Text(
-            shootShotTitle(shot),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.caption(
-              palette,
-            ).copyWith(color: palette.textPrimary),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                shootShotTitle(shot),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption(
+                  palette,
+                ).copyWith(color: palette.textPrimary),
+              ),
+              if (!time.isEmpty) ShotTimeText(time: time, maxLines: 2),
+            ],
           ),
         ),
         ...trailing,
@@ -147,8 +157,14 @@ class ShootShotRow extends StatelessWidget {
 class ShootShotTile extends StatelessWidget {
   final Shot shot;
   final double width;
+  final ShotTime time;
 
-  const ShootShotTile({super.key, required this.shot, this.width = 112});
+  const ShootShotTile({
+    super.key,
+    required this.shot,
+    this.width = 112,
+    this.time = const ShotTime(),
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -168,8 +184,43 @@ class ShootShotTile extends StatelessWidget {
               palette,
             ).copyWith(color: palette.textPrimary, fontSize: 11),
           ),
+          if (!time.isEmpty) ShotTimeText(time: time, maxLines: 3),
         ],
       ),
+    );
+  }
+}
+
+/// «10:15 – 10:50 · PMC de Ali…»: la hora del plano en el plan de rodaje.
+class ShotTimeText extends StatelessWidget {
+  final ShotTime time;
+  final int? maxLines;
+
+  const ShotTimeText({super.key, required this.time, this.maxLines});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final range = shootTimeRange(time.from, time.to);
+    final note = time.note.trim();
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (range.isNotEmpty)
+            TextSpan(
+              text: range,
+              style: TextStyle(
+                color: palette.accent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (range.isNotEmpty && note.isNotEmpty) const TextSpan(text: ' · '),
+          if (note.isNotEmpty) TextSpan(text: note),
+        ],
+      ),
+      maxLines: maxLines,
+      overflow: maxLines == null ? null : TextOverflow.ellipsis,
+      style: AppTypography.caption(palette).copyWith(fontSize: 11),
     );
   }
 }

@@ -52,46 +52,87 @@ void main() {
     );
   }
 
-  test('reimportar no duplica, conserva marcas y avisa de lo que cambia', () async {
-    final uid = await save(reservation());
-    var r = (await db.getRentalReservations(projectId)).single;
-    var items = await db.watchRentalItems(projectId, uid).first;
-    expect(items, hasLength(4));
-    await db.setReservationPickedUp(r, at: 'A', device: 'Mac');
-    final bandera = items.firstWhere((i) => i.name == 'Bandera');
-    final kit = items.firstWhere((i) => i.name == 'KIT');
-    await db.setRentalItemChecked(bandera, returning: false, at: 'B');
+  test(
+    'reimportar no duplica, conserva marcas y avisa de lo que cambia',
+    () async {
+      final uid = await save(reservation());
+      var r = (await db.getRentalReservations(projectId)).single;
+      var items = await db.watchRentalItems(projectId, uid).first;
+      expect(items, hasLength(4));
+      await db.setReservationPickedUp(r, at: 'A', device: 'Mac');
+      final bandera = items.firstWhere((i) => i.name == 'Bandera');
+      final kit = items.firstWhere((i) => i.name == 'KIT');
+      await db.setRentalItemChecked(bandera, returning: false, at: 'B');
 
-    final next = reservation(
-      pickup: '2026-11-13T09:00',
-      items: const [
-        ParsedRentalItem(name: 'KIT', quantity: 2, rawText: 'KIT'),
-        ParsedRentalItem(name: 'Nuevo', quantity: 1, rawText: 'Nuevo'),
-      ],
-    );
-    final service = RentalImportService(db);
-    final preview = await service.preview(projectId, next);
-    expect(preview.isUpdate, isTrue);
-    expect(preview.added, ['Nuevo']);
-    expect(preview.changed, ['KIT']);
-    expect(preview.removed, containsAll(['Bandera', 'Cable']));
-    await service.apply(
-      projectId: projectId,
-      preview: preview,
-      title: 'Lista',
-      houseName: 'ESCAC',
-    );
+      final next = reservation(
+        pickup: '2026-11-13T09:00',
+        items: const [
+          ParsedRentalItem(name: 'KIT', quantity: 2, rawText: 'KIT'),
+          ParsedRentalItem(name: 'Nuevo', quantity: 1, rawText: 'Nuevo'),
+        ],
+      );
+      final service = RentalImportService(db);
+      final preview = await service.preview(projectId, next);
+      expect(preview.isUpdate, isTrue);
+      expect(preview.added, ['Nuevo']);
+      expect(preview.changed, ['KIT']);
+      expect(preview.removed, containsAll(['Bandera', 'Cable']));
+      await service.apply(
+        projectId: projectId,
+        preview: preview,
+        title: 'Lista',
+        houseName: 'ESCAC',
+      );
 
-    r = (await db.getRentalReservations(projectId)).single;
-    expect(r.pickedUpAt, 'A');
-    expect(r.pickupAt, '2026-11-13T09:00');
-    items = await db.watchRentalItems(projectId, uid).first;
-    expect(items.firstWhere((i) => i.uid == kit.uid).quantity, 2);
-    // Lo comprobado no desaparece: queda señalado.
-    final kept = items.firstWhere((i) => i.uid == bandera.uid);
-    expect(kept.removedFromSourceAt, isNotNull);
-    expect(items.where((i) => i.name == 'Cable'), isEmpty);
-  });
+      r = (await db.getRentalReservations(projectId)).single;
+      expect(r.pickedUpAt, 'A');
+      expect(r.pickupAt, '2026-11-13T09:00');
+      items = await db.watchRentalItems(projectId, uid).first;
+      expect(items.firstWhere((i) => i.uid == kit.uid).quantity, 2);
+      // Lo comprobado no desaparece: queda señalado.
+      final kept = items.firstWhere((i) => i.uid == bandera.uid);
+      expect(kept.removedFromSourceAt, isNotNull);
+      expect(items.where((i) => i.name == 'Cable'), isEmpty);
+    },
+  );
+
+  test(
+    'lo añadido a mano y las fechas editadas sobreviven a reimportar',
+    () async {
+      final uid = await save(reservation());
+      var r = (await db.getRentalReservations(projectId)).single;
+      await db.addManualRentalItem(r, name: 'Gaffer negro', quantity: 3);
+      await db.updateRentalReservationInfo(
+        r,
+        title: 'Lista ESCAC',
+        pickupAt: '2026-11-12T08:30',
+        returnAt: r.returnAt,
+        notes: 'Llamar antes',
+      );
+      r = (await db.getRentalReservations(projectId)).single;
+      expect(r.title, 'Lista ESCAC');
+      expect(r.notes, 'Llamar antes');
+
+      final service = RentalImportService(db);
+      final preview = await service.preview(projectId, reservation());
+      expect(preview.removed, isEmpty);
+      await service.apply(
+        projectId: projectId,
+        preview: preview,
+        title: 'Lista ESCAC',
+        houseName: 'ESCAC',
+      );
+      final items = await db.watchRentalItems(projectId, uid).first;
+      final manual = items.singleWhere((i) => i.name == 'Gaffer negro');
+      expect(manual.quantity, 3);
+      expect(manual.deletedAt, isNull);
+      await db.softDeleteRentalItem(manual, 'X');
+      expect(
+        (await db.watchRentalItems(projectId, uid).first).map((i) => i.name),
+        isNot(contains('Gaffer negro')),
+      );
+    },
+  );
 
   test('el mismo PDF en dos aparatos da las mismas filas', () {
     final uid = rentalReservationUid('S100');
@@ -180,13 +221,15 @@ void main() {
           {...(m as Map<String, dynamic>), 'notes': 'de la nube'},
       ],
     };
-    final out = BundleMerge.merge(
-      baseLocal: base,
-      baseCloud: base,
-      local: local,
-      cloud: cloud,
-      newer: MergeSide.cloud,
-    ).merged['rentalReservations'] as List;
+    final out =
+        BundleMerge.merge(
+              baseLocal: base,
+              baseCloud: base,
+              local: local,
+              cloud: cloud,
+              newer: MergeSide.cloud,
+            ).merged['rentalReservations']
+            as List;
     expect(out.single['pickedUpAt'], 'A');
     expect(out.single['notes'], 'de la nube');
   });

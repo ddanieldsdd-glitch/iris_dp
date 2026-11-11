@@ -76,6 +76,8 @@ class OnSetMark {
       all[_key] = {
         'status': status.name,
         if (note.trim().isNotEmpty) 'note': note.trim(),
+        // Cuándo se apuntó: si dos aparatos marcan distinto, gana la última.
+        'at': DateTime.now().toUtc().toIso8601String(),
       };
     }
     return jsonEncode(all);
@@ -326,11 +328,15 @@ class OnSetList extends StatelessWidget {
       for (final b in blocks) b.id,
     ], (id) => shots[byId[id]!.shotId]!.sceneId);
     final hiddenCount = blocks.where((b) => !_isVisible(b)).length;
+    final sortedStrips = [...strips]
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     final gutter = AppLayout.gutter(context);
     final columns = columnsFor(MediaQuery.sizeOf(context).width - 2 * gutter);
-    var order = 0;
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Dentro: el builder puede repetirse al recolocar.
+        var order = 0;
+        final pending = [...sortedStrips];
         final cardWidth =
             (constraints.maxWidth -
                 2 * gutter -
@@ -374,17 +380,6 @@ class OnSetList extends StatelessWidget {
                     : done / (blocks.length - dropped),
               ),
             ),
-            if (strips.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.sm),
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final block in strips) _StripChip(block: block),
-                  ],
-                ),
-              ),
             if (hiddenCount > 0)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -406,7 +401,12 @@ class OnSetList extends StatelessWidget {
                   ],
                 ),
               ),
-            for (final tract in tracts)
+            // Cada franja en su sitio del orden: antes del tramo que la sigue.
+            for (final tract in tracts) ...[
+              ..._strips(
+                pending,
+                before: byId[tract.blockIds.first]!.sortOrder,
+              ),
               ..._tract(
                 context,
                 tract: tract,
@@ -414,10 +414,32 @@ class OnSetList extends StatelessWidget {
                 nextOrder: () => ++order,
                 cardWidth: cardWidth,
               ),
+            ],
+            ..._strips(pending),
           ],
         );
       },
     );
+  }
+
+  /// Saca de [pending] las franjas anteriores a [before] (todas si es nulo).
+  List<Widget> _strips(List<ShootDocumentBlock> pending, {int? before}) {
+    final now = [
+      for (final b in pending)
+        if (before == null || b.sortOrder < before) b,
+    ];
+    if (now.isEmpty) return const [];
+    pending.removeWhere(now.contains);
+    return [
+      Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.md),
+        child: Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [for (final block in now) _StripChip(block: block)],
+        ),
+      ),
+    ];
   }
 
   List<Widget> _tract(
@@ -443,6 +465,7 @@ class OnSetList extends StatelessWidget {
             shot: shot,
             scene: scenes[tract.sceneId],
             mark: OnSetMark.of(block),
+            time: ShotTime.of(block),
             onMark: (mark) => onMark(block, mark),
             onHide: onHideShot == null ? null : () => onHideShot!(shot),
           ),
@@ -514,6 +537,9 @@ class OnSetShotCard extends StatelessWidget {
   final Shot shot;
   final Scene? scene;
   final OnSetMark mark;
+
+  /// Hora y apunte del plan de rodaje.
+  final ShotTime time;
   final ValueChanged<OnSetMark>? onMark;
 
   /// Lo quita de la vista de este aparato.
@@ -525,6 +551,7 @@ class OnSetShotCard extends StatelessWidget {
     required this.shot,
     required this.scene,
     this.mark = const OnSetMark(),
+    this.time = const ShotTime(),
     this.onMark,
     this.onHide,
   });
@@ -585,6 +612,10 @@ class OnSetShotCard extends StatelessWidget {
                         if (optics.isNotEmpty) ...[
                           const SizedBox(height: 2),
                           Text(optics, style: AppTypography.mono(palette)),
+                        ],
+                        if (!time.isEmpty) ...[
+                          const SizedBox(height: 2),
+                          ShotTimeText(time: time),
                         ],
                       ],
                     ),

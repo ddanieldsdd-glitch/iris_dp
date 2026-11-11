@@ -322,17 +322,19 @@ abstract final class BundleMerge {
       if (blRec == null || bcRec == null) {
         // Añadido en un lado (o, raro, en los dos con el mismo uid).
         if (lRec != null && cRec != null) {
-          out.add(_mergeFields(
-            collection,
-            uid,
-            _label(collection, lRec),
-            const {},
-            const {},
-            lRec,
-            cRec,
-            newer,
-            discards,
-          ));
+          out.add(
+            _mergeFields(
+              collection,
+              uid,
+              _label(collection, lRec),
+              const {},
+              const {},
+              lRec,
+              cRec,
+              newer,
+              discards,
+            ),
+          );
         } else {
           out.add(lRec ?? cRec!);
         }
@@ -346,37 +348,43 @@ abstract final class BundleMerge {
         if (_same(kept, keptSide == MergeSide.local ? blRec : bcRec)) continue;
         if (newer == keptSide) {
           out.add(kept);
-          discards.add(MergeDiscard(
-            collection: collection,
-            uid: uid,
-            label: _label(collection, kept),
-            kept: kept,
-            discarded: null,
-            discardedSide: _other(keptSide),
-          ));
+          discards.add(
+            MergeDiscard(
+              collection: collection,
+              uid: uid,
+              label: _label(collection, kept),
+              kept: kept,
+              discarded: null,
+              discardedSide: _other(keptSide),
+            ),
+          );
         } else {
-          discards.add(MergeDiscard(
-            collection: collection,
-            uid: uid,
-            label: _label(collection, kept),
-            kept: null,
-            discarded: kept,
-            discardedSide: keptSide,
-          ));
+          discards.add(
+            MergeDiscard(
+              collection: collection,
+              uid: uid,
+              label: _label(collection, kept),
+              kept: null,
+              discarded: kept,
+              discardedSide: keptSide,
+            ),
+          );
         }
         continue;
       }
-      out.add(_mergeFields(
-        collection,
-        uid,
-        _label(collection, lRec),
-        blRec,
-        bcRec,
-        lRec,
-        cRec,
-        newer,
-        discards,
-      ));
+      out.add(
+        _mergeFields(
+          collection,
+          uid,
+          _label(collection, lRec),
+          blRec,
+          bcRec,
+          lRec,
+          cRec,
+          newer,
+          discards,
+        ),
+      );
     }
     return out;
   }
@@ -428,15 +436,17 @@ abstract final class BundleMerge {
               : MergeSide.cloud;
         } else {
           from = newer;
-          discards.add(MergeDiscard(
-            collection: collection,
-            uid: uid,
-            label: label,
-            field: k,
-            kept: newer == MergeSide.local ? vl : vc,
-            discarded: newer == MergeSide.local ? vc : vl,
-            discardedSide: _other(newer),
-          ));
+          discards.add(
+            MergeDiscard(
+              collection: collection,
+              uid: uid,
+              label: label,
+              field: k,
+              kept: newer == MergeSide.local ? vl : vc,
+              discarded: newer == MergeSide.local ? vc : vl,
+              discardedSide: _other(newer),
+            ),
+          );
         }
       }
       final src = from == MergeSide.local ? l : c;
@@ -461,14 +471,120 @@ abstract final class BundleMerge {
     final changedThere = _canon(_comparable(c)) != _canon(_comparable(bc));
     if (!changedThere) return l;
     if (!changedHere) return c;
-    discards.add(MergeDiscard(
-      collection: name,
-      label: name,
-      kept: newer == MergeSide.local ? l : c,
-      discarded: newer == MergeSide.local ? c : l,
-      discardedSide: _other(newer),
-    ));
-    return newer == MergeSide.local ? l : c;
+    discards.add(
+      MergeDiscard(
+        collection: name,
+        label: name,
+        kept: newer == MergeSide.local ? l : c,
+        discarded: newer == MergeSide.local ? c : l,
+        discardedSide: _other(newer),
+      ),
+    );
+    final kept = newer == MergeSide.local ? l : c;
+    if (name == shootBlockName) {
+      // Las marcas de En set de un lado no se pierden porque el otro tocara
+      // el plan: se llevan a la versión que gana.
+      return newer == MergeSide.local
+          ? keepOnSetMarks(winner: l, winnerBase: bl, loser: c, loserBase: bc)
+          : keepOnSetMarks(winner: c, winnerBase: bc, loser: l, loserBase: bl);
+    }
+    return kept;
+  }
+
+  static const shootBlockName = 'documentos de rodaje';
+
+  /// Clave de un bloque de jornada que no depende de los ids de cada equipo:
+  /// jornada (nombre y fecha) y plano, o escena y tipo.
+  static Map<String, Map<String, dynamic>> _shootBlocksByKey(
+    Map<String, dynamic> blob, {
+    bool byNameOnly = false,
+  }) {
+    final docs = <String, String>{};
+    for (final d in _records(blob['shootDocuments'])) {
+      final key = d['documentKey'];
+      if (key is! String) continue;
+      final name = '${d['name'] ?? ''}'.trim();
+      docs[key] = byNameOnly ? name : '$name|${d['shootDate'] ?? ''}';
+    }
+    final out = <String, Map<String, dynamic>>{};
+    final seen = <String, int>{};
+    for (final b in _records(blob['shootDocumentBlocks'])) {
+      final doc = docs[b['documentKey']];
+      if (doc == null) continue;
+      final shot = b['shotKey'];
+      final base = shot != null
+          ? '$doc|shot|$shot'
+          : '$doc|${b['blockType']}|${b['sceneKey']}|${b['customLabel'] ?? ''}';
+      // El mismo plano dos veces en una jornada: se distinguen por orden.
+      final n = seen[base] = (seen[base] ?? 0) + 1;
+      out['$base#$n'] = b;
+    }
+    return out;
+  }
+
+  static Map<String, dynamic>? _markOf(Map<String, dynamic>? block) {
+    if (block == null) return null;
+    final raw = block['contentOverridesJson'];
+    if (raw is! String || raw.isEmpty) return null;
+    try {
+      final m = jsonDecode(raw);
+      final mark = m is Map ? m['onSet'] : null;
+      return mark is Map ? Map<String, dynamic>.from(mark) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void _setMark(Map<String, dynamic> block, Map<String, dynamic>? mark) {
+    Map<String, dynamic> all = {};
+    final raw = block['contentOverridesJson'];
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        final m = jsonDecode(raw);
+        if (m is Map) all = Map<String, dynamic>.from(m);
+      } catch (_) {}
+    }
+    if (mark == null) {
+      all.remove('onSet');
+    } else {
+      all['onSet'] = mark;
+    }
+    block['contentOverridesJson'] = all.isEmpty ? null : jsonEncode(all);
+  }
+
+  /// [winner] con las marcas de En set que [loser] cambió desde su base. Si
+  /// los dos cambiaron la misma marca, gana la apuntada más tarde.
+  static Map<String, dynamic> keepOnSetMarks({
+    required Map<String, dynamic> winner,
+    required Map<String, dynamic> winnerBase,
+    required Map<String, dynamic> loser,
+    required Map<String, dynamic> loserBase,
+  }) {
+    final out = _copy(winner) as Map<String, dynamic>;
+    for (final byName in [false, true]) {
+      final w = _shootBlocksByKey(out, byNameOnly: byName);
+      final wb = _shootBlocksByKey(winnerBase, byNameOnly: byName);
+      final x = _shootBlocksByKey(loser, byNameOnly: byName);
+      final xb = _shootBlocksByKey(loserBase, byNameOnly: byName);
+      for (final e in x.entries) {
+        final target = w[e.key];
+        if (target == null) continue;
+        final mine = _markOf(e.value);
+        final mineBase = _markOf(xb[e.key]);
+        if (_eq(mine, mineBase)) continue;
+        final theirs = _markOf(target);
+        final theirsBase = _markOf(wb[e.key]);
+        if (_eq(mine, theirs)) continue;
+        final theirsChanged = !_eq(theirs, theirsBase);
+        if (theirsChanged) {
+          final a = '${mine?['at'] ?? ''}';
+          final b = '${theirs?['at'] ?? ''}';
+          if (a.compareTo(b) <= 0) continue;
+        }
+        _setMark(target, mine);
+      }
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------------
@@ -522,10 +638,9 @@ abstract final class BundleMerge {
     List<Map<String, dynamic>> bases,
     List<MergeDiscard> discards,
   ) {
-    String? linkedUid(Object? v) =>
-        v is String && v.startsWith(_linkPrefix)
-            ? v.substring(_linkPrefix.length)
-            : null;
+    String? linkedUid(Object? v) => v is String && v.startsWith(_linkPrefix)
+        ? v.substring(_linkPrefix.length)
+        : null;
 
     // Lo que se queda sin padre (borrado en el otro lado) se va con él; en
     // cascada: un plano que se va se lleva sus referencias.
@@ -559,12 +674,14 @@ abstract final class BundleMerge {
             (d) => d.collection == e.key && d.uid == r['uid'],
           );
           if (!untouched) {
-            discards.add(MergeDiscard(
-              collection: e.key,
-              uid: r['uid'] as String?,
-              label: _label(e.key, rec),
-              discarded: r,
-            ));
+            discards.add(
+              MergeDiscard(
+                collection: e.key,
+                uid: r['uid'] as String?,
+                label: _label(e.key, rec),
+                discarded: r,
+              ),
+            );
           }
           return true;
         });
@@ -652,8 +769,7 @@ abstract final class BundleMerge {
     String key,
   ) {
     final list = side[key];
-    if ((list == null || (list is List && list.isEmpty)) &&
-        base[key] != null) {
+    if ((list == null || (list is List && list.isEmpty)) && base[key] != null) {
       side[key] = _copy(base[key]);
     }
   }
