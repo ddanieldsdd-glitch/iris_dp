@@ -545,6 +545,7 @@
     }
     return clearView ? m.solid : m.seen;
   }
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x3c4249 });
   const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fc7d6, roughness: 0.1, metalness: 0.1, side: THREE.DoubleSide, transparent: true, opacity: 0.25, depthWrite: false });
 
   // Un tramo de pared con grosor (CA.1): las dos caras, el canto de arriba,
@@ -733,7 +734,15 @@
         }
       }
     }
-    L.walls.add(meshFrom(pos, wallMaterial(w), w.id));
+    const wall = meshFrom(pos, wallMaterial(w), w.id);
+    L.walls.add(wall);
+    // En «Maqueta», las aristas marcadas: esquinas y huecos se leen aunque
+    // dos caras queden del mismo tono.
+    if (clearView) {
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(wall.geometry, 30), edgeMat);
+      edges.userData.edges = true;
+      L.walls.add(edges);
+    }
     for (const o of holes) addLeaves(o, z0, w.tops[0]);
     if (glass.length) L.glass.add(meshFrom(glass, glassMat, null));
   }
@@ -1110,12 +1119,16 @@
         root.add(new THREE.AmbientLight(0xffffff, 0.2 * k));
       }
     } else if (clearView) {
-      // Luz de trabajo pareja: todo se ve, nada deslumbra.
-      root.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, power(1.0)));
-      root.add(new THREE.AmbientLight(0xffffff, power(0.45)));
-      const work = new THREE.DirectionalLight(0xffffff, power(0.35));
+      // Luz de maqueta: todo se ve y nada se quema. Lo que mira arriba recibe
+      // en total algo menos de 1 (un blanco no llega a saturar) y cada cara
+      // de una pared recibe distinto, para que se lean los volúmenes.
+      root.add(new THREE.HemisphereLight(0xffffff, 0x55524c, power(0.42)));
+      root.add(new THREE.AmbientLight(0xffffff, power(0.1)));
+      const work = new THREE.DirectionalLight(0xffffff, power(0.42));
       work.position.set(4, 10, 6);
-      root.add(work);
+      const fill = new THREE.DirectionalLight(0xffffff, power(0.14));
+      fill.position.set(-6, 4, -3);
+      root.add(work, fill);
     } else {
       root.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3328, power(sc.sun ? 0.6 : 0.38)));
       root.add(new THREE.AmbientLight(0xffffff, power(0.12)));
