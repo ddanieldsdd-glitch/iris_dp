@@ -297,17 +297,26 @@ class PlaceResult {
   final double latitude;
   final double longitude;
 
+  /// Calle y número, ciudad: lo que hace falta para llegar. Solo en los
+  /// resultados de direcciones y negocios.
+  final String? address;
+
   const PlaceResult({
     required this.name,
     required this.latitude,
     required this.longitude,
     this.region,
     this.country,
+    this.address,
   });
 
-  String get label => [
-    name,
-    if (region != null && region!.isNotEmpty && region != name) region,
-    if (country != null && country!.isNotEmpty) country,
-  ].join(', ');
+  /// Lo que se guarda en la localización: «Kebab Khaled · Carrer de …,
+  /// Barcelona» con dirección, o «Barcelona, Cataluña, España» sin ella.
+  String get label => address != null && address!.isNotEmpty
+      ? (address == name ? name : '$name · $address')
+      : [
+          name,
+          if (region != null && region!.isNotEmpty && region != name) region,
+          if (country != null && country!.isNotEmpty) country,
+        ].join(', ');
 }

@@ -158,6 +158,29 @@ class MediaStorage {
     return destPath;
   }
 
+  /// Dónde va el mapa de una localización en ese punto. Se rehace en cada
+  /// equipo (no se sincroniza) y cambia de nombre si cambia el punto. Nulo
+  /// si no hay almacenamiento.
+  static Future<String?> siteMapPath({
+    required int projectId,
+    required int siteId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final dir = await _documentsRoot();
+    if (dir == null) return null;
+    final key =
+        '${latitude.toStringAsFixed(5)}_${longitude.toStringAsFixed(5)}'
+            .replaceAll('-', 'm')
+            .replaceAll('.', 'p');
+    return p.join(
+      _projectPath(dir, projectId),
+      'sites',
+      '$siteId',
+      'map_$key.png',
+    );
+  }
+
   static Future<String> copySiteImage({
     required int projectId,
     required int siteId,
