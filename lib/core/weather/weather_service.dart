@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../places/place_search.dart';
 import 'weather_models.dart';
 
 /// De dónde sale la previsión y la búsqueda de lugares. Detrás de una
@@ -71,8 +72,31 @@ class OpenMeteoWeather implements WeatherProvider {
     );
   }
 
+  /// Direcciones y negocios de OpenStreetMap primero y, detrás, las
+  /// ciudades de Open-Meteo. Si uno falla, sale lo del otro.
   @override
   Future<List<PlaceResult>> searchPlaces(String query) async {
+    final results = await Future.wait([
+      NominatimPlaces(
+        client: _client,
+      ).search(query).catchError((Object _) => const <PlaceResult>[]),
+      _searchCities(query).catchError((Object _) => const <PlaceResult>[]),
+    ]);
+    final out = <PlaceResult>[];
+    for (final place in [...results[0], ...results[1]]) {
+      // Un mismo sitio en los dos, a menos de unos 300 m, sale una vez.
+      final repeated = out.any(
+        (p) =>
+            p.name == place.name &&
+            (p.latitude - place.latitude).abs() < 0.003 &&
+            (p.longitude - place.longitude).abs() < 0.003,
+      );
+      if (!repeated) out.add(place);
+    }
+    return out;
+  }
+
+  Future<List<PlaceResult>> _searchCities(String query) async {
     final q = query.trim();
     if (q.length < 2) return const [];
     final uri = Uri.https('geocoding-api.open-meteo.com', '/v1/search', {

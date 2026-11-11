@@ -1,9 +1,14 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/places/place_search.dart';
+import '../../core/places/static_map.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -104,6 +109,36 @@ Future<void> pickSitePlace(
     longitude: place.longitude,
     placeLabel: place.label,
   );
+  // El mapa se prepara ya, con red, para que los PDF lo tengan sin ella.
+  unawaited(
+    ensureSiteMap(
+      projectId: site.projectId,
+      siteId: site.id,
+      latitude: place.latitude,
+      longitude: place.longitude,
+    ).catchError((Object _) => null),
+  );
+}
+
+/// Lo que se enseña de dónde está: el nombre y, debajo, la dirección o las
+/// coordenadas, sin repetir las coordenadas dos veces.
+({String title, String detail}) sitePlaceLines(LocationSite site) {
+  final lat = site.latitude;
+  final lon = site.longitude;
+  if (lat == null || lon == null) {
+    return (title: 'Sin ubicar en el mapa', detail: '');
+  }
+  final coords = formatCoordinates(lat, lon);
+  final label = site.placeLabel?.trim() ?? '';
+  // «Punto 41.37815, 2.17323», de unas coordenadas pegadas.
+  if (label.isEmpty || label.startsWith('Punto ')) {
+    return (title: 'Punto exacto', detail: coords);
+  }
+  final at = label.indexOf(' · ');
+  if (at > 0) {
+    return (title: label.substring(0, at), detail: label.substring(at + 3));
+  }
+  return (title: label, detail: coords);
 }
 
 /// El enlace de Google Maps de unas coordenadas. Es el único de la app, para
@@ -192,16 +227,14 @@ class _SitePlaceCardState extends ConsumerState<SitePlaceCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          located
-                              ? (site.placeLabel ?? 'Ubicación')
-                              : 'Sin ubicar en el mapa',
+                          sitePlaceLines(site).title,
                           style: AppTypography.bodyLarge(palette),
                         ),
                         Text(
                           located
-                              ? formatCoordinates(lat, lon)
-                              : 'Sirve para el sol y la previsión de las '
-                                    'jornadas de rodaje.',
+                              ? sitePlaceLines(site).detail
+                              : 'Sirve para el sol, la previsión y el mapa '
+                                    'de las jornadas de rodaje.',
                           style: AppTypography.caption(palette),
                         ),
                       ],
@@ -256,6 +289,10 @@ class _SitePlaceCardState extends ConsumerState<SitePlaceCard> {
               );
             },
           ),
+          if (located) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _SiteMap(site: site, latitude: lat, longitude: lon),
+          ],
           if (located && widget.full) ...[
             const SizedBox(height: AppSpacing.sm),
             _SunOfDay(
@@ -266,6 +303,75 @@ class _SitePlaceCardState extends ConsumerState<SitePlaceCard> {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// El mapa de la localización, que se prepara la primera vez y se guarda.
+/// Tocarlo abre Maps. Sin red no se ve y no pasa nada.
+class _SiteMap extends StatefulWidget {
+  final LocationSite site;
+  final double latitude;
+  final double longitude;
+
+  const _SiteMap({
+    required this.site,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  @override
+  State<_SiteMap> createState() => _SiteMapState();
+}
+
+class _SiteMapState extends State<_SiteMap> {
+  Future<String?>? _map;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_SiteMap old) {
+    super.didUpdateWidget(old);
+    if (old.latitude != widget.latitude || old.longitude != widget.longitude) {
+      _load();
+    }
+  }
+
+  void _load() {
+    _map = ensureSiteMap(
+      projectId: widget.site.projectId,
+      siteId: widget.site.id,
+      latitude: widget.latitude,
+      longitude: widget.longitude,
+    ).catchError((Object _) => null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: _map,
+      builder: (context, snap) {
+        final path = snap.data;
+        if (path == null) return const SizedBox.shrink();
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: InkWell(
+            onTap: () => openSiteInMaps(widget.latitude, widget.longitude),
+            child: AspectRatio(
+              aspectRatio: StaticMap.width / StaticMap.height,
+              child: Image.file(
+                File(path),
+                fit: BoxFit.cover,
+                cacheWidth: StaticMap.width,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -363,12 +469,46 @@ class _PlaceSearchDialogState extends ConsumerState<PlaceSearchDialog> {
 
   Future<void> _search() async {
     final text = _query.text.trim();
-    final point = parseCoordinates(text);
+    final point = parseCoordinates(text) ?? coordinatesFromMapsLink(text);
     if (point != null) {
       Navigator.pop(context, _pointResult(point.latitude, point.longitude));
       return;
     }
-    if (text.length < 2 || _searching) return;
+    if (_searching) return;
+    if (isShortMapsLink(text)) {
+      // «maps.app.goo.gl/…»: hay que abrirlo para ver adónde lleva.
+      setState(() {
+        _searching = true;
+        _notice = null;
+      });
+      try {
+        final found = await resolveShortMapsLink(text);
+        if (!mounted) return;
+        if (found != null) {
+          Navigator.pop(
+            context,
+            _pointResult(found.latitude, found.longitude),
+          );
+          return;
+        }
+        setState(
+          () => _notice =
+              'Ese enlace no lleva el punto. En Google Maps, toca el sitio y '
+              'copia sus coordenadas.',
+        );
+      } catch (e) {
+        if (mounted) {
+          setState(
+            () => _notice =
+                'No se pudo abrir el enlace. ${userFriendlyError(e)}',
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _searching = false);
+      }
+      return;
+    }
+    if (text.length < 2) return;
     setState(() {
       _searching = true;
       _notice = null;
@@ -381,8 +521,9 @@ class _PlaceSearchDialogState extends ConsumerState<PlaceSearchDialog> {
       setState(() {
         _results = results;
         _notice = results.isEmpty
-            ? 'No se ha encontrado ese lugar. Prueba con la ciudad o pega '
-                  'las coordenadas.'
+            ? 'No se ha encontrado. Prueba añadiendo la ciudad («Kebab '
+                  'Khaled Barcelona») o la calle, o pega el enlace de Google '
+                  'Maps.'
             : null;
       });
     } catch (e) {
@@ -407,7 +548,8 @@ class _PlaceSearchDialogState extends ConsumerState<PlaceSearchDialog> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final point = parseCoordinates(_query.text);
+    final point =
+        parseCoordinates(_query.text) ?? coordinatesFromMapsLink(_query.text);
     return AlertDialog(
       backgroundColor: palette.surfaceElevated,
       title: Text(
@@ -421,8 +563,9 @@ class _PlaceSearchDialogState extends ConsumerState<PlaceSearchDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Escribe la ciudad o el pueblo, o pega las coordenadas del '
-              'punto exacto (en Google Maps: botón derecho sobre el sitio).',
+              'Escribe el nombre del sitio, la dirección o la ciudad. También '
+              'puedes pegar el enlace de Google Maps o las coordenadas del '
+              'punto exacto (botón derecho sobre el sitio).',
               style: AppTypography.caption(palette),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -432,7 +575,8 @@ class _PlaceSearchDialogState extends ConsumerState<PlaceSearchDialog> {
               style: AppTypography.bodyLarge(palette),
               decoration: InputDecoration(
                 isDense: true,
-                hintText: 'Ej. Barcelona, o 41.3851, 2.1734',
+                hintText: 'Ej. Kebab Khaled Barcelona, Carrer de Sant Pau 12, '
+                    'o un enlace de Maps',
                 suffixIcon: _searching
                     ? const Padding(
                         padding: EdgeInsets.all(12),
@@ -476,9 +620,19 @@ class _PlaceSearchDialogState extends ConsumerState<PlaceSearchDialog> {
                       ListTile(
                         dense: true,
                         leading: const Icon(Icons.place_outlined, size: 18),
-                        title: Text(place.label),
+                        title: Text(
+                          place.address == null ? place.label : place.name,
+                        ),
                         subtitle: Text(
-                          formatCoordinates(place.latitude, place.longitude),
+                          place.address == null
+                              ? formatCoordinates(
+                                  place.latitude,
+                                  place.longitude,
+                                )
+                              : [
+                                  place.address!,
+                                  if (place.country != null) place.country!,
+                                ].join(' · '),
                         ),
                         onTap: () => Navigator.pop(context, place),
                       ),
