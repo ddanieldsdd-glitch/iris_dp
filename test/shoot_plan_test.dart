@@ -185,4 +185,38 @@ void main() {
     await service.reorderDays(projectId, [d2, d1]);
     expect((await plan()).days.map((d) => d.id), [d2, d1]);
   });
+
+  test('duplicar una jornada: detrás, sin marcas; borrar se deshace', () async {
+    final d1 = await service.addDay(projectId);
+    final d2 = await service.addDay(projectId);
+    await service.place(
+      projectId: projectId,
+      dayId: d1,
+      items: [
+        for (final s in shotsA) (sceneId: sceneA.id, shotId: s.id),
+      ],
+    );
+    final first = (await db.getBlocksForShootDocument(d1)).first;
+    await db.updateShootDocumentBlock(
+      first.copyWith(
+        contentOverridesJson: const Value(
+          '{"onSet":{"status":"done"},"shotTime":{"from":"10:00"}}',
+        ),
+      ),
+    );
+    final copy = await service.duplicateDay(projectId, d1);
+    expect((await plan()).days.map((d) => d.id), [d1, copy, d2]);
+    final copied = await db.getBlocksForShootDocument(copy);
+    expect(copied.map((b) => b.shotId), shotsA.map((s) => s.id));
+    expect(copied.first.contentOverridesJson, '{"shotTime":{"from":"10:00"}}');
+    await history.undo();
+    expect((await plan()).days.map((d) => d.id), [d1, d2]);
+
+    await service.deleteDay(projectId, d1);
+    expect((await plan()).days.map((d) => d.id), [d2]);
+    await history.undo();
+    final back = await plan();
+    expect(back.days.map((d) => d.id), [d1, d2]);
+    expect(shotsOfDay(back, d1), shotsA.map((s) => s.id));
+  });
 }

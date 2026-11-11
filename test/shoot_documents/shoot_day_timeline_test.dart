@@ -192,9 +192,9 @@ void main() {
     final siteId = await db.insertSite(
       LocationSitesCompanion.insert(projectId: projectId, name: 'BOSQUE'),
     );
-    final site = (await db.watchSitesForProject(
-      projectId,
-    ).first).firstWhere((s) => s.id == siteId);
+    final site = (await db.watchSitesForProject(projectId).first).firstWhere(
+      (s) => s.id == siteId,
+    );
     await service().addStrip(
       dayId,
       ShootStripDraft(

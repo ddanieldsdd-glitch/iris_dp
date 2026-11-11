@@ -480,7 +480,111 @@ abstract final class BundleMerge {
         discardedSide: _other(newer),
       ),
     );
-    return newer == MergeSide.local ? l : c;
+    final kept = newer == MergeSide.local ? l : c;
+    if (name == shootBlockName) {
+      // Las marcas de En set de un lado no se pierden porque el otro tocara
+      // el plan: se llevan a la versión que gana.
+      return newer == MergeSide.local
+          ? keepOnSetMarks(winner: l, winnerBase: bl, loser: c, loserBase: bc)
+          : keepOnSetMarks(winner: c, winnerBase: bc, loser: l, loserBase: bl);
+    }
+    return kept;
+  }
+
+  static const shootBlockName = 'documentos de rodaje';
+
+  /// Clave de un bloque de jornada que no depende de los ids de cada equipo:
+  /// jornada (nombre y fecha) y plano, o escena y tipo.
+  static Map<String, Map<String, dynamic>> _shootBlocksByKey(
+    Map<String, dynamic> blob, {
+    bool byNameOnly = false,
+  }) {
+    final docs = <String, String>{};
+    for (final d in _records(blob['shootDocuments'])) {
+      final key = d['documentKey'];
+      if (key is! String) continue;
+      final name = '${d['name'] ?? ''}'.trim();
+      docs[key] = byNameOnly ? name : '$name|${d['shootDate'] ?? ''}';
+    }
+    final out = <String, Map<String, dynamic>>{};
+    final seen = <String, int>{};
+    for (final b in _records(blob['shootDocumentBlocks'])) {
+      final doc = docs[b['documentKey']];
+      if (doc == null) continue;
+      final shot = b['shotKey'];
+      final base = shot != null
+          ? '$doc|shot|$shot'
+          : '$doc|${b['blockType']}|${b['sceneKey']}|${b['customLabel'] ?? ''}';
+      // El mismo plano dos veces en una jornada: se distinguen por orden.
+      final n = seen[base] = (seen[base] ?? 0) + 1;
+      out['$base#$n'] = b;
+    }
+    return out;
+  }
+
+  static Map<String, dynamic>? _markOf(Map<String, dynamic>? block) {
+    if (block == null) return null;
+    final raw = block['contentOverridesJson'];
+    if (raw is! String || raw.isEmpty) return null;
+    try {
+      final m = jsonDecode(raw);
+      final mark = m is Map ? m['onSet'] : null;
+      return mark is Map ? Map<String, dynamic>.from(mark) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void _setMark(Map<String, dynamic> block, Map<String, dynamic>? mark) {
+    Map<String, dynamic> all = {};
+    final raw = block['contentOverridesJson'];
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        final m = jsonDecode(raw);
+        if (m is Map) all = Map<String, dynamic>.from(m);
+      } catch (_) {}
+    }
+    if (mark == null) {
+      all.remove('onSet');
+    } else {
+      all['onSet'] = mark;
+    }
+    block['contentOverridesJson'] = all.isEmpty ? null : jsonEncode(all);
+  }
+
+  /// [winner] con las marcas de En set que [loser] cambió desde su base. Si
+  /// los dos cambiaron la misma marca, gana la apuntada más tarde.
+  static Map<String, dynamic> keepOnSetMarks({
+    required Map<String, dynamic> winner,
+    required Map<String, dynamic> winnerBase,
+    required Map<String, dynamic> loser,
+    required Map<String, dynamic> loserBase,
+  }) {
+    final out = _copy(winner) as Map<String, dynamic>;
+    for (final byName in [false, true]) {
+      final w = _shootBlocksByKey(out, byNameOnly: byName);
+      final wb = _shootBlocksByKey(winnerBase, byNameOnly: byName);
+      final x = _shootBlocksByKey(loser, byNameOnly: byName);
+      final xb = _shootBlocksByKey(loserBase, byNameOnly: byName);
+      for (final e in x.entries) {
+        final target = w[e.key];
+        if (target == null) continue;
+        final mine = _markOf(e.value);
+        final mineBase = _markOf(xb[e.key]);
+        if (_eq(mine, mineBase)) continue;
+        final theirs = _markOf(target);
+        final theirsBase = _markOf(wb[e.key]);
+        if (_eq(mine, theirs)) continue;
+        final theirsChanged = !_eq(theirs, theirsBase);
+        if (theirsChanged) {
+          final a = '${mine?['at'] ?? ''}';
+          final b = '${theirs?['at'] ?? ''}';
+          if (a.compareTo(b) <= 0) continue;
+        }
+        _setMark(target, mine);
+      }
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------------

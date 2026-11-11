@@ -72,8 +72,90 @@ class AnnotationCanvasController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     compositor.dispose();
     super.dispose();
+  }
+
+  bool _disposed = false;
+
+  /// Funde los trazos antiguos de cada capa en una imagen ([AnnotationLayer.
+  /// baked]). Lo activa el folio de dibujo: así un dibujo largo no pesa más
+  /// cuanto más se dibuja, y rehacer una capa nunca pasa de unos pocos
+  /// trazos. Las anotaciones de la planta no lo usan (su PDF es vectorial).
+  bool bakeOldStrokes = false;
+
+  /// Con más trazos que esto en una capa se aplanan los antiguos…
+  static const bakeAbove = 60;
+
+  /// …y se dejan sueltos estos últimos: los que se pueden deshacer, mover
+  /// o borrar uno a uno.
+  static const keepEditable = 40;
+
+  bool _baking = false;
+
+  Future<void> _maybeBake() async {
+    if (!bakeOldStrokes || _baking || _disposed) return;
+    final size = lastSize;
+    if (size.isEmpty) return;
+    final doc = _document;
+    for (final layer in doc.effectiveLayers) {
+      final strokes = [
+        for (final stroke in doc.strokes)
+          if (doc.strokeLayerId(stroke) == layer.id) stroke,
+      ];
+      if (strokes.length <= bakeAbove) continue;
+      final old = strokes.sublist(0, strokes.length - keepEditable);
+      _baking = true;
+      String? png;
+      try {
+        png = await compositor.bake(doc, layer.id, old, size);
+      } catch (_) {
+        png = null;
+      } finally {
+        _baking = false;
+      }
+      if (png == null || _disposed) return;
+      // Puede haber otra capa con demasiados trazos.
+      if (_applyBake(layer.id, layer.baked, old, png)) unawaited(_maybeBake());
+      return;
+    }
+  }
+
+  /// Cambia [old] por la imagen [png] en la capa, si nada de eso ha cambiado
+  /// mientras se fundía. No es un paso de deshacer: se ve igual.
+  bool _applyBake(
+    String layerId,
+    String? previous,
+    List<AnnotationStroke> old,
+    String png,
+  ) {
+    var doc = _document;
+    AnnotationLayer? current;
+    for (final layer in doc.effectiveLayers) {
+      if (layer.id == layerId) current = layer;
+    }
+    if (current == null || current.baked != previous) return false;
+    final present = Set<AnnotationStroke>.identity()..addAll(doc.strokes);
+    if (!old.every(present.contains)) return false;
+    final gone = Set<AnnotationStroke>.identity()..addAll(old);
+    doc = doc.copyWith(
+      strokes: [
+        for (final stroke in doc.strokes)
+          if (!gone.contains(stroke)) stroke,
+      ],
+    );
+    if (doc.layers.isEmpty) doc = _pinLayers(doc);
+    doc = doc.copyWith(
+      layers: [
+        for (final layer in doc.layers)
+          layer.id == layerId ? layer.copyWith(baked: png) : layer,
+      ],
+    );
+    _document = doc;
+    _dropStaleSelection();
+    notifyListeners();
+    return true;
   }
 
   final List<AnnotationDocument> _undo = [];
@@ -476,6 +558,7 @@ class AnnotationCanvasController extends ChangeNotifier {
         blend: source.blend,
         alphaLock: source.alphaLock,
         clip: source.clip,
+        baked: source.baked,
       ),
     );
     var serial = 0;
@@ -531,6 +614,10 @@ class AnnotationCanvasController extends ChangeNotifier {
     if (index <= 0) return;
     final upper = current[index];
     final lower = current[index - 1];
+    if (upper.baked != null || lower.baked != null) {
+      unawaited(_mergeBaked(lower, upper));
+      return;
+    }
     final doc = _pinLayers(_document);
     _commit(
       doc.copyWith(
@@ -554,11 +641,50 @@ class AnnotationCanvasController extends ChangeNotifier {
     );
   }
 
+  /// Fusión con parte aplanada: las dos capas se juntan en una imagen.
+  Future<void> _mergeBaked(AnnotationLayer lower, AnnotationLayer upper) async {
+    final size = lastSize;
+    if (size.isEmpty) return;
+    final start = _document;
+    final doc = _pinLayers(start);
+    String? png;
+    try {
+      png = await compositor.mergeLayers(doc, lower, upper, size);
+    } catch (_) {
+      png = null;
+    }
+    // Si algo ha cambiado mientras se juntaban, no se toca nada.
+    if (png == null || _disposed || !identical(_document, start)) return;
+    _commit(
+      doc.copyWith(
+        layers: [
+          for (final layer in doc.layers)
+            if (layer.id == lower.id)
+              layer.copyWith(baked: png)
+            else if (layer.id != upper.id)
+              layer,
+        ],
+        strokes: [
+          for (final stroke in doc.strokes)
+            if (stroke.layerId != upper.id && stroke.layerId != lower.id)
+              stroke,
+        ],
+        stamps: [
+          for (final stamp in doc.stamps)
+            stamp.layerId == upper.id
+                ? stamp.copyWith(layerId: lower.id)
+                : stamp,
+        ],
+      ),
+    );
+  }
+
   /// Aplica las capas y el papel de un estilo. En un folio vacío las capas
   /// se sustituyen; si ya hay dibujo, las que faltan se añaden encima.
   void applyLayout(List<AnnotationLayer> styleLayers, AnnotationPaper paper) {
     final doc = _document;
-    final hasContent = doc.strokes.isNotEmpty || doc.stamps.isNotEmpty;
+    final hasContent =
+        doc.strokes.isNotEmpty || doc.stamps.isNotEmpty || doc.hasBaked;
     final List<AnnotationLayer> next;
     if (!hasContent) {
       next = styleLayers;
@@ -758,7 +884,10 @@ class AnnotationCanvasController extends ChangeNotifier {
     _selectedStampId = null;
     _commit(
       AnnotationDocument(
-        layers: _document.layers,
+        layers: [
+          for (final layer in _document.layers)
+            layer.copyWith(clearBaked: true),
+        ],
         paper: _document.paper,
         paperImage: _document.paperImage,
       ),
@@ -796,6 +925,7 @@ class AnnotationCanvasController extends ChangeNotifier {
     _document = next;
     _dropStaleSelection();
     notifyListeners();
+    unawaited(_maybeBake());
   }
 }
 
@@ -1482,7 +1612,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
         widget.controller.compositor.pixelRatio = math.min(
           (MediaQuery.maybeDevicePixelRatioOf(context) ?? 1) *
               widget.resolutionScale,
-          4096 / longest,
+          AnnotationCompositor.maxSide / longest,
         );
         final live = _livePoints.isEmpty
             ? null
@@ -1588,7 +1718,7 @@ class AnnotationPainter extends CustomPainter {
   final Rect? selectionRect;
   final List<Offset>? lasso;
 
-  const AnnotationPainter({
+  AnnotationPainter({
     required this.document,
     this.liveStroke,
     this.liveStamp,
@@ -1601,7 +1731,7 @@ class AnnotationPainter extends CustomPainter {
     this.liftOffset = Offset.zero,
     this.selectionRect,
     this.lasso,
-  });
+  }) : super(repaint: BakedLayerImages.loaded);
 
   @override
   void paint(Canvas canvas, Size size) {

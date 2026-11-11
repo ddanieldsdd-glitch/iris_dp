@@ -38,16 +38,33 @@ abstract final class BrushEngine {
   static bool isSmudge(AnnotationStroke stroke) =>
       BrushCatalog.byId(stroke.brushId)?.mode == BrushMode.smudge;
 
+  /// Zona (píxeles de documento) que lee y pinta un trazo de difumino:
+  /// basta con recortar la capa a esto para difuminar. `null` si no pinta.
+  static Rect? smudgeBounds(Size size, AnnotationStroke stroke) {
+    final spec = BrushCatalog.byId(stroke.brushId);
+    if (spec == null || stroke.points.length < 2) return null;
+    final pts = [
+      for (final p in stroke.points)
+        Offset(p.x * size.width, p.y * size.height),
+    ];
+    final diameter = math.max(2.0, stroke.width * unit(size) * spec.sizeScale);
+    return _bounds(pts, diameter * 2);
+  }
+
   /// Difumino: dentro de la huella del dedo se vuelve a pintar la capa
   /// [source] (en píxeles de imagen, [ratio] por píxel de documento)
   /// desenfocada y arrastrada desde donde venía el trazo.
+  ///
+  /// [source] puede ser solo un recorte de la capa: [sourceOrigin] es dónde
+  /// empieza ese recorte, en píxeles de documento.
   static void paintSmudge(
     Canvas canvas,
     Size size,
     AnnotationStroke stroke,
     ui.Image source,
-    double ratio,
-  ) {
+    double ratio, {
+    Offset sourceOrigin = Offset.zero,
+  }) {
     final spec = BrushCatalog.byId(stroke.brushId);
     if (spec == null || stroke.points.length < 2) return;
     final u = unit(size);
@@ -84,8 +101,8 @@ abstract final class BrushEngine {
       final from = dab.position - dir * (diameter * 0.35);
       rects.add(
         Rect.fromLTWH(
-          (from.dx - r) * ratio,
-          (from.dy - r) * ratio,
+          (from.dx - sourceOrigin.dx - r) * ratio,
+          (from.dy - sourceOrigin.dy - r) * ratio,
           2 * r * ratio,
           2 * r * ratio,
         ),

@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
 
@@ -19,6 +22,14 @@ class AnnotationCompositor {
   /// Píxeles de imagen por píxel de documento (la densidad de pantalla).
   double pixelRatio;
 
+  /// Lado largo máximo de la imagen de una capa. En iPad e iPhone se queda
+  /// más bajo: cada capa es una textura de la GPU, y a 4096 px un dibujo con
+  /// varias capas llegaba a pasar de 1 GB y cerraba la app.
+  static double get maxSide => switch (defaultTargetPlatform) {
+    TargetPlatform.iOS || TargetPlatform.android => 2560,
+    _ => 4096,
+  };
+
   final Map<String, _LayerRaster> _cache = {};
 
   /// Papel con el que se rasterizaron las capas: su grano cambia el trazo.
@@ -26,6 +37,10 @@ class AnnotationCompositor {
 
   /// Veces que se ha rasterizado una capa (para las pruebas de rendimiento).
   int rasterizations = 0;
+
+  /// Imágenes grandes creadas al rasterizar (capas, no recortes de
+  /// difumino), para las pruebas de memoria.
+  int fullImages = 0;
 
   static final Expando<AnnotationCompositor> _shared = Expando(
     'annotation-compositor',
@@ -43,26 +58,32 @@ class AnnotationCompositor {
     _cache.clear();
   }
 
-  /// Imagen de la capa [layerId] con sus trazos, o `null` si está vacía.
+  /// Imagen de la capa [layerId] con sus trazos, o `null` si está vacía
+  /// (o si su parte aplanada aún se está leyendo).
   ui.Image? layerImage(
     AnnotationDocument document,
     String layerId,
     Size size, {
     Set<String> exclude = const {},
   }) {
-    final strokes = [
-      for (final stroke in document.strokes)
-        if (document.strokeLayerId(stroke) == layerId &&
-            !exclude.contains(stroke.id))
-          stroke,
-    ];
+    final baked = _layer(document, layerId)?.baked;
+    ui.Image? base;
+    if (baked != null) {
+      base = BakedLayerImages.peek(baked);
+      // Se está decodificando: se pinta en cuanto llegue.
+      if (base == null) return _cache[layerId]?.image;
+    }
+    final strokes = _strokesOf(document, layerId, exclude: exclude);
     final cached = _cache[layerId];
-    if (strokes.isEmpty) {
+    if (strokes.isEmpty && base == null) {
       cached?.image?.dispose();
       _cache.remove(layerId);
       return null;
     }
-    if (cached != null && cached.size == size && cached.ratio == pixelRatio) {
+    if (cached != null &&
+        cached.size == size &&
+        cached.ratio == pixelRatio &&
+        cached.baked == baked) {
       if (_sameStrokes(cached.strokes, strokes)) return cached.image;
       if (_isPrefix(cached.strokes, strokes) && cached.image != null) {
         final image = _render(
@@ -71,19 +92,40 @@ class AnnotationCompositor {
           base: cached.image,
         );
         cached.image!.dispose();
-        _cache[layerId] = _LayerRaster(size, pixelRatio, strokes, image);
+        _cache[layerId] = _LayerRaster(size, pixelRatio, baked, strokes, image);
         return image;
       }
     }
     cached?.image?.dispose();
-    final image = _render(size, strokes);
-    _cache[layerId] = _LayerRaster(size, pixelRatio, strokes, image);
+    final image = _render(size, strokes, base: base);
+    _cache[layerId] = _LayerRaster(size, pixelRatio, baked, strokes, image);
     return image;
   }
 
-  /// Pinta [strokes] encima de [base] y devuelve la imagen nueva. El
-  /// difumino necesita leer lo pintado hasta él: ahí se cierra la imagen
-  /// parcial y se sigue sobre ella.
+  static AnnotationLayer? _layer(AnnotationDocument document, String id) {
+    for (final layer in document.effectiveLayers) {
+      if (layer.id == id) return layer;
+    }
+    return null;
+  }
+
+  static List<AnnotationStroke> _strokesOf(
+    AnnotationDocument document,
+    String layerId, {
+    Set<String> exclude = const {},
+  }) => [
+    for (final stroke in document.strokes)
+      if (document.strokeLayerId(stroke) == layerId &&
+          !exclude.contains(stroke.id))
+        stroke,
+  ];
+
+  /// Pinta [strokes] encima de [base] y devuelve la imagen nueva (siempre
+  /// una imagen nueva: [base] sigue siendo de quien la pasó).
+  ///
+  /// Todo se graba en una sola imagen del tamaño de la capa. El difumino
+  /// necesita leer lo pintado hasta él: de eso solo se saca el recorte que
+  /// toca su trazo, no la capa entera.
   ui.Image _render(
     Size size,
     List<AnnotationStroke> strokes, {
@@ -92,41 +134,59 @@ class AnnotationCompositor {
     rasterizations++;
     final w = (size.width * pixelRatio).ceil().clamp(1, 8192);
     final h = (size.height * pixelRatio).ceil().clamp(1, 8192);
-    var current = base;
-    var start = 0;
-    while (start < strokes.length) {
-      var end = start;
-      while (end < strokes.length && !BrushEngine.isSmudge(strokes[end])) {
-        end++;
+    final pictures = <ui.Picture>[];
+    final crops = <ui.Image>[];
+    var recorder = ui.PictureRecorder();
+    var canvas = Canvas(recorder);
+    if (base != null) _drawBase(canvas, base, w, h);
+    canvas.scale(pixelRatio);
+    try {
+      for (final stroke in strokes) {
+        if (!BrushEngine.isSmudge(stroke)) {
+          _paintStroke(canvas, size, stroke);
+          continue;
+        }
+        final area = BrushEngine.smudgeBounds(
+          size,
+          stroke,
+        )?.intersect(Offset.zero & size);
+        if (area == null || area.width <= 0 || area.height <= 0) continue;
+        final sofar = recorder.endRecording();
+        pictures.add(sofar);
+        final left = (area.left * pixelRatio).floor();
+        final top = (area.top * pixelRatio).floor();
+        final cw = ((area.right * pixelRatio).ceil() - left).clamp(1, w);
+        final ch = ((area.bottom * pixelRatio).ceil() - top).clamp(1, h);
+        final cropRecorder = ui.PictureRecorder();
+        Canvas(cropRecorder)
+          ..translate(-left.toDouble(), -top.toDouble())
+          ..drawPicture(sofar);
+        final cropPicture = cropRecorder.endRecording();
+        final crop = cropPicture.toImageSync(cw, ch);
+        cropPicture.dispose();
+        crops.add(crop);
+        recorder = ui.PictureRecorder();
+        canvas = Canvas(recorder)..drawPicture(sofar);
+        canvas.scale(pixelRatio);
+        BrushEngine.paintSmudge(
+          canvas,
+          size,
+          stroke,
+          crop,
+          pixelRatio,
+          sourceOrigin: Offset(left / pixelRatio, top / pixelRatio),
+        );
       }
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      if (current != null) _drawImage(canvas, current, size);
-      canvas.scale(pixelRatio);
-      for (var i = start; i < end; i++) {
-        _paintStroke(canvas, size, strokes[i]);
+      fullImages++;
+      return _finish(recorder, w, h);
+    } finally {
+      for (final picture in pictures) {
+        picture.dispose();
       }
-      // Un difumino justo después: lee la imagen hecha hasta aquí.
-      if (end < strokes.length) {
-        final snapshot = _finish(recorder, w, h);
-        final next = ui.PictureRecorder();
-        final c2 = Canvas(next);
-        _drawImage(c2, snapshot, size);
-        c2.scale(pixelRatio);
-        BrushEngine.paintSmudge(c2, size, strokes[end], snapshot, pixelRatio);
-        final smudged = _finish(next, w, h);
-        snapshot.dispose();
-        if (current != base) current?.dispose();
-        current = smudged;
-        start = end + 1;
-        continue;
+      for (final crop in crops) {
+        crop.dispose();
       }
-      final image = _finish(recorder, w, h);
-      if (current != base) current?.dispose();
-      current = image;
-      start = end;
     }
-    return current!;
   }
 
   static ui.Image _finish(ui.PictureRecorder recorder, int w, int h) {
@@ -136,10 +196,107 @@ class AnnotationCompositor {
     return image;
   }
 
+  /// Dibuja la imagen de base de una capa (su raster anterior o su parte
+  /// aplanada, que puede venir de otra resolución) llenando [w]×[h] píxeles
+  /// de imagen, sobre un lienzo aún sin escalar.
+  static void _drawBase(Canvas canvas, ui.Image image, int w, int h) {
+    if (image.width == w && image.height == h) {
+      canvas.drawImage(image, Offset.zero, Paint());
+      return;
+    }
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+  }
+
   /// Dibuja una imagen de capa (en píxeles de imagen) a tamaño de documento
   /// sobre un lienzo aún sin escalar.
   void _drawImage(Canvas canvas, ui.Image image, Size size) {
     canvas.drawImage(image, Offset.zero, Paint());
+  }
+
+  /// Funde en una imagen la parte aplanada de la capa [layerId] y [strokes]
+  /// (los más antiguos de esa capa), en PNG base64 para el documento. La
+  /// imagen se queda en [BakedLayerImages] para no tener que leerla.
+  /// `null` si la parte aplanada anterior no se pudo leer.
+  Future<String?> bake(
+    AnnotationDocument document,
+    String layerId,
+    List<AnnotationStroke> strokes,
+    Size size,
+  ) async {
+    final previous = _layer(document, layerId)?.baked;
+    ui.Image? base;
+    if (previous != null) {
+      base = await BakedLayerImages.load(previous);
+      if (base == null) return null;
+    }
+    final image = _withPaper(
+      document,
+      () => _render(size, strokes, base: base),
+    );
+    return BakedLayerImages.encode(image);
+  }
+
+  /// Junta dos capas en una imagen: [lower] entera y encima [upper] entera
+  /// con su opacidad y su modo. Para fusionar capas con parte aplanada.
+  Future<String?> mergeLayers(
+    AnnotationDocument document,
+    AnnotationLayer lower,
+    AnnotationLayer upper,
+    Size size,
+  ) async {
+    Future<ui.Image?> full(AnnotationLayer layer) async {
+      ui.Image? base;
+      if (layer.baked != null) {
+        base = await BakedLayerImages.load(layer.baked!);
+        if (base == null) return null;
+      }
+      final strokes = _strokesOf(document, layer.id);
+      return _withPaper(document, () => _render(size, strokes, base: base));
+    }
+
+    final below = await full(lower);
+    final above = await full(upper);
+    if (below == null || above == null) {
+      below?.dispose();
+      above?.dispose();
+      return null;
+    }
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final rect = Rect.fromLTWH(
+      0,
+      0,
+      below.width.toDouble(),
+      below.height.toDouble(),
+    );
+    canvas.drawImage(below, Offset.zero, Paint());
+    canvas.saveLayer(
+      rect,
+      Paint()
+        ..color = Color.fromRGBO(0, 0, 0, upper.opacity.clamp(0.0, 1.0))
+        ..blendMode = blendFor(upper.blend),
+    );
+    canvas.drawImage(above, Offset.zero, Paint());
+    canvas.restore();
+    final merged = _finish(recorder, below.width, below.height);
+    below.dispose();
+    above.dispose();
+    return BakedLayerImages.encode(merged);
+  }
+
+  static T _withPaper<T>(AnnotationDocument document, T Function() body) {
+    final previous = BrushEngine.paperGrain;
+    BrushEngine.paperGrain = PaperLibrary.paper(document.paperImage)?.grain;
+    try {
+      return body();
+    } finally {
+      BrushEngine.paperGrain = previous;
+    }
   }
 
   static void _paintStroke(Canvas canvas, Size size, AnnotationStroke stroke) {
@@ -361,10 +518,93 @@ class AnnotationCompositor {
 class _LayerRaster {
   final Size size;
   final double ratio;
+  final String? baked;
   final List<AnnotationStroke> strokes;
   final ui.Image? image;
 
-  const _LayerRaster(this.size, this.ratio, this.strokes, this.image);
+  const _LayerRaster(
+    this.size,
+    this.ratio,
+    this.baked,
+    this.strokes,
+    this.image,
+  );
+}
+
+/// Las partes aplanadas de las capas, leídas de su PNG una sola vez. Las
+/// comparten todos los compositores (lienzo, miniaturas, exportación).
+abstract final class BakedLayerImages {
+  /// Cuántas se guardan leídas a la vez (cada una es una textura grande).
+  static const _keep = 6;
+
+  static final Map<String, ui.Image> _images = {};
+  static final Map<String, Future<ui.Image?>> _pending = {};
+
+  /// Sube cada vez que termina de leerse una: quien pinta vuelve a pintar.
+  static final ValueNotifier<int> loaded = ValueNotifier(0);
+
+  /// La imagen si ya está leída; si no, empieza a leerla y da `null`.
+  static ui.Image? peek(String png) {
+    final image = _images.remove(png);
+    if (image != null) {
+      _images[png] = image;
+      return image;
+    }
+    load(png);
+    return null;
+  }
+
+  /// Lee (o da la ya leída) la imagen de [png]. `null` si está dañada.
+  static Future<ui.Image?> load(String png) {
+    final ready = _images[png];
+    if (ready != null) return Future.value(ready);
+    return _pending[png] ??= _decode(png);
+  }
+
+  /// Deja leídas todas las partes aplanadas de [document] (antes de pintarlo
+  /// fuera de pantalla: PNG, PDF).
+  static Future<void> ensure(AnnotationDocument document) async {
+    for (final layer in document.layers) {
+      final baked = layer.baked;
+      if (baked != null) await load(baked);
+    }
+  }
+
+  static Future<ui.Image?> _decode(String png) async {
+    try {
+      final codec = await ui.instantiateImageCodec(base64Decode(png));
+      final frame = await codec.getNextFrame();
+      codec.dispose();
+      _store(png, frame.image);
+      loaded.value++;
+      return frame.image;
+    } catch (_) {
+      return null;
+    } finally {
+      _pending.remove(png);
+    }
+  }
+
+  /// Pasa [image] a PNG base64 y la deja guardada como ya leída.
+  static Future<String?> encode(ui.Image image) async {
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (data == null) {
+      image.dispose();
+      return null;
+    }
+    final png = base64Encode(data.buffer.asUint8List());
+    _store(png, image);
+    return png;
+  }
+
+  static void _store(String png, ui.Image image) {
+    _images.remove(png)?.dispose();
+    _images[png] = image;
+    while (_images.length > _keep) {
+      final oldest = _images.keys.first;
+      _images.remove(oldest)!.dispose();
+    }
+  }
 }
 
 class _LayerBase {

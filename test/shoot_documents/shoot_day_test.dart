@@ -254,9 +254,7 @@ void main() {
     await settle();
     expect(find.text('1 · P seguimiento'), findsOneWidget);
     expect(find.text('1 · PP de ALI'), findsOneWidget);
-    final first = tester.getTopLeft(
-      find.text('1 · P seguimiento'),
-    );
+    final first = tester.getTopLeft(find.text('1 · P seguimiento'));
     final second = tester.getTopLeft(find.text('1 · PP de ALI'));
     expect(first.dy, lessThan(second.dy));
 
@@ -270,55 +268,56 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('la jornada ofrece ubicar y refleja el cambio de la localización', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1500, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+  testWidgets(
+    'la jornada ofrece ubicar y refleja el cambio de la localización',
+    (tester) async {
+      tester.view.physicalSize = const Size(1500, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
 
-    await tester.runAsync(() => seed(located: false));
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          databaseProvider.overrideWithValue(db),
-          weatherProviderProvider.overrideWithValue(_FakeWeather()),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.dark,
-          home: ShootDayScreen(projectId: projectId, documentId: dayId),
+      await tester.runAsync(() => seed(located: false));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(db),
+            weatherProviderProvider.overrideWithValue(_FakeWeather()),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.dark,
+            home: ShootDayScreen(projectId: projectId, documentId: dayId),
+          ),
         ),
-      ),
-    );
-    Future<void> settle() async {
-      for (var i = 0; i < 25; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
+      );
+      Future<void> settle() async {
+        for (var i = 0; i < 25; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
       }
-    }
 
-    await settle();
-    expect(find.textContaining('Sin ubicar en el mapa'), findsOneWidget);
-    expect(find.textContaining(RegExp(r'Amanecer \d')), findsNothing);
+      await settle();
+      expect(find.textContaining('Sin ubicar en el mapa'), findsOneWidget);
+      expect(find.textContaining(RegExp(r'Amanecer \d')), findsNothing);
 
-    // Ubicar desde aquí escribe en la localización: se ve en toda la app.
-    expect(find.text('Ubicar'), findsOneWidget);
+      // Ubicar desde aquí escribe en la localización: se ve en toda la app.
+      expect(find.text('Ubicar'), findsOneWidget);
 
-    await db.setSitePlace(
-      siteId,
-      latitude: 41.3874,
-      longitude: 2.1686,
-      placeLabel: 'Barcelona, Cataluña, España',
-    );
-    await settle();
-    expect(find.text('Ubicar'), findsNothing);
-    expect(find.text('Cambiar'), findsOneWidget);
+      await db.setSitePlace(
+        siteId,
+        latitude: 41.3874,
+        longitude: 2.1686,
+        placeLabel: 'Barcelona, Cataluña, España',
+      );
+      await settle();
+      expect(find.text('Ubicar'), findsNothing);
+      expect(find.text('Cambiar'), findsOneWidget);
 
-    final site = await db.getSiteById(siteId);
-    expect(site!.latitude, closeTo(41.39, 0.01));
-    expect(site.placeLabel, 'Barcelona, Cataluña, España');
-    expect(find.textContaining(RegExp(r'Amanecer \d')), findsOneWidget);
+      final site = await db.getSiteById(siteId);
+      expect(site!.latitude, closeTo(41.39, 0.01));
+      expect(site.placeLabel, 'Barcelona, Cataluña, España');
+      expect(find.textContaining(RegExp(r'Amanecer \d')), findsOneWidget);
 
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump(const Duration(milliseconds: 100));
-  });
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 100));
+    },
+  );
 }

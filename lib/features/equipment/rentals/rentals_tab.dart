@@ -433,6 +433,32 @@ class _RentalDetailBody extends StatelessWidget {
     if (ok == true) await db.softDeleteRentalReservation(reservation, _now());
   }
 
+  Future<void> _edit(BuildContext context) async {
+    final result = await showDialog<_ReservationEdit>(
+      context: context,
+      builder: (_) => _ReservationEditDialog(reservation: reservation),
+    );
+    if (result == null) return;
+    await db.updateRentalReservationInfo(
+      reservation,
+      title: result.title,
+      pickupAt: result.pickupAt,
+      returnAt: result.returnAt,
+      notes: result.notes,
+    );
+  }
+
+  Future<void> _addItem(BuildContext context) async {
+    final line = await showRentalLineDialog(context);
+    if (line == null) return;
+    await db.addManualRentalItem(
+      reservation,
+      name: line.name,
+      quantity: line.quantity,
+      note: line.note,
+    );
+  }
+
   static String _stamp(String? iso, String? device) {
     final at = iso == null ? null : DateTime.tryParse(iso)?.toLocal();
     if (at == null) return '';
@@ -508,6 +534,11 @@ class _RentalDetailBody extends StatelessWidget {
                   ),
                 ),
                 IconButton(
+                  tooltip: 'Editar nombre, fechas y notas',
+                  onPressed: () => _edit(context),
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                ),
+                IconButton(
                   tooltip: 'Quitar lista',
                   onPressed: () => _delete(context),
                   icon: const Icon(Icons.delete_outline, size: 20),
@@ -533,6 +564,10 @@ class _RentalDetailBody extends StatelessWidget {
               '${_stamp(r.returnedAt, r.returnedDevice)}',
               style: AppTypography.bodyMedium(palette),
             ),
+            if ((r.notes ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(r.notes!.trim(), style: AppTypography.caption(palette)),
+            ],
             const SizedBox(height: AppSpacing.md),
             Wrap(
               spacing: AppSpacing.sm,
@@ -564,6 +599,15 @@ class _RentalDetailBody extends StatelessWidget {
               style: AppTypography.label(palette),
             ),
             ...rows,
+            const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _addItem(context),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Añadir línea'),
+              ),
+            ),
           ],
         );
       },
@@ -609,10 +653,38 @@ class _RentalItemTile extends StatelessWidget {
         child: Text(label, style: AppTypography.caption(palette)),
       );
     }
+    final manual = i.uid.startsWith(RentalQueries.manualItemPrefix);
     return CheckboxListTile(
       dense: true,
       contentPadding: EdgeInsets.only(left: child ? AppSpacing.md : 0),
       controlAffinity: ListTileControlAffinity.leading,
+      secondary: manual
+          ? PopupMenuButton<String>(
+              tooltip: 'Línea añadida a mano',
+              iconSize: 18,
+              onSelected: (v) async {
+                if (v == 'delete') {
+                  await db.softDeleteRentalItem(
+                    i,
+                    DateTime.now().toUtc().toIso8601String(),
+                  );
+                  return;
+                }
+                final line = await showRentalLineDialog(context, item: i);
+                if (line == null) return;
+                await db.updateRentalItemText(
+                  i,
+                  name: line.name,
+                  quantity: line.quantity,
+                  note: line.note,
+                );
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'edit', child: Text('Editar')),
+                PopupMenuItem(value: 'delete', child: Text('Quitar')),
+              ],
+            )
+          : null,
       value: _isChecked(i),
       onChanged: (v) => db.setRentalItemChecked(
         i,
@@ -667,6 +739,177 @@ class _RentalItemTile extends StatelessWidget {
         ).copyWith(color: palette.textPrimary),
       ),
       children: rows,
+    );
+  }
+}
+
+typedef _ReservationEdit = ({
+  String title,
+  String? pickupAt,
+  String? returnAt,
+  String? notes,
+});
+
+typedef RentalLine = ({String name, double? quantity, String? note});
+
+/// Pide una línea de material: nombre, cantidad y nota.
+Future<RentalLine?> showRentalLineDialog(
+  BuildContext context, {
+  RentalItem? item,
+}) async {
+  final name = TextEditingController(text: item?.name ?? '');
+  final quantity = TextEditingController(
+    text: item?.quantity == null ? '' : formatRentalQuantity(item!.quantity),
+  );
+  final note = TextEditingController(text: item?.note ?? '');
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(item == null ? 'Añadir línea' : 'Editar línea'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: name,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Material'),
+          ),
+          TextField(
+            controller: quantity,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Cantidad'),
+          ),
+          TextField(
+            controller: note,
+            decoration: const InputDecoration(labelText: 'Nota'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Guardar'),
+        ),
+      ],
+    ),
+  );
+  final result = ok == true && name.text.trim().isNotEmpty
+      ? (
+          name: name.text.trim(),
+          quantity: double.tryParse(quantity.text.replaceAll(',', '.')),
+          note: note.text.trim().isEmpty ? null : note.text.trim(),
+        )
+      : null;
+  name.dispose();
+  quantity.dispose();
+  note.dispose();
+  return result;
+}
+
+class _ReservationEditDialog extends StatefulWidget {
+  final RentalReservation reservation;
+
+  const _ReservationEditDialog({required this.reservation});
+
+  @override
+  State<_ReservationEditDialog> createState() => _ReservationEditDialogState();
+}
+
+class _ReservationEditDialogState extends State<_ReservationEditDialog> {
+  late final _title = TextEditingController(text: widget.reservation.title);
+  late final _notes = TextEditingController(
+    text: widget.reservation.notes ?? '',
+  );
+  late String? _pickup = widget.reservation.pickupAt;
+  late String? _return = widget.reservation.returnAt;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
+
+  Future<String?> _pick(String? current) async {
+    final now = DateTime.tryParse(current ?? '') ?? DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (date == null || !mounted) return current;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: now.hour, minute: now.minute),
+    );
+    final t = time ?? TimeOfDay(hour: now.hour, minute: now.minute);
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${date.year}-${two(date.month)}-${two(date.day)}'
+        'T${two(t.hour)}:${two(t.minute)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Editar lista'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _title,
+              decoration: const InputDecoration(labelText: 'Nombre'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final v = await _pick(_pickup);
+                setState(() => _pickup = v);
+              },
+              icon: const Icon(Icons.inventory_2_outlined, size: 18),
+              label: Text('Recoger: ${formatRentalMoment(_pickup)}'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final v = await _pick(_return);
+                setState(() => _return = v);
+              },
+              icon: const Icon(Icons.assignment_return_outlined, size: 18),
+              label: Text('Devolver: ${formatRentalMoment(_return)}'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: _notes,
+              maxLines: 3,
+              minLines: 1,
+              decoration: const InputDecoration(labelText: 'Notas'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop<_ReservationEdit>(context, (
+            title: _title.text,
+            pickupAt: _pickup,
+            returnAt: _return,
+            notes: _notes.text,
+          )),
+          child: const Text('Guardar'),
+        ),
+      ],
     );
   }
 }

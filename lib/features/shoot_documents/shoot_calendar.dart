@@ -1,8 +1,9 @@
 import '../../core/database/app_database.dart';
+import 'shoot_calendar_edit.dart';
 import 'shoot_day_timeline.dart';
 import 'shoot_plan.dart';
 
-enum ShootCalendarKind { shoot, strip, pickup, ret }
+enum ShootCalendarKind { shoot, strip, scene, pickup, ret }
 
 /// Una entrada del calendario de rodaje. Sale de las jornadas, sus franjas y
 /// las reservas: el calendario no guarda nada propio, así que no puede
@@ -24,6 +25,13 @@ class ShootCalendarEntry {
   /// Jornada de origen, si la tiene.
   final int? dayId;
 
+  /// Fecha de la jornada de origen: una franja de madrugada cae en [date],
+  /// el día siguiente.
+  final String? dayDate;
+
+  /// Bloque de la franja, o el primero del tramo de la escena.
+  final int? blockId;
+
   const ShootCalendarEntry({
     required this.key,
     required this.date,
@@ -35,9 +43,17 @@ class ShootCalendarEntry {
     this.detail,
     this.done = false,
     this.dayId,
+    this.dayDate,
+    this.blockId,
   });
 
   bool get hasTime => from != null;
+
+  /// Se puede mover y estirar en la rejilla.
+  bool get editable =>
+      kind == ShootCalendarKind.shoot ||
+      kind == ShootCalendarKind.strip ||
+      kind == ShootCalendarKind.scene;
 
   /// Termina al día siguiente: rodaje de noche.
   bool get crossesMidnight =>
@@ -54,6 +70,8 @@ List<ShootCalendarEntry> buildShootCalendar({
   required List<RentalReservation> reservations,
   required Map<String, RentalHouse> houses,
   required Map<int, LocationSite> sites,
+  Map<int, Scene> scenes = const {},
+  Map<int, Shot> shots = const {},
 }) {
   final entries = <ShootCalendarEntry>[];
   final sitesByUid = {
@@ -80,15 +98,49 @@ List<ShootCalendarEntry> buildShootCalendar({
           ?place,
         ].join(' · '),
         dayId: d.id,
+        dayDate: date,
       ),
     );
-    for (final b in blocks) {
-      if (b.documentId != d.id || !ShootStrip.isStrip(b)) continue;
+    // La madrugada de una jornada de noche cae al día siguiente.
+    String dateOf(String? hm) =>
+        hm != null && calendarMinutesInDay(hm, d.shootFromTime) >= 24 * 60
+        ? calendarAddDays(date, 1)
+        : date;
+    final dayBlocks = [
+      for (final b in blocks)
+        if (b.documentId == d.id) b,
+    ];
+    for (final entry in buildShootDayEntries(dayBlocks, shots)) {
+      if (entry is! ShootSceneEntry) continue;
+      final first = entry.blocks.first;
+      final schedule = SceneSchedule.of(first);
+      if (schedule.from == null) continue;
+      final scene = scenes[entry.sceneId];
+      entries.add(
+        ShootCalendarEntry(
+          key: 'scene:${first.id}',
+          date: dateOf(schedule.from),
+          kind: ShootCalendarKind.scene,
+          title: scene == null ? 'Escena' : 'Esc. ${scene.label}',
+          from: schedule.from,
+          to: schedule.to,
+          detail: [
+            ?scene?.locationPureName,
+            if (schedule.note.trim().isNotEmpty) schedule.note.trim(),
+          ].join(' · '),
+          dayId: d.id,
+          dayDate: date,
+          blockId: first.id,
+        ),
+      );
+    }
+    for (final b in dayBlocks) {
+      if (!ShootStrip.isStrip(b)) continue;
       final strip = ShootStrip.of(b);
       entries.add(
         ShootCalendarEntry(
           key: 'strip:${b.id}',
-          date: date,
+          date: dateOf(strip.from),
           kind: ShootCalendarKind.strip,
           stripKind: strip.kind,
           title: ShootStrip.titleOf(b),
@@ -99,6 +151,8 @@ List<ShootCalendarEntry> buildShootCalendar({
             if (b.noteBody?.trim().isNotEmpty ?? false) b.noteBody!.trim(),
           ].join(' · '),
           dayId: d.id,
+          dayDate: date,
+          blockId: b.id,
         ),
       );
     }
@@ -180,9 +234,7 @@ List<ShootCalendarSlot> shootCalendarSlots(
   String date,
 ) {
   const shortest = 45;
-  final previous = shootCalendarDate(
-    DateTime.parse(date).subtract(const Duration(days: 1)),
-  );
+  final previous = calendarAddDays(date, -1);
   final slots = <ShootCalendarSlot>[];
   for (final e in entries) {
     if (!e.hasTime) continue;
@@ -237,4 +289,62 @@ List<ShootCalendarSlot> shootCalendarSlots(
   }
   close();
   return slots;
+}
+
+/// Una escena de una jornada con fecha que aún no tiene hora.
+class UnscheduledShootScene {
+  final int dayId;
+  final String dayName;
+  final String date;
+  final String? dayFrom;
+  final int sceneId;
+
+  /// Primer bloque del tramo: ahí se guarda la hora.
+  final ShootDocumentBlock block;
+  final int shots;
+
+  const UnscheduledShootScene({
+    required this.dayId,
+    required this.dayName,
+    required this.date,
+    required this.dayFrom,
+    required this.sceneId,
+    required this.block,
+    required this.shots,
+  });
+}
+
+/// Las escenas sin hora de las jornadas de [dates].
+List<UnscheduledShootScene> unscheduledShootScenes({
+  required List<ShootDocument> documents,
+  required List<ShootDocumentBlock> blocks,
+  required Map<int, Shot> shots,
+  required Set<String> dates,
+}) {
+  final out = <UnscheduledShootScene>[];
+  for (final d in sortShootDays(documents)) {
+    final date = d.shootDate;
+    if (date == null || !dates.contains(date)) continue;
+    final dayBlocks = [
+      for (final b in blocks)
+        if (b.documentId == d.id) b,
+    ];
+    for (final entry in buildShootDayEntries(dayBlocks, shots)) {
+      if (entry is! ShootSceneEntry) continue;
+      final first = entry.blocks.first;
+      if (SceneSchedule.of(first).from != null) continue;
+      out.add(
+        UnscheduledShootScene(
+          dayId: d.id,
+          dayName: d.name,
+          date: date,
+          dayFrom: d.shootFromTime,
+          sceneId: entry.sceneId,
+          block: first,
+          shots: entry.shotBlocks(shots).length,
+        ),
+      );
+    }
+  }
+  return out;
 }

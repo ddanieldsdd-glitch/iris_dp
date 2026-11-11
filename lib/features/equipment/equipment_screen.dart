@@ -650,6 +650,8 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen>
         equipmentId: id,
       );
     }
+    // El equipo del proyecto viaja con él: que se suba.
+    await db.touchProjectContent(widget.projectId);
   }
 }
 

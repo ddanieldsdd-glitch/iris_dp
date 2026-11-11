@@ -36,10 +36,16 @@ abstract class LiveDrawingLink {
 /// su id. Un trazo cambiado (movido, difuminado) es otro objeto y va entero.
 class DrawingDeltaEncoder {
   final Map<String, AnnotationStroke> _sent = {};
+
+  /// Parte aplanada ya enviada de cada capa: no se repite (es una imagen).
+  final Map<String, String> _sentBaked = {};
   int _rev = 0;
 
   /// La próxima vez va todo entero (alguien acaba de llegar).
-  void reset() => _sent.clear();
+  void reset() {
+    _sent.clear();
+    _sentBaked.clear();
+  }
 
   Map<String, dynamic> encode(AnnotationDocument document) {
     final json = document.toJson();
@@ -58,13 +64,39 @@ class DrawingDeltaEncoder {
       ..clear()
       ..addAll(next);
     json['strokes'] = strokes;
+    final layers = json['layers'];
+    if (layers is List) {
+      final nextBaked = <String, String>{};
+      json['layers'] = [
+        for (final layer in layers.cast<Map<String, dynamic>>())
+          _encodeLayer(layer, nextBaked),
+      ];
+      _sentBaked
+        ..clear()
+        ..addAll(nextBaked);
+    } else {
+      _sentBaked.clear();
+    }
     return {'rev': ++_rev, 'doc': json};
+  }
+
+  Map<String, dynamic> _encodeLayer(
+    Map<String, dynamic> layer,
+    Map<String, String> nextBaked,
+  ) {
+    final id = layer['id']?.toString();
+    final baked = layer['baked'];
+    if (id == null || baked is! String) return layer;
+    nextBaked[id] = baked;
+    if (_sentBaked[id] != baked) return layer;
+    return {...layer..remove('baked'), 'bakedRef': true};
   }
 }
 
 /// Rehace el dibujo con lo que llega de [DrawingDeltaEncoder].
 class DrawingDeltaDecoder {
   final Map<String, Map<String, dynamic>> _known = {};
+  final Map<String, String> _knownBaked = {};
   int _rev = 0;
 
   /// Nulo si falta algún trazo (se perdió un mensaje): hay que pedirlo
@@ -92,6 +124,28 @@ class DrawingDeltaDecoder {
       final id = stroke['id'];
       if (id is String) next[id] = stroke;
     }
+    final nextBaked = <String, String>{};
+    final rawLayers = doc['layers'];
+    if (rawLayers is List) {
+      final layers = <Map<String, dynamic>>[];
+      for (final item in rawLayers) {
+        if (item is! Map) continue;
+        final layer = Map<String, dynamic>.from(item);
+        final id = layer['id']?.toString();
+        if (layer.remove('bakedRef') == true) {
+          final known = id == null ? null : _knownBaked[id];
+          if (known == null) return null;
+          layer['baked'] = known;
+        }
+        final baked = layer['baked'];
+        if (id != null && baked is String) nextBaked[id] = baked;
+        layers.add(layer);
+      }
+      doc['layers'] = layers;
+    }
+    _knownBaked
+      ..clear()
+      ..addAll(nextBaked);
     _known
       ..clear()
       ..addAll(next);

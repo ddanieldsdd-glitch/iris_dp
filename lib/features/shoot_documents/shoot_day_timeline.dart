@@ -118,6 +118,44 @@ class SceneSchedule {
   }
 }
 
+/// Hora y apunte de un plano dentro de la jornada, tal como viene en el plan
+/// de rodaje. Va en el bloque del plano, junto a las marcas de En set.
+class ShotTime {
+  static const _key = 'shotTime';
+
+  final String? from;
+  final String? to;
+  final String note;
+
+  const ShotTime({this.from, this.to, this.note = ''});
+
+  bool get isEmpty => from == null && to == null && note.trim().isEmpty;
+
+  static ShotTime of(ShootDocumentBlock block) {
+    final m = decodeBlockOverrides(block.contentOverridesJson)[_key];
+    if (m is! Map) return const ShotTime();
+    return ShotTime(
+      from: m['from'] as String?,
+      to: m['to'] as String?,
+      note: m['note'] as String? ?? '',
+    );
+  }
+
+  String writeInto(String? json) {
+    final all = decodeBlockOverrides(json);
+    if (isEmpty) {
+      all.remove(_key);
+    } else {
+      all[_key] = {
+        'from': ?from,
+        'to': ?to,
+        if (note.trim().isNotEmpty) 'note': note.trim(),
+      };
+    }
+    return jsonEncode(all);
+  }
+}
+
 /// La escena de un bloque. Manda la del plano: un plano que cambia de escena
 /// se ve igual en el tablero, en la jornada y en el set.
 int? shootBlockSceneId(ShootDocumentBlock block, Map<int, Shot> shots) =>

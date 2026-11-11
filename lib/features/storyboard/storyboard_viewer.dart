@@ -199,123 +199,168 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
                       horizontal: AppSpacing.lg,
                       vertical: AppSpacing.sm,
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
+                        Row(
                           children: [
-                            Text(
-                              'Esc ${scene.label} · Plano ${shot.number}',
-                              style: AppTypography.titleMedium(palette),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Esc ${scene.label} · Plano ${shot.number}',
+                                  style: AppTypography.titleMedium(palette),
+                                ),
+                                Text(
+                                  '${locationFromCanonical(scene.locationCanonical)}'
+                                  ' · ${index + 1} de ${sequence.length}',
+                                  style: AppTypography.caption(palette),
+                                ),
+                              ],
                             ),
-                            Text(
-                              '${locationFromCanonical(scene.locationCanonical)}'
-                              ' · ${index + 1} de ${sequence.length}',
-                              style: AppTypography.caption(palette),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: AppSpacing.lg),
-                        if (lockedBy != null) ...[
-                          const Icon(
-                            Icons.lock_outline,
-                            size: 16,
-                            color: Color(0xFF7F77DD),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Editando en $lockedBy',
-                            style: AppTypography.caption(
-                              palette,
-                            ).copyWith(color: const Color(0xFF7F77DD)),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                        ],
-                        Expanded(
-                          child: IgnorePointer(
-                            ignoring: lockedBy != null,
-                            child: _TitleField(
-                              key: ValueKey('titulo_${shot.id}'),
-                              initial: scriptMarkupToPlain(shot.framing),
-                              // Escribiendo el título, el plano sale bloqueado en
-                              // los demás equipos.
-                              onFocusChanged: (focused) {
-                                final live = ref.read(liveEditingProvider);
-                                focused
-                                    ? live.focusShot(shot.uid)
-                                    : live.blurShot(shot.uid);
-                              },
-                              onChanged: (text) => db.updateShotFields(
-                                shot.id,
-                                ShotsCompanion(
-                                  framing: Value(text.isEmpty ? null : text),
+                            const SizedBox(width: AppSpacing.lg),
+                            if (lockedBy != null) ...[
+                              const Icon(
+                                Icons.lock_outline,
+                                size: 16,
+                                color: Color(0xFF7F77DD),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Editando en $lockedBy',
+                                style: AppTypography.caption(
+                                  palette,
+                                ).copyWith(color: const Color(0xFF7F77DD)),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                            ],
+                            // A la derecha; si no caben (iPad en vertical),
+                            // se deslizan en vez de desbordar.
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  reverse: true,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const SizedBox(width: AppSpacing.md),
+                                      TextButton.icon(
+                                        onPressed: lockedBy != null
+                                            ? null
+                                            : () async {
+                                                // Dibujando o cambiando la imagen, el plano
+                                                // sale bloqueado en los demás equipos.
+                                                final live = ref.read(
+                                                  liveEditingProvider,
+                                                );
+                                                live.focusShot(shot.uid);
+                                                await _openImageMenu(shot);
+                                                live.blurShot(shot.uid);
+                                              },
+                                        icon: const Icon(
+                                          Icons.image_outlined,
+                                          size: 18,
+                                        ),
+                                        label: const Text('Imagen'),
+                                      ),
+                                      if (_shownPath(shot)
+                                          case final path?) ...[
+                                        TextButton.icon(
+                                          onPressed: () => _copyImage(path),
+                                          icon: const Icon(
+                                            Icons.content_copy,
+                                            size: 18,
+                                          ),
+                                          label: const Text('Copiar'),
+                                        ),
+                                        TextButton.icon(
+                                          onPressed: lockedBy != null
+                                              ? null
+                                              : () => _removeImage(shot, path),
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            size: 18,
+                                          ),
+                                          label: const Text('Quitar'),
+                                        ),
+                                      ],
+                                      TextButton.icon(
+                                        onPressed: lockedBy != null
+                                            ? null
+                                            : () => showShotParamsSheet(
+                                                context,
+                                                shot,
+                                              ),
+                                        icon: const Icon(Icons.tune, size: 18),
+                                        label: const Text('Datos'),
+                                      ),
+                                      TextButton.icon(
+                                        onPressed: () =>
+                                            showShotFramesExportSheet(
+                                              context,
+                                              scene: scene,
+                                              shot: shot,
+                                            ),
+                                        icon: const Icon(
+                                          Icons.ios_share,
+                                          size: 18,
+                                        ),
+                                        label: const Text('Exportar'),
+                                      ),
+                                      TextButton.icon(
+                                        onPressed: () =>
+                                            _newShot(scene, sequence),
+                                        icon: const Icon(Icons.add, size: 18),
+                                        label: const Text('Plano nuevo'),
+                                      ),
+                                      if (widget.onMore != null)
+                                        IconButton(
+                                          tooltip: 'Más opciones del plano',
+                                          icon: const Icon(Icons.more_horiz),
+                                          onPressed: () => widget.onMore!(shot),
+                                        ),
+                                      const SizedBox(width: AppSpacing.sm),
+                                      FilledButton.tonalIcon(
+                                        onPressed: () =>
+                                            Navigator.of(context).maybePop(),
+                                        icon: const Icon(Icons.close, size: 18),
+                                        label: const Text('Cerrar'),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                        const SizedBox(width: AppSpacing.md),
-                        TextButton.icon(
-                          onPressed: lockedBy != null
-                              ? null
-                              : () async {
-                                  // Dibujando o cambiando la imagen, el plano
-                                  // sale bloqueado en los demás equipos.
-                                  final live = ref.read(liveEditingProvider);
-                                  live.focusShot(shot.uid);
-                                  await _openImageMenu(shot);
-                                  live.blurShot(shot.uid);
-                                },
-                          icon: const Icon(Icons.image_outlined, size: 18),
-                          label: const Text('Imagen'),
-                        ),
-                        if (_shownPath(shot) case final path?) ...[
-                          TextButton.icon(
-                            onPressed: () => _copyImage(path),
-                            icon: const Icon(Icons.content_copy, size: 18),
-                            label: const Text('Copiar'),
+                        const SizedBox(height: AppSpacing.sm),
+                        // El nombre del plano, en su línea y a todo lo ancho:
+                        // entre los botones no se leía en el iPad.
+                        IgnorePointer(
+                          ignoring: lockedBy != null,
+                          child: _TitleField(
+                            key: ValueKey('titulo_${shot.id}'),
+                            large: true,
+                            initial: scriptMarkupToPlain(shot.framing),
+                            // Escribiendo el título, el plano sale bloqueado en
+                            // los demás equipos.
+                            onFocusChanged: (focused) {
+                              final live = ref.read(liveEditingProvider);
+                              focused
+                                  ? live.focusShot(shot.uid)
+                                  : live.blurShot(shot.uid);
+                            },
+                            onChanged: (text) => db.updateShotFields(
+                              shot.id,
+                              ShotsCompanion(
+                                framing: Value(text.isEmpty ? null : text),
+                              ),
+                            ),
                           ),
-                          TextButton.icon(
-                            onPressed: lockedBy != null
-                                ? null
-                                : () => _removeImage(shot, path),
-                            icon: const Icon(Icons.delete_outline, size: 18),
-                            label: const Text('Quitar'),
-                          ),
-                        ],
-                        TextButton.icon(
-                          onPressed: lockedBy != null
-                              ? null
-                              : () => showShotParamsSheet(context, shot),
-                          icon: const Icon(Icons.tune, size: 18),
-                          label: const Text('Datos'),
-                        ),
-                        TextButton.icon(
-                          onPressed: () => showShotFramesExportSheet(
-                            context,
-                            scene: scene,
-                            shot: shot,
-                          ),
-                          icon: const Icon(Icons.ios_share, size: 18),
-                          label: const Text('Exportar'),
-                        ),
-                        TextButton.icon(
-                          onPressed: () => _newShot(scene, sequence),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Plano nuevo'),
-                        ),
-                        if (widget.onMore != null)
-                          IconButton(
-                            tooltip: 'Más opciones del plano',
-                            icon: const Icon(Icons.more_horiz),
-                            onPressed: () => widget.onMore!(shot),
-                          ),
-                        const SizedBox(width: AppSpacing.sm),
-                        FilledButton.tonalIcon(
-                          onPressed: () => Navigator.of(context).maybePop(),
-                          icon: const Icon(Icons.close, size: 18),
-                          label: const Text('Cerrar'),
                         ),
                       ],
                     ),
@@ -713,11 +758,15 @@ class _TitleField extends StatefulWidget {
   final ValueChanged<String> onChanged;
   final ValueChanged<bool>? onFocusChanged;
 
+  /// En la barra del iPad y el Mac: letra grande y caja visible.
+  final bool large;
+
   const _TitleField({
     super.key,
     required this.initial,
     required this.onChanged,
     this.onFocusChanged,
+    this.large = false,
   });
 
   @override
@@ -762,16 +811,47 @@ class _TitleFieldState extends State<_TitleField> {
       },
       child: TextField(
         controller: _ctrl,
-        style: AppTypography.titleMedium(palette),
+        style: widget.large
+            ? AppTypography.titleLarge(
+                palette,
+              ).copyWith(color: palette.textPrimary)
+            : AppTypography.titleMedium(palette),
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => _commit(),
         decoration: InputDecoration(
           isDense: true,
-          hintText: 'Título del plano (encuadre): «PP de ALI»',
+          hintText: widget.large
+              ? 'Nombre del plano (encuadre): «PP de ALI»'
+              : 'Título del plano (encuadre): «PP de ALI»',
           hintStyle: AppTypography.bodyMedium(
             palette,
           ).copyWith(color: palette.textTertiary),
-          border: InputBorder.none,
+          border: widget.large
+              ? OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: palette.border),
+                )
+              : InputBorder.none,
+          enabledBorder: widget.large
+              ? OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: palette.border),
+                )
+              : null,
+          focusedBorder: widget.large
+              ? OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: palette.accent, width: 1.5),
+                )
+              : null,
+          filled: widget.large,
+          fillColor: widget.large ? palette.surface : null,
+          contentPadding: widget.large
+              ? const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                )
+              : null,
         ),
       ),
     );

@@ -123,7 +123,9 @@ class RentalImportService {
       ],
       removed: [
         for (final r in active)
-          if (!parsedUids.contains(r.uid)) r.name,
+          if (!parsedUids.contains(r.uid) &&
+              !r.uid.startsWith(RentalQueries.manualItemPrefix))
+            r.name,
       ],
     );
   }
@@ -241,6 +243,8 @@ class RentalImportService {
       }
       for (final old in current) {
         if (parsedUids.contains(old.uid) || old.deletedAt != null) continue;
+        // Lo añadido a mano no viene en el archivo: se queda.
+        if (old.uid.startsWith(RentalQueries.manualItemPrefix)) continue;
         final checked =
             old.pickupCheckedAt != null || old.returnCheckedAt != null;
         await (_db.update(

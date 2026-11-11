@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart' show Value;
+import 'shoot_documents_export.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,6 +18,7 @@ import 'shoot_day_timeline.dart';
 import 'shoot_day_widgets.dart';
 import '../export_center/export_center_screen.dart';
 import '../export_center/export_selection.dart';
+import 'import/shoot_plan_import_screen.dart';
 import 'shoot_plan.dart';
 
 /// Lo que se arrastra por el tablero.
@@ -70,6 +72,17 @@ class ShootDaysBoardScreen extends ConsumerWidget {
             tooltip: 'Deshacer',
             icon: const Icon(Icons.undo),
             onPressed: history.canUndo ? history.undo : null,
+          ),
+          IconButton(
+            tooltip: 'Orden del día de todas las jornadas (PDF)',
+            icon: const Icon(Icons.assignment_outlined),
+            onPressed: () =>
+                exportShootDayOrder(context, service.db, projectId: projectId),
+          ),
+          IconButton(
+            tooltip: 'Importar plan de rodaje',
+            icon: const Icon(Icons.playlist_add_outlined),
+            onPressed: () => openShootPlanImport(context, projectId: projectId),
           ),
           IconButton(
             tooltip: 'Exportar',
@@ -537,6 +550,51 @@ class _DayColumn extends StatelessWidget {
             ),
           ),
         ),
+        _ActionsMenu(
+          actions: [
+            _MenuAction(
+              'Orden del día (PDF)',
+              (context) => exportShootDayOrder(
+                context,
+                board.service.db,
+                projectId: board.projectId,
+                dayIds: {day.id},
+                dayName: day.name,
+              ),
+            ),
+            _MenuAction(
+              'Duplicar jornada',
+              (_) => board.service.duplicateDay(board.projectId, day.id),
+            ),
+            _MenuAction('Borrar jornada', (context) async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text('¿Borrar ${day.name}?'),
+                  content: Text(
+                    shotCount == 0
+                        ? 'La jornada está vacía.'
+                        : 'Sus $shotCount planos vuelven a «Sin asignar». '
+                              'Puedes deshacerlo mientras sigas en el plan.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Borrar'),
+                    ),
+                  ],
+                ),
+              );
+              if (ok == true) {
+                await board.service.deleteDay(board.projectId, day.id);
+              }
+            }),
+          ],
+        ),
       ],
     );
 
@@ -636,6 +694,7 @@ class _DayColumn extends StatelessWidget {
                       _DropSlot(board: board, dayId: day.id, before: block),
                     _ShotTile(
                       shot: shot,
+                      time: ShotTime.of(block),
                       days: board.plan.daysOfShot[shot.id] ?? 0,
                       compact: compact,
                       drag: _BlocksDrag([block.id]),
@@ -959,6 +1018,7 @@ class _TractState extends State<_Tract> {
 
 class _ShotTile extends StatelessWidget {
   final Shot shot;
+  final ShotTime time;
   final int days;
   final bool compact;
   final _BoardDrag drag;
@@ -966,6 +1026,7 @@ class _ShotTile extends StatelessWidget {
 
   const _ShotTile({
     required this.shot,
+    this.time = const ShotTime(),
     required this.days,
     required this.compact,
     required this.drag,
@@ -979,6 +1040,7 @@ class _ShotTile extends StatelessWidget {
       padding: const EdgeInsets.only(top: AppSpacing.xs),
       child: ShootShotRow(
         shot: shot,
+        time: time,
         trailing: [
           if (days > 1)
             Tooltip(

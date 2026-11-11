@@ -192,7 +192,10 @@ class _SketchSheetScreenState extends State<SketchSheetScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = AnnotationCanvasController(document: widget.initialDocument);
+    _controller = AnnotationCanvasController(document: widget.initialDocument)
+      // Los trazos antiguos se funden en la capa: un dibujo largo no se
+      // vuelve más pesado (en el iPad llegaba a cerrar la app).
+      ..bakeOldStrokes = true;
     final doc = widget.initialDocument;
     final fresh = doc.isEmpty && doc.layers.isEmpty;
     _style = _storyboard

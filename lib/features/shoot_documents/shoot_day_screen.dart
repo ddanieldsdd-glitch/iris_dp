@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart' show Value;
+import 'shoot_documents_export.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -144,6 +145,15 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
     title: day.name,
   );
 
+  Future<void> _order(ShootDocument day, [BuildContext? from]) =>
+      exportShootDayOrder(
+        from ?? context,
+        ref.read(databaseProvider),
+        projectId: widget.projectId,
+        dayIds: {day.id},
+        dayName: day.name,
+      );
+
   void _export() => ExportCenterScreen.open(
     context,
     projectId: widget.projectId,
@@ -180,6 +190,11 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
                       icon: const Icon(Icons.checklist),
                     ),
                     IconButton(
+                      tooltip: 'Orden del día (PDF)',
+                      onPressed: () => _order(day),
+                      icon: const Icon(Icons.assignment_outlined),
+                    ),
+                    IconButton(
                       tooltip: 'Exportar',
                       onPressed: _export,
                       icon: const Icon(Icons.ios_share),
@@ -190,6 +205,13 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
                       onPressed: () => _openOnSet(day),
                       icon: const Icon(Icons.checklist, size: 18),
                       label: const Text('En set'),
+                    ),
+                    Builder(
+                      builder: (context) => TextButton.icon(
+                        onPressed: () => _order(day, context),
+                        icon: const Icon(Icons.assignment_outlined, size: 18),
+                        label: const Text('Orden del día'),
+                      ),
                     ),
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -884,6 +906,7 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
           title: title,
           schedule: SceneSchedule.of(entry.blocks.first),
           shots: [for (final b in shotBlocks) shots[b.shotId]!],
+          times: [for (final b in shotBlocks) ShotTime.of(b)],
           menu: _menu([
             (
               label: 'Hora y aclaración',
@@ -1025,6 +1048,7 @@ class _DayOrderState extends ConsumerState<_DayOrder> {
               : ShootShotRow(
                   shot: row.shot!,
                   thumbWidth: 72,
+                  time: ShotTime.of(row.block),
                   trailing: [_removeButton(palette, removed)],
                 ),
         ),
@@ -1054,6 +1078,7 @@ class _SceneCard extends StatelessWidget {
   final String title;
   final SceneSchedule schedule;
   final List<Shot> shots;
+  final List<ShotTime> times;
   final Widget menu;
 
   const _SceneCard({
@@ -1061,6 +1086,7 @@ class _SceneCard extends StatelessWidget {
     required this.title,
     required this.schedule,
     required this.shots,
+    required this.times,
     required this.menu,
   });
 
@@ -1131,7 +1157,10 @@ class _SceneCard extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [for (final shot in shots) ShootShotTile(shot: shot)],
+              children: [
+                for (final (i, shot) in shots.indexed)
+                  ShootShotTile(shot: shot, time: times[i]),
+              ],
             ),
         ],
       ),
