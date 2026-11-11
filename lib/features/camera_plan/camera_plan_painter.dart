@@ -228,6 +228,10 @@ class CameraPlanPainter extends CustomPainter {
   /// los aparatos sobre la planta limpia.
   final bool showBeams;
 
+  /// En un documento, cada luz lleva solo su número de [documentLightLegend]
+  /// y el texto va en la leyenda de al lado, fuera de la planta.
+  final bool documentLightNumbers;
+
   CameraPlanPainter({
     required this.elements,
     required this.palette,
@@ -268,6 +272,7 @@ class CameraPlanPainter extends CustomPainter {
     this.documentMarks = false,
     this.documentBackdrop,
     this.showBeams = true,
+    this.documentLightNumbers = false,
   }) : _fixedScale = scale,
        _fixedOffset = offset,
        _contents = PlanLightKey.drawing([
@@ -2017,19 +2022,8 @@ class CameraPlanPainter extends CustomPainter {
       canvas.drawPath(route, stroke);
     }
 
-    for (final (i, stop) in el.pathPoints.indexed) {
-      final rotation = PlanMarks.rotationAt(el, i);
-      canvas.saveLayer(null, Paint()..color = const Color(0x99FFFFFF));
-      canvas.translate(stop.dx, stop.dy);
-      canvas.rotate(rotation * math.pi / 180);
-      canvas.scale(_documentFigureScale(el));
-      if (el.type == ElementType.camera) {
-        _drawCamera(canvas, el);
-      } else {
-        _drawActor(canvas, el, rotation: rotation);
-      }
-      canvas.restore();
-    }
+    // Sin la figura repetida en cada parada: amontonadas tapaban el camino.
+    // Cada parada lleva su número encima (ver [_layoutDocumentStops]).
 
     final head = Paint()..color = color;
     for (var i = 0; i < stops.length - 1; i++) {
@@ -2062,8 +2056,9 @@ class CameraPlanPainter extends CustomPainter {
 
   static const _documentStopRadius = 4.4;
 
-  /// Los números de orden de los recorridos, cada uno en una esquina de su
-  /// figura sin tapar otro número.
+  /// Los números de orden de los recorridos: el primero en una esquina de
+  /// la figura y los demás encima de su parada, apartados lo justo si
+  /// otro número ya ocupa el sitio.
   List<_DocumentStop> _layoutDocumentStops(List<PlanElement> moving) {
     const corners = [
       Offset(1, -1),
@@ -2071,20 +2066,20 @@ class CameraPlanPainter extends CustomPainter {
       Offset(1, 1),
       Offset(-1, 1),
     ];
+    const near = _documentStopRadius * 2 + 0.6;
     final stops = <_DocumentStop>[];
     for (final el in moving) {
       final reach =
           _documentMarkRadius * _documentFigureScale(el) * scale * 0.72;
       for (final (i, stop) in [el.position, ...el.pathPoints].indexed) {
         final at = offset + stop * scale;
-        final center = at + corners.first * reach;
-        final free = corners
-            .map((c) => at + c * reach)
-            .where(
-              (c) => stops.every(
-                (s) => (s.center - c).distance >= _documentStopRadius * 2 + 0.6,
-              ),
-            );
+        final candidates = i == 0
+            ? [for (final c in corners) at + c * reach]
+            : [at, for (final c in corners) at + c * near * 0.75];
+        final center = candidates.first;
+        final free = candidates.where(
+          (c) => stops.every((s) => (s.center - c).distance >= near),
+        );
         stops.add(
           _DocumentStop(
             free.isEmpty ? center : free.first,
@@ -2096,6 +2091,39 @@ class CameraPlanPainter extends CustomPainter {
       }
     }
     return stops;
+  }
+
+  /// El número de cada luz, encima de su aparato: blanco sobre negro para
+  /// no confundirse con los números de los recorridos, que van en color.
+  void _drawDocumentLightNumbers(
+    Canvas canvas,
+    List<(Offset, double, int)> numbered,
+  ) {
+    // Luces iguales pegadas (una tira de prácticas) llevan un solo número.
+    final drawn = <(Offset, int)>[];
+    for (final (at, markRadius, number) in numbered) {
+      final r = (markRadius * 0.8).clamp(4.6, 6.5).toDouble();
+      if (drawn.any((d) => d.$2 == number && (d.$1 - at).distance < r * 3)) {
+        continue;
+      }
+      drawn.add((at, number));
+      canvas.drawCircle(at, r + 0.7, Paint()..color = Colors.white);
+      canvas.drawCircle(at, r, Paint()..color = const Color(0xFF111114));
+      final text = TextPainter(
+        text: TextSpan(
+          text: '$number',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: number > 9 ? r * 1.05 : r * 1.3,
+            fontWeight: FontWeight.w800,
+            height: 1,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      text.paint(canvas, at - Offset(text.width / 2, text.height / 2));
+      text.dispose();
+    }
   }
 
   /// Encima de todas las figuras. Las cámaras, con número cuadrado.
@@ -2194,7 +2222,9 @@ class CameraPlanPainter extends CustomPainter {
   /// Cuánto crecen las marcas de un documento para verse a [_documentMarkSize]
   /// veces su tamaño, por mucho que se aleje la planta.
   double get _documentMarkScale => documentMarks
-      ? (_documentMarkSize / scale).clamp(1.0, _documentMarkMax).toDouble()
+      ? (_documentMarkSize / scale)
+            .clamp(_documentMarkMin, _documentMarkMax)
+            .toDouble()
       : 1;
 
   /// Tamaño de las marcas: el mayor que deja separadas las que están más
@@ -2220,13 +2250,16 @@ class CameraPlanPainter extends CustomPainter {
         .toDouble();
   }
 
-  /// Cámaras y personajes son pocos y lo primero que se busca: van mayores
-  /// que las luces.
+  /// Cámaras y personajes del plano son pocos y lo primero que se busca:
+  /// van mayores que las luces. Los heredados (figuración) no.
   double _documentFigureScale(PlanElement el) =>
       _documentMarkScale *
-      (el.type == ElementType.camera || el.type == ElementType.actor
+      ((el.type == ElementType.camera || el.type == ElementType.actor) &&
+              !_inheritedSet.contains(el)
           ? 1.35
           : 1);
+
+  late final Set<PlanElement> _inheritedSet = {...inheritedElements};
 
   bool _growsInDocument(PlanElement el) =>
       el.type == ElementType.camera ||
@@ -2234,9 +2267,13 @@ class CameraPlanPainter extends CustomPainter {
       (el.type == ElementType.light && !_isGripBar(el));
 
   static const _documentMarkLargest = 0.52;
-  static const _documentMarkSmallest = 0.32;
+  static const _documentMarkSmallest = 0.26;
   static const _documentMarkRadius = 18.0;
   static const _documentMarkMax = 3.0;
+
+  /// Una planta de documento se acerca hasta llenar su hueco: las marcas
+  /// guardan su tamaño en la hoja en vez de crecer con el decorado.
+  static const _documentMarkMin = 0.15;
 
   /// Texto, color y si puede omitirse del rótulo de [el] en un documento.
   (String, Color, bool)? _documentLabelOf(PlanElement el) {
@@ -2272,12 +2309,51 @@ class CameraPlanPainter extends CustomPainter {
     }
   }
 
+  /// Las luces de [all] numeradas para la leyenda de un documento: las que
+  /// dicen lo mismo comparten número. Se numeran de arriba abajo y de
+  /// izquierda a derecha, como se lee la planta.
+  static List<PlanLightLegendEntry> documentLightLegend(
+    List<PlanElement> all,
+  ) {
+    final byText = <String, List<PlanElement>>{};
+    for (final el in all) {
+      if (el.type != ElementType.light || _isGripBar(el)) continue;
+      if (PlanTerrainPainter.isTerrain(el)) continue;
+      final lines = _lightLabelLines(el);
+      if (lines.isEmpty) continue;
+      byText.putIfAbsent(lines.join(' · '), () => []).add(el);
+    }
+    Offset first(List<PlanElement> list) => list
+        .map((e) => e.position)
+        .reduce((a, b) => (a.dy < b.dy || (a.dy == b.dy && a.dx < b.dx)) ? a : b);
+    final groups = byText.entries.toList()
+      ..sort((a, b) {
+        final pa = first(a.value);
+        final pb = first(b.value);
+        // Por franjas de altura, para que dos luces casi a la par se lean
+        // de izquierda a derecha.
+        final row = (pa.dy / 40).floor().compareTo((pb.dy / 40).floor());
+        return row != 0 ? row : pa.dx.compareTo(pb.dx);
+      });
+    return [
+      for (final (i, group) in groups.indexed)
+        PlanLightLegendEntry(i + 1, group.key, group.value),
+    ];
+  }
+
+  late final Map<PlanElement, int> _lightNumbers = {
+    if (documentMarks && documentLightNumbers)
+      for (final entry in documentLightLegend(_lit))
+        for (final el in entry.elements) el: entry.number,
+  };
+
   /// Los rótulos de un documento, colocados entre todos para que no se
   /// pisen entre ellos ni tapen las marcas.
   void _drawDocumentLabels(Canvas canvas, Size size) {
     final entries = <_DocumentLabelEntry>[];
     final marks = <Rect>[];
     final moving = <PlanElement>[];
+    final numbered = <(Offset, double, int)>[];
     for (final el in [...inheritedElements, ...elements]) {
       if (PlanTerrainPainter.isTerrain(el)) continue;
       final at = offset + el.position * scale;
@@ -2292,6 +2368,11 @@ class CameraPlanPainter extends CustomPainter {
         }
       }
       if (grows) marks.add(Rect.fromCircle(center: at, radius: radius));
+      final number = _lightNumbers[el];
+      if (number != null) {
+        numbered.add((at, radius, number));
+        continue;
+      }
       final found = _documentLabelOf(el);
       if (found == null) continue;
       final (text, color, optional) = found;
@@ -2319,6 +2400,7 @@ class CameraPlanPainter extends CustomPainter {
       for (final stop in stops)
         Rect.fromCircle(center: stop.center, radius: _documentStopRadius),
     ]);
+    _drawDocumentLightNumbers(canvas, numbered);
     _drawDocumentStops(canvas, stops);
     if (entries.isEmpty) return;
 
@@ -2623,7 +2705,7 @@ class CameraPlanPainter extends CustomPainter {
   }
 
   /// Nombre, filtros, color e intensidad de una luz; vacío si no tiene nombre.
-  List<String> _lightLabelLines(PlanElement el) {
+  static List<String> _lightLabelLines(PlanElement el) {
     final base =
         el.customName ??
         (el.props['name'] as String?) ??
@@ -3900,6 +3982,21 @@ class _DocumentLabelEntry {
 }
 
 /// Número de una parada de un recorrido, ya colocado.
+/// Una línea de la leyenda de luces de un documento: su número en la
+/// planta, lo que es y las luces que lo llevan.
+class PlanLightLegendEntry {
+  final int number;
+  final String text;
+  final List<PlanElement> elements;
+
+  const PlanLightLegendEntry(this.number, this.text, this.elements);
+
+  int get count => elements.length;
+
+  /// «Nanlite PavoTube II 15X · 3300K · 100% ×2».
+  String get label => count > 1 ? '$text ×$count' : text;
+}
+
 class _DocumentStop {
   final Offset center;
   final int number;

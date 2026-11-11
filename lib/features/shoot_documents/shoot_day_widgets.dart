@@ -232,12 +232,16 @@ class ShootStripCard extends StatelessWidget {
   final Widget? trailing;
   final EdgeInsetsGeometry padding;
 
+  /// Sin la hora en el título: la enseña la columna de horas del orden.
+  final bool showTime;
+
   const ShootStripCard({
     super.key,
     required this.block,
     this.siteName,
     this.trailing,
     this.padding = const EdgeInsets.fromLTRB(10, 8, 8, 8),
+    this.showTime = true,
   });
 
   @override
@@ -245,7 +249,7 @@ class ShootStripCard extends StatelessWidget {
     final palette = context.palette;
     final strip = ShootStrip.of(block);
     final color = shootStripColor(strip.kind, palette);
-    final time = shootTimeRange(strip.from, strip.to);
+    final time = showTime ? shootTimeRange(strip.from, strip.to) : '';
     final note = block.noteBody?.trim() ?? '';
     return Container(
       padding: padding,
