@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import '../pdf_export/shoot_day_brief.dart';
+
 /// Tamaño de papel del documento.
 enum ScriptDocPaper {
   a4('A4'),
@@ -40,11 +42,21 @@ class TechnicalScriptDoc {
   /// (8,5 en el PDF, 9 en el Word).
   final double? fontSize;
 
+  /// La jornada contada con detalle (lugar, mapa, tiempo, horario): con
+  /// ella el PDF abre con una portada en vez de [subtitle]. El Word sigue
+  /// con el texto.
+  final ShootDayBrief? brief;
+
+  /// Nombre del proyecto, para la portada.
+  final String? projectName;
+
   const TechnicalScriptDoc({
     required this.title,
     required this.columns,
     required this.sections,
     this.subtitle,
+    this.brief,
+    this.projectName,
     this.fontFamily = 'Inter',
     this.includeIndex = true,
     this.paper = ScriptDocPaper.a4,
@@ -61,6 +73,8 @@ class TechnicalScriptDoc {
   }) => TechnicalScriptDoc(
     title: title,
     subtitle: subtitle,
+    brief: brief,
+    projectName: projectName,
     columns: columns,
     sections: sections,
     fontFamily: fontFamily ?? this.fontFamily,

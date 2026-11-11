@@ -14,6 +14,7 @@ import '../../core/weather/sun_calculator.dart';
 import '../../core/weather/weather_models.dart';
 import '../../core/weather/weather_service.dart';
 import '../../core/weather/weather_summary.dart';
+import '../../shared/pdf_export/shoot_day_brief.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
 import '../export_center/export_selection.dart';
 import '../camera_plan/plan_data.dart';
@@ -384,6 +385,9 @@ Future<TechnicalScriptDoc?> buildScriptDocFor(
   List<ExportDaySection> sections,
   TechnicalScriptSettings settings, {
   Set<String>? hiddenColumns,
+
+  /// La portada elegida; sin ella, la foto de la localización.
+  String? coverPath,
 }) async {
   final hidden = hiddenColumns ?? _screenHidden(settings);
   final projectId = source.project.id;
@@ -491,11 +495,25 @@ Future<TechnicalScriptDoc?> buildScriptDocFor(
         : 'Dirección: $director';
   }
 
+  // Una sola jornada: su portada con lugar, mapa, tiempo y horario.
+  final brief = oneDay
+      ? (await ShootDayBrief.load(
+          db,
+          projectId,
+          dayIds: {sections.single.day!.id},
+          thumbs: false,
+          coverPath: coverPath,
+          fallbackCoverPath: source.project.coverImagePath,
+        )).firstOrNull
+      : null;
+
   return TechnicalScriptDoc(
     title: byDays
         ? 'GUION TÉCNICO DE RODAJE · ${name.toUpperCase()}'
         : 'GUION TÉCNICO ${name.toUpperCase()}',
     subtitle: subtitle,
+    brief: brief,
+    projectName: name,
     columns: [
       if (byDays) const ScriptDocColumn('orden', 'ORDEN', 900, centered: true),
       ...scriptDocColumns(hidden: hidden),
