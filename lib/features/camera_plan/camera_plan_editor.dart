@@ -95,6 +95,7 @@ import 'rig/hall_builder_sheet.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
 import 'plan_outliner.dart';
+import 'rig/plan_3d_edit.dart';
 import 'rig/plan_3d_view.dart';
 import '../scan_jobs/capture_store.dart';
 import '../../core/utils/shot_reference_import.dart';
@@ -3296,9 +3297,23 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   /// Centro de lo que se ve, en coordenadas del plano.
-  Offset get _viewCenter => _canvasSize.isEmpty
-      ? const Offset(300, 250)
-      : _toCanvasCoords(_canvasSize.center(Offset.zero));
+  Offset get _viewCenter =>
+      _placeAt ??
+      (_canvasSize.isEmpty
+          ? const Offset(300, 250)
+          : _toCanvasCoords(_canvasSize.center(Offset.zero)));
+
+  /// Punto del suelo tocado en el 3D donde va lo que se añade (ED.2).
+  Offset? _placeAt;
+
+  Future<void> _addAt(Offset at, Future<void> Function() add) async {
+    _placeAt = at;
+    try {
+      await add();
+    } finally {
+      _placeAt = null;
+    }
+  }
 
   void _showSnack(String message) {
     AppSnackBar.show(context, message);
@@ -3741,7 +3756,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (!mounted) return;
     el.layer = layer;
     if (layer != PlanLayer.shot) el.id = --_tempId;
-    if (!keepPosition) {
+    if (_placeAt case final at? when !keepPosition) {
+      el.position = at;
+    } else if (!keepPosition) {
       // Lo nuevo aparece en lo que se está viendo.
       final same = _elements.where((e) => e.type == el.type).length;
       el.position = _snapToGrid(
@@ -4123,6 +4140,83 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }();
   bool _loadedOnce = false;
 
+  /// Lo que se puede añadir y editar desde el 3D (ED.2): lo mismo que la
+  /// paleta de la planta, en corto, y se suelta donde se toca el suelo.
+  Plan3dEditing get _editing3d {
+    Plan3dAddItem item(
+      String group,
+      String label,
+      IconData icon,
+      Future<void> Function() add,
+    ) => Plan3dAddItem(
+      group: group,
+      label: label,
+      icon: icon,
+      add: (at) => _addAt(at, add),
+    );
+    const people = 'Cámara y reparto';
+    const lights = 'Luces';
+    const grip = 'Grip';
+    const props = 'Atrezzo';
+    return Plan3dEditing(
+      items: [
+        item(people, 'Cámara', Icons.videocam_outlined, _addCamera),
+        item(
+          people,
+          'Personaje',
+          Icons.person_outline,
+          () => _addActor(_nextActorColor),
+        ),
+        for (final (name, color) in _paletteCast.take(8))
+          item(
+            people,
+            name,
+            Icons.person,
+            () => _addActor(color, name: name),
+          ),
+        for (final light in _gear.lights.take(10))
+          item(
+            lights,
+            light.model,
+            Icons.highlight_outlined,
+            () => _addCatalogLight(light),
+          ),
+        for (final type in const [
+          LightType.fresnelSmall,
+          LightType.fresnelMedium,
+          LightType.fresnelLarge,
+          LightType.lightPanel,
+          LightType.led1x1,
+          LightType.openFace,
+          LightType.par,
+          LightType.flo4Tubes,
+        ])
+          item(lights, type.label, Icons.highlight_outlined, () => _addLight(type)),
+        for (final type in const [
+          LightType.flag,
+          LightType.cutter,
+          LightType.diffusionFrame,
+          LightType.net,
+          LightType.bounce,
+          LightType.cStand,
+        ])
+          item(grip, type.label, Icons.crop_square, () => _addLight(type)),
+        item(grip, 'Palio', Icons.crop_din, _addPalio),
+        for (final type in PropType.values)
+          if (type != PropType.meter)
+            item(props, type.label, type.icon, () => _addProp(type)),
+        for (final (name, shape, _, _, _, _) in PropBox.presets)
+          if (shape != PropBox.box)
+            item(props, name, Icons.table_bar_outlined, () => _addBox(shape)),
+        item('Medición', 'Fotómetro', Icons.speed_outlined, _addMeter),
+      ],
+      duplicate: _selection.isEmpty ? null : _duplicateSelection,
+      delete: _selection.isEmpty ? null : _deleteSelected,
+      undo: _undoStack.isEmpty ? null : _undo,
+      redo: _redoStack.isEmpty ? null : _redo,
+    );
+  }
+
   /// La planta abierta, para la tira del 3D.
   PlanTarget? get _navTarget {
     if (widget.onNavigate == null) return null;
@@ -4189,6 +4283,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       navTarget: _navTarget,
       onNavigate: (t) => _navigateFrom3d(t, fullScreen: true),
       lookThrough: _lookThrough,
+      editing: () => _editing3d,
+      liveElements: () => _visibleElements,
+      liveSelected: () => _selected,
     );
   }
 
@@ -6716,6 +6813,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   navTarget: _navTarget,
                                   onNavigate: _navigateFrom3d,
                                   lookThrough: _lookThrough,
+                                  editing: _editing3d,
                                 ),
                               ),
                             ],
