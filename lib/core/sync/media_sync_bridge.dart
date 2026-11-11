@@ -28,9 +28,9 @@ abstract final class MediaSyncBridge {
     final queue = uploadQueue;
     if (queue == null) return;
 
-    final img = await (db.select(db.moodboardImages)
-          ..where((m) => m.id.equals(imageId)))
-        .getSingleOrNull();
+    final img = await (db.select(
+      db.moodboardImages,
+    )..where((m) => m.id.equals(imageId))).getSingleOrNull();
     if (img == null) return;
 
     final project = await db.getProject(projectId);

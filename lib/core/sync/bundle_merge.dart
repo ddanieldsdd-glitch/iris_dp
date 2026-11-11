@@ -322,17 +322,19 @@ abstract final class BundleMerge {
       if (blRec == null || bcRec == null) {
         // Añadido en un lado (o, raro, en los dos con el mismo uid).
         if (lRec != null && cRec != null) {
-          out.add(_mergeFields(
-            collection,
-            uid,
-            _label(collection, lRec),
-            const {},
-            const {},
-            lRec,
-            cRec,
-            newer,
-            discards,
-          ));
+          out.add(
+            _mergeFields(
+              collection,
+              uid,
+              _label(collection, lRec),
+              const {},
+              const {},
+              lRec,
+              cRec,
+              newer,
+              discards,
+            ),
+          );
         } else {
           out.add(lRec ?? cRec!);
         }
@@ -346,37 +348,43 @@ abstract final class BundleMerge {
         if (_same(kept, keptSide == MergeSide.local ? blRec : bcRec)) continue;
         if (newer == keptSide) {
           out.add(kept);
-          discards.add(MergeDiscard(
-            collection: collection,
-            uid: uid,
-            label: _label(collection, kept),
-            kept: kept,
-            discarded: null,
-            discardedSide: _other(keptSide),
-          ));
+          discards.add(
+            MergeDiscard(
+              collection: collection,
+              uid: uid,
+              label: _label(collection, kept),
+              kept: kept,
+              discarded: null,
+              discardedSide: _other(keptSide),
+            ),
+          );
         } else {
-          discards.add(MergeDiscard(
-            collection: collection,
-            uid: uid,
-            label: _label(collection, kept),
-            kept: null,
-            discarded: kept,
-            discardedSide: keptSide,
-          ));
+          discards.add(
+            MergeDiscard(
+              collection: collection,
+              uid: uid,
+              label: _label(collection, kept),
+              kept: null,
+              discarded: kept,
+              discardedSide: keptSide,
+            ),
+          );
         }
         continue;
       }
-      out.add(_mergeFields(
-        collection,
-        uid,
-        _label(collection, lRec),
-        blRec,
-        bcRec,
-        lRec,
-        cRec,
-        newer,
-        discards,
-      ));
+      out.add(
+        _mergeFields(
+          collection,
+          uid,
+          _label(collection, lRec),
+          blRec,
+          bcRec,
+          lRec,
+          cRec,
+          newer,
+          discards,
+        ),
+      );
     }
     return out;
   }
@@ -428,15 +436,17 @@ abstract final class BundleMerge {
               : MergeSide.cloud;
         } else {
           from = newer;
-          discards.add(MergeDiscard(
-            collection: collection,
-            uid: uid,
-            label: label,
-            field: k,
-            kept: newer == MergeSide.local ? vl : vc,
-            discarded: newer == MergeSide.local ? vc : vl,
-            discardedSide: _other(newer),
-          ));
+          discards.add(
+            MergeDiscard(
+              collection: collection,
+              uid: uid,
+              label: label,
+              field: k,
+              kept: newer == MergeSide.local ? vl : vc,
+              discarded: newer == MergeSide.local ? vc : vl,
+              discardedSide: _other(newer),
+            ),
+          );
         }
       }
       final src = from == MergeSide.local ? l : c;
@@ -461,13 +471,15 @@ abstract final class BundleMerge {
     final changedThere = _canon(_comparable(c)) != _canon(_comparable(bc));
     if (!changedThere) return l;
     if (!changedHere) return c;
-    discards.add(MergeDiscard(
-      collection: name,
-      label: name,
-      kept: newer == MergeSide.local ? l : c,
-      discarded: newer == MergeSide.local ? c : l,
-      discardedSide: _other(newer),
-    ));
+    discards.add(
+      MergeDiscard(
+        collection: name,
+        label: name,
+        kept: newer == MergeSide.local ? l : c,
+        discarded: newer == MergeSide.local ? c : l,
+        discardedSide: _other(newer),
+      ),
+    );
     return newer == MergeSide.local ? l : c;
   }
 
@@ -522,10 +534,9 @@ abstract final class BundleMerge {
     List<Map<String, dynamic>> bases,
     List<MergeDiscard> discards,
   ) {
-    String? linkedUid(Object? v) =>
-        v is String && v.startsWith(_linkPrefix)
-            ? v.substring(_linkPrefix.length)
-            : null;
+    String? linkedUid(Object? v) => v is String && v.startsWith(_linkPrefix)
+        ? v.substring(_linkPrefix.length)
+        : null;
 
     // Lo que se queda sin padre (borrado en el otro lado) se va con él; en
     // cascada: un plano que se va se lleva sus referencias.
@@ -559,12 +570,14 @@ abstract final class BundleMerge {
             (d) => d.collection == e.key && d.uid == r['uid'],
           );
           if (!untouched) {
-            discards.add(MergeDiscard(
-              collection: e.key,
-              uid: r['uid'] as String?,
-              label: _label(e.key, rec),
-              discarded: r,
-            ));
+            discards.add(
+              MergeDiscard(
+                collection: e.key,
+                uid: r['uid'] as String?,
+                label: _label(e.key, rec),
+                discarded: r,
+              ),
+            );
           }
           return true;
         });
@@ -652,8 +665,7 @@ abstract final class BundleMerge {
     String key,
   ) {
     final list = side[key];
-    if ((list == null || (list is List && list.isEmpty)) &&
-        base[key] != null) {
+    if ((list == null || (list is List && list.isEmpty)) && base[key] != null) {
       side[key] = _copy(base[key]);
     }
   }

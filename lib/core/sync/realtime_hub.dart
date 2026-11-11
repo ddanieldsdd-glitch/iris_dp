@@ -59,7 +59,10 @@ class ScanBuilderPeer {
     return ScanBuilderPeer(
       installId: installId,
       device: p['device'] as String?,
-      lanIps: [for (final ip in ips) if (ip is String) ip],
+      lanIps: [
+        for (final ip in ips)
+          if (ip is String) ip,
+      ],
       port: port,
       token: token,
     );
@@ -123,8 +126,7 @@ class RealtimeHub {
       _updateRequests.stream;
 
   /// Cómo va una petición (lo escucha el iPad o iPhone).
-  Stream<DeviceUpdateStatus> get deviceUpdateStatuses =>
-      _updateStatuses.stream;
+  Stream<DeviceUpdateStatus> get deviceUpdateStatuses => _updateStatuses.stream;
 
   RealtimeChannel? _channel;
   String? _workspaceId;
@@ -192,11 +194,13 @@ class RealtimeHub {
             final hash = payload['hash'];
             if (project is! String || hash is! String) return;
             if (payload['installId'] == installId) return;
-            _notices.add(SnapshotNotice(
-              projectCloudId: project,
-              hash: hash,
-              device: payload['device'] as String?,
-            ));
+            _notices.add(
+              SnapshotNotice(
+                projectCloudId: project,
+                hash: hash,
+                device: payload['device'] as String?,
+              ),
+            );
           },
         )
         .onBroadcast(

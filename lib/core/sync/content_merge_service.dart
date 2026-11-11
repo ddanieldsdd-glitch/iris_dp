@@ -61,10 +61,11 @@ class ContentMergeService {
       final cloud = Map<String, dynamic>.from(content);
       ProjectContentBundle.assertReadable(cloud);
       final cloudHash =
-          row['content_hash'] as String? ?? ProjectContentBundle.hashBundle(cloud);
+          row['content_hash'] as String? ??
+          ProjectContentBundle.hashBundle(cloud);
       final cloudAt = DateTime.tryParse(row['updated_at'] as String? ?? '');
-      final newer = cloudAt != null &&
-              (localAt == null || cloudAt.isAfter(localAt))
+      final newer =
+          cloudAt != null && (localAt == null || cloudAt.isAfter(localAt))
           ? MergeSide.cloud
           : MergeSide.local;
 
@@ -91,7 +92,11 @@ class ContentMergeService {
 
       // Después aquí, como una descarga.
       await LocalDatabaseBackup.create(_db, label: 'antes-de-mezclar');
-      await ProjectContentBundle.importBundle(_db, localProjectId, result.merged);
+      await ProjectContentBundle.importBundle(
+        _db,
+        localProjectId,
+        result.merged,
+      );
       final imported = await ProjectContentBundle.export(_db, localProjectId);
       await ContentSyncBaseStore.save(
         _db,
@@ -107,11 +112,11 @@ class ContentMergeService {
         local: imported,
         cloud: result.merged,
       );
-      await (_db.update(_db.projects)
-            ..where((p) => p.id.equals(localProjectId)))
-          .write(ProjectsCompanion(
-        contentSyncUpdatedAt: Value(DateTime.now().toUtc()),
-      ));
+      await (_db.update(
+        _db.projects,
+      )..where((p) => p.id.equals(localProjectId))).write(
+        ProjectsCompanion(contentSyncUpdatedAt: Value(DateTime.now().toUtc())),
+      );
       final now = DateTime.now();
       final cloudDevice = row['updated_device'] as String?;
       await SyncConflictLog.addAll(_db, [

@@ -33,7 +33,8 @@ class SyncPlanBuilder {
     final items = <SyncPlanItem>[];
 
     for (final local in locals) {
-      if (local.cloudId == null) {
+      // Las copias de consulta de invitados no se suben nunca.
+      if (local.cloudId == null && local.mirrorCloudId == null) {
         items.add(
           SyncPlanItem(
             action: SyncPlanAction.pushNewLocal,
@@ -81,8 +82,9 @@ class SyncPlanBuilder {
       final diffs = _diffProject(local, row);
       if (diffs.isEmpty) continue;
 
-      final cloudUpdated =
-          DateTime.tryParse(row['updated_at'] as String? ?? '');
+      final cloudUpdated = DateTime.tryParse(
+        row['updated_at'] as String? ?? '',
+      );
 
       if (cloudUpdated == null) {
         items.add(
@@ -154,8 +156,7 @@ class SyncPlanBuilder {
         SyncPlanItem(
           action: SyncPlanAction.deleteLocal,
           title: local.name,
-          description:
-              'Ya no está en la nube (borrado en otro dispositivo)',
+          description: 'Ya no está en la nube (borrado en otro dispositivo)',
           localProjectId: local.id,
           cloudId: cid,
           localProject: local,
@@ -234,8 +235,10 @@ class SyncPlanBuilder {
     for (final local in linked) {
       final cloudId = local.cloudId!;
       if (unchanged.contains(cloudId)) continue;
-      final localSummary =
-          await ProjectContentBundle.summarizeLocal(_db, local.id);
+      final localSummary = await ProjectContentBundle.summarizeLocal(
+        _db,
+        local.id,
+      );
       final localBundle = bundles[local.id]!;
       final localHash = hashes[local.id]!;
       final snap = snapshots[cloudId];
@@ -279,7 +282,8 @@ class SyncPlanBuilder {
           cloudHash: cloudHash ?? localHash,
         );
         final base = await ContentSyncBaseStore.load(_db, local.id);
-        final baseMoved = base?.localHash != synced.localHash ||
+        final baseMoved =
+            base?.localHash != synced.localHash ||
             base?.cloudHash != synced.cloudHash;
         if (baseMoved) {
           await ContentSyncBaseStore.save(_db, local.id, synced);
@@ -429,19 +433,31 @@ class SyncPlanBuilder {
     final diffs = <SyncFieldDiff>[];
     void cmp(String field, String label, int a, int b) {
       if (a != b) {
-        diffs.add(SyncFieldDiff(
-          field: field,
-          label: label,
-          localValue: '$a',
-          cloudValue: '$b',
-        ));
+        diffs.add(
+          SyncFieldDiff(
+            field: field,
+            label: label,
+            localValue: '$a',
+            cloudValue: '$b',
+          ),
+        );
       }
     }
 
     cmp('scenes', 'Escenas', local.sceneCount, cloud.sceneCount);
     cmp('shots', 'Planos', local.shotCount, cloud.shotCount);
-    cmp('sets', 'Sets de rodaje', local.locationSetCount, cloud.locationSetCount);
-    cmp('docs', 'Docs. rodaje', local.shootDocumentCount, cloud.shootDocumentCount);
+    cmp(
+      'sets',
+      'Sets de rodaje',
+      local.locationSetCount,
+      cloud.locationSetCount,
+    );
+    cmp(
+      'docs',
+      'Docs. rodaje',
+      local.shootDocumentCount,
+      cloud.shootDocumentCount,
+    );
     return diffs;
   }
 
@@ -452,21 +468,37 @@ class SyncPlanBuilder {
       final na = _norm(a);
       final nb = _norm(b);
       if (na != nb) {
-        diffs.add(SyncFieldDiff(
-          field: field,
-          label: label,
-          localValue: a?.isEmpty == true ? null : a,
-          cloudValue: b?.isEmpty == true ? null : b,
-        ));
+        diffs.add(
+          SyncFieldDiff(
+            field: field,
+            label: label,
+            localValue: a?.isEmpty == true ? null : a,
+            cloudValue: b?.isEmpty == true ? null : b,
+          ),
+        );
       }
     }
 
     cmp('name', 'Nombre', local.name, row['name'] as String?);
-    cmp('director', 'Director', local.director, row['director_display'] as String?);
-    cmp('description', 'Descripción', local.description, row['description'] as String?);
+    cmp(
+      'director',
+      'Director',
+      local.director,
+      row['director_display'] as String?,
+    );
+    cmp(
+      'description',
+      'Descripción',
+      local.description,
+      row['description'] as String?,
+    );
     cmp('client', 'Cliente', local.clientName, row['client_name'] as String?);
-    cmp('status', 'Estado', _statusLabel(local.status),
-        _statusLabel(row['status'] as String? ?? 'preproduction'));
+    cmp(
+      'status',
+      'Estado',
+      _statusLabel(local.status),
+      _statusLabel(row['status'] as String? ?? 'preproduction'),
+    );
     cmp('sort', 'Orden', '${local.sortOrder}', '${row['sort_order'] ?? 0}');
     // icon_code: omitido (cosmético; defaults distintos local vs nube no deben bloquear sync)
 
@@ -476,8 +508,8 @@ class SyncPlanBuilder {
   String? _norm(String? v) => v?.trim().isEmpty == true ? null : v?.trim();
 
   String _statusLabel(String status) => switch (status) {
-        'shooting' => 'Rodaje',
-        'post' => 'Post',
-        _ => 'Preproducción',
-      };
+    'shooting' => 'Rodaje',
+    'post' => 'Post',
+    _ => 'Preproducción',
+  };
 }

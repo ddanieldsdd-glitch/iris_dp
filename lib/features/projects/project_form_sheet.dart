@@ -107,49 +107,47 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
     final director = _directorCtrl.text.trim();
 
     try {
-    if (_isEditing) {
-      final updated = widget.project!.copyWith(
-        name: name,
-        director: director.isEmpty ? const Value(null) : Value(director),
-        status: _status,
-        iconCode: _selectedIcon,
-        groupId: Value(_groupId),
-        coverImagePath: Value(_coverImagePath),
-        updatedAt: DateTime.now(),
-      );
-      await ProjectCloudActions.saveProject(ref, updated);
-    } else {
-      final newId = await ProjectCloudActions.createProject(
-        ref,
-        name: name,
-        director: director.isEmpty ? null : director,
-        status: _status,
-        iconCode: _selectedIcon,
-        groupId: _groupId,
-      );
-      if (_coverImagePath != null) {
-        final stored = await _persistCoverForNewProject(newId);
-        if (stored != null) {
-          final created = await db.getProject(newId);
-          if (created != null) {
-            await db.updateProject(
-              created.copyWith(
-                coverImagePath: Value(stored),
-                updatedAt: DateTime.now(),
-              ),
-            );
+      if (_isEditing) {
+        final updated = widget.project!.copyWith(
+          name: name,
+          director: director.isEmpty ? const Value(null) : Value(director),
+          status: _status,
+          iconCode: _selectedIcon,
+          groupId: Value(_groupId),
+          coverImagePath: Value(_coverImagePath),
+          updatedAt: DateTime.now(),
+        );
+        await ProjectCloudActions.saveProject(ref, updated);
+      } else {
+        final newId = await ProjectCloudActions.createProject(
+          ref,
+          name: name,
+          director: director.isEmpty ? null : director,
+          status: _status,
+          iconCode: _selectedIcon,
+          groupId: _groupId,
+        );
+        if (_coverImagePath != null) {
+          final stored = await _persistCoverForNewProject(newId);
+          if (stored != null) {
+            final created = await db.getProject(newId);
+            if (created != null) {
+              await db.updateProject(
+                created.copyWith(
+                  coverImagePath: Value(stored),
+                  updatedAt: DateTime.now(),
+                ),
+              );
+            }
           }
         }
       }
-    }
 
-    if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No se pudo guardar el proyecto: $e'),
-        ),
+        SnackBar(content: Text('No se pudo guardar el proyecto: $e')),
       );
     }
   }
@@ -185,14 +183,18 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
               TextField(
                 controller: _nameCtrl,
                 style: AppTypography.bodyLarge(palette),
-                decoration: const InputDecoration(hintText: 'Nombre del proyecto'),
+                decoration: const InputDecoration(
+                  hintText: 'Nombre del proyecto',
+                ),
                 autofocus: !_isEditing,
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: _directorCtrl,
                 style: AppTypography.bodyLarge(palette),
-                decoration: const InputDecoration(hintText: 'Director (opcional)'),
+                decoration: const InputDecoration(
+                  hintText: 'Director (opcional)',
+                ),
               ),
               const SizedBox(height: AppSpacing.lg),
               Text('Imagen del proyecto', style: AppTypography.label(palette)),
@@ -227,7 +229,9 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
                       ),
                       child: Icon(
                         icon,
-                        color: selected ? palette.accent : palette.textSecondary,
+                        color: selected
+                            ? palette.accent
+                            : palette.textSecondary,
                         size: 22,
                       ),
                     ),
@@ -335,7 +339,8 @@ class _CoverImagePicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final hasCover = coverPath != null &&
+    final hasCover =
+        coverPath != null &&
         coverPath!.isNotEmpty &&
         File(coverPath!).existsSync();
     final icon = IconData(iconCode, fontFamily: 'MaterialIcons');
@@ -374,8 +379,9 @@ class _CoverImagePicker extends StatelessWidget {
                 onPressed: onRemove,
                 child: Text(
                   'Quitar',
-                  style: AppTypography.bodyMedium(palette)
-                      .copyWith(color: palette.error),
+                  style: AppTypography.bodyMedium(
+                    palette,
+                  ).copyWith(color: palette.error),
                 ),
               ),
           ],
@@ -413,15 +419,13 @@ class _StatusOption extends StatelessWidget {
               ? palette.accent.withValues(alpha: 0.15)
               : palette.surfaceOverlay,
           borderRadius: AppRadius.pill,
-          border: Border.all(
-            color: selected ? palette.accent : palette.border,
-          ),
+          border: Border.all(color: selected ? palette.accent : palette.border),
         ),
         child: Text(
           label,
-          style: AppTypography.bodyMedium(palette).copyWith(
-            color: selected ? palette.accent : palette.textSecondary,
-          ),
+          style: AppTypography.bodyMedium(
+            palette,
+          ).copyWith(color: selected ? palette.accent : palette.textSecondary),
         ),
       ),
     );

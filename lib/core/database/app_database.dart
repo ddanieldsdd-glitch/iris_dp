@@ -785,6 +785,10 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(rentalReservations);
         await m.createTable(rentalItems);
       }
+      if (from < 64) {
+        // Copias de consulta de los proyectos de invitados.
+        await add(projects, projects.mirrorCloudId);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -5468,7 +5472,7 @@ const kQueryIndexes = [
   ('project_annotation_documents', 'project_id'),
 ];
 
-const kSchemaVersion = 63;
+const kSchemaVersion = 64;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

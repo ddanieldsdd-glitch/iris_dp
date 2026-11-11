@@ -38,7 +38,9 @@ final mediaIngestServiceProvider = Provider<MediaIngestService?>((ref) {
   );
 });
 
-final mediaUploadProgressProvider = StreamProvider<MediaUploadQueueProgress>((ref) {
+final mediaUploadProgressProvider = StreamProvider<MediaUploadQueueProgress>((
+  ref,
+) {
   final queue = ref.watch(mediaUploadQueueProvider);
   if (queue == null) {
     return Stream.value(const MediaUploadQueueProgress());
@@ -48,8 +50,5 @@ final mediaUploadProgressProvider = StreamProvider<MediaUploadQueueProgress>((re
 
 final mediaUploadHasWorkProvider = Provider<bool>((ref) {
   final progress = ref.watch(mediaUploadProgressProvider);
-  return progress.maybeWhen(
-    data: (p) => p.hasWork,
-    orElse: () => false,
-  );
+  return progress.maybeWhen(data: (p) => p.hasWork, orElse: () => false);
 });
