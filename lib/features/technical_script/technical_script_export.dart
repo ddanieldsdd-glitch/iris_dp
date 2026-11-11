@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart' show Color;
 
 import '../../core/database/app_database.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/distinct_images.dart';
 import '../../core/utils/export_cancel.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../core/utils/project_color_scheme.dart';
@@ -148,20 +149,26 @@ Future<ScriptDocRow> _docRow(
   }
   final rowFill = sheet.rowFill(shot.notesHighlight);
   // Todas las referencias propias; sin ninguna, la heredada del storyboard.
-  final own = referenceImagesOf(
-    shot,
-    await db.getReferencesForShot(shot.id),
-  );
+  final storyPath = storyboard ? storyboardImageOf(shot) : null;
+  // Sin repetir, ni entre ellas ni con la de la columna STORYBOARD (una
+  // copia del dibujo usada como referencia es la misma imagen).
+  final distinct = await distinctImagePaths([
+    storyPath,
+    ...referenceImagesOf(shot, await db.getReferencesForShot(shot.id)),
+  ]);
+  final own = storyPath == null ? distinct : distinct.skip(1).toList();
+  final fallback = referenceImageOf(shot);
   final images = <Uint8List>[];
   for (final path in !references
       ? const <String?>[]
-      : own.isEmpty
-      ? [referenceImageOf(shot)]
-      : own) {
+      : own.isNotEmpty
+      ? own
+      : storyPath == null
+      ? [fallback]
+      : const <String?>[]) {
     final bytes = await PdfSafeImage.loadFromPathMaxEdge(path, maxEdge: 1200);
     if (bytes != null) images.add(bytes);
   }
-  final storyPath = storyboard ? storyboardImageOf(shot) : null;
   final story = storyPath == null
       ? null
       : await PdfSafeImage.loadFromPathMaxEdge(storyPath, maxEdge: 1200);
