@@ -95,7 +95,7 @@ Trabajar todo en el 3D sin volver a la planta. Rama `plan/stage-editor-3d`.
 - 🟡 Sin probar en iPad ni en Windows. **ED.0 Maqueta legible.** La luz de trabajo ya no quema los blancos, cada cara lleva su tono y las paredes, sus aristas.
 - 🟡 Probado en el navegador del Mac; sin probar en la app, el iPad ni Windows. **ED.1 Transformar.** Panel con X, Y, giro, altura y cota con números y pasos ±; en el visor, un aro azul que gira y una flecha verde que sube y baja. Las medidas siguen en los controles de cada pieza.
 - **ED.2 Añadir desde el 3D.** Paleta de focos, cámaras, personas, atrezzo y grip que se sueltan en el suelo; duplicar, borrar y deshacer.
-- **ED.3 Planos y escenas en el 3D.** Tira con los planos del set: tocar uno salta a su cámara con lente y encuadre; cambiar de set o escena sin salir.
+- 🟡 Probado con tests; sin probar en la app, el iPad ni Windows. **ED.3 Planos y escenas en el 3D.** Encima del 3D, una tira con los planos del set (o de la escena del plano abierto): tocar uno mira por su cámara y, si tiene dos, tocarlo otra vez pasa a la otra; si su cámara no está en ese 3D, abre su planta. Mantener pulsado abre siempre su planta. El título es un menú para cambiar de set o de escena. Al pasar de planta el 3D sigue abierto (también a pantalla entera) y mira por la cámara del plano.
 - **ED.4 IRIS Stage como casa del 3D.** Atajo desde la planta 2D y «outliner» con todo lo de la escena, incluidos los assets de Unreal, Fab y Megascans.
 - **ED.5 Storyboard sobre la cámara.** En cada viñeta, la cámara del plano y su vista 3D como fondo para dibujar encima con proporciones reales.
 

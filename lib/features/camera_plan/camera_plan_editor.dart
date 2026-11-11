@@ -1182,6 +1182,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _loading = false;
     });
     _lastSaved = _snapshot();
+    if (!_loadedOnce) {
+      _loadedOnce = true;
+      if (_reopen3dScreen) {
+        _reopen3dScreen = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _open3dScreen();
+        });
+      }
+    }
     _claimLive();
     // Si otro equipo la está editando, no se toca: se guardará al soltarla.
     if (_uidsToSave.isNotEmpty &&
@@ -4098,8 +4107,47 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   // ── 3D ────────────────────────────────────────────────────────────────────
 
   /// El 3D: en el Mac, un panel junto a la planta que se abre y se cierra;
-  /// en el iPad, su propia pantalla.
-  bool _show3d = false;
+  /// en el iPad, su propia pantalla. Sigue abierto al pasar a otra planta
+  /// (ED.3): se trabaja en el 3D sin volver al 2D.
+  late bool _show3d = _keep3d;
+  static bool _keep3d = false;
+
+  /// Se llegó aquí desde la tira del 3D: el 3D mira por la cámara del plano
+  /// y, si estaba a pantalla entera, se vuelve a abrir así.
+  static bool _lookThroughNext = false;
+  static bool _reopen3dScreen = false;
+  late final bool _lookThrough = () {
+    final v = _lookThroughNext;
+    _lookThroughNext = false;
+    return v;
+  }();
+  bool _loadedOnce = false;
+
+  /// La planta abierta, para la tira del 3D.
+  PlanTarget? get _navTarget {
+    if (widget.onNavigate == null) return null;
+    if (widget.lightSetupId case final id?) {
+      return PlanTarget.lightSetup(id, widget.label);
+    }
+    if (widget.shotId case final id?) {
+      return PlanTarget.shot(id, widget.label, leg: widget.leg);
+    }
+    return null;
+  }
+
+  /// Un plano, set o escena elegido en la tira del 3D.
+  void _navigateFrom3d(PlanTarget target, {bool fullScreen = false}) {
+    final go = widget.onNavigate;
+    if (go == null) return;
+    _lookThroughNext = target.scope == FloorPlanScope.shot;
+    if (fullScreen) {
+      _reopen3dScreen = true;
+      Navigator.of(context).pop();
+    } else {
+      _keep3d = true;
+    }
+    go(target);
+  }
 
   /// Ancho del panel 3D en el Mac; se cambia arrastrando su borde.
   double _view3dWidth = 640;
@@ -4110,6 +4158,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   void _toggle3d() {
     if (_wide) {
       setState(() => _show3d = !_show3d);
+      _keep3d = _show3d;
       return;
     }
     _open3dScreen();
@@ -4137,6 +4186,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       onRoom: _saveRoom,
       exposure: _exposure,
       stop: _targetStop,
+      navTarget: _navTarget,
+      onNavigate: (t) => _navigateFrom3d(t, fullScreen: true),
+      lookThrough: _lookThrough,
     );
   }
 
@@ -6661,6 +6713,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   onRoom: _saveRoom,
                                   exposure: _exposure,
                                   stop: _targetStop,
+                                  navTarget: _navTarget,
+                                  onNavigate: _navigateFrom3d,
+                                  lookThrough: _lookThrough,
                                 ),
                               ),
                             ],
