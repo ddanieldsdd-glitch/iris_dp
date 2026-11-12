@@ -46,10 +46,16 @@ class PlacedDocumentLabel {
 /// Coloca los rótulos de una planta sin que se pisen: junto a su marca si
 /// hay sitio y, si no, en columnas a los lados de la planta. [overflow] dice
 /// que ni así caben y hace falta letra más pequeña.
+///
+/// Con [drawing], el dibujo ocupa ese hueco y los rótulos obligatorios van
+/// todos a los márgenes de fuera, a [gap] del dibujo: dentro no se pisa
+/// nada. Los opcionales solo entran dentro del dibujo si hay sitio.
 ({List<PlacedDocumentLabel> placed, bool overflow}) layoutDocumentLabels(
   List<DocumentLabel> labels,
   Size canvas, {
   List<Rect> marks = const [],
+  Rect? drawing,
+  double gap = 8,
 }) {
   const edge = 3.0;
   final bounds = (Offset.zero & canvas).deflate(edge);
@@ -58,7 +64,7 @@ class PlacedDocumentLabel {
 
   final demoted = <DocumentLabel>{
     for (final l in required)
-      if (l.anchors.length > 1) l,
+      if (l.anchors.length > 1 || drawing != null) l,
   };
   var near = <PlacedDocumentLabel>[];
   var columns = <PlacedDocumentLabel>[];
@@ -71,7 +77,14 @@ class PlacedDocumentLabel {
     demoted.addAll(
       required.where((l) => !near.any((p) => identical(p.label, l))),
     );
-    final result = _columns(demoted.toList(), labels, bounds, marks);
+    final result = _columns(
+      demoted.toList(),
+      labels,
+      bounds,
+      marks,
+      drawing: drawing,
+      gap: gap,
+    );
     columns = result.placed;
     overflow = result.overflow;
     final blocked = near.where(
@@ -88,7 +101,7 @@ class PlacedDocumentLabel {
       width: label.size.width,
       height: label.size.height,
     );
-    if (_free(rect, bounds, placed, marks)) {
+    if (_free(rect, drawing?.deflate(edge) ?? bounds, placed, marks)) {
       placed.add(PlacedDocumentLabel(label, rect));
     }
   }
@@ -147,24 +160,61 @@ List<PlacedDocumentLabel> _near(
   List<DocumentLabel> items,
   List<DocumentLabel> all,
   Rect bounds,
-  List<Rect> marks,
-) {
-  const gap = 8.0;
+  List<Rect> marks, {
+  Rect? drawing,
+  double gap = 8,
+}) {
   const spacing = 2.0;
   if (items.isEmpty) return (placed: const [], overflow: false);
 
   // Hasta dónde llega la planta: las columnas van por fuera.
   var left = double.infinity;
   var right = double.negativeInfinity;
-  for (final label in all) {
-    for (final a in label.anchors) {
-      left = math.min(left, a.dx - label.radius);
-      right = math.max(right, a.dx + label.radius);
+  if (drawing != null) {
+    left = drawing.left;
+    right = drawing.right;
+  } else {
+    for (final label in all) {
+      for (final a in label.anchors) {
+        left = math.min(left, a.dx - label.radius);
+        right = math.max(right, a.dx + label.radius);
+      }
     }
   }
   final middle = (left + right) / 2;
-  final lefts = items.where((l) => l.center.dx < middle).toList();
-  final rights = items.where((l) => l.center.dx >= middle).toList();
+
+  // Cuántas marcas ajenas cruza la línea de [label] hacia un lado.
+  int crossings(DocumentLabel label, bool toLeft) {
+    final a = label.center;
+    final start = Offset(toLeft ? left : right, a.dy);
+    var count = 0;
+    // Lo pegado a la propia figura (sus otras posiciones y números) no
+    // cuenta: la línea sale de ahí de todos modos.
+    final own = math.max(label.radius * 3.5, 12.0);
+    for (final m in marks) {
+      if (m.contains(a) || (m.center - a).distance < own) continue;
+      if (_segmentHits(start, a, m)) count++;
+    }
+    return count;
+  }
+
+  // Cada figura cruzada cuenta como cruzar media planta: una línea larga
+  // que atraviesa el dibujo también estorba.
+  bool goesLeft(DocumentLabel label) {
+    final near = label.center.dx < middle;
+    if (drawing == null) return near;
+    final width = math.max(1.0, right - left);
+    double cost(bool toLeft) =>
+        crossings(label, toLeft) +
+        2 * (toLeft ? label.center.dx - left : right - label.center.dx) / width;
+    final toLeft = cost(true);
+    final toRight = cost(false);
+    if ((toLeft - toRight).abs() < 1e-9) return near;
+    return toLeft < toRight;
+  }
+
+  final lefts = items.where(goesLeft).toList();
+  final rights = items.where((l) => !lefts.contains(l)).toList();
 
   double height(List<DocumentLabel> side) =>
       side.fold<double>(0, (sum, l) => sum + l.size.height + spacing);
@@ -218,4 +268,19 @@ List<PlacedDocumentLabel> _near(
   stack(lefts, true);
   stack(rights, false);
   return (placed: placed, overflow: overflow);
+}
+
+/// Si el tramo de [a] a [b] pasa por la marca [m] (tomada como círculo).
+bool _segmentHits(Offset a, Offset b, Rect m) {
+  final c = m.center;
+  final r = m.shortestSide / 2 * 0.9;
+  final ab = b - a;
+  final length = ab.distanceSquared;
+  final t = length == 0
+      ? 0.0
+      : (((c.dx - a.dx) * ab.dx + (c.dy - a.dy) * ab.dy) / length).clamp(
+          0.0,
+          1.0,
+        );
+  return (a + ab * t - c).distance < r;
 }

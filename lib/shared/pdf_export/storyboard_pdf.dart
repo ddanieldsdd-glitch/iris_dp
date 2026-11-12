@@ -21,6 +21,8 @@ import '../../features/storyboard/storyboard_image_palette.dart';
 import '../../features/storyboard/shot_sheet_data.dart';
 import '../../features/storyboard/storyboard_shot_sheet_pdf.dart';
 import '../rich_text/script_markup.dart';
+import 'shoot_day_brief.dart';
+import 'shoot_day_order_pdf.dart';
 import '../../core/utils/shot_reference_import.dart';
 
 /// PDF de storyboard con estilos CLEAN / BASIC / DETAIL / SHOT PLAN.
@@ -207,6 +209,9 @@ class StoryboardPdfExporter {
     StoryboardGroupExportChoice? groupChoice,
     StoryboardExportStyle style = StoryboardExportStyle.detail,
     AppDatabase? db,
+
+    /// Plan de rodaje que abre el documento.
+    List<ShootDayBrief> schedule = const [],
   }) async {
     final doc = pw.Document();
     var hasPages = false;
@@ -215,6 +220,12 @@ class StoryboardPdfExporter {
     final pdfTheme = PdfExportFonts.theme(
       regular: fonts.regular,
       bold: fonts.bold,
+    );
+    ShootDayOrderPdf.addSheets(
+      doc,
+      theme: pdfTheme,
+      projectName: project.name,
+      sheets: schedule,
     );
     // Las hojas por plano cargan sus imágenes una a una.
     final imageCache = groupChoice?.mode == StoryboardGroupExportMode.asShots
@@ -424,10 +435,7 @@ class StoryboardPdfExporter {
               children: [
                 pw.Expanded(
                   child: pw.Text(
-                    [
-                      project.name.toUpperCase(),
-                      ?dayLabel,
-                    ].join('  ·  '),
+                    [project.name.toUpperCase(), ?dayLabel].join('  ·  '),
                     maxLines: 1,
                     style: pw.TextStyle(
                       fontSize: 8.5,

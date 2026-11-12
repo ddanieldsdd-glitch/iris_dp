@@ -15,6 +15,30 @@ import 'plan_images.dart';
 import 'plan_segment.dart';
 import 'plan_thumbnail.dart';
 
+/// Qué planta lleva un documento: la de cámara y actores, la de luz, o las
+/// dos seguidas.
+enum PlanExportView {
+  stage('Cámara y actores'),
+  light('Luz'),
+  both('Las dos');
+
+  final String label;
+  const PlanExportView(this.label);
+
+  bool get hasStage => this != light;
+  bool get hasLight => this != stage;
+
+  String get documentTitle => switch (this) {
+    stage => 'PLANTA DE CÁMARA',
+    light => 'PLANTA DE LUZ',
+    both => 'PLANTA DE CÁMARA Y LUZ',
+  };
+}
+
+/// Una planta de documento: cámaras y actores con sus nombres al margen, o
+/// las luces numeradas con cámaras y actores atenuados.
+enum PlanSheetView { stage, light }
+
 /// Pinta plantas para los documentos tal como se ven en el editor: con la
 /// luz del grupo, las imágenes, la cenital y los recorridos. Las plantas del
 /// proyecto se cargan una sola vez, por muchos planos que se exporten.
@@ -201,6 +225,7 @@ class PlanRenderer {
     bool beams = true,
     String? backdrop,
     bool lightNumbers = false,
+    PlanSheetView? sheet,
   }) async => PlanThumbnail.renderPng(
     elements: picture.elements,
     inherited: picture.inherited,
@@ -219,7 +244,13 @@ class PlanRenderer {
     showBeams: beams,
     jpeg: jpeg,
     documentLightNumbers: lightNumbers,
+    documentGutter: sheet == PlanSheetView.stage ? documentGutterFor(size) : 0,
+    documentLightOnly: sheet == PlanSheetView.light,
   );
+
+  /// Ancho de cada margen de los nombres en una planta de cámara y actores.
+  static double documentGutterFor(Size size) =>
+      (size.width * 0.19).clamp(70.0, 130.0).toDouble();
 
   /// Las luces numeradas de [picture], en el mismo orden que sus números
   /// en la planta pintada con `lightNumbers`.
@@ -233,13 +264,13 @@ class PlanRenderer {
   /// leyenda aparte.
   Future<PlanSheet> shotSheet(
     Shot shot, {
-    bool light = true,
+    PlanSheetView view = PlanSheetView.light,
     bool beams = true,
     Size size = const Size(640, 420),
     double pixelRatio = 1,
     String? backdrop,
   }) async {
-    final picture = await shotPicture(shot, light: light);
+    final picture = await shotPicture(shot, light: view == PlanSheetView.light);
     return PlanSheet(
       await png(
         picture,
@@ -249,8 +280,9 @@ class PlanRenderer {
         beams: beams,
         backdrop: backdrop,
         lightNumbers: true,
+        sheet: view,
       ),
-      legendOf(picture),
+      view == PlanSheetView.light ? legendOf(picture) : const [],
     );
   }
 
@@ -258,13 +290,16 @@ class PlanRenderer {
   /// [shotSheet].
   Future<PlanSheet> setupSheet(
     LightSetup setup, {
-    bool light = true,
+    PlanSheetView view = PlanSheetView.light,
     bool beams = true,
     Size size = const Size(640, 420),
     double pixelRatio = 1,
     String? backdrop,
   }) async {
-    final picture = await setupPicture(setup, light: light);
+    final picture = await setupPicture(
+      setup,
+      light: view == PlanSheetView.light,
+    );
     return PlanSheet(
       await png(
         picture,
@@ -274,8 +309,9 @@ class PlanRenderer {
         beams: beams,
         backdrop: backdrop,
         lightNumbers: true,
+        sheet: view,
       ),
-      legendOf(picture),
+      view == PlanSheetView.light ? legendOf(picture) : const [],
     );
   }
 
@@ -360,7 +396,8 @@ class PlanPicture {
       all = all == null ? rect : all!.expandToInclude(rect);
     }
 
-    void point(Offset p) => include(Rect.fromCircle(center: p, radius: _margin));
+    void point(Offset p) =>
+        include(Rect.fromCircle(center: p, radius: _margin));
     for (final el in [...inherited, ...elements]) {
       point(el.position);
       if (PlanSegment.isSegment(el)) point(PlanSegment.end(el));

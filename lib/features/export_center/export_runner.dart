@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/database/app_database.dart';
 import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/pdf_safe_image.dart';
+import '../../shared/pdf_export/shoot_day_brief.dart';
 import '../../shared/pdf_export/shooting_plan_pdf.dart';
 import '../../shared/pdf_export/storyboard_pdf.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
@@ -54,26 +55,53 @@ class ExportRunner {
         ),
   ];
 
+  /// El plan de rodaje de las jornadas de [sections], si se pidió. Sin
+  /// jornadas no hay plan que poner.
+  Future<List<ShootDayBrief>> _schedule(
+    List<ExportDaySection> sections,
+    ExportOptions options,
+  ) async {
+    if (!options.withSchedule) return const [];
+    final dayIds = {
+      for (final section in sections)
+        if (section.day != null) section.day!.id,
+    };
+    if (dayIds.isEmpty) return const [];
+    final sheets = await ShootDayBrief.load(
+      db,
+      source.project.id,
+      dayIds: dayIds,
+      coverPath: options.planCoverImage,
+      fallbackCoverPath: source.project.coverImagePath,
+    );
+    return options.withWeather
+        ? sheets
+        : [for (final sheet in sheets) sheet.withoutWeather()];
+  }
+
   Future<Uint8List> _storyboard(
     List<ExportDaySection> sections,
     ExportOptions options,
-  ) => StoryboardPdfExporter.buildParts(
+  ) async => StoryboardPdfExporter.buildParts(
     project: source.project,
     parts: _parts(sections),
     groupChoice: options.look.choice(options.imageSource),
     db: db,
+    schedule: await _schedule(sections, options),
   );
 
   Future<Uint8List> _plan(
     List<ExportDaySection> sections,
     ExportOptions options,
-  ) => ShootingPlanPdf.build(
+  ) async => ShootingPlanPdf.build(
     db: db,
     project: source.project,
     sections: sections,
-    withLight: options.planWithLight,
+    view: options.planView,
     withBeams: options.planBeams,
     withOverviews: options.planOverviews,
+    withIndex: options.planIndex,
+    schedule: await _schedule(sections, options),
     coverImagePath: options.planCoverImage,
     planBackdropPath: options.planBackdropImage,
   );
@@ -90,6 +118,8 @@ class ExportRunner {
       settings,
       hiddenColumns: options.script.hiddenColumns,
       coverPath: options.planCoverImage,
+      withBrief: options.withSchedule,
+      withWeather: options.withWeather,
     );
     final doc = options.script.applyTo(built!);
     if (!word) return TechnicalScriptPdfExporter.buildBytes(doc);

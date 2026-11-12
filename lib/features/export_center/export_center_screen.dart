@@ -22,6 +22,7 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
 import '../camera_plan/plan_data.dart';
+import '../camera_plan/plan_renderer.dart' show PlanExportView;
 import '../camera_plan/plan_view_picker.dart';
 import '../projects/project_card_actions.dart' show pickMoodboardCover;
 import '../shoot_documents/shoot_days_board.dart';
@@ -947,14 +948,31 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
     final body = switch (_options.document) {
       ExportDocument.storyboard => _storyboardFormat(palette),
       ExportDocument.shootingPlan => [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          value: _options.planWithLight,
-          onChanged: (v) => _setOptions(_options.copyWith(planWithLight: v)),
-          title: const Text('Con luz'),
-          subtitle: const Text('Apágalo para una planta solo de cámara.'),
+        SegmentedButton<PlanExportView>(
+          showSelectedIcon: false,
+          segments: [
+            for (final view in PlanExportView.values)
+              ButtonSegment(value: view, label: Text(view.label)),
+          ],
+          selected: {_options.planView},
+          onSelectionChanged: (v) =>
+              _setOptions(_options.copyWith(planView: v.first)),
         ),
-        if (_options.planWithLight)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xs),
+          child: Text(switch (_options.planView) {
+            PlanExportView.stage =>
+              'Cámaras, actores y recorridos, con los nombres al margen. '
+                  'Sin luces.',
+            PlanExportView.light =>
+              'Las luces numeradas, con su lista al lado. Cámaras y actores '
+                  'atenuados.',
+            PlanExportView.both =>
+              'Cada plano lleva su planta de cámara y actores y, debajo, la '
+                  'de luz.',
+          }, style: AppTypography.caption(palette)),
+        ),
+        if (_options.planView.hasLight)
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: _options.planBeams,
@@ -991,6 +1009,7 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
     };
     return [
       ...body,
+      ..._documentSwitches(),
       const SizedBox(height: AppSpacing.sm),
       Wrap(
         spacing: AppSpacing.sm,
@@ -1005,6 +1024,46 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
               ),
         ],
       ),
+    ];
+  }
+
+  /// Lo que abre el documento: índice, plan de rodaje y tiempo.
+  List<Widget> _documentSwitches() {
+    final document = _options.document;
+    final schedule = _options.withSchedule;
+    return [
+      if (document == ExportDocument.shootingPlan)
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _options.planIndex,
+          onChanged: (v) => _setOptions(_options.copyWith(planIndex: v)),
+          title: const Text('Índice'),
+          subtitle: const Text('En la portada, con la página de cada plano.'),
+        ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        value: schedule,
+        onChanged: (v) => _setOptions(_options.withScheduleSet(v)),
+        title: Text(
+          document == ExportDocument.technicalScript
+              ? 'Portada de la jornada'
+              : 'Plan de rodaje al principio',
+        ),
+        subtitle: Text(
+          document == ExportDocument.technicalScript
+              ? 'Lugar, mapa, tiempo y horario. Solo al exportar una jornada.'
+              : 'El orden del día de cada jornada exportada, antes de los '
+                    'planos.',
+        ),
+      ),
+      if (schedule)
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _options.withWeather,
+          onChanged: (v) => _setOptions(_options.copyWith(withWeather: v)),
+          title: const Text('Meteorología'),
+          subtitle: const Text('La previsión del tiempo. El sol se queda.'),
+        ),
     ];
   }
 

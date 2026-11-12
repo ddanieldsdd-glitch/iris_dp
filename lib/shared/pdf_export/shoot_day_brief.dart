@@ -131,6 +131,25 @@ class ShootDayBrief {
   });
 
   bool get located => latitude != null && longitude != null;
+
+  /// La misma jornada sin la previsión del tiempo. El sol se queda: es
+  /// luz, no meteorología.
+  ShootDayBrief withoutWeather() => ShootDayBrief(
+    dayName: dayName,
+    position: position,
+    date: date,
+    window: window,
+    call: call,
+    placeName: placeName,
+    placeDetail: placeDetail,
+    latitude: latitude,
+    longitude: longitude,
+    map: map,
+    cover: cover,
+    note: note,
+    sun: sun,
+    rows: rows,
+  );
   String? get mapsUrl => located ? siteMapsUrl(latitude!, longitude!) : null;
   String? get wazeUrl => located ? siteWazeUrl(latitude!, longitude!) : null;
 

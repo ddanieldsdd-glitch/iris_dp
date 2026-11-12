@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../shared/annotations/annotation_canvas.dart';
 import '../../shared/annotations/annotation_document.dart';
+import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
 import 'plan_images.dart';
@@ -173,17 +174,33 @@ class PlanThumbnail extends StatelessWidget {
     /// Mayor acercamiento sin sección elegida. En pantalla 1; en los
     /// documentos la planta llena su hueco aunque el decorado sea pequeño.
     double maxScale = 1.0,
+
+    /// Margen mínimo en la hoja alrededor de lo encuadrado: en un documento
+    /// las figuras tienen tamaño fijo y no deben quedar cortadas en el borde.
+    double sheetMargin = 0,
   }) {
-    if (crop != null) {
-      final scale = math.min(
-        _maxCropScale,
-        math.min(size.width / crop.width, size.height / crop.height),
+    // Con margen en la hoja, la escala depende del margen y el margen de la
+    // escala: dos vueltas bastan.
+    ({double scale, Offset offset}) fit(Rect bounds, double limit) {
+      var scale = math.min(
+        limit,
+        math.min(size.width / bounds.width, size.height / bounds.height),
       );
+      var framed = bounds;
+      for (var i = 0; i < 2 && sheetMargin > 0; i++) {
+        framed = bounds.inflate(sheetMargin / scale);
+        scale = math.min(
+          limit,
+          math.min(size.width / framed.width, size.height / framed.height),
+        );
+      }
       return (
         scale: scale,
-        offset: size.center(Offset.zero) - crop.center * scale,
+        offset: size.center(Offset.zero) - framed.center * scale,
       );
     }
+
+    if (crop != null) return fit(crop, _maxCropScale);
     var bounds =
         focus ??
         (all.isNotEmpty
@@ -219,13 +236,40 @@ class PlanThumbnail extends StatelessWidget {
           ? documentMargin
           : _margin,
     );
-    final scale = math.min(
-      maxScale,
-      math.min(size.width / bounds.width, size.height / bounds.height),
-    );
-    return (
-      scale: scale,
-      offset: size.center(Offset.zero) - bounds.center * scale,
+    return fit(bounds, maxScale);
+  }
+
+  /// Lo que ocupa la planta en la hoja: sus elementos, zonas y dibujos, o
+  /// la sección elegida si la hay.
+  static Rect? _contentOnSheet({
+    required List<PlanElement> all,
+    required List<PlanZone> zones,
+    required Rect? drawn,
+    required Rect? crop,
+    required double scale,
+    required Offset offset,
+  }) {
+    Rect? world;
+    void add(Rect r) => world = world?.expandToInclude(r) ?? r;
+    for (final el in all) {
+      add(Rect.fromCircle(center: el.position, radius: 1));
+      if (PlanSegment.isSegment(el)) {
+        add(Rect.fromCircle(center: PlanSegment.end(el), radius: 1));
+      }
+      for (final p in el.pathPoints) {
+        add(Rect.fromCircle(center: p, radius: 1));
+      }
+    }
+    for (final zone in zones) {
+      add(zone.rect);
+    }
+    if (drawn != null) add(drawn);
+    if (crop != null) world = world?.intersect(crop) ?? crop;
+    final w = world;
+    if (w == null || w.isEmpty) return null;
+    return Rect.fromPoints(
+      offset + w.topLeft * scale,
+      offset + w.bottomRight * scale,
     );
   }
 
@@ -259,6 +303,13 @@ class PlanThumbnail extends StatelessWidget {
     /// [CameraPlanPainter.documentLightNumbers].
     bool documentLightNumbers = false,
 
+    /// Margen a cada lado, fuera del dibujo, donde van los nombres de
+    /// cámaras y actores; ver [CameraPlanPainter.documentDrawing].
+    double documentGutter = 0,
+
+    /// Planta de luz; ver [CameraPlanPainter.documentLightOnly].
+    bool documentLightOnly = false,
+
     /// En JPEG: el PDF lo mete tal cual, y un PNG lo descomprime y lo vuelve
     /// a comprimir en el hilo de la interfaz.
     bool jpeg = false,
@@ -277,15 +328,57 @@ class PlanThumbnail extends StatelessWidget {
       }
     }
     if (all.isEmpty && zones.isEmpty && drawn == null) return null;
-    final (:scale, :offset) = frame(
-      size,
+    // Con márgenes, la planta se encuadra en el hueco del centro.
+    final inner = documentGutter > 0
+        ? Rect.fromLTRB(
+            documentGutter,
+            0,
+            size.width - documentGutter,
+            size.height,
+          )
+        : Offset.zero & size;
+    // En la planta de cámara y actores manda dónde está cada uno: se
+    // encuadra la zona donde se mueven, como al trabajar en el editor, y no
+    // el decorado entero.
+    var view = crop;
+    if (documentGutter > 0) {
+      Rect? action;
+      for (final el in all) {
+        if (el.type != ElementType.camera && el.type != ElementType.actor) {
+          continue;
+        }
+        for (final p in [el.position, ...el.pathPoints]) {
+          final r = Rect.fromCircle(center: p, radius: 1);
+          action = action?.expandToInclude(r) ?? r;
+        }
+      }
+      if (action != null) view = action.inflate(60);
+    }
+    final framed = frame(
+      inner.size,
       all: all,
       focus: focus,
       zones: zones,
       drawn: drawn,
-      crop: crop,
+      crop: view,
       maxScale: documentMarks ? documentMaxScale : 1.0,
+      sheetMargin: documentGutter > 0 ? 26 : 0,
     );
+    final scale = framed.scale;
+    final offset = framed.offset + inner.topLeft;
+    // El dibujo acaba donde acaba la planta: los nombres van pegados a ella
+    // y sus líneas son cortas.
+    final drawing = documentGutter > 0
+        ? _contentOnSheet(
+                all: all,
+                zones: zones,
+                drawn: drawn,
+                crop: view,
+                scale: scale,
+                offset: offset,
+              )?.inflate(14).intersect(inner) ??
+              inner
+        : inner;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder, Offset.zero & (size * pixelRatio));
     canvas.scale(pixelRatio);
@@ -308,10 +401,15 @@ class PlanThumbnail extends StatelessWidget {
       documentBackdrop: documentBackdrop,
       showBeams: showBeams,
       documentLightNumbers: documentLightNumbers,
+      documentDrawing: documentGutter > 0 ? drawing : null,
+      documentLightOnly: documentLightOnly,
     ).paint(canvas, size);
-    for (final drawing in drawings) {
+    // Lo dibujado a mano y el recorrido entre zonas, dentro del dibujo.
+    canvas.save();
+    canvas.clipRect(drawing);
+    for (final sketch in drawings) {
       AnnotationPainter(
-        document: drawing,
+        document: sketch,
         viewport: AnnotationViewport(
           documentSize: drawingSheet,
           offset: offset,
@@ -327,6 +425,7 @@ class PlanThumbnail extends StatelessWidget {
         color: AppPalette.light.accent,
       ).paint(canvas, size);
     }
+    canvas.restore();
     final image = await recorder.endRecording().toImage(
       (size.width * pixelRatio).round(),
       (size.height * pixelRatio).round(),
