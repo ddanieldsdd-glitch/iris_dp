@@ -61,10 +61,11 @@ Future<int> _repairForeignPrimaries(AppDatabase db, int projectId) async {
   for (final row in shots) {
     if (File(row.read<String>('primary_path')).existsSync()) continue;
     final shotId = row.read<int>('id');
-    final refs = await (db.select(db.shotReferences)
-          ..where((r) => r.shotId.equals(shotId))
-          ..orderBy([(r) => OrderingTerm.asc(r.sortOrder)]))
-        .get();
+    final refs =
+        await (db.select(db.shotReferences)
+              ..where((r) => r.shotId.equals(shotId))
+              ..orderBy([(r) => OrderingTerm.asc(r.sortOrder)]))
+            .get();
     final here = refs.where((r) => File(r.imagePath).existsSync()).firstOrNull;
     if (here == null) continue;
     await (db.update(db.shots)..where((s) => s.id.equals(shotId))).write(

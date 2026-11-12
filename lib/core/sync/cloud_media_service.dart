@@ -34,10 +34,9 @@ class CloudMediaService {
   final http.Client _http;
 
   CloudMediaService(this._client, {http.Client? httpClient})
-      : _http = httpClient ?? http.Client();
+    : _http = httpClient ?? http.Client();
 
-  static String hashBytes(Uint8List bytes) =>
-      sha256.convert(bytes).toString();
+  static String hashBytes(Uint8List bytes) => sha256.convert(bytes).toString();
 
   static String hashFile(String path) {
     final bytes = File(path).readAsBytesSync();
@@ -78,7 +77,8 @@ class CloudMediaService {
         existing['public_id'] != null) {
       return CloudUploadResult(
         publicId: existing['public_id'] as String,
-        deliveryUrl: existing['delivery_url'] as String? ??
+        deliveryUrl:
+            existing['delivery_url'] as String? ??
             CloudinaryConfig.deliveryUrl(existing['public_id'] as String),
         bytesOriginal: bytesOriginalOverride ?? optimized.originalBytes,
         bytesStored: optimized.optimizedBytes,
@@ -140,9 +140,7 @@ class CloudMediaService {
       'local_path_hint': localPath,
       'category': entityType,
       'local_hash': contentHash,
-      'metadata': {
-        if (source != null) 'source': source,
-      },
+      'metadata': {if (source != null) 'source': source},
     };
 
     if (existing != null && existing['id'] != null) {
@@ -247,9 +245,8 @@ class CloudMediaService {
   }
 
   /// Los bytes de un archivo de Supabase Storage.
-  Future<Uint8List> downloadStorageBytes(String storagePath) => _client.storage
-      .from(SupabaseConfig.storageBucket)
-      .download(storagePath);
+  Future<Uint8List> downloadStorageBytes(String storagePath) =>
+      _client.storage.from(SupabaseConfig.storageBucket).download(storagePath);
 
   /// Descarga un archivo de Supabase Storage al proyecto.
   Future<String?> downloadStorageFile({
@@ -282,16 +279,20 @@ class CloudMediaService {
       ..fields['quality'] = 'auto:good'
       ..fields['fetch_format'] = 'auto'
       ..fields['flags'] = 'strip_profile'
-      ..files.add(http.MultipartFile.fromBytes(
-        'file',
-        bytes,
-        filename: 'upload$extension',
-      ));
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: 'upload$extension',
+        ),
+      );
 
     final streamed = await _http.send(request);
     final body = await streamed.stream.bytesToString();
     if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
-      throw Exception('Cloudinary upload failed (${streamed.statusCode}): $body');
+      throw Exception(
+        'Cloudinary upload failed (${streamed.statusCode}): $body',
+      );
     }
     return Map<String, dynamic>.from(jsonDecode(body) as Map);
   }

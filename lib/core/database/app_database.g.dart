@@ -525,6 +525,17 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _mirrorCloudIdMeta = const VerificationMeta(
+    'mirrorCloudId',
+  );
+  @override
+  late final GeneratedColumn<String> mirrorCloudId = GeneratedColumn<String>(
+    'mirror_cloud_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _cardSizeMeta = const VerificationMeta(
     'cardSize',
   );
@@ -586,6 +597,7 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     moodboardCatalogJson,
     cardMetricsJson,
     cardColor,
+    mirrorCloudId,
     cardSize,
     createdAt,
     updatedAt,
@@ -787,6 +799,15 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         cardColor.isAcceptableOrUnknown(data['card_color']!, _cardColorMeta),
       );
     }
+    if (data.containsKey('mirror_cloud_id')) {
+      context.handle(
+        _mirrorCloudIdMeta,
+        mirrorCloudId.isAcceptableOrUnknown(
+          data['mirror_cloud_id']!,
+          _mirrorCloudIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('card_size')) {
       context.handle(
         _cardSizeMeta,
@@ -910,6 +931,10 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         DriftSqlType.int,
         data['${effectivePrefix}card_color'],
       ),
+      mirrorCloudId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mirror_cloud_id'],
+      ),
       cardSize: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}card_size'],
@@ -972,6 +997,10 @@ class Project extends DataClass implements Insertable<Project> {
   /// Color de la tarjeta del proyecto (ARGB). Nulo: el de acento.
   final int? cardColor;
 
+  /// Copia de consulta del proyecto de un invitado (su id en la nube). Solo
+  /// la tiene el administrador; no se sube ni se sincroniza nunca.
+  final String? mirrorCloudId;
+
   /// Tamaño de la tarjeta: s, m, l o xl. Nulo: m.
   final String? cardSize;
   final DateTime createdAt;
@@ -1001,6 +1030,7 @@ class Project extends DataClass implements Insertable<Project> {
     this.moodboardCatalogJson,
     this.cardMetricsJson,
     this.cardColor,
+    this.mirrorCloudId,
     this.cardSize,
     required this.createdAt,
     required this.updatedAt,
@@ -1069,6 +1099,9 @@ class Project extends DataClass implements Insertable<Project> {
     }
     if (!nullToAbsent || cardColor != null) {
       map['card_color'] = Variable<int>(cardColor);
+    }
+    if (!nullToAbsent || mirrorCloudId != null) {
+      map['mirror_cloud_id'] = Variable<String>(mirrorCloudId);
     }
     if (!nullToAbsent || cardSize != null) {
       map['card_size'] = Variable<String>(cardSize);
@@ -1142,6 +1175,9 @@ class Project extends DataClass implements Insertable<Project> {
       cardColor: cardColor == null && nullToAbsent
           ? const Value.absent()
           : Value(cardColor),
+      mirrorCloudId: mirrorCloudId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mirrorCloudId),
       cardSize: cardSize == null && nullToAbsent
           ? const Value.absent()
           : Value(cardSize),
@@ -1192,6 +1228,7 @@ class Project extends DataClass implements Insertable<Project> {
       ),
       cardMetricsJson: serializer.fromJson<String?>(json['cardMetricsJson']),
       cardColor: serializer.fromJson<int?>(json['cardColor']),
+      mirrorCloudId: serializer.fromJson<String?>(json['mirrorCloudId']),
       cardSize: serializer.fromJson<String?>(json['cardSize']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -1227,6 +1264,7 @@ class Project extends DataClass implements Insertable<Project> {
       'moodboardCatalogJson': serializer.toJson<String?>(moodboardCatalogJson),
       'cardMetricsJson': serializer.toJson<String?>(cardMetricsJson),
       'cardColor': serializer.toJson<int?>(cardColor),
+      'mirrorCloudId': serializer.toJson<String?>(mirrorCloudId),
       'cardSize': serializer.toJson<String?>(cardSize),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -1258,6 +1296,7 @@ class Project extends DataClass implements Insertable<Project> {
     Value<String?> moodboardCatalogJson = const Value.absent(),
     Value<String?> cardMetricsJson = const Value.absent(),
     Value<int?> cardColor = const Value.absent(),
+    Value<String?> mirrorCloudId = const Value.absent(),
     Value<String?> cardSize = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -1310,6 +1349,9 @@ class Project extends DataClass implements Insertable<Project> {
         ? cardMetricsJson.value
         : this.cardMetricsJson,
     cardColor: cardColor.present ? cardColor.value : this.cardColor,
+    mirrorCloudId: mirrorCloudId.present
+        ? mirrorCloudId.value
+        : this.mirrorCloudId,
     cardSize: cardSize.present ? cardSize.value : this.cardSize,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -1370,6 +1412,9 @@ class Project extends DataClass implements Insertable<Project> {
           ? data.cardMetricsJson.value
           : this.cardMetricsJson,
       cardColor: data.cardColor.present ? data.cardColor.value : this.cardColor,
+      mirrorCloudId: data.mirrorCloudId.present
+          ? data.mirrorCloudId.value
+          : this.mirrorCloudId,
       cardSize: data.cardSize.present ? data.cardSize.value : this.cardSize,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -1403,6 +1448,7 @@ class Project extends DataClass implements Insertable<Project> {
           ..write('moodboardCatalogJson: $moodboardCatalogJson, ')
           ..write('cardMetricsJson: $cardMetricsJson, ')
           ..write('cardColor: $cardColor, ')
+          ..write('mirrorCloudId: $mirrorCloudId, ')
           ..write('cardSize: $cardSize, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -1436,6 +1482,7 @@ class Project extends DataClass implements Insertable<Project> {
     moodboardCatalogJson,
     cardMetricsJson,
     cardColor,
+    mirrorCloudId,
     cardSize,
     createdAt,
     updatedAt,
@@ -1468,6 +1515,7 @@ class Project extends DataClass implements Insertable<Project> {
           other.moodboardCatalogJson == this.moodboardCatalogJson &&
           other.cardMetricsJson == this.cardMetricsJson &&
           other.cardColor == this.cardColor &&
+          other.mirrorCloudId == this.mirrorCloudId &&
           other.cardSize == this.cardSize &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -1498,6 +1546,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
   final Value<String?> moodboardCatalogJson;
   final Value<String?> cardMetricsJson;
   final Value<int?> cardColor;
+  final Value<String?> mirrorCloudId;
   final Value<String?> cardSize;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -1526,6 +1575,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.moodboardCatalogJson = const Value.absent(),
     this.cardMetricsJson = const Value.absent(),
     this.cardColor = const Value.absent(),
+    this.mirrorCloudId = const Value.absent(),
     this.cardSize = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1555,6 +1605,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.moodboardCatalogJson = const Value.absent(),
     this.cardMetricsJson = const Value.absent(),
     this.cardColor = const Value.absent(),
+    this.mirrorCloudId = const Value.absent(),
     this.cardSize = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1584,6 +1635,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Expression<String>? moodboardCatalogJson,
     Expression<String>? cardMetricsJson,
     Expression<int>? cardColor,
+    Expression<String>? mirrorCloudId,
     Expression<String>? cardSize,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -1618,6 +1670,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
         'moodboard_catalog_json': moodboardCatalogJson,
       if (cardMetricsJson != null) 'card_metrics_json': cardMetricsJson,
       if (cardColor != null) 'card_color': cardColor,
+      if (mirrorCloudId != null) 'mirror_cloud_id': mirrorCloudId,
       if (cardSize != null) 'card_size': cardSize,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -1649,6 +1702,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Value<String?>? moodboardCatalogJson,
     Value<String?>? cardMetricsJson,
     Value<int?>? cardColor,
+    Value<String?>? mirrorCloudId,
     Value<String?>? cardSize,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -1678,6 +1732,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       moodboardCatalogJson: moodboardCatalogJson ?? this.moodboardCatalogJson,
       cardMetricsJson: cardMetricsJson ?? this.cardMetricsJson,
       cardColor: cardColor ?? this.cardColor,
+      mirrorCloudId: mirrorCloudId ?? this.mirrorCloudId,
       cardSize: cardSize ?? this.cardSize,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -1769,6 +1824,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     if (cardColor.present) {
       map['card_color'] = Variable<int>(cardColor.value);
     }
+    if (mirrorCloudId.present) {
+      map['mirror_cloud_id'] = Variable<String>(mirrorCloudId.value);
+    }
     if (cardSize.present) {
       map['card_size'] = Variable<String>(cardSize.value);
     }
@@ -1808,6 +1866,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
           ..write('moodboardCatalogJson: $moodboardCatalogJson, ')
           ..write('cardMetricsJson: $cardMetricsJson, ')
           ..write('cardColor: $cardColor, ')
+          ..write('mirrorCloudId: $mirrorCloudId, ')
           ..write('cardSize: $cardSize, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -41726,6 +41785,7 @@ typedef $$ProjectsTableCreateCompanionBuilder =
       Value<String?> moodboardCatalogJson,
       Value<String?> cardMetricsJson,
       Value<int?> cardColor,
+      Value<String?> mirrorCloudId,
       Value<String?> cardSize,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -41756,6 +41816,7 @@ typedef $$ProjectsTableUpdateCompanionBuilder =
       Value<String?> moodboardCatalogJson,
       Value<String?> cardMetricsJson,
       Value<int?> cardColor,
+      Value<String?> mirrorCloudId,
       Value<String?> cardSize,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -42401,6 +42462,11 @@ class $$ProjectsTableFilterComposer
 
   ColumnFilters<int> get cardColor => $composableBuilder(
     column: $table.cardColor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mirrorCloudId => $composableBuilder(
+    column: $table.mirrorCloudId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -43144,6 +43210,11 @@ class $$ProjectsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get mirrorCloudId => $composableBuilder(
+    column: $table.mirrorCloudId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get cardSize => $composableBuilder(
     column: $table.cardSize,
     builder: (column) => ColumnOrderings(column),
@@ -43290,6 +43361,11 @@ class $$ProjectsTableAnnotationComposer
 
   GeneratedColumn<int> get cardColor =>
       $composableBuilder(column: $table.cardColor, builder: (column) => column);
+
+  GeneratedColumn<String> get mirrorCloudId => $composableBuilder(
+    column: $table.mirrorCloudId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get cardSize =>
       $composableBuilder(column: $table.cardSize, builder: (column) => column);
@@ -43985,6 +44061,7 @@ class $$ProjectsTableTableManager
                 Value<String?> moodboardCatalogJson = const Value.absent(),
                 Value<String?> cardMetricsJson = const Value.absent(),
                 Value<int?> cardColor = const Value.absent(),
+                Value<String?> mirrorCloudId = const Value.absent(),
                 Value<String?> cardSize = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -44013,6 +44090,7 @@ class $$ProjectsTableTableManager
                 moodboardCatalogJson: moodboardCatalogJson,
                 cardMetricsJson: cardMetricsJson,
                 cardColor: cardColor,
+                mirrorCloudId: mirrorCloudId,
                 cardSize: cardSize,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -44043,6 +44121,7 @@ class $$ProjectsTableTableManager
                 Value<String?> moodboardCatalogJson = const Value.absent(),
                 Value<String?> cardMetricsJson = const Value.absent(),
                 Value<int?> cardColor = const Value.absent(),
+                Value<String?> mirrorCloudId = const Value.absent(),
                 Value<String?> cardSize = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -44071,6 +44150,7 @@ class $$ProjectsTableTableManager
                 moodboardCatalogJson: moodboardCatalogJson,
                 cardMetricsJson: cardMetricsJson,
                 cardColor: cardColor,
+                mirrorCloudId: mirrorCloudId,
                 cardSize: cardSize,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

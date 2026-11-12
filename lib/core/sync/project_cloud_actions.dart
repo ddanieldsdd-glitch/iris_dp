@@ -47,8 +47,7 @@ abstract final class ProjectCloudActions {
     final db = ref.read(databaseProvider);
     final sync = _service(ref);
     final workspaceId = await CloudSessionStore.workspaceId();
-    final loggedIn =
-        ref.read(supabaseClientProvider)?.auth.currentUser != null;
+    final loggedIn = ref.read(supabaseClientProvider)?.auth.currentUser != null;
 
     if (sync != null &&
         CloudRuntimeConfig.isActive &&

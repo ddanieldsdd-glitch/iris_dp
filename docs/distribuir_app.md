@@ -69,6 +69,21 @@ Resultado: `build/dmg/IRIS-DP.dmg`
 4. Abre IRIS DP → **inicia sesión con el mismo email**
 5. Pulsa el **icono de nube** para sincronizar proyectos
 
+### Dar IRIS a otra persona (invitado)
+
+Desde la migración 016 cada cuenta nueva necesita tu aprobación y tú, como administrador, puedes cerrarle el acceso cuando quieras.
+
+1. Pásale el `.dmg` de la última versión publicada (GitHub Releases).
+2. En su Mac: abrir el `.dmg`, arrastrar **IRIS** a Aplicaciones y abrirla. La primera vez macOS la bloquea porque no va firmada por Apple: **Ajustes del sistema → Privacidad y seguridad → Abrir igualmente**.
+3. Crea su cuenta desde la propia app. Verá «Tu cuenta está pendiente».
+4. En tu IRIS: **Ajustes → Invitados → Aprobar**. Al pulsar **Reintentar**, entra.
+5. Sus proyectos no ven los tuyos. Tú ves los suyos con el botón de personas de la pantalla de proyectos (copia de consulta: lo que toques no le llega).
+6. Opcional: **Tope de espacio** en su tarjeta, para que no llene la nube gratuita.
+
+**Cerrar la app.** «Cerrar acceso» en su tarjeta: en cuanto su app compruebe (al abrirla, al volver a ella o en una hora) ve tu mensaje y no se abre; sin conexión, como mucho 7 días. Sus proyectos siguen en su Mac. «Reabrir acceso» lo deshace. Para todos a la vez, **Mantenimiento** (a ti no te afecta).
+
+**Versión mínima.** Si publicas una versión que todos deben usar, sube `min_build` en `app_state` (SQL Editor): las versiones anteriores piden actualizar antes de abrirse.
+
 ---
 
 ## 4. Instalar en iPad e iPhone (desde el Mac)

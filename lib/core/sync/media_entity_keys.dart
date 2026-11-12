@@ -14,45 +14,35 @@ abstract final class MediaEntityKeys {
   static String byUid(String uid) => '$uidPrefix$uid';
 
   /// El uid de una clave [byUid], o nulo si es de las de posición.
-  static String? uidOf(String entityKey) =>
-      entityKey.startsWith(uidPrefix)
-          ? entityKey.substring(uidPrefix.length)
-          : null;
+  static String? uidOf(String entityKey) => entityKey.startsWith(uidPrefix)
+      ? entityKey.substring(uidPrefix.length)
+      : null;
 
   /// La clave de una imagen: por uid si lo tiene; si no (filas aún sin
   /// migrar), la de posición.
   static String forImage(String? uid, String Function() positional) =>
       uid != null && uid.isNotEmpty ? byUid(uid) : positional();
 
-  static String moodboard({
-    String? groupKey,
-    required int sortOrder,
-  }) =>
+  static String moodboard({String? groupKey, required int sortOrder}) =>
       'moodboard:${groupKey ?? 'ungrouped'}:$sortOrder';
 
   static String shotReference({
     required String shotKey,
     required int sortOrder,
-  }) =>
-      'shot:$shotKey:ref:$sortOrder';
+  }) => 'shot:$shotKey:ref:$sortOrder';
 
-  static String siteImage({
-    required String siteKey,
-    required int sortOrder,
-  }) =>
+  static String siteImage({required String siteKey, required int sortOrder}) =>
       'site:$siteKey:$sortOrder';
 
   static String locationImage({
     required String setKey,
     required int sortOrder,
-  }) =>
-      'set:$setKey:$sortOrder';
+  }) => 'set:$setKey:$sortOrder';
 
   static String shootDocumentBlock({
     required String documentKey,
     required int sortOrder,
-  }) =>
-      'doc:$documentKey:block:$sortOrder';
+  }) => 'doc:$documentKey:block:$sortOrder';
 
   static const projectCover = 'project:cover';
 }

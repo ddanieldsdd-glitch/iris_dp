@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/access/app_access_gate.dart';
 import 'core/navigation/route_observer.dart';
 import 'core/settings/app_prefs.dart';
 import 'core/cloud/cloud_providers.dart';
@@ -61,18 +62,20 @@ class IrisDPApp extends StatelessWidget {
           child: AppBackground(
             child: StorageRelocationGate(
               child: ConnectivityGate(
-                child: AutoSyncScheduler(
-                  child: AppUpdateGate(
-                    child: MediaSyncBinder(
-                      child: ScanJobsHost(
-                        child: RentalRemindersHost(
-                          child: DeviceUpdateHost(
-                            child: OnboardingGate(
-                              homeContentBuilder: (_) => const Column(
-                                children: [
-                                  AuthRequiredBanner(),
-                                  Expanded(child: ProjectsScreen()),
-                                ],
+                child: AppAccessGate(
+                  child: AutoSyncScheduler(
+                    child: AppUpdateGate(
+                      child: MediaSyncBinder(
+                        child: ScanJobsHost(
+                          child: RentalRemindersHost(
+                            child: DeviceUpdateHost(
+                              child: OnboardingGate(
+                                homeContentBuilder: (_) => const Column(
+                                  children: [
+                                    AuthRequiredBanner(),
+                                    Expanded(child: ProjectsScreen()),
+                                  ],
+                                ),
                               ),
                             ),
                           ),

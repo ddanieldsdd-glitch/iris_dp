@@ -1,5 +1,10 @@
 import '../../core/settings/settings_backups_section.dart';
+import '../../core/access/admin_guests_section.dart';
+import '../../core/access/app_access_gate.dart' show accessControlEnforced;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/access/app_access_service.dart';
 
 import '../../core/cloud/cloud_runtime_config.dart';
 import '../../core/settings/settings_cloud_link_section.dart';
@@ -35,6 +40,7 @@ abstract final class SettingsSectionIds {
   static const storage = 'storage';
   static const backups = 'backups';
   static const help = 'help';
+  static const guests = 'guests';
   static const cameraPlan = 'camera_plan';
   static const bible = 'bible';
   static const optics = 'optics';
@@ -44,8 +50,20 @@ abstract final class SettingsSectionIds {
 
 /// Todas las secciones, en el orden del lateral: primero lo de la app por
 /// prioridad y después las pantallas. Una pantalla entra aquí cuando tiene
-/// ajustes propios.
-List<SettingsSectionSpec> appSettingsSections() => [
+/// ajustes propios. [admin] añade la sección de invitados.
+List<SettingsSectionSpec> appSettingsSections({bool admin = false}) => [
+  if (admin)
+    SettingsSectionSpec(
+      id: SettingsSectionIds.guests,
+      title: 'Invitados',
+      icon: Icons.group_outlined,
+      color: const Color(0xFFFF9F0A),
+      group: SettingsGroup.app,
+      description:
+          'Quién puede usar IRIS, cuánto ocupa cada cuenta y mantenimiento.',
+      keywords: const ['acceso', 'cuentas', 'mantenimiento', 'tope', 'cupo'],
+      builder: (context, _) => const AdminGuestsSection(),
+    ),
   SettingsSectionSpec(
     id: SettingsSectionIds.cloud,
     title: 'Cuenta y nube',
@@ -189,6 +207,7 @@ class _CloudSection extends StatelessWidget {
           onLoginAction: () => SettingsActions.login(context),
           onMigrationAction: () => SettingsActions.migrateToCloud(context),
         ),
+        if (active && accessControlEnforced) const _AdminCanSeeNote(),
         if (active) ...[
           const SizedBox(height: AppSpacing.lg),
           const SettingsWorkspaceMembersSection(),
@@ -238,6 +257,39 @@ class _HelpSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Al invitado se le dice que el administrador ve sus proyectos.
+class _AdminCanSeeNote extends ConsumerWidget {
+  const _AdminCanSeeNote();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final check = ref.watch(accessCheckProvider);
+    if (check == null || check.isAdmin) return const SizedBox.shrink();
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Row(
+        children: [
+          Icon(
+            Icons.visibility_outlined,
+            size: 16,
+            color: palette.textTertiary,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'El administrador de IRIS puede ver tus proyectos de la nube.',
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.textSecondary),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

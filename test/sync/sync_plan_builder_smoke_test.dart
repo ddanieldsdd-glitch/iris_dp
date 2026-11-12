@@ -31,6 +31,20 @@ void main() {
     expect(plan.items.single.title, 'Solo en SQLite');
   });
 
+  test('la copia de un proyecto de invitado no se sube nunca', () async {
+    await db.into(db.projects).insert(
+          ProjectsCompanion.insert(
+            name: 'Copia de invitado',
+            mirrorCloudId: const Value('cloud-del-invitado'),
+          ),
+        );
+
+    final client = createSupabaseMockClient();
+    final plan = await SyncPlanBuilder(db, client).build('ws-smoke');
+
+    expect(plan.items, isEmpty);
+  });
+
   test('build planifica importFromCloud cuando la fila solo existe en nube', () async {
     const cloudId = 'cloud-import-only';
     final client = createSupabaseMockClient(
