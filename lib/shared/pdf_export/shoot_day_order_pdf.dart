@@ -50,25 +50,20 @@ abstract final class ShootDayOrderPdf {
     now: now,
   );
 
-  static Future<Uint8List> compose({
+  /// Una hoja por jornada de [sheets] en [doc]: así otros documentos (la
+  /// planta, el storyboard) pueden llevar el plan de rodaje delante.
+  static void addSheets(
+    pw.Document doc, {
+    required pw.ThemeData theme,
     required String projectName,
     required List<ShootDayBrief> sheets,
     bool thumbs = true,
-    DateTime? now,
-  }) async {
-    final fonts = await PdfExportFonts.load();
-    final theme = PdfExportFonts.theme(
-      regular: fonts.regular,
-      bold: fonts.bold,
-    );
-    final made = now ?? DateTime.now();
-    String two(int v) => v.toString().padLeft(2, '0');
-    final stamp =
-        '${two(made.day)}/${two(made.month)}/${made.year} '
-        '${two(made.hour)}:${two(made.minute)}';
-    final doc = pw.Document(title: 'Orden del día · $projectName');
-    const small = pw.TextStyle(fontSize: 7.5, color: BriefPdf.soft);
+    pw.Widget Function(pw.Context context)? footer,
 
+    /// Destino del índice en la primera hoja.
+    String? anchor,
+  }) {
+    const small = pw.TextStyle(fontSize: 7.5, color: BriefPdf.soft);
     for (final sheet in sheets) {
       doc.addPage(
         pw.MultiPage(
@@ -92,20 +87,15 @@ abstract final class ShootDayOrderPdf {
                     style: small,
                   ),
                 ),
-          footer: (context) => pw.Padding(
-            padding: const pw.EdgeInsets.only(top: 6),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('$projectName · generado el $stamp', style: small),
-                pw.Text(
-                  '${context.pageNumber} / ${context.pagesCount}',
-                  style: small,
+          footer: footer == null
+              ? null
+              : (context) => pw.Padding(
+                  padding: const pw.EdgeInsets.only(top: 6),
+                  child: footer(context),
                 ),
-              ],
-            ),
-          ),
           build: (context) => [
+            if (anchor != null && identical(sheet, sheets.first))
+              pw.Anchor(name: anchor, child: pw.SizedBox()),
             BriefPdf.band(
               project: projectName,
               document: 'Orden del día',
@@ -148,6 +138,44 @@ abstract final class ShootDayOrderPdf {
         ),
       );
     }
+  }
+
+  static Future<Uint8List> compose({
+    required String projectName,
+    required List<ShootDayBrief> sheets,
+    bool thumbs = true,
+    DateTime? now,
+  }) async {
+    final fonts = await PdfExportFonts.load();
+    final theme = PdfExportFonts.theme(
+      regular: fonts.regular,
+      bold: fonts.bold,
+    );
+    final made = now ?? DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final stamp =
+        '${two(made.day)}/${two(made.month)}/${made.year} '
+        '${two(made.hour)}:${two(made.minute)}';
+    final doc = pw.Document(title: 'Orden del día · $projectName');
+    const small = pw.TextStyle(fontSize: 7.5, color: BriefPdf.soft);
+
+    addSheets(
+      doc,
+      theme: theme,
+      projectName: projectName,
+      sheets: sheets,
+      thumbs: thumbs,
+      footer: (context) => pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text('$projectName · generado el $stamp', style: small),
+          pw.Text(
+            '${context.pageNumber} / ${context.pagesCount}',
+            style: small,
+          ),
+        ],
+      ),
+    );
     if (sheets.isEmpty) {
       doc.addPage(
         pw.Page(

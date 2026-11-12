@@ -160,13 +160,14 @@ Future<ScriptDocRow> _docRow(
   final own = storyPath == null ? distinct : distinct.skip(1).toList();
   final fallback = referenceImageOf(shot);
   final images = <Uint8List>[];
-  for (final path in !references
-      ? const <String?>[]
-      : own.isNotEmpty
-      ? own
-      : storyPath == null
-      ? [fallback]
-      : const <String?>[]) {
+  for (final path
+      in !references
+          ? const <String?>[]
+          : own.isNotEmpty
+          ? own
+          : storyPath == null
+          ? [fallback]
+          : const <String?>[]) {
     final bytes = await PdfSafeImage.loadFromPathMaxEdge(path, maxEdge: 1200);
     if (bytes != null) images.add(bytes);
   }
@@ -395,6 +396,12 @@ Future<TechnicalScriptDoc?> buildScriptDocFor(
 
   /// La portada elegida; sin ella, la foto de la localización.
   String? coverPath,
+
+  /// Con una sola jornada, la portada con lugar, mapa, tiempo y horario.
+  bool withBrief = true,
+
+  /// La previsión del tiempo en esa portada.
+  bool withWeather = true,
 }) async {
   final hidden = hiddenColumns ?? _screenHidden(settings);
   final projectId = source.project.id;
@@ -464,8 +471,7 @@ Future<TechnicalScriptDoc?> buildScriptDocFor(
             references: !hidden.contains('ref'),
           ),
       ]);
-      final whole =
-          tract.shots.length == source.shotsOfScene(scene.id).length;
+      final whole = tract.shots.length == source.shotsOfScene(scene.id).length;
       docSections.add(
         ScriptDocSection(
           title:
@@ -503,7 +509,7 @@ Future<TechnicalScriptDoc?> buildScriptDocFor(
   }
 
   // Una sola jornada: su portada con lugar, mapa, tiempo y horario.
-  final brief = oneDay
+  final loaded = oneDay && withBrief
       ? (await ShootDayBrief.load(
           db,
           projectId,
@@ -513,6 +519,7 @@ Future<TechnicalScriptDoc?> buildScriptDocFor(
           fallbackCoverPath: source.project.coverImagePath,
         )).firstOrNull
       : null;
+  final brief = withWeather ? loaded : loaded?.withoutWeather();
 
   return TechnicalScriptDoc(
     title: byDays

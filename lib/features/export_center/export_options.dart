@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../camera_plan/plan_renderer.dart' show PlanExportView;
 import '../storyboard/shot_sheet_data.dart';
 import '../storyboard/storyboard_export_style.dart';
 import '../storyboard/storyboard_group_export_options.dart';
@@ -27,7 +28,10 @@ enum StoryboardLook {
   clean('Clean', 'Cada plano en su hoja, la imagen sola'),
   basic('Basic', 'Hoja por plano con encuadre y focal'),
   detail('Detail', 'Hoja por plano con cámara, paleta y notas'),
-  shotPlan('Shot plan', 'La más completa: hoja por plano con guion, planta y sol');
+  shotPlan(
+    'Shot plan',
+    'La más completa: hoja por plano con guion, planta y sol',
+  );
 
   final String label;
   final String hint;
@@ -80,7 +84,9 @@ class ExportOptions {
   final ExportSplit split;
   final StoryboardLook look;
   final ShotImageSource imageSource;
-  final bool planWithLight;
+
+  /// Planta de cámara y actores, de luz, o las dos.
+  final PlanExportView planView;
 
   /// Con la luz que cae en el suelo; sin ella, solo los aparatos.
   final bool planBeams;
@@ -93,7 +99,20 @@ class ExportOptions {
 
   /// Imagen detrás de las plantas, en lugar del fondo negro.
   final String? planBackdropImage;
+
+  /// Índice en la portada del documento de planta.
+  final bool planIndex;
+
+  /// Documentos que abren con el plan de rodaje de sus jornadas. En el guion
+  /// técnico es la portada de la jornada, cuando se exporta una sola.
+  final Set<ExportDocument> scheduleFor;
+
+  /// Previsión del tiempo en el plan de rodaje. El sol se queda: es luz.
+  final bool withWeather;
   final ScriptExportOptions script;
+
+  /// Este documento abre con el plan de rodaje.
+  bool get withSchedule => scheduleFor.contains(document);
 
   const ExportOptions({
     this.document = ExportDocument.storyboard,
@@ -101,11 +120,14 @@ class ExportOptions {
     this.split = ExportSplit.single,
     this.look = StoryboardLook.grid6,
     this.imageSource = ShotImageSource.storyboard,
-    this.planWithLight = true,
+    this.planView = PlanExportView.both,
     this.planBeams = true,
     this.planOverviews = true,
     this.planCoverImage,
     this.planBackdropImage,
+    this.planIndex = true,
+    this.scheduleFor = const {ExportDocument.technicalScript},
+    this.withWeather = true,
     this.script = const ScriptExportOptions(),
   });
 
@@ -123,13 +145,16 @@ class ExportOptions {
     ExportSplit? split,
     StoryboardLook? look,
     ShotImageSource? imageSource,
-    bool? planWithLight,
+    PlanExportView? planView,
     bool? planBeams,
     bool? planOverviews,
     String? planCoverImage,
     bool clearPlanCoverImage = false,
     String? planBackdropImage,
     bool clearPlanBackdropImage = false,
+    bool? planIndex,
+    Set<ExportDocument>? scheduleFor,
+    bool? withWeather,
     ScriptExportOptions? script,
   }) => ExportOptions(
     document: document ?? this.document,
@@ -137,7 +162,7 @@ class ExportOptions {
     split: split ?? this.split,
     look: look ?? this.look,
     imageSource: imageSource ?? this.imageSource,
-    planWithLight: planWithLight ?? this.planWithLight,
+    planView: planView ?? this.planView,
     planBeams: planBeams ?? this.planBeams,
     planOverviews: planOverviews ?? this.planOverviews,
     planCoverImage: clearPlanCoverImage
@@ -146,7 +171,17 @@ class ExportOptions {
     planBackdropImage: clearPlanBackdropImage
         ? null
         : planBackdropImage ?? this.planBackdropImage,
+    planIndex: planIndex ?? this.planIndex,
+    scheduleFor: scheduleFor ?? this.scheduleFor,
+    withWeather: withWeather ?? this.withWeather,
     script: script ?? this.script,
+  );
+
+  /// Pone o quita el plan de rodaje en el documento elegido.
+  ExportOptions withScheduleSet(bool on) => copyWith(
+    scheduleFor: on
+        ? {...scheduleFor, document}
+        : ({...scheduleFor}..remove(document)),
   );
 
   Map<String, dynamic> toJson() => {
@@ -155,17 +190,21 @@ class ExportOptions {
     'split': split.name,
     'look': look.name,
     'imageSource': imageSource.name,
-    'planWithLight': planWithLight,
+    'planView': planView.name,
     'planBeams': planBeams,
     'planOverviews': planOverviews,
     'planCoverImage': planCoverImage,
     'planBackdropImage': planBackdropImage,
+    'planIndex': planIndex,
+    'scheduleFor': [for (final d in scheduleFor) d.name],
+    'withWeather': withWeather,
     'script': script.toJson(),
   };
 
   factory ExportOptions.fromJson(Map<String, dynamic> json) {
     const d = ExportOptions();
     final script = json['script'];
+    final schedule = json['scheduleFor'];
     return ExportOptions(
       document: _byName(ExportDocument.values, json['document']) ?? d.document,
       scope: _byName(ExportScope.values, json['scope']) ?? d.scope,
@@ -173,11 +212,19 @@ class ExportOptions {
       look: _byName(StoryboardLook.values, json['look']) ?? d.look,
       imageSource:
           _byName(ShotImageSource.values, json['imageSource']) ?? d.imageSource,
-      planWithLight: json['planWithLight'] != false,
+      planView:
+          _byName(PlanExportView.values, json['planView']) ??
+          // Lo guardado antes del selector: «Con luz» eran las dos juntas.
+          (json['planWithLight'] == false ? PlanExportView.stage : d.planView),
       planBeams: json['planBeams'] != false,
       planOverviews: json['planOverviews'] != false,
       planCoverImage: json['planCoverImage'] as String?,
       planBackdropImage: json['planBackdropImage'] as String?,
+      planIndex: json['planIndex'] != false,
+      scheduleFor: schedule is List
+          ? {for (final name in schedule) ?_byName(ExportDocument.values, name)}
+          : d.scheduleFor,
+      withWeather: json['withWeather'] != false,
       script: script is Map
           ? ScriptExportOptions.fromJson(Map<String, dynamic>.from(script))
           : d.script,
