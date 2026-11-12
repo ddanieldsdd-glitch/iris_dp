@@ -66,7 +66,12 @@ void main() {
     ]);
     final scene = sheet.rows[1];
     expect(scene.title, 'Esc. 7 · EXT. LA ROUGE · NOCHE');
-    expect(scene.shots.last, '2 · PMC de Ali, mirando · 23:45 – 00:05');
+    final shot = scene.shots.last;
+    expect(shot.number, 2);
+    expect(
+      [shot.framing, shot.time].join(' · '),
+      allOf(contains('PMC de Ali'), contains('23:45 – 00:05')),
+    );
     final bytes = await ShootDayOrderPdf.compose(
       projectName: 'K',
       sheets: sheets,

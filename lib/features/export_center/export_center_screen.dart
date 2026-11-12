@@ -23,6 +23,7 @@ import '../../core/widgets/app_snackbar.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
 import '../camera_plan/plan_data.dart';
 import '../camera_plan/plan_view_picker.dart';
+import '../projects/project_card_actions.dart' show pickMoodboardCover;
 import '../shoot_documents/shoot_days_board.dart';
 import '../storyboard/shot_sheet_data.dart';
 import '../technical_script/script_export_dialog.dart';
@@ -850,6 +851,7 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
     required String? path,
     required ValueChanged<String> onPick,
     required VoidCallback onClear,
+    bool moodboard = false,
   }) => Padding(
     padding: const EdgeInsets.only(top: 2),
     child: Row(
@@ -864,17 +866,80 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
         ),
         if (path != null)
           TextButton(onPressed: onClear, child: const Text('Quitar')),
-        TextButton.icon(
-          onPressed: () async {
-            final imported = await _importPlanImage();
-            if (imported != null && mounted) onPick(imported);
-          },
-          icon: const Icon(Icons.image_outlined, size: 16),
-          label: Text(path == null ? 'Añadir' : 'Cambiar'),
-        ),
+        if (moodboard)
+          PopupMenuButton<bool>(
+            tooltip: 'Elegir imagen',
+            onSelected: (fromMoodboard) async {
+              final chosen = fromMoodboard
+                  ? await pickMoodboardCover(
+                      context,
+                      ref.read(databaseProvider),
+                      widget.projectId,
+                    )
+                  : await _importPlanImage();
+              if (chosen != null && mounted) onPick(chosen);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: true,
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.dashboard_outlined, size: 18),
+                  title: Text('Del moodboard'),
+                ),
+              ),
+              PopupMenuItem(
+                value: false,
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.folder_open_outlined, size: 18),
+                  title: Text('De un archivo'),
+                ),
+              ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.image_outlined, size: 16, color: palette.accent),
+                  const SizedBox(width: 6),
+                  Text(
+                    path == null ? 'Añadir' : 'Cambiar',
+                    style: AppTypography.bodyMedium(
+                      palette,
+                    ).copyWith(color: palette.accent),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          TextButton.icon(
+            onPressed: () async {
+              final imported = await _importPlanImage();
+              if (imported != null && mounted) onPick(imported);
+            },
+            icon: const Icon(Icons.image_outlined, size: 16),
+            label: Text(path == null ? 'Añadir' : 'Cambiar'),
+          ),
       ],
     ),
   );
+
+  /// La portada, la misma para la planta, el guion técnico y el orden del
+  /// día: del moodboard o de un archivo. Sin elegir, la del proyecto.
+  Widget _coverRow(AppPalette palette, {required String empty}) =>
+      _planImageRow(
+        palette,
+        title: 'Imagen de portada',
+        empty: empty,
+        path: _options.planCoverImage,
+        moodboard: true,
+        onPick: (path) => _setOptions(_options.copyWith(planCoverImage: path)),
+        onClear: () =>
+            _setOptions(_options.copyWith(clearPlanCoverImage: true)),
+      );
 
   List<Widget> _format(AppPalette palette) {
     final canSplitDays = _selection.scope == ExportScope.days;
@@ -910,16 +975,7 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
           ),
         ),
         if (_options.planOverviews) ..._overviewRows(palette),
-        _planImageRow(
-          palette,
-          title: 'Imagen de portada',
-          empty: 'Banda negra',
-          path: _options.planCoverImage,
-          onPick: (path) =>
-              _setOptions(_options.copyWith(planCoverImage: path)),
-          onClear: () =>
-              _setOptions(_options.copyWith(clearPlanCoverImage: true)),
-        ),
+        _coverRow(palette, empty: 'Banda negra'),
         _planImageRow(
           palette,
           title: 'Fondo de las plantas',
@@ -1065,6 +1121,10 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
           ),
         ],
       ),
+      if (!script.word) ...[
+        const SizedBox(height: AppSpacing.sm),
+        _coverRow(palette, empty: 'Foto de la localización o del proyecto'),
+      ],
     ];
   }
 

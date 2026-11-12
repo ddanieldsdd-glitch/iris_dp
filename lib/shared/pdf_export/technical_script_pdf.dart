@@ -7,6 +7,7 @@ import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/pdf_export_fonts.dart';
 import '../rich_text/script_markup.dart';
 import '../technical_script_export/technical_script_doc.dart';
+import 'shoot_day_brief.dart';
 
 /// PDF del guion técnico: hoja blanca apaisada con una tabla por escena,
 /// como la del documento de trabajo en Word.
@@ -201,20 +202,48 @@ class TechnicalScriptPdfExporter {
         pageFormat: doc.landscape ? paper.landscape : paper.portrait,
         margin: const pw.EdgeInsets.all(28),
         build: (context) => [
-          pw.Text(
-            doc.title,
-            style: pw.TextStyle(
-              fontSize: 16,
-              fontWeight: pw.FontWeight.bold,
-              color: _ink,
+          if (doc.brief case final brief?) ...[
+            // Portada de la jornada: cuándo, dónde, el tiempo y el horario.
+            BriefPdf.band(
+              project: doc.projectName ?? '',
+              document: 'Guion técnico de rodaje',
+              brief: brief,
+              height: 118,
             ),
-          ),
-          if (doc.subtitle != null && doc.subtitle!.trim().isNotEmpty) ...[
-            pw.SizedBox(height: 3),
+            pw.SizedBox(height: 12),
+            BriefPdf.facts(brief, height: 108),
+            pw.SizedBox(height: 8),
+            BriefPdf.weather(brief),
+            if (brief.rows.isNotEmpty) ...[
+              pw.SizedBox(height: 12),
+              pw.Text(
+                'HORARIO',
+                style: const pw.TextStyle(
+                  fontSize: 7.5,
+                  color: BriefPdf.soft,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              pw.Divider(color: BriefPdf.ink, thickness: 1.2, height: 8),
+              for (final row in brief.rows) BriefPdf.row(row, thumbs: false),
+            ],
+            if (doc.hasIndex) pw.NewPage(),
+          ] else ...[
             pw.Text(
-              doc.subtitle!,
-              style: const pw.TextStyle(fontSize: 9, color: _ink),
+              doc.title,
+              style: pw.TextStyle(
+                fontSize: 16,
+                fontWeight: pw.FontWeight.bold,
+                color: _ink,
+              ),
             ),
+            if (doc.subtitle != null && doc.subtitle!.trim().isNotEmpty) ...[
+              pw.SizedBox(height: 3),
+              pw.Text(
+                doc.subtitle!,
+                style: const pw.TextStyle(fontSize: 9, color: _ink),
+              ),
+            ],
           ],
           pw.SizedBox(height: 14),
           if (doc.hasIndex) ...[

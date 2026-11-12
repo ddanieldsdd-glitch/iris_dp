@@ -20,35 +20,46 @@ Future<void> changeProjectCardImage(
   AppDatabase db,
   Project project,
 ) async {
-  final bible = await db.ensureVisualBibleForProject(project.id);
-  if (!context.mounted) return;
-  final picked = await showMoodboardImagePicker(
-    context,
-    projectId: project.id,
-    bibleId: bible.id,
-    sectionId: BibleSectionId.moodboard,
-    selected: const [],
-    single: true,
-  );
-  if (picked == null || picked.isEmpty) return;
-  final image = await (db.select(
-    db.moodboardImages,
-  )..where((m) => m.id.equals(picked.first))).getSingleOrNull();
-  if (image == null) return;
-  final ext = p.extension(image.imagePath).isEmpty
-      ? '.jpg'
-      : p.extension(image.imagePath);
-  final copied = await MediaStorage.copyFileIntoProject(
-    projectId: project.id,
-    sourcePath: image.imagePath,
-    subfolder: 'cover',
-    fileName: 'cover_${DateTime.now().millisecondsSinceEpoch}$ext',
-  );
+  final copied = await pickMoodboardCover(context, db, project.id);
   if (copied == null) return;
   final current = await db.getProject(project.id);
   if (current == null) return;
   await db.updateProject(
     current.copyWith(coverImagePath: Value(copied), updatedAt: DateTime.now()),
+  );
+}
+
+/// Elige una imagen del moodboard (o importa o pega una) y la copia a la
+/// carpeta de portada del proyecto. Devuelve la copia, o nulo si no se
+/// eligió nada. Sirve para la tarjeta y para la portada de los documentos.
+Future<String?> pickMoodboardCover(
+  BuildContext context,
+  AppDatabase db,
+  int projectId,
+) async {
+  final bible = await db.ensureVisualBibleForProject(projectId);
+  if (!context.mounted) return null;
+  final picked = await showMoodboardImagePicker(
+    context,
+    projectId: projectId,
+    bibleId: bible.id,
+    sectionId: BibleSectionId.moodboard,
+    selected: const [],
+    single: true,
+  );
+  if (picked == null || picked.isEmpty) return null;
+  final image = await (db.select(
+    db.moodboardImages,
+  )..where((m) => m.id.equals(picked.first))).getSingleOrNull();
+  if (image == null) return null;
+  final ext = p.extension(image.imagePath).isEmpty
+      ? '.jpg'
+      : p.extension(image.imagePath);
+  return MediaStorage.copyFileIntoProject(
+    projectId: projectId,
+    sourcePath: image.imagePath,
+    subfolder: 'cover',
+    fileName: 'cover_${DateTime.now().millisecondsSinceEpoch}$ext',
   );
 }
 

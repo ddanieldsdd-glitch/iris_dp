@@ -67,19 +67,40 @@ class StoryboardPdfExporter {
   /// Medidas reales de la rejilla: `availableHeight` del formato cuenta los
   /// márgenes por defecto, no los de la página, y por eso no sirve aquí.
   static ({double colWidth, double rowHeight, double imageHeight}) _gridMetrics(
-    StoryboardGridDensity density,
-  ) {
+    StoryboardGridDensity density, {
+    int columns = _columns,
+    int? rows,
+    double caption = _gridCaption,
+  }) {
     final page = PdfPageFormat.a4.landscape;
     final width = page.width - _gridMargin * 2;
     final height = page.height - _gridMargin * 2 - _headerHeight - _headerGap;
-    final colWidth = (width - _gridGap * (_columns - 1)) / _columns;
-    final rowHeight = (height - _gridGap * (density.rows - 1)) / density.rows;
-    final imageHeight = math.min(
-      colWidth / _frameAspect,
-      rowHeight - _gridCaption,
-    );
+    final rowCount = rows ?? density.rows;
+    final colWidth = (width - _gridGap * (columns - 1)) / columns;
+    final rowHeight = (height - _gridGap * (rowCount - 1)) / rowCount;
+    final imageHeight = math.min(colWidth / _frameAspect, rowHeight - caption);
     return (colWidth: colWidth, rowHeight: rowHeight, imageHeight: imageHeight);
   }
+
+  /// Columnas y filas para [count] planos en una hoja de [density]: con
+  /// pocos planos, viñetas más grandes en vez de media hoja en blanco.
+  @visibleForTesting
+  static ({int columns, int rows}) gridShape(
+    int count,
+    StoryboardGridDensity density,
+  ) {
+    final perPage = density.rows * _columns;
+    if (count >= perPage || count > 4) {
+      return (columns: _columns, rows: density.rows);
+    }
+    final columns = count <= 1 ? 1 : 2;
+    final rows = (count / columns).ceil();
+    return (columns: columns, rows: math.min(rows, density.rows));
+  }
+
+  /// Alto del pie de cada viñeta del storyboard de secuencia: número,
+  /// encuadre, técnica y acción.
+  static const _sequenceCaption = 64.0;
 
   static Future<Uint8List> buildBytes({
     required Project project,
@@ -382,62 +403,86 @@ class StoryboardPdfExporter {
         : scene.name;
     final last = firstIndex + chunk.length - 1;
     final range = chunk.length == 1
-        ? 'Shot $firstIndex of $totalShots'
-        : 'Shots $firstIndex – $last of $totalShots';
-    final tag = layout?.artemisFileSuffix ?? 'SB';
+        ? 'Plano $firstIndex de $totalShots'
+        : 'Planos $firstIndex–$last de $totalShots';
+    final document = layout == StoryboardSequenceLayout.shotList
+        ? 'LISTA DE PLANOS'
+        : 'STORYBOARD';
 
+    // La misma banda negra que la planta de rodaje: proyecto y jornada a la
+    // izquierda, el documento a la derecha; debajo, la escena.
     return pw.SizedBox(
       height: _headerHeight,
       child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text(
-                project.name,
-                style: pw.TextStyle(
-                  fontSize: 11,
-                  fontWeight: pw.FontWeight.bold,
+          pw.Container(
+            height: 20,
+            color: PdfColors.black,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8),
+            child: pw.Row(
+              children: [
+                pw.Expanded(
+                  child: pw.Text(
+                    [
+                      project.name.toUpperCase(),
+                      ?dayLabel,
+                    ].join('  ·  '),
+                    maxLines: 1,
+                    style: pw.TextStyle(
+                      fontSize: 8.5,
+                      color: PdfColors.white,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
-              pw.Text(
-                dayLabel == null ? tag : '$dayLabel  ·  $tag',
-                style: const pw.TextStyle(
-                  fontSize: 9,
-                  color: PdfColors.grey700,
+                pw.Text(
+                  document,
+                  style: const pw.TextStyle(
+                    fontSize: 7.5,
+                    color: PdfColors.grey300,
+                    letterSpacing: 1.2,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          pw.SizedBox(height: 4),
+          pw.SizedBox(height: 6),
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
+              pw.Text(
+                'ESC ${scene.label}',
+                style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(width: 10),
               pw.Expanded(
-                child: pw.Text(
-                  'Sc. ${scene.label}',
-                  maxLines: 1,
-                  style: pw.TextStyle(
-                    fontSize: 15,
-                    fontWeight: pw.FontWeight.bold,
+                child: pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 1.5),
+                  child: pw.Text(
+                    slug.toUpperCase(),
+                    maxLines: 1,
+                    style: const pw.TextStyle(
+                      fontSize: 9.5,
+                      color: PdfColors.grey800,
+                    ),
                   ),
                 ),
               ),
-              pw.Text(
-                range,
-                style: const pw.TextStyle(
-                  fontSize: 9,
-                  color: PdfColors.grey700,
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 1.5),
+                child: pw.Text(
+                  range,
+                  style: const pw.TextStyle(
+                    fontSize: 8.5,
+                    color: PdfColors.grey700,
+                  ),
                 ),
               ),
             ],
-          ),
-          pw.SizedBox(height: 2),
-          pw.Text(
-            slug,
-            maxLines: 1,
-            style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
           ),
         ],
       ),
@@ -452,16 +497,23 @@ class StoryboardPdfExporter {
     Map<int, Uint8List> imageCache = const {},
   }) {
     const gap = _gridGap;
-    final (:colWidth, :rowHeight, :imageHeight) = _gridMetrics(density);
+    final shape = gridShape(shots.length, density);
+    final columns = shape.columns;
+    final (:colWidth, :rowHeight, :imageHeight) = _gridMetrics(
+      density,
+      columns: columns,
+      rows: shape.rows,
+      caption: sequenceStoryboard ? _sequenceCaption : _gridCaption,
+    );
     final imageWidth = imageHeight * _frameAspect;
 
     final rows = <pw.Widget>[];
-    for (var r = 0; r < density.rows; r++) {
-      final rowStart = r * _columns;
+    for (var r = 0; r < shape.rows; r++) {
+      final rowStart = r * columns;
       if (rowStart >= shots.length) break;
       final rowShots = shots.sublist(
         rowStart,
-        (rowStart + _columns).clamp(0, shots.length),
+        (rowStart + columns).clamp(0, shots.length),
       );
       rows.add(
         pw.SizedBox(
@@ -469,13 +521,13 @@ class StoryboardPdfExporter {
           child: pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              for (var c = 0; c < _columns; c++)
+              for (var c = 0; c < columns; c++)
                 pw.SizedBox(
-                  width: colWidth + (c < _columns - 1 ? gap : 0),
+                  width: colWidth + (c < columns - 1 ? gap : 0),
                   child: c < rowShots.length
                       ? pw.Padding(
                           padding: pw.EdgeInsets.only(
-                            right: c < _columns - 1 ? gap : 0,
+                            right: c < columns - 1 ? gap : 0,
                           ),
                           child: pw.Align(
                             alignment: pw.Alignment.topCenter,
@@ -498,7 +550,7 @@ class StoryboardPdfExporter {
           ),
         ),
       );
-      if (r < density.rows - 1 && rowStart + _columns < shots.length) {
+      if (r < shape.rows - 1 && rowStart + columns < shots.length) {
         rows.add(pw.SizedBox(height: gap));
       }
     }
@@ -578,7 +630,7 @@ class StoryboardPdfExporter {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  'Shot ${shot.number}',
+                  'Plano ${shot.number}',
                   style: pw.TextStyle(
                     fontSize: 11,
                     fontWeight: pw.FontWeight.bold,
@@ -648,6 +700,14 @@ class StoryboardPdfExporter {
   }) {
     final technical = formatShotTechnicalLine(shot);
     final imageStyle = sequenceStoryboard ? StoryboardExportStyle.clean : style;
+    if (sequenceStoryboard) {
+      return _sequenceCell(
+        shot,
+        width: colWidth,
+        imageHeight: imageHeight,
+        imageCache: imageCache,
+      );
+    }
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -699,6 +759,92 @@ class StoryboardPdfExporter {
               textAlign: pw.TextAlign.center,
             ),
         ],
+        _ShotPaintProbe(shot.id),
+      ],
+    );
+  }
+
+  /// Una viñeta del storyboard de secuencia: la imagen con su número en la
+  /// esquina y, debajo, el encuadre, la técnica en una línea y la acción.
+  static pw.Widget _sequenceCell(
+    Shot shot, {
+    required double width,
+    required double imageHeight,
+    Map<int, Uint8List> imageCache = const {},
+  }) {
+    String plain(String? s) =>
+        scriptMarkupToPlain(s).trim().replaceAll(RegExp(r'\s*\n\s*'), ' ');
+    final framing = plain(shot.framing);
+    final tech = [
+      plain(shot.lens),
+      plain(shot.movement),
+      plain(shot.angle),
+      if (plain(shot.fStop).isNotEmpty) 'T${plain(shot.fStop)}',
+    ].where((s) => s.isNotEmpty).join('  ·  ');
+    final action = plain(shot.action);
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Stack(
+          children: [
+            pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+              ),
+              child: _frameImage(
+                shot,
+                width: width,
+                height: imageHeight,
+                imageCache: imageCache,
+              ),
+            ),
+            pw.Positioned(
+              left: 0,
+              top: 0,
+              child: pw.Container(
+                color: PdfColors.black,
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
+                child: pw.Text(
+                  '${shot.number}',
+                  style: pw.TextStyle(
+                    fontSize: 11,
+                    color: PdfColors.white,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 4),
+        if (framing.isNotEmpty)
+          pw.Text(
+            framing,
+            maxLines: 2,
+            style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+          ),
+        if (tech.isNotEmpty)
+          pw.Text(
+            tech.toUpperCase(),
+            maxLines: 1,
+            style: const pw.TextStyle(
+              fontSize: 6.5,
+              color: PdfColors.grey700,
+              letterSpacing: 0.4,
+            ),
+          ),
+        if (action.isNotEmpty)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 2),
+            child: pw.Text(
+              action,
+              maxLines: 2,
+              style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey800),
+            ),
+          ),
         _ShotPaintProbe(shot.id),
       ],
     );

@@ -89,6 +89,7 @@ class ExportRunner {
       sections,
       settings,
       hiddenColumns: options.script.hiddenColumns,
+      coverPath: options.planCoverImage,
     );
     final doc = options.script.applyTo(built!);
     if (!word) return TechnicalScriptPdfExporter.buildBytes(doc);
