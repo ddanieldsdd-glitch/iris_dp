@@ -8,6 +8,7 @@ import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_painter.dart';
 import 'package:iris_dp/features/camera_plan/plan_document_labels.dart';
 import 'package:iris_dp/features/camera_plan/plan_renderer.dart';
+import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/plan_thumbnail.dart';
 import 'package:iris_dp/features/export_center/export_options.dart';
 import 'package:iris_dp/features/export_center/export_selection.dart';
@@ -232,6 +233,48 @@ void main() {
         documentLightOnly: true,
       );
       expect(png, isNotNull);
+    });
+  });
+
+  group('encuadre de la planta de cámara', () {
+    PlanElement wall(int id, Offset a, Offset b) =>
+        PlanSegment.create(start: a, end: b);
+    final camera = PlanElement(
+      id: 1,
+      type: ElementType.camera,
+      position: const Offset(500, 500),
+      cameraLetter: 'A',
+      pathPoints: const [Offset(560, 520)],
+      props: {'uid': 'C1'},
+    );
+
+    test('entra la sala que rodea la acción', () {
+      final view = PlanThumbnail.stageView(
+        all: [
+          camera,
+          wall(2, const Offset(300, 380), const Offset(800, 380)),
+          wall(3, const Offset(300, 380), const Offset(300, 760)),
+        ],
+      )!;
+      expect(view.top, lessThanOrEqualTo(380));
+      expect(view.left, lessThanOrEqualTo(300));
+    });
+
+    test('una calle larga no aleja la acción', () {
+      final view = PlanThumbnail.stageView(
+        all: [
+          camera,
+          wall(2, const Offset(-5000, 440), const Offset(5000, 440)),
+        ],
+      )!;
+      expect(view.width, lessThan(1000));
+    });
+
+    test('la sección elegida en el editor entra entera', () {
+      const section = Rect.fromLTRB(100, 100, 900, 900);
+      final view = PlanThumbnail.stageView(all: [camera], crop: section)!;
+      expect(view.contains(section.topLeft), isTrue);
+      expect(view.contains(section.bottomRight - const Offset(1, 1)), isTrue);
     });
   });
 
