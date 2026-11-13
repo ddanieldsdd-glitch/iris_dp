@@ -2366,15 +2366,100 @@ class CameraPlanPainter extends CustomPainter {
 
   /// El número de cada luz, encima de su aparato: blanco sobre negro para
   /// no confundirse con los números de los recorridos, que van en color.
+  /// Hacia dónde apunta un foco, en la hoja; nulo si alumbra a todos lados,
+  /// cuelga del techo o está apagado.
+  (Offset, Color)? _aimOf(PlanElement el) {
+    if (el.type != ElementType.light || _isGripBar(el)) return null;
+    final beam = LightBeam.of(el);
+    if (beam == null || beam.off) return null;
+    if (beam.spread >= 300 || PlanLight.isOverhead(el)) return null;
+    final a = el.rotation * math.pi / 180;
+    return (Offset(math.sin(a), -math.cos(a)), beam.color);
+  }
+
+  /// Una flecha desde el aparato hacia donde apunta, del color de su luz y
+  /// con filo oscuro para verse sobre el haz y sobre el suelo.
+  static List<Offset> _drawLightAim(
+    Canvas canvas,
+    Offset light,
+    double markRadius,
+    Offset aim,
+    Color color,
+  ) {
+    final body = math.max(markRadius, 5.0) * 1.05;
+    final length = math.max(markRadius * 1.5, 11.0);
+    final head = (length * 0.42).clamp(4.0, 7.0).toDouble();
+    final from = light + aim * body;
+    final tip = light + aim * (body + length);
+    final side = Offset(-aim.dy, aim.dx);
+    final base = tip - aim * head;
+    final arrow = Path()
+      ..moveTo(tip.dx, tip.dy)
+      ..lineTo((base + side * head * 0.6).dx, (base + side * head * 0.6).dy)
+      ..lineTo((base - side * head * 0.6).dx, (base - side * head * 0.6).dy)
+      ..close();
+    final edge = const Color(0xFF111114);
+    canvas.drawLine(
+      from,
+      base,
+      Paint()
+        ..color = edge
+        ..strokeWidth = 3.4
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawPath(
+      arrow,
+      Paint()
+        ..color = edge
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawLine(
+      from,
+      base,
+      Paint()
+        ..color = color
+        ..strokeWidth = 1.7
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawPath(arrow, Paint()..color = color);
+    return [Offset.lerp(from, tip, 0.5)!, tip];
+  }
+
   void _drawDocumentLightNumbers(
     Canvas canvas,
-    List<(Offset, double, int)> numbered,
+    List<_DocumentLightMark> numbered,
     Rect bounds,
   ) {
     // Luces iguales pegadas (una tira de prácticas) llevan un solo número.
     final drawn = <(Offset, int)>[];
     final spots = <(Offset, double)>[];
-    for (final (light, markRadius, number) in numbered) {
+    // Primero las flechas: los números se colocan sin taparlas.
+    if (documentLightOnly) {
+      for (final mark in numbered) {
+        final aim = mark.aim;
+        if (aim == null) continue;
+        final points = _drawLightAim(
+          canvas,
+          mark.at,
+          mark.radius,
+          aim.$1,
+          aim.$2,
+        );
+        for (final p in points) {
+          spots.add((p, 3));
+        }
+      }
+      // Ningún número encima de otro aparato.
+      for (final mark in numbered) {
+        spots.add((mark.at, math.max(mark.radius, 5.0) * 0.8));
+      }
+    }
+    for (final mark in numbered) {
+      final light = mark.at;
+      final markRadius = mark.radius;
+      final number = mark.number;
       final r = (markRadius * 0.8).clamp(4.6, 6.5).toDouble();
       if (drawn.any((d) => d.$2 == number && (d.$1 - light).distance < r * 3)) {
         continue;
@@ -2385,8 +2470,31 @@ class CameraPlanPainter extends CustomPainter {
       bool free(Offset c) =>
           bounds.deflate(r).contains(c) &&
           spots.every((sp) => (sp.$1 - c).distance >= sp.$2 + r + 1);
+      final aim = documentLightOnly ? mark.aim?.$1 : null;
       var at = light;
-      if (!free(at)) {
+      if (documentLightOnly) {
+        // En la planta de luz el número va al lado del aparato, sin taparlo:
+        // se ve el foco, cuál es y, si apunta, hacia dónde (el número va
+        // detrás, lejos de la flecha).
+        final ring = math.max(markRadius, 5.0) * 0.9 + r + 1.5;
+        final start = aim == null ? -math.pi / 4 : math.atan2(-aim.dy, -aim.dx);
+        final angles = [
+          for (final k in [0, 1, -1, 2, -2, 3, -3]) start + k * math.pi / 6,
+          if (aim == null)
+            for (final k in [4, -4, 5, -5, 6]) start + k * math.pi / 6,
+        ];
+        at = light + Offset(math.cos(start), math.sin(start)) * ring;
+        search:
+        for (final scale in [1.0, 1.4, 1.9]) {
+          for (final t in angles) {
+            final c = light + Offset(math.cos(t), math.sin(t)) * ring * scale;
+            if (free(c)) {
+              at = c;
+              break search;
+            }
+          }
+        }
+      } else if (!free(at)) {
         search:
         for (final ring in [r * 2.2, r * 3.4, r * 4.6]) {
           for (var k = 0; k < 8; k++) {
@@ -2402,7 +2510,7 @@ class CameraPlanPainter extends CustomPainter {
         }
       }
       spots.add((at, r + 0.7));
-      if (at != light) {
+      if (at != light && !documentLightOnly) {
         canvas.drawLine(
           light,
           at,
@@ -2680,7 +2788,7 @@ class CameraPlanPainter extends CustomPainter {
       for (final (at, radius) in layout.figures)
         Rect.fromCircle(center: at, radius: radius),
     ];
-    final numbered = <(Offset, double, int)>[];
+    final numbered = <_DocumentLightMark>[];
     for (final el in [...inheritedElements, ...elements]) {
       if (PlanTerrainPainter.isTerrain(el)) continue;
       final at = offset + el.position * scale;
@@ -2690,7 +2798,7 @@ class CameraPlanPainter extends CustomPainter {
       if (documentLightOnly && _isFigure(el)) continue;
       final number = _lightNumbers[el];
       if (number != null) {
-        numbered.add((at, radius, number));
+        numbered.add(_DocumentLightMark(at, radius, number, _aimOf(el)));
         continue;
       }
       final found = _documentLabelOf(el);
@@ -4380,4 +4488,15 @@ class _DocumentLayout {
   final List<_DocumentStop> stops;
 
   const _DocumentLayout(this.figures, this.stops);
+}
+
+/// Un foco con número en la planta de luz y, si apunta a algún sitio, hacia
+/// dónde y de qué color es su luz.
+class _DocumentLightMark {
+  final Offset at;
+  final double radius;
+  final int number;
+  final (Offset, Color)? aim;
+
+  const _DocumentLightMark(this.at, this.radius, this.number, this.aim);
 }

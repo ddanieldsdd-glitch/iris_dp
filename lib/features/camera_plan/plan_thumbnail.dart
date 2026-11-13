@@ -275,6 +275,61 @@ class PlanThumbnail extends StatelessWidget {
 
   /// La planta en una imagen PNG sobre papel blanco, para el PDF y el Word.
   /// Nulo si no hay nada que pintar.
+  /// Lo que enseña la planta de cámara y actores: dónde se mueven, y la
+  /// localización que los rodea para saber dónde están. Las paredes y los
+  /// muebles cerca de la acción entran enteros, y la sección elegida en el
+  /// editor también; lo lejano (una calle larga, otra sala) se queda fuera
+  /// para que las figuras no salgan diminutas.
+  static Rect? stageView({
+    required List<PlanElement> all,
+    List<PlanZone> zones = const [],
+    Rect? crop,
+  }) {
+    Rect? action;
+    for (final el in all) {
+      if (el.type != ElementType.camera && el.type != ElementType.actor) {
+        continue;
+      }
+      for (final p in [el.position, ...el.pathPoints]) {
+        final r = Rect.fromCircle(center: p, radius: 1);
+        action = action?.expandToInclude(r) ?? r;
+      }
+    }
+    if (action == null) return null;
+    var view = action.inflate(60);
+    // Hasta dónde puede crecer: lo bastante para ver la sala, no tanto
+    // como para perder las figuras.
+    var cap = action.inflate(math.max(240, action.longestSide * 0.8));
+    if (crop != null) {
+      view = view.expandToInclude(crop);
+      cap = cap.expandToInclude(crop);
+    }
+    final near = action.inflate(120);
+    void include(Rect r) {
+      final clipped = r.intersect(cap);
+      if (clipped.width < 0 || clipped.height < 0) return;
+      view = view.expandToInclude(clipped);
+    }
+
+    for (final el in all) {
+      if (el.type == ElementType.wall || PlanSegment.isSegment(el)) {
+        final a = el.position;
+        final b = PlanSegment.isSegment(el) ? PlanSegment.end(el) : a;
+        var touches = false;
+        for (var i = 0; i <= 16 && !touches; i++) {
+          touches = near.contains(Offset.lerp(a, b, i / 16)!);
+        }
+        if (touches) include(Rect.fromPoints(a, b).inflate(8));
+      } else if (el.type == ElementType.prop && near.contains(el.position)) {
+        include(Rect.fromCircle(center: el.position, radius: 30));
+      }
+    }
+    for (final zone in zones) {
+      if (zone.rect.overlaps(action)) include(zone.rect);
+    }
+    return view;
+  }
+
   static Future<Uint8List?> renderPng({
     required List<PlanElement> elements,
     List<PlanElement> inherited = const [],
@@ -342,17 +397,7 @@ class PlanThumbnail extends StatelessWidget {
     // el decorado entero.
     var view = crop;
     if (documentGutter > 0) {
-      Rect? action;
-      for (final el in all) {
-        if (el.type != ElementType.camera && el.type != ElementType.actor) {
-          continue;
-        }
-        for (final p in [el.position, ...el.pathPoints]) {
-          final r = Rect.fromCircle(center: p, radius: 1);
-          action = action?.expandToInclude(r) ?? r;
-        }
-      }
-      if (action != null) view = action.inflate(60);
+      view = stageView(all: all, zones: zones, crop: crop) ?? crop;
     }
     final framed = frame(
       inner.size,
