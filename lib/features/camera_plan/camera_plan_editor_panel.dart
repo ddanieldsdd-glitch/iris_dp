@@ -61,6 +61,10 @@ class _ElementPanel extends StatefulWidget {
   /// A cuántos planos está vinculada la cámara.
   final int linkedShots;
 
+  /// Planos de la escena por su identificador («6/1»): a quién sigue un
+  /// actor (PL.4).
+  final Map<String, String> followLabels;
+
   const _ElementPanel({
     required this.palette,
     required this.element,
@@ -91,6 +95,7 @@ class _ElementPanel extends StatefulWidget {
     this.onOverride,
     this.onLinkShots,
     this.linkedShots = 0,
+    this.followLabels = const {},
   });
 
   @override
@@ -126,6 +131,42 @@ class _ElementPanelState extends State<_ElementPanel> {
     if (known != null) element.actorColor = known.color;
     widget.onUpdate();
   }
+
+  /// Insignia de un actor que sigue al de otro plano, con «Soltar».
+  Widget _followBadge(AppPalette palette, String? label) => Row(
+    children: [
+      Expanded(
+        child: Tooltip(
+          message:
+              'Se mueve con el actor de ese plano mientras no lo muevas '
+              'aquí.',
+          child: Container(
+            key: const ValueKey('actor-follow-badge'),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: palette.accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              label == null ? 'Sigue a otro plano' : 'Sigue a $label',
+              style: AppTypography.caption(
+                palette,
+              ).copyWith(color: palette.accent),
+            ),
+          ),
+        ),
+      ),
+      TextButton(
+        key: const ValueKey('actor-follow-release'),
+        onPressed: () {
+          PlanFollow.release(widget.element);
+          widget.onUpdate();
+          setState(() {});
+        },
+        child: const Text('Soltar'),
+      ),
+    ],
+  );
 
   @override
   void initState() {
@@ -477,6 +518,13 @@ class _ElementPanelState extends State<_ElementPanel> {
                               ),
                           ],
                         ),
+                        if (PlanFollow.of(element) case final follow?) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          _followBadge(
+                            palette,
+                            widget.followLabels[follow.shotUid],
+                          ),
+                        ],
                         const SizedBox(height: 4),
                         Text(
                           PlanCast.isNamed(element.label)

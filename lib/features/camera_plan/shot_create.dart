@@ -7,7 +7,8 @@ import 'plan_prefs.dart';
 
 /// Añade un plano al final de [scene]; [shots] son los que ya tiene. Salvo
 /// que Ajustes diga lo contrario, nace como el anterior: mismo set, misma
-/// lente y movimiento, y su cámara en el mismo sitio.
+/// lente y movimiento, su cámara en el mismo sitio y sus actores, que
+/// siguen a los del anterior mientras no se muevan (PL.4).
 Future<int> createShotInScene(
   AppDatabase db,
   Scene scene,
@@ -38,6 +39,11 @@ Future<int> createShotInScene(
       locationBasePlanId: Value(previous?.locationBasePlanId),
     ),
   );
-  if (previous != null) await CameraLinks(db).copyCameras(previous.id, id);
+  if (previous != null) {
+    final links = CameraLinks(db);
+    await links.copyCameras(previous.id, id);
+    // Los actores vienen con su sitio y siguen a los del plano anterior.
+    await links.copyActors(previous.id, id);
+  }
   return id;
 }

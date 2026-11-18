@@ -5,6 +5,7 @@ import 'camera_shot_sync.dart';
 import 'floor_plan_repository.dart';
 import 'floor_plan_scope.dart';
 import 'light_overrides.dart';
+import 'plan_follow.dart';
 
 /// Un plano que se puede vincular a una cámara del esquema de luz.
 class LinkableShot {
@@ -140,8 +141,37 @@ class CameraLinks {
     ];
     if (copies.isEmpty) return;
     LightOverrides.renewUids(copies);
-    await _saveShot(toShotId, copies);
+    await _addToShot(toShotId, copies);
   }
+
+  /// Pone en [toShotId] los actores de [fromShotId], con su sitio, su
+  /// recorrido y sus marcas (PL.4). Cada copia sigue a su original
+  /// ([PlanFollow]) mientras no se mueva en su plano.
+  Future<void> copyActors(int fromShotId, int toShotId) async {
+    final from = await db.getShotById(fromShotId);
+    final fromUid = from?.uid;
+    if (fromUid == null) return;
+    final source = await _shotElements(fromShotId);
+    final actors = [
+      for (final el in source)
+        if (el.type == ElementType.actor) el,
+    ];
+    if (actors.isEmpty) return;
+    // Los actores de antes de PL.4 no tenían identificador: se lo damos.
+    if (LightOverrides.ensureUids(actors).isNotEmpty) {
+      await _saveShot(fromShotId, source);
+    }
+    final originals = [for (final el in actors) LightOverrides.uidOf(el)!];
+    final copies = [for (final el in actors) LightOverrides.clone(el)];
+    LightOverrides.renewUids(copies);
+    for (var i = 0; i < copies.length; i++) {
+      PlanFollow.set(copies[i], fromUid, originals[i]);
+    }
+    await _addToShot(toShotId, copies);
+  }
+
+  Future<void> _addToShot(int shotId, List<PlanElement> copies) async =>
+      _saveShot(shotId, [...await _shotElements(shotId), ...copies]);
 
   /// Las copias siguen a sus cámaras: tras guardar el esquema [setupId],
   /// cada copia que estaba igual que la cámara de antes ([before]) toma
@@ -161,7 +191,7 @@ class CameraLinks {
     final changed = {
       for (final uid in now.keys)
         if (old[uid] case final was?
-            when !_samePlace(was, now[uid]!) ||
+            when !PlanFollow.samePlace(was, now[uid]!) ||
                 CameraShotSync.gearChanged(was, now[uid]!))
           uid,
     };
@@ -179,11 +209,8 @@ class CameraLinks {
         // El sitio y la focal se siguen por separado: un plano que movió su
         // copia sigue tomando la focal que se cambie en el set, y uno que
         // tiene otra focal sigue a la cámara cuando se mueve.
-        if (_samePlace(el, was) && !_samePlace(el, cam)) {
-          el
-            ..position = cam.position
-            ..rotation = cam.rotation
-            ..pathPoints = [...cam.pathPoints];
+        if (PlanFollow.samePlace(el, was) && !PlanFollow.samePlace(el, cam)) {
+          PlanFollow.takePlace(el, cam);
           touched = true;
         }
         if (!CameraShotSync.gearChanged(el, was) &&
@@ -266,15 +293,6 @@ class CameraLinks {
     }
     return n;
   }
-
-  static bool _samePlace(PlanElement a, PlanElement b) =>
-      a.position == b.position &&
-      a.rotation == b.rotation &&
-      a.pathPoints.length == b.pathPoints.length &&
-      [
-        for (var i = 0; i < a.pathPoints.length; i++)
-          a.pathPoints[i] == b.pathPoints[i],
-      ].every((x) => x);
 
   Future<List<PlanElement>> _shotElements(int shotId) =>
       FloorPlanRepository(db).loadElements(
