@@ -55,6 +55,10 @@ class _ElementPanel extends StatefulWidget {
   final bool canOverride;
   final ValueChanged<bool>? onOverride;
 
+  /// Un foco del set que este plano puede usar o no (PL.1).
+  final bool canUse;
+  final ValueChanged<bool>? onUse;
+
   /// En la planta de luz, una cámara se vincula a planos: abre la lista.
   final VoidCallback? onLinkShots;
 
@@ -89,6 +93,8 @@ class _ElementPanel extends StatefulWidget {
     this.gear = const ProjectGear(),
     this.canOverride = false,
     this.onOverride,
+    this.canUse = false,
+    this.onUse,
     this.onLinkShots,
     this.linkedShots = 0,
   });
@@ -638,6 +644,23 @@ class _ElementPanelState extends State<_ElementPanel> {
                         ),
                       ]),
                     ],
+                    if (widget.canUse)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              LightOverrides.isUnused(element)
+                                  ? 'No se usa en este plano (U)'
+                                  : 'Se usa en este plano (U)',
+                              style: AppTypography.caption(palette),
+                            ),
+                          ),
+                          Switch(
+                            value: !LightOverrides.isUnused(element),
+                            onChanged: widget.onUse,
+                          ),
+                        ],
+                      ),
                     if (widget.canOverride)
                       Row(
                         children: [

@@ -9,13 +9,16 @@ import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/plan_light.dart';
 import 'light_beam.dart';
+import 'light_overrides.dart';
 
 /// Número de unidad de cada aparato que emite, como en una hoja de luces:
 /// U1, U2… en el orden en que están en la planta.
 Map<PlanElement, int> lightUnitNumbers(Iterable<PlanElement> elements) {
   final numbers = <PlanElement, int>{};
   for (final el in elements) {
-    if (el.type == ElementType.light && LightBeam.emits(el.lightType)) {
+    if (el.type == ElementType.light &&
+        LightBeam.emits(el.lightType) &&
+        !LightOverrides.isUnused(el)) {
       numbers[el] = numbers.length + 1;
     }
   }

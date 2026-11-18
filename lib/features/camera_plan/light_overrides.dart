@@ -97,17 +97,66 @@ class LightOverrides {
     });
   }
 
+  /// Un foco del set que este plano no usa (PL.1). Se guarda como ajuste
+  /// del plano, apagado: una versión anterior de la app lo ve apagado y no
+  /// pierde nada.
+  static const unusedKey = 'unused';
+  static const _offKey = 'off';
+
+  static bool isUnused(PlanElement el) => el.props[unusedKey] == true;
+
+  /// Marca [el] (ya ajustado en el plano) como no usado, o lo vuelve a
+  /// usar con el encendido que tiene en el set ([setOff]).
+  static void setUnused(PlanElement el, bool unused, {bool setOff = false}) {
+    if (unused) {
+      el.props[unusedKey] = true;
+      el.props[_offKey] = true;
+    } else {
+      el.props.remove(unusedKey);
+      if (setOff) {
+        el.props[_offKey] = true;
+      } else {
+        el.props.remove(_offKey);
+      }
+    }
+  }
+
+  /// Los identificadores de los focos que el plano no usa.
+  static Set<String> unusedIn(String? json) => {
+    for (final entry in decode(json).entries)
+      if (isUnused(entry.value)) entry.key,
+  };
+
+  /// Si el ajuste de [own] no cambia nada respecto a [original]: entonces
+  /// sobra y el plano vuelve a ver el del set.
+  static bool sameAs(PlanElement own, PlanElement original) {
+    String plain(PlanElement el) {
+      final copy = clone(el)..shotOverride = false;
+      return FloorPlanJson.encode([copy..id = 0]);
+    }
+
+    return plain(own) == plain(original);
+  }
+
   /// Los elementos del esquema tal como se ven en el plano: los que tienen
-  /// ajuste se sustituyen por él y quedan marcados (`shotOverride`).
-  static List<PlanElement> apply(List<PlanElement> setup, String? json) {
+  /// ajuste se sustituyen por él y quedan marcados (`shotOverride`). Los
+  /// focos que el plano no usa desaparecen, salvo con [keepUnused] (el
+  /// editor los enseña en fantasma).
+  static List<PlanElement> apply(
+    List<PlanElement> setup,
+    String? json, {
+    bool keepUnused = false,
+  }) {
     final overrides = decode(json);
     if (overrides.isEmpty) return setup;
     return [
       for (final el in setup)
         if (overrides[uidOf(el)] case final own?)
-          own
-            ..props[uidKey] = uidOf(el)
-            ..shotOverride = true
+          if (keepUnused || !isUnused(own))
+            own
+              ..props[uidKey] = uidOf(el)
+              ..shotOverride = true
+          else ...[]
         else
           el,
     ];

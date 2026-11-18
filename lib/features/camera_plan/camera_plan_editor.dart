@@ -119,6 +119,7 @@ import 'group_light.dart';
 part 'camera_plan_editor_toolbar.dart';
 part 'camera_plan_editor_add_sheet.dart';
 part 'camera_plan_editor_panel.dart';
+part 'camera_plan_editor_light_use.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
   final int projectId;
@@ -3549,6 +3550,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       a.length == b.length && a.keys.every((k) => a[k] == b[k]);
 
   /// Tras guardar un cambio, apila el estado anterior para poder deshacerlo.
+  /// Para las extensiones del editor, que no pueden llamar a `setState`.
+  void _rebuild(VoidCallback fn) => setState(fn);
+
   void _commitHistory() {
     final current = _snapshot();
     if (_sameSnapshot(current, _lastSaved)) return;
@@ -3780,6 +3784,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     setState(() => _elements.add(el));
     await _persistElement(el);
     if (select && mounted) _select(el);
+    // Un foco nuevo del set, desde un plano: ¿en qué planos aparece? (PL.1)
+    if (el.type == ElementType.light && layer == PlanLayer.light && mounted) {
+      await _askWhereLightAppears(el);
+    }
   }
 
   Future<void> _addCamera() async {
@@ -5572,6 +5580,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         _setTool(PlanTool.wall),
     const SingleActivator(LogicalKeyboardKey.keyM): () =>
         _setTool(PlanTool.measure),
+    // Usar o dejar de usar en este plano los focos elegidos (PL.1).
+    const SingleActivator(LogicalKeyboardKey.keyU): _toggleSelectedUse,
     for (final (meta, control) in const [(true, false), (false, true)]) ...{
       SingleActivator(
         LogicalKeyboardKey.arrowLeft,
@@ -6949,6 +6959,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                     _canShotOverride(_selected!),
                                 onOverride: (own) =>
                                     _setShotOverride(_selected!, own),
+                                canUse: _canToggleUse(_selected!),
+                                onUse: (used) =>
+                                    _setLightUsed(_selected!, used),
                                 onLinkShots: _canLinkShots(_selected!)
                                     ? () => _linkCameraToShots(_selected!)
                                     : null,

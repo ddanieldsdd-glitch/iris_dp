@@ -13,6 +13,7 @@ import 'light/light_scene.dart';
 import 'light/meter.dart';
 import 'light/plan_light.dart';
 import 'light_beam.dart';
+import 'light_overrides.dart';
 import 'light_symbols.dart';
 import 'light/modifiers.dart';
 import 'light/surfaces.dart';
@@ -3010,6 +3011,9 @@ class CameraPlanPainter extends CustomPainter {
     }
   }
 
+  /// Pintando un fantasma: no se vuelve a envolver.
+  bool _ghosting = false;
+
   void _drawElement(
     Canvas canvas,
     PlanElement el, {
@@ -3020,6 +3024,22 @@ class CameraPlanPainter extends CustomPainter {
     /// cuerpo ya se pintó con el suelo.
     bool body = true,
   }) {
+    // Un foco del set que este plano no usa: en fantasma, para volver a
+    // usarlo con un toque (PL.2).
+    if (!_ghosting && LightOverrides.isUnused(el)) {
+      _ghosting = true;
+      canvas.saveLayer(
+        null,
+        Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.22),
+      );
+      try {
+        _drawElement(canvas, el, selected: selected, ringed: ringed, body: body);
+      } finally {
+        canvas.restore();
+        _ghosting = false;
+      }
+      return;
+    }
     // Estructuras y telas: con su símbolo de rigging.
     if (PlanDrape.isDrape(el) || RigTypeCodec.of(el) != null) {
       _drawRig(canvas, el, selected: selected, ringed: ringed);
