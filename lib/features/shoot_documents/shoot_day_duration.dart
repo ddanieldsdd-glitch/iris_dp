@@ -11,8 +11,12 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/shot_reference_import.dart';
+import '../../core/widgets/image_gallery_viewer.dart';
 import '../../shared/rich_text/script_markup.dart';
+import '../camera_plan/camera_plan_status_cell.dart';
 import '../camera_plan/plan_renderer.dart';
+import '../camera_plan/plan_target.dart';
+import '../camera_plan/plan_workspace_screen.dart';
 import 'shoot_day_timeline.dart';
 import 'shoot_day_widgets.dart';
 
@@ -400,6 +404,70 @@ class _ShootShotPanelState extends ConsumerState<ShootShotPanel> {
     });
   }
 
+  /// La planta grande, pintada al abrirla como en el PDF: cámara y
+  /// actores, o la luz con sus focos numerados.
+  Future<Uint8List?> _sheet(PlanSheetView view) async {
+    final renderer = await _renderer!;
+    final sheet = await renderer.shotSheet(
+      widget.shot,
+      view: view,
+      size: const Size(1200, 800),
+      pixelRatio: 2,
+    );
+    return sheet.image;
+  }
+
+  /// Planta (cámara y luz) y storyboard y referencias en el visor,
+  /// empezando por [initial].
+  Future<void> _openGallery(int initial) async {
+    final paths = await _images ?? const <String>[];
+    if (!mounted) return;
+    await showImageGallery(
+      context,
+      title: '${widget.sceneTitle} · ${shootShotTitle(widget.shot)}',
+      initial: initial,
+      images: [
+        GalleryImage.lazy(
+          () => _sheet(PlanSheetView.stage),
+          label: 'Planta de cámara',
+        ),
+        GalleryImage.lazy(
+          () => _sheet(PlanSheetView.light),
+          label: 'Planta de luz',
+        ),
+        for (final p in paths) GalleryImage.file(p, label: 'Storyboard'),
+      ],
+    );
+  }
+
+  String get _planLabel => '${widget.sceneTitle} · ${shootShotTitle(widget.shot)}';
+
+  /// El plano en su planta: cámaras y actores del plano.
+  Future<void> _openCameraPlan() => openShotPlan(
+    context,
+    ref.read(databaseProvider),
+    widget.shot,
+    label: _planLabel,
+  );
+
+  /// El set de luz que usa el plano, donde viven sus focos. Sin set, el
+  /// plano mismo (allí se elige o se crea).
+  Future<void> _openLightPlan() async {
+    final db = ref.read(databaseProvider);
+    final setupId = widget.shot.lightSetupId;
+    final setup = setupId == null ? null : await db.getLightSetupById(setupId);
+    if (!mounted) return;
+    if (setup == null) return _openCameraPlan();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlanWorkspaceScreen(
+          projectId: widget.projectId,
+          initial: PlanTarget.lightSetup(setup.id, setup.name),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -470,9 +538,28 @@ class _ShootShotPanelState extends ConsumerState<ShootShotPanel> {
           Text(tech, style: AppTypography.bodyMedium(palette)),
         ],
         const SizedBox(height: AppSpacing.md),
-        Text('Planta', style: AppTypography.label(palette)),
+        Row(
+          children: [
+            Expanded(
+              child: Text('Planta', style: AppTypography.label(palette)),
+            ),
+            TextButton.icon(
+              onPressed: _openCameraPlan,
+              icon: const Icon(Icons.videocam_outlined, size: 16),
+              label: const Text('Cámara'),
+            ),
+            TextButton.icon(
+              onPressed: _openLightPlan,
+              icon: const Icon(Icons.lightbulb_outline, size: 16),
+              label: const Text('Luz'),
+            ),
+          ],
+        ),
         const SizedBox(height: 6),
-        ClipRRect(
+        _Zoomable(
+          tooltip: 'Ampliar la planta',
+          onTap: () => _openGallery(0),
+          child: ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: AspectRatio(
             aspectRatio: 420 / 300,
@@ -506,6 +593,7 @@ class _ShootShotPanelState extends ConsumerState<ShootShotPanel> {
               },
             ),
           ),
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         Text('Storyboard y referencias', style: AppTypography.label(palette)),
@@ -524,15 +612,19 @@ class _ShootShotPanelState extends ConsumerState<ShootShotPanel> {
             }
             return Column(
               children: [
-                for (final p in paths)
+                for (final (i, p) in paths.indexed)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 6),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.file(
-                        File(p),
-                        fit: BoxFit.contain,
-                        cacheWidth: 900,
+                    child: _Zoomable(
+                      tooltip: 'Ampliar',
+                      onTap: () => _openGallery(2 + i),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.file(
+                          File(p),
+                          fit: BoxFit.contain,
+                          cacheWidth: 900,
+                        ),
                       ),
                     ),
                   ),
@@ -549,4 +641,27 @@ class _ShootShotPanelState extends ConsumerState<ShootShotPanel> {
       ],
     );
   }
+}
+
+/// Una imagen que se amplía al tocarla, con el cursor de lupa en el Mac.
+class _Zoomable extends StatelessWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  const _Zoomable({
+    required this.child,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    waitDuration: const Duration(milliseconds: 600),
+    child: MouseRegion(
+      cursor: SystemMouseCursors.zoomIn,
+      child: GestureDetector(onTap: onTap, child: child),
+    ),
+  );
 }
