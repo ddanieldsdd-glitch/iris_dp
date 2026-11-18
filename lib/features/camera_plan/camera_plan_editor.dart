@@ -5593,6 +5593,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         _setTool(PlanTool.measure),
     // Usar o dejar de usar en este plano los focos elegidos (PL.1).
     const SingleActivator(LogicalKeyboardKey.keyU): _toggleSelectedUse,
+    // 1 a 9: qué posición del plano se ve y, si el elegido la tiene, su
+    // marca (PL.6).
+    for (final (i, key) in const [
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit5,
+      LogicalKeyboardKey.digit6,
+      LogicalKeyboardKey.digit7,
+      LogicalKeyboardKey.digit8,
+      LogicalKeyboardKey.digit9,
+    ].indexed)
+      SingleActivator(key): () => _showPosition(i),
     for (final (meta, control) in const [(true, false), (false, true)]) ...{
       SingleActivator(
         LogicalKeyboardKey.arrowLeft,

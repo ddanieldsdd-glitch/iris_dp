@@ -24,6 +24,21 @@ extension _LightUse on _CameraPlanEditorState {
   /// La posición que se ve, dentro de las que hay.
   int get _shownPosition => _viewPosition.clamp(0, _positionCount - 1).toInt();
 
+  /// Enseña la posición [position] (0 es la primera) y, si el elemento
+  /// elegido la tiene, elige su marca.
+  void _showPosition(int position) {
+    if (position >= _positionCount) return;
+    final el = _selected;
+    _rebuild(() {
+      _viewPosition = position;
+      if (el != null && _canMark(el)) {
+        _selectedPathIndex = position == 0 || position > el.pathPoints.length
+            ? null
+            : position - 1;
+      }
+    });
+  }
+
   /// Puede tener posiciones: cámaras y actores siempre; un foco, solo en
   /// un plano (PL.3).
   bool _canMark(PlanElement el) =>
@@ -124,6 +139,20 @@ extension _LightUse on _CameraPlanEditorState {
     return 'Focos $used/${lights.length}';
   }
 
+  /// Este plano toma la luz entera de [from]: qué focos usa, sus
+  /// posiciones y sus ajustes (PL.5).
+  Future<void> _copyLightOf(Shot from) async {
+    final shot = _shot;
+    if (shot == null) return;
+    await _repo.saveLightOverrides(
+      shot.id,
+      LightOverrides.decode(from.lightOverridesJson),
+    );
+    await _load();
+    if (!mounted) return;
+    AppSnackBar.show(context, 'Luz copiada del plano ${from.number}.');
+  }
+
   /// El panel rápido: casillas por foco, «igual que el plano anterior»,
   /// todos o ninguno (PL.2).
   Future<void> _openLightUse() async {
@@ -174,6 +203,9 @@ extension _LightUse on _CameraPlanEditorState {
           : previous.sceneId == shot.sceneId
           ? 'el plano ${previous.number}'
           : 'el plano anterior del set',
+      onCopyPrevious: previous == null
+          ? null
+          : () => _copyLightOf(previous),
       onApply: (unused) => _setLightsUsed({
         for (final el in _shotLights)
           el: !unused.contains(LightOverrides.uidOf(el)),

@@ -21,6 +21,10 @@ class PlanLightUsePanel extends StatefulWidget {
   final String? previousLabel;
   final Future<void> Function(Set<String> unused) onApply;
 
+  /// Copia la luz entera del plano anterior: qué usa, posiciones y
+  /// ajustes (PL.5).
+  final Future<void> Function()? onCopyPrevious;
+
   const PlanLightUsePanel({
     super.key,
     required this.title,
@@ -29,6 +33,7 @@ class PlanLightUsePanel extends StatefulWidget {
     required this.onApply,
     this.previous,
     this.previousLabel,
+    this.onCopyPrevious,
   });
 
   /// Abre el panel como hoja.
@@ -40,6 +45,7 @@ class PlanLightUsePanel extends StatefulWidget {
     required Future<void> Function(Set<String> unused) onApply,
     Set<String>? previous,
     String? previousLabel,
+    Future<void> Function()? onCopyPrevious,
   }) => showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -51,6 +57,7 @@ class PlanLightUsePanel extends StatefulWidget {
       onApply: onApply,
       previous: previous,
       previousLabel: previousLabel,
+      onCopyPrevious: onCopyPrevious,
     ),
   );
 
@@ -126,6 +133,23 @@ class _PlanLightUsePanelState extends State<PlanLightUsePanel> {
                             : 'Igual que ${widget.previousLabel}',
                       ),
                       onPressed: () => _set(widget.previous!),
+                    ),
+                  if (widget.onCopyPrevious != null)
+                    ActionChip(
+                      key: const ValueKey('light-use-copy'),
+                      avatar: const Icon(Icons.copy_all, size: 16),
+                      label: Text(
+                        widget.previousLabel == null
+                            ? 'Copiar su luz entera'
+                            : 'Copiar la luz de ${widget.previousLabel}',
+                      ),
+                      tooltip:
+                          'Qué focos usa, sus posiciones y sus ajustes: todo '
+                          'como en ese plano',
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await widget.onCopyPrevious!();
+                      },
                     ),
                   ActionChip(
                     key: const ValueKey('light-use-all'),

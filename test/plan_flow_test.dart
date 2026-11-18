@@ -19,6 +19,7 @@ import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_scope.dart';
+import 'package:iris_dp/features/camera_plan/light_overrides.dart';
 import 'package:iris_dp/features/camera_plan/plan_guide.dart';
 import 'package:iris_dp/features/camera_plan/plan_prefs.dart';
 import 'package:iris_dp/features/camera_plan/plan_start_from.dart';
@@ -115,6 +116,29 @@ void main() {
       expect(copies, hasLength(1));
       expect(copies.single.position, const Offset(120, 340));
       expect(CameraLinks.setupCameraOf(copies.single), 'cam-del-set');
+    });
+
+    test('nace con la luz del anterior: los focos que usa (PL.5)', () async {
+      final setup = await FloorPlanRepository(
+        db,
+      ).createLightSetup(projectId: projectId);
+      final first = await addShot(1, setupId: setup.id);
+      final unused = PlanElement(
+        id: 1,
+        type: ElementType.light,
+        position: Offset.zero,
+        props: {'uid': 'foco-1'},
+      );
+      LightOverrides.setUnused(unused, true);
+      await FloorPlanRepository(
+        db,
+      ).saveLightOverrides(first, {'foco-1': unused});
+
+      final id = await createShotInScene(db, await scene(), [
+        (await db.getShotById(first))!,
+      ]);
+      final created = (await db.getShotById(id))!;
+      expect(LightOverrides.unusedIn(created.lightOverridesJson), {'foco-1'});
     });
 
     test('con el ajuste apagado nace en blanco', () async {

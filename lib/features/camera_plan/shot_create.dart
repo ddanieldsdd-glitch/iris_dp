@@ -7,7 +7,8 @@ import 'plan_prefs.dart';
 
 /// Añade un plano al final de [scene]; [shots] son los que ya tiene. Salvo
 /// que Ajustes diga lo contrario, nace como el anterior: mismo set, misma
-/// lente y movimiento, y su cámara en el mismo sitio.
+/// lente y movimiento, su cámara en el mismo sitio y su luz: los focos que
+/// usa y cómo los ajusta (PL.5).
 Future<int> createShotInScene(
   AppDatabase db,
   Scene scene,
@@ -36,6 +37,7 @@ Future<int> createShotInScene(
       movement: Value(previous?.movement),
       lightSetupId: Value(previous?.lightSetupId),
       locationBasePlanId: Value(previous?.locationBasePlanId),
+      lightOverridesJson: Value(previous?.lightOverridesJson),
     ),
   );
   if (previous != null) await CameraLinks(db).copyCameras(previous.id, id);
