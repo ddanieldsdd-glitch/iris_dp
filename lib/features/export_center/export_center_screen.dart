@@ -999,6 +999,17 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
               ],
             ),
           ),
+        if (_options.planView.hasStage)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _options.planSteps,
+            onChanged: (v) => _setOptions(_options.copyWith(planSteps: v)),
+            title: const Text('Viñetas por tramo'),
+            subtitle: const Text(
+              'Los planos con mucho movimiento llevan, bajo la planta, una '
+              'viñeta por cada tramo: 1 → 2, 2 → 3…',
+            ),
+          ),
         if (_options.planView.hasLight)
           SwitchListTile(
             contentPadding: EdgeInsets.zero,

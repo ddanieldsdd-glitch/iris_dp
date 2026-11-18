@@ -128,6 +128,7 @@ class ExportRunner {
     coverImagePath: options.planCoverImage,
     planBackdropPath: options.planBackdropImage,
     bigPlan: options.planBig,
+    withSteps: options.planSteps,
     indexParts: options.planIndexParts,
     briefs: await _indexBriefs(sections, options),
   );

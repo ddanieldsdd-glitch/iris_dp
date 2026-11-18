@@ -23,6 +23,7 @@ import 'plan_gear_list.dart';
 import 'plan_light_map.dart';
 import 'plan_marks.dart';
 import 'plan_opening.dart';
+import 'plan_path_separation.dart';
 import 'plan_sun_painter.dart';
 import 'plan_terrain_painter.dart';
 import 'plan_segment.dart';
@@ -2050,9 +2051,18 @@ class CameraPlanPainter extends CustomPainter {
     final color = _pathColor(el);
     final point = 1 / scale;
     final stops = [el.position, ...el.pathPoints];
-    final route = Path()..moveTo(stops.first.dx, stops.first.dy);
-    for (final stop in stops.skip(1)) {
-      route.lineTo(stop.dx, stop.dy);
+    // Los tramos, apartados de los de otro recorrido que vayan por encima.
+    final spans =
+        _document.spans[el] ??
+        [
+          for (var i = 0; i < stops.length - 1; i++)
+            (a: stops[i], b: stops[i + 1]),
+        ];
+    final route = Path();
+    for (final span in spans) {
+      route
+        ..moveTo(span.a.dx, span.a.dy)
+        ..lineTo(span.b.dx, span.b.dy);
     }
     final stroke = Paint()
       ..style = PaintingStyle.stroke
@@ -2074,8 +2084,8 @@ class CameraPlanPainter extends CustomPainter {
       // A trazos, como en el editor.
       final dash = isCamera ? 5.0 : 3.5;
       final gap = isCamera ? 3.5 : 3.0;
-      for (var i = 0; i < stops.length - 1; i++) {
-        final span = stops[i + 1] - stops[i];
+      for (final s in spans) {
+        final span = s.b - s.a;
         if (span.distance == 0) continue;
         final dir = span / span.distance;
         for (
@@ -2084,8 +2094,8 @@ class CameraPlanPainter extends CustomPainter {
           along += (dash + gap) * point
         ) {
           canvas.drawLine(
-            stops[i] + dir * along,
-            stops[i] + dir * math.min(along + dash * point, span.distance),
+            s.a + dir * along,
+            s.a + dir * math.min(along + dash * point, span.distance),
             stroke,
           );
         }
@@ -2095,16 +2105,16 @@ class CameraPlanPainter extends CustomPainter {
     final head = Paint()
       ..color = isCamera ? color : color.withValues(alpha: 0.7);
     final arrow = isCamera ? 1.0 : 0.75;
-    for (var i = 0; i < stops.length - 1; i++) {
-      final span = stops[i + 1] - stops[i];
+    for (final s in spans) {
+      final span = s.b - s.a;
       if (span.distance * scale < 14) continue;
       final dir = span / span.distance;
       final side = Offset(-dir.dy, dir.dx);
       // La punta, donde no tape una figura ni un número; si no hay sitio,
       // el tramo se queda sin ella.
-      final along = _documentArrowSpot(stops[i], span);
+      final along = _documentArrowSpot(s.a, span);
       if (along == null) continue;
-      final tip = stops[i] + span * along + dir * 4.5 * point * arrow;
+      final tip = s.a + span * along + dir * 4.5 * point * arrow;
       final back = tip - dir * 8 * point * arrow;
       final wing = 3.8 * point * arrow;
       canvas.drawPath(
@@ -2196,9 +2206,22 @@ class CameraPlanPainter extends CustomPainter {
       }
     }
     final bounds = documentDrawing ?? (Offset.zero & _sheet);
+    // Los recorridos que van por el mismo sitio, en carriles: en la hoja,
+    // para que la separación no dependa de la escala.
+    final separated = separatePaths([
+      for (final el in moving)
+        [for (final p in [el.position, ...el.pathPoints]) offset + p * scale],
+    ]);
+    Offset back(Offset q) => (q - offset) / scale;
     return _DocumentLayout(
       figures,
       _layoutDocumentStops(moving, figures, bounds),
+      {
+        for (final (i, el) in moving.indexed)
+          el: [
+            for (final span in separated[i]) (a: back(span.a), b: back(span.b)),
+          ],
+      },
     );
   }
 
@@ -2239,6 +2262,7 @@ class CameraPlanPainter extends CustomPainter {
         bool square,
         double body,
         List<double>? facings,
+        int first,
       })
     >
     routes,
@@ -2303,7 +2327,7 @@ class CameraPlanPainter extends CustomPainter {
         stops.add(
           _DocumentStop(
             chosen ?? at,
-            i + 1,
+            i + route.first,
             route.color,
             square: route.square,
             anchor: at,
@@ -2332,6 +2356,8 @@ class CameraPlanPainter extends CustomPainter {
             for (var i = 0; i <= el.pathPoints.length; i++)
               _rotationAtStop(el, i) * math.pi / 180,
           ],
+          // En una viñeta de un tramo, sus números de verdad (2 → 3).
+          first: 1 + ((el.props[PlanMarks.fromKey] as num?)?.toInt() ?? 0),
         ),
     ],
     figures,
@@ -2354,6 +2380,7 @@ class CameraPlanPainter extends CustomPainter {
             square: false,
             body: r.body,
             facings: null,
+            first: 1,
           ),
       ],
       figures,
@@ -4543,7 +4570,11 @@ class _DocumentLayout {
   final List<(Offset, double)> figures;
   final List<_DocumentStop> stops;
 
-  const _DocumentLayout(this.figures, this.stops);
+  /// Los tramos de cada recorrido, ya separados de los que van por el
+  /// mismo sitio, en unidades de la planta.
+  final Map<PlanElement, List<PathSpan>> spans;
+
+  const _DocumentLayout(this.figures, this.stops, [this.spans = const {}]);
 }
 
 /// Un foco con número en la planta de luz y, si apunta a algún sitio, hacia

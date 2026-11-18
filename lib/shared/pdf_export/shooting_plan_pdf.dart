@@ -59,6 +59,9 @@ class ShootingPlanBlock {
   /// El rótulo de la planta pequeña.
   final String smallTitle;
 
+  /// Una viñeta por tramo del movimiento, bajo la planta grande de cámara.
+  final List<Uint8List> steps;
+
   const ShootingPlanBlock({
     required this.sceneLabel,
     required this.shotNumber,
@@ -80,6 +83,7 @@ class ShootingPlanBlock {
     this.lightPlan,
     this.lightLegend = const [],
     this.smallTitle = 'LUZ',
+    this.steps = const [],
   });
 }
 
@@ -270,6 +274,7 @@ class ShootingPlanPdf {
     PlanSheetView bigPlan = PlanSheetView.stage,
     Set<PlanIndexPart> indexParts = const {},
     List<ShootDayBrief> briefs = const [],
+    bool withSteps = true,
   }) async {
     final renderer = await PlanRenderer.load(db, project.id);
     final briefOf = {
@@ -301,6 +306,7 @@ class ShootingPlanPdf {
                 withBeams,
                 planBackdropPath,
                 bigPlan,
+                withSteps,
               ),
             ),
           ),
@@ -419,6 +425,7 @@ class ShootingPlanPdf {
     bool withBeams,
     String? backdrop, [
     PlanSheetView bigPlan = PlanSheetView.stage,
+    bool withSteps = true,
   ]) async {
     final shot = item.shot;
     final slug = [
@@ -430,7 +437,12 @@ class ShootingPlanPdf {
     // la altura.
     final full = view.hasStage;
     // Con las dos, la grande es la elegida y la otra va pequeña al lado.
-    final lightBig = view == PlanExportView.both && bigPlan == PlanSheetView.light;
+    final lightBig =
+        view == PlanExportView.both && bigPlan == PlanSheetView.light;
+    // Si se mueve mucho, una viñeta por tramo bajo la planta de cámara.
+    final steps = full && !lightBig && withSteps
+        ? await renderer.shotSteps(shot, sizeFor: _stepSize, backdrop: backdrop)
+        : const <Uint8List>[];
     final bigView = !full
         ? PlanSheetView.light
         : lightBig
@@ -443,7 +455,7 @@ class ShootingPlanPdf {
       size: full
           ? Size(
               _fullPlanWidth - (lightBig ? legendWidth : 0),
-              _bodyHeight,
+              _bodyHeight - (steps.isEmpty ? 0 : _stepsHeight),
             )
           : Size(_planWidth - legendWidth, _blockHeight),
       pixelRatio: 4,
@@ -484,6 +496,7 @@ class ShootingPlanPdf {
       lightPlan: light?.image,
       lightLegend: light == null ? const [] : _legendOf(light),
       smallTitle: lightBig ? 'CÁMARA Y ACTORES' : 'LUZ',
+      steps: steps,
     );
   }
 
@@ -559,6 +572,75 @@ class ShootingPlanPdf {
   static const _lightHeight = 236.0;
   static const _lightLegendWidth = 132.0;
   static const _overviewLegendWidth = 170.0;
+
+  /// La tira de viñetas por tramo: alto total y viñetas por fila.
+  static const _stepsHeight = 118.0;
+  static const _stepsPerRow = 5;
+  static const _stepGap = 4.0;
+  static const _stepCaption = 11.0;
+
+  /// Lo que mide cada viñeta con [count] tramos.
+  static Size _stepSize(int count) {
+    final perRow = math.min(math.max(count, 1), _stepsPerRow);
+    final rows = (count / _stepsPerRow).ceil().clamp(1, 2);
+    final width = (_fullPlanWidth - 8 - _stepGap * (perRow - 1)) / perRow;
+    final height =
+        (_stepsHeight - 8 - rows * _stepCaption - _stepGap * (rows - 1)) / rows;
+    return Size(width, height);
+  }
+
+  /// Las viñetas por tramo, con su «1 – 2» encima.
+  static pw.Widget _stepsView(List<Uint8List> steps) {
+    final size = _stepSize(steps.length);
+    final shown = steps.take(_stepsPerRow * 2).toList();
+    return pw.Container(
+      height: _stepsHeight,
+      padding: const pw.EdgeInsets.all(4),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(
+          top: pw.BorderSide(color: PdfColors.grey400, width: 0.5),
+        ),
+      ),
+      child: pw.Wrap(
+        spacing: _stepGap,
+        runSpacing: _stepGap,
+        children: [
+          for (final (k, image) in shown.indexed)
+            pw.SizedBox(
+              width: size.width,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.SizedBox(
+                    height: _stepCaption,
+                    child: pw.Text(
+                      '${k + 1} – ${k + 2}',
+                      style: pw.TextStyle(
+                        fontSize: 7.5,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  pw.Container(
+                    height: size.height,
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(
+                        color: PdfColors.grey300,
+                        width: 0.4,
+                      ),
+                    ),
+                    child: pw.Image(
+                      pw.MemoryImage(image),
+                      fit: pw.BoxFit.contain,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   /// Las luces numeradas, al lado de la planta: lo que antes eran rótulos
   /// con su línea encima de la planta.
@@ -1141,27 +1223,36 @@ class ShootingPlanPdf {
             decoration: pw.BoxDecoration(
               border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
             ),
-            child: pw.Row(
+            child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
                 pw.Expanded(
-                  child: pw.Container(
-                    alignment: pw.Alignment.center,
-                    child: block.plan == null
-                        ? pw.Text(
-                            'Sin planta',
-                            style: const pw.TextStyle(
-                              fontSize: 9,
-                              color: PdfColors.grey600,
-                            ),
-                          )
-                        : pw.Image(
-                            pw.MemoryImage(block.plan!),
-                            fit: pw.BoxFit.contain,
-                          ),
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                    children: [
+                      pw.Expanded(
+                        child: pw.Container(
+                          alignment: pw.Alignment.center,
+                          child: block.plan == null
+                              ? pw.Text(
+                                  'Sin planta',
+                                  style: const pw.TextStyle(
+                                    fontSize: 9,
+                                    color: PdfColors.grey600,
+                                  ),
+                                )
+                              : pw.Image(
+                                  pw.MemoryImage(block.plan!),
+                                  fit: pw.BoxFit.contain,
+                                ),
+                        ),
+                      ),
+                      if (block.legend.isNotEmpty)
+                        _legend(block.legend, legendWidth),
+                    ],
                   ),
                 ),
-                if (block.legend.isNotEmpty) _legend(block.legend, legendWidth),
+                if (full && block.steps.isNotEmpty) _stepsView(block.steps),
               ],
             ),
           ),

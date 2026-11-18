@@ -111,6 +111,10 @@ class ExportOptions {
   /// Con las dos plantas, cuál va en grande.
   final PlanSheetView planBig;
 
+  /// Los planos que se mueven mucho llevan, bajo su planta, una viñeta por
+  /// tramo del recorrido.
+  final bool planSteps;
+
   /// Documentos que abren con el plan de rodaje de sus jornadas. En el guion
   /// técnico es la portada de la jornada, cuando se exporta una sola.
   final Set<ExportDocument> scheduleFor;
@@ -140,6 +144,7 @@ class ExportOptions {
       PlanIndexPart.facts,
     },
     this.planBig = PlanSheetView.stage,
+    this.planSteps = true,
     this.scheduleFor = const {ExportDocument.technicalScript},
     this.withWeather = true,
     this.script = const ScriptExportOptions(),
@@ -169,6 +174,7 @@ class ExportOptions {
     bool? planIndex,
     Set<PlanIndexPart>? planIndexParts,
     PlanSheetView? planBig,
+    bool? planSteps,
     Set<ExportDocument>? scheduleFor,
     bool? withWeather,
     ScriptExportOptions? script,
@@ -190,6 +196,7 @@ class ExportOptions {
     planIndex: planIndex ?? this.planIndex,
     planIndexParts: planIndexParts ?? this.planIndexParts,
     planBig: planBig ?? this.planBig,
+    planSteps: planSteps ?? this.planSteps,
     scheduleFor: scheduleFor ?? this.scheduleFor,
     withWeather: withWeather ?? this.withWeather,
     script: script ?? this.script,
@@ -216,6 +223,7 @@ class ExportOptions {
     'planIndex': planIndex,
     'planIndexParts': [for (final p in planIndexParts) p.name],
     'planBig': planBig.name,
+    'planSteps': planSteps,
     'scheduleFor': [for (final d in scheduleFor) d.name],
     'withWeather': withWeather,
     'script': script.toJson(),
@@ -248,6 +256,9 @@ class ExportOptions {
             }
           : d.planIndexParts,
       planBig: _byName(PlanSheetView.values, json['planBig']) ?? d.planBig,
+      planSteps: json['planSteps'] is bool
+          ? json['planSteps'] as bool
+          : d.planSteps,
       scheduleFor: schedule is List
           ? {for (final name in schedule) ?_byName(ExportDocument.values, name)}
           : d.scheduleFor,

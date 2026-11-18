@@ -12,6 +12,10 @@ class PlanMarks {
   PlanMarks._();
 
   static const rotKey = 'pathRot';
+
+  /// En una viñeta de un tramo de documento, cuántas posiciones van antes
+  /// de la primera que se ve: sus números siguen los del plano.
+  static const fromKey = 'markFrom';
   static const poseKey = 'pose';
   static const poseStand = 'stand';
   static const poseSit = 'sit';

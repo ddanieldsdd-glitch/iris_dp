@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -10,8 +11,10 @@ import '../locations/location_scan_service.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
+import 'light_overrides.dart';
 import 'plan_data.dart';
 import 'plan_images.dart';
+import 'plan_marks.dart';
 import 'plan_segment.dart';
 import 'plan_thumbnail.dart';
 
@@ -327,6 +330,99 @@ class PlanRenderer {
       ),
       view == PlanSheetView.light ? legendOf(picture) : const [],
     );
+  }
+
+  /// Cuántos tramos tiene el movimiento de un plano: los de la cámara o el
+  /// actor que más se mueve.
+  static int stepCount(PlanPicture picture) => picture.elements
+      .where(PlanMarks.supports)
+      .fold(0, (n, el) => math.max(n, el.pathPoints.length));
+
+  /// Si el plano se mueve tanto que en una sola planta los recorridos se
+  /// pisan: entonces lleva una viñeta por tramo.
+  static bool wantsSteps(PlanPicture picture) {
+    final moving = picture.elements.where(PlanMarks.supports);
+    final legs = moving.fold(0, (n, el) => n + el.pathPoints.length);
+    final steps = stepCount(picture);
+    return steps >= 2 && (legs >= 4 || steps >= 3);
+  }
+
+  /// El tramo [k] (de la posición k+1 a la k+2): cada cámara y actor que
+  /// se mueve en él, con ese movimiento; los demás, quietos donde estén.
+  static PlanPicture stepOf(PlanPicture picture, int k) {
+    PlanElement step(PlanElement el) {
+      if (!PlanMarks.supports(el) || el.pathPoints.isEmpty) return el;
+      final copy = LightOverrides.clone(el);
+      final stops = [el.position, ...el.pathPoints];
+      double facing(int i) =>
+          i == 0 ? el.rotation : PlanMarks.rotationAt(el, i - 1);
+      final from = math.min(k, stops.length - 1);
+      copy
+        ..position = stops[from]
+        ..rotation = facing(from)
+        ..pathPoints = [if (from + 1 < stops.length) stops[from + 1]];
+      copy.props.remove(PlanMarks.rotKey);
+      if (from + 1 < stops.length) {
+        copy.props[PlanMarks.rotKey] = [facing(from + 1)];
+      }
+      copy.props[PlanMarks.fromKey] = from;
+      return copy;
+    }
+
+    return PlanPicture(
+      elements: [for (final el in picture.elements) step(el)],
+      inherited: picture.inherited,
+      drawings: picture.drawings,
+      focus: picture.focus,
+      crop: picture.crop,
+      routes: picture.routes,
+      images: picture.images,
+      background: picture.background,
+      backgroundRect: picture.backgroundRect,
+      backgroundOpacity: picture.backgroundOpacity,
+    );
+  }
+
+  /// Dónde se mueven las cámaras y los actores de [picture]: todas las
+  /// viñetas de un plano se encuadran igual.
+  static Rect? actionOf(PlanPicture picture) {
+    Rect? all;
+    for (final el in picture.elements.where(PlanMarks.supports)) {
+      for (final p in [el.position, ...el.pathPoints]) {
+        final r = Rect.fromCircle(center: p, radius: 110);
+        all = all == null ? r : all.expandToInclude(r);
+      }
+    }
+    return all;
+  }
+
+  /// Una viñeta por tramo del movimiento del plano, solo con cámaras y
+  /// actores; vacía si se mueve poco. [sizeFor] da el tamaño de cada
+  /// viñeta según cuántos tramos haya.
+  Future<List<Uint8List>> shotSteps(
+    Shot shot, {
+    Size Function(int steps)? sizeFor,
+    double pixelRatio = 3,
+    String? backdrop,
+    bool force = false,
+  }) async {
+    final picture = await shotPicture(shot, light: false);
+    if (!force && !wantsSteps(picture)) return const [];
+    final view = actionOf(picture);
+    final count = stepCount(picture);
+    final size = sizeFor?.call(count) ?? const Size(160, 110);
+    return [
+      for (var k = 0; k < count; k++)
+        ?await png(
+          stepOf(picture, k),
+          size: size,
+          pixelRatio: pixelRatio,
+          view: view,
+          jpeg: true,
+          beams: false,
+          backdrop: backdrop,
+        ),
+    ];
   }
 
   /// La planta de un plano, con su sección elegida. Nula si no hay nada.
