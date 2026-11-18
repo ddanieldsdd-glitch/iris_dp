@@ -9,8 +9,13 @@ extension _LightUse on _CameraPlanEditorState {
       el.type == ElementType.light &&
       _CameraPlanEditorState._canShotOverride(el);
 
-  /// Usa o deja de usar [el] en este plano.
-  Future<void> _setLightUsed(PlanElement el, bool used) async {
+  /// Usa o deja de usar [el] en este plano. Sin [save], lo guarda quien
+  /// llama (varios a la vez).
+  Future<void> _setLightUsed(
+    PlanElement el,
+    bool used, {
+    bool save = true,
+  }) async {
     if (!_canToggleUse(el) || used != LightOverrides.isUnused(el)) return;
     LightOverrides.ensureUids([el]);
     final uid = LightOverrides.uidOf(el)!;
@@ -31,11 +36,35 @@ extension _LightUse on _CameraPlanEditorState {
       );
       // Si el plano no le cambiaba nada más, vuelve a ser el del set.
       if (original != null && LightOverrides.sameAs(el, original)) {
-        await _setShotOverride(el, false);
-        return;
+        _setupOriginals.remove(uid);
+        final index = _elements.indexOf(el);
+        original
+          ..layer = el.layer
+          ..id = --_tempId
+          ..shotOverride = false;
+        _rebuild(() {
+          if (index >= 0) _elements[index] = original;
+          if (identical(_selected, el)) _selected = original;
+        });
       }
     }
-    await _saveLayer(el.layer);
+    if (save) {
+      await _saveLayer(el.layer);
+      _commitHistory();
+    }
+  }
+
+  /// Usa o deja de usar varios focos, guardando una vez.
+  Future<void> _setLightsUsed(Map<PlanElement, bool> changes) async {
+    final layers = <PlanLayer>{};
+    for (final MapEntry(key: el, value: used) in changes.entries) {
+      if (used == LightOverrides.isUnused(el)) layers.add(el.layer);
+      await _setLightUsed(el, used, save: false);
+    }
+    if (layers.isEmpty) return;
+    for (final layer in layers) {
+      await _saveLayer(layer);
+    }
     _commitHistory();
   }
 
@@ -48,9 +77,79 @@ extension _LightUse on _CameraPlanEditorState {
     if (lights.isEmpty) return;
     // Si alguno no se usa, se usan todos; si no, se dejan todos.
     final use = lights.any(LightOverrides.isUnused);
-    for (final el in lights) {
-      await _setLightUsed(el, use);
-    }
+    await _setLightsUsed({for (final el in lights) el: use});
+  }
+
+  /// Los focos del set que este plano puede usar o no.
+  List<PlanElement> get _shotLights => [
+    for (final el in _elements)
+      if (_canToggleUse(el)) el,
+  ];
+
+  /// «Focos 5/7» en la barra de capas; nulo fuera de un plano.
+  String? get _lightUseLabel {
+    if (_shot == null) return null;
+    final lights = _shotLights;
+    if (lights.isEmpty) return null;
+    final used = lights.where((e) => !LightOverrides.isUnused(e)).length;
+    return 'Focos $used/${lights.length}';
+  }
+
+  /// El panel rápido: casillas por foco, «igual que el plano anterior»,
+  /// todos o ninguno (PL.2).
+  Future<void> _openLightUse() async {
+    final shot = _shot;
+    if (shot == null) return;
+    final db = ref.read(databaseProvider);
+    // El plano anterior del mismo set: en la escena o, si no, en el set.
+    final siblings =
+        await (db.select(db.shots)
+              ..where((s) => s.lightSetupId.equalsNullable(shot.lightSetupId))
+              ..orderBy([
+                (s) => OrderingTerm.asc(s.sceneId),
+                (s) => OrderingTerm.asc(s.sortOrder),
+                (s) => OrderingTerm.asc(s.number),
+              ]))
+            .get();
+    final at = siblings.indexWhere((s) => s.id == shot.id);
+    final previous = at > 0 ? siblings[at - 1] : null;
+    if (!mounted) return;
+    String where(PlanElement el) => switch (el.layer) {
+      PlanLayer.light => '',
+      PlanLayer.groupLight => 'Del grupo',
+      PlanLayer.environment || PlanLayer.set => 'Del entorno',
+      PlanLayer.shot => '',
+    };
+    final lights = _shotLights;
+    LightOverrides.ensureUids(lights);
+    await PlanLightUsePanel.show(
+      context,
+      title: 'Focos de este plano',
+      lights: [
+        for (final el in lights)
+          (
+            uid: LightOverrides.uidOf(el)!,
+            name: el.fullLabel,
+            where: where(el),
+          ),
+      ],
+      unused: {
+        for (final el in lights)
+          if (LightOverrides.isUnused(el)) LightOverrides.uidOf(el)!,
+      },
+      previous: previous == null
+          ? null
+          : LightOverrides.unusedIn(previous.lightOverridesJson),
+      previousLabel: previous == null
+          ? null
+          : previous.sceneId == shot.sceneId
+          ? 'el plano ${previous.number}'
+          : 'el plano anterior del set',
+      onApply: (unused) => _setLightsUsed({
+        for (final el in _shotLights)
+          el: !unused.contains(LightOverrides.uidOf(el)),
+      }),
+    );
   }
 }
 

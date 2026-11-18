@@ -54,6 +54,7 @@ import 'plan_sketch_promote.dart';
 import 'plan_view_picker.dart';
 import 'plan_start_from.dart' show createSetupAsked;
 import 'plan_light_map.dart';
+import 'plan_light_use_panel.dart';
 import 'plan_project_gear_dialog.dart';
 import 'plan_marks.dart';
 import 'plan_room_panel.dart';
@@ -5758,6 +5759,23 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               _setupColor,
               onMenu: _chooseLightSetup,
             ),
+            // Qué focos del set usa este plano (PL.2).
+            if (_lightUseLabel case final label?)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ActionChip(
+                  key: const ValueKey('plan-light-use'),
+                  tooltip: 'Qué focos del set usa este plano (U)',
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(
+                    Icons.lightbulb_outline,
+                    size: 16,
+                    color: palette.accent,
+                  ),
+                  label: Text(label),
+                  onPressed: _openLightUse,
+                ),
+              ),
             if (_navTargets.isNotEmpty)
               chip(
                 PlanLayer.shot,
