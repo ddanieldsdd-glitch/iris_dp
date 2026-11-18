@@ -1086,7 +1086,8 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
             children: [
               Text(
                 'Con cada jornada, en la misma hoja: con una sola jornada va '
-                'en la portada.',
+                'en la portada. El material va en una hoja al final, cruzado '
+                'con las reservas de alquiler de ese día.',
                 style: AppTypography.caption(context.palette),
               ),
               const SizedBox(height: 4),

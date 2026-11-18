@@ -9,6 +9,8 @@ import '../../core/database/app_database.dart';
 import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/pdf_safe_image.dart';
 import '../../shared/pdf_export/shoot_day_brief.dart';
+import '../../shared/pdf_export/shooting_plan_day_sheet.dart'
+    show PlanIndexPart;
 import '../../shared/pdf_export/shooting_plan_pdf.dart';
 import '../../shared/pdf_export/storyboard_pdf.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
@@ -96,7 +98,10 @@ class ExportRunner {
     List<ExportDaySection> sections,
     ExportOptions options,
   ) async {
-    if (!options.planIndex || options.planIndexParts.isEmpty) return const [];
+    if (!options.planIndex ||
+        PlanIndexPart.summaryOf(options.planIndexParts).isEmpty) {
+      return const [];
+    }
     final dayIds = {
       for (final section in sections)
         if (section.day != null) section.day!.id,

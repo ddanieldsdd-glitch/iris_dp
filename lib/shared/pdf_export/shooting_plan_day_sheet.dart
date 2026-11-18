@@ -9,7 +9,14 @@ import 'shoot_day_brief.dart';
 enum PlanIndexPart {
   order('Orden de rodaje'),
   places('Mapa, QR y enlaces'),
-  facts('Citación, sol y tiempo');
+  facts('Citación, sol y tiempo'),
+
+  /// No va en el resumen: es una hoja al final, con su línea en el índice.
+  material('Material de la jornada');
+
+  /// Las partes que van en el resumen de la jornada.
+  static Set<PlanIndexPart> summaryOf(Set<PlanIndexPart> parts) =>
+      parts.difference({material});
 
   final String label;
 

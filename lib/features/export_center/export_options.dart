@@ -142,6 +142,7 @@ class ExportOptions {
       PlanIndexPart.order,
       PlanIndexPart.places,
       PlanIndexPart.facts,
+      PlanIndexPart.material,
     },
     this.planBig = PlanSheetView.stage,
     this.planSteps = true,

@@ -21,7 +21,9 @@ import '../rich_text/script_markup.dart';
 import '../technical_script_export/technical_script_doc.dart';
 import 'pdf_page_count.dart';
 import 'shoot_day_brief.dart';
+import 'shoot_day_material.dart';
 import 'shooting_plan_day_sheet.dart';
+import 'shooting_plan_material_sheet.dart';
 import 'shoot_day_order_pdf.dart';
 
 /// Un plano listo para pintar.
@@ -129,7 +131,16 @@ class ShootingPlanDay {
   /// Su orden del día, para el resumen del índice.
   final ShootDayBrief? brief;
 
-  const ShootingPlanDay(this.order, this.entries, {this.heading, this.brief});
+  /// El material que juega en ella, para su hoja al final.
+  final ShootDayMaterial? material;
+
+  const ShootingPlanDay(
+    this.order,
+    this.entries, {
+    this.heading,
+    this.brief,
+    this.material,
+  });
 }
 
 /// Reparto en páginas, sin pintar nada: cada bloque ocupa media página, así
@@ -196,12 +207,14 @@ class ShootingPlanLayout {
     bool index = true,
     int schedulePages = 0,
     int summaries = 0,
+    int materials = 0,
   }) {
     final indexPages = index
         ? pagesForIndex(
             lineCount(days, overviews: overviews) +
                 (schedulePages > 0 ? 1 : 0) +
-                summaries,
+                summaries +
+                materials,
           )
         : 1;
     final lead = indexPages + summaries + schedulePages;
@@ -277,6 +290,7 @@ class ShootingPlanPdf {
     bool withSteps = true,
   }) async {
     final renderer = await PlanRenderer.load(db, project.id);
+    final withMaterial = indexParts.contains(PlanIndexPart.material);
     final briefOf = {
       for (final b in briefs)
         if (b.dayId != null) b.dayId!: b,
@@ -319,6 +333,18 @@ class ShootingPlanPdf {
           orderLine(section),
           entries,
           brief: briefOf[day?.id],
+          material: withMaterial
+              ? await ShootDayMaterial.load(
+                  db,
+                  renderer.data,
+                  project.id,
+                  [
+                    for (final tract in section.scenes)
+                      for (final item in tract.shots) item.shot,
+                  ],
+                  date: day?.shootDate,
+                )
+              : null,
           heading: day == null
               ? null
               : [
@@ -739,7 +765,14 @@ class ShootingPlanPdf {
           );
     // El resumen de cada jornada (orden, lugares y datos): en la portada si
     // es una sola y cabe con el índice; si no, una hoja por jornada.
-    final summaryDays = withIndex && indexParts.isNotEmpty
+    final summaryParts = PlanIndexPart.summaryOf(indexParts);
+    final materialDays = indexParts.contains(PlanIndexPart.material)
+        ? [
+            for (final day in days)
+              if (day.material case final m? when !m.isEmpty) day,
+          ]
+        : const <ShootingPlanDay>[];
+    final summaryDays = withIndex && summaryParts.isNotEmpty
         ? [
             for (final day in days)
               if (day.brief != null) day,
@@ -747,13 +780,14 @@ class ShootingPlanPdf {
         : const <ShootingPlanDay>[];
     final coverLines =
         ShootingPlanLayout.lineCount(days, overviews: overviews.isNotEmpty) +
-        (schedulePages > 0 ? 1 : 0);
+        (schedulePages > 0 ? 1 : 0) +
+        materialDays.length;
     final summaryOnCover =
         days.length == 1 &&
         summaryDays.length == 1 &&
         ShootingPlanDaySheet.fits(
           summaryDays.single.brief!,
-          indexParts,
+          summaryParts,
           _coverSummaryHeight,
           indexLines: coverLines,
         );
@@ -764,7 +798,10 @@ class ShootingPlanPdf {
       index: withIndex,
       schedulePages: schedulePages,
       summaries: summaryPages,
+      materials: withIndex ? materialDays.length : 0,
     );
+    // El material de cada jornada, al final, tras las plantas de escenas.
+    final materialPage = layout.overviewPage + overviews.length;
     final doc = pw.Document(title: '$documentTitle · $projectName');
 
     // Índice: portada y las páginas que necesite.
@@ -782,7 +819,7 @@ class ShootingPlanPdf {
       if (summary >= 0) {
         lines.add(
           _indexLine(
-            _summaryLabel(indexParts),
+            _summaryLabel(summaryParts),
             layout.summaryPages[summary],
             'jornada_$summary',
           ),
@@ -799,6 +836,19 @@ class ShootingPlanPdf {
       lines.add(
         _indexLine('PLANTAS DE ESCENAS', layout.overviewPage, 'plantas'),
       );
+    }
+    if (withIndex) {
+      for (final (i, day) in materialDays.indexed) {
+        lines.add(
+          _indexLine(
+            materialDays.length == 1 || day.heading == null
+                ? 'MATERIAL DE LA JORNADA'
+                : 'MATERIAL · ${day.heading!.toUpperCase()}',
+            materialPage + i,
+            'material_$i',
+          ),
+        );
+      }
     }
 
     final subtitle = days.length == 1 ? days.single.heading : null;
@@ -871,7 +921,7 @@ class ShootingPlanPdf {
                     pw.SizedBox(height: 10),
                     ShootingPlanDaySheet.build(
                       coverBrief,
-                      indexParts,
+                      summaryParts,
                       height: _coverSummaryHeight,
                       width: _format.width - 72,
                       index: lines,
@@ -943,7 +993,7 @@ class ShootingPlanPdf {
                     ),
                     ShootingPlanDaySheet.build(
                       day.brief!,
-                      indexParts,
+                      summaryParts,
                       height: _bodyHeight - 30,
                       width: _bodyWidth,
                     ),
@@ -1017,6 +1067,42 @@ class ShootingPlanPdf {
             documentTitle,
             pageNumber,
             _overviewView(overview, anchored: i == 0),
+          ),
+        ),
+      );
+    }
+
+    // Material de cada jornada: una hoja por jornada.
+    for (final (i, day) in materialDays.indexed) {
+      doc.addPage(
+        pw.Page(
+          theme: theme,
+          pageFormat: _format,
+          margin: const pw.EdgeInsets.all(_margin),
+          build: (context) => _sheet(
+            projectName,
+            day.heading,
+            documentTitle,
+            materialPage + i,
+            pw.Anchor(
+              name: 'material_$i',
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  shootingPlanDaySummaryTitle(
+                    [
+                      'Material de la jornada',
+                      if (day.heading != null) day.heading!,
+                    ].join('  ·  '),
+                  ),
+                  ShootingPlanMaterialSheet.build(
+                    day.material!,
+                    width: _bodyWidth,
+                    height: _bodyHeight - 30,
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       );
