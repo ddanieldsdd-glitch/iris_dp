@@ -28,6 +28,7 @@ import 'plan_terrain_painter.dart';
 import 'plan_segment.dart';
 import 'plan_street.dart';
 import 'plan_document_labels.dart';
+import 'plan_document_light.dart';
 import 'prop_box.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
@@ -237,8 +238,9 @@ class CameraPlanPainter extends CustomPainter {
   /// su línea y nunca encima de la planta.
   final Rect? documentDrawing;
 
-  /// Planta de luz de un documento: cámaras y actores atenuados, sin
-  /// nombres ni recorridos, para que manden las luces.
+  /// Planta de luz de un documento: cada foco con su haz contorneado y,
+  /// al margen, su número y nombre corto; cámaras y actores enteros, sin
+  /// nombres ni recorridos, para ver a quién alumbra cada foco (P.4).
   final bool documentLightOnly;
 
   CameraPlanPainter({
@@ -412,14 +414,9 @@ class CameraPlanPainter extends CustomPainter {
         _drawAssetTop(canvas, el);
       }
     }
+    // En la planta de luz, cámara y actores del plano van enteros: con
+    // ellos se entiende a quién alumbra cada foco.
     for (final el in ordered) {
-      final faded = documentLightOnly && _isFigure(el);
-      if (faded) {
-        canvas.saveLayer(
-          null,
-          Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.35),
-        );
-      }
       _drawElement(
         canvas,
         el,
@@ -427,7 +424,6 @@ class CameraPlanPainter extends CustomPainter {
         ringed: alsoSelected.contains(el),
         body: !PlanTerrainPainter.isTerrain(el),
       );
-      if (faded) canvas.restore();
     }
 
     for (final image in images) {
@@ -542,8 +538,12 @@ class CameraPlanPainter extends CustomPainter {
     }
     // Los haces van debajo de todo lo demás. Con el mapa de exposición no
     // se pintan: el mapa ya dice cuánta luz hay en cada sitio.
+    // En la planta de luz de un documento, cada foco lleva su haz
+    // contorneado en vez de la mancha (P.4).
+    final cones = _documentCones && !exposureMap && !mapped;
+    if (cones) _drawDocumentLightShapes(canvas, scene);
     for (final light
-        in exposureMap || mapped || !showBeams
+        in exposureMap || mapped || !showBeams || cones
             ? const <SceneLight>[]
             : scene.lights) {
       _drawBeam(
@@ -2797,6 +2797,28 @@ class CameraPlanPainter extends CustomPainter {
       // En la planta de luz, cámaras y actores son solo referencia.
       if (documentLightOnly && _isFigure(el)) continue;
       final number = _lightNumbers[el];
+      if (number != null && documentLightOnly) {
+        // Cada foco, con su número y su nombre corto al margen, unido a él
+        // por una línea en su color, como los actores en la de cámara. El
+        // haz ya dice hacia dónde apunta; sin haz, una flecha (P.4).
+        if (!_documentCones) {
+          if (_aimOf(el) case (final aim, final color)) {
+            for (final p in _drawLightAim(canvas, at, radius, aim, color)) {
+              marks.add(Rect.fromCircle(center: p, radius: 3));
+            }
+          }
+        }
+        final tag = documentLightTag(number, _lightLabelLines(el).first);
+        final same = entries.where((e) => e.text == tag).firstOrNull;
+        if (same != null) {
+          same.anchors.add(at);
+        } else {
+          entries.add(
+            _DocumentLabelEntry(tag, _documentInkOf(el), false, [at], radius),
+          );
+        }
+        continue;
+      }
       if (number != null) {
         numbered.add(_DocumentLightMark(at, radius, number, _aimOf(el)));
         continue;
@@ -2924,6 +2946,40 @@ class CameraPlanPainter extends CustomPainter {
     }
     for (final (painter, _) in painters.values) {
       painter.dispose();
+    }
+  }
+
+  /// Planta de luz de un documento con los haces contorneados (P.4).
+  bool get _documentCones => documentMarks && documentLightOnly && showBeams;
+
+  /// El color con que se dibuja un foco en un documento.
+  Color _documentInkOf(PlanElement el) => switch (LightBeam.of(el)) {
+    final beam? when !beam.off => documentLightInk(beam),
+    _ => _CanvasColors.inkSecondary,
+  };
+
+  /// El haz de cada foco del documento, contorneado en su color: hasta los
+  /// actores a los que alumbra o, si no alumbra a nadie, con tope.
+  void _drawDocumentLightShapes(Canvas canvas, LightScene scene) {
+    final targets = [
+      for (final el in _lit)
+        if (el.type == ElementType.actor) ...[el.position, ...el.pathPoints],
+    ];
+    for (final light in scene.lights) {
+      final el = light.fixture?.element;
+      if (el == null || _isGripBar(el)) continue;
+      final shape = DocumentLightShape.of(
+        light,
+        metersPerUnit: scene.metersPerUnit,
+        targets: targets,
+      );
+      if (shape == null) continue;
+      paintDocumentLight(
+        canvas,
+        shape,
+        _documentInkOf(el),
+        stroke: 1.1 / scale,
+      );
     }
   }
 

@@ -158,12 +158,14 @@ class PlanRenderer {
     final base = data.baseOfShot(shot);
     return PlanPicture(
       elements: [
-        ..._lightsOf(base, light),
-        ..._visible([
-          if (setup != null) ...data.groupLightOf(setup),
+        // Los focos que ve el plano, con sus ajustes propios: igual que en
+        // el editor (B.1).
+        if (light) ...data.lightsOfShot(shot),
+        ..._withoutLights([
+          ...data.groupLightOfShot(shot),
           ...data.lightOfShot(shot),
-          ...data.ownOfShot(shot),
-        ], light),
+        ]),
+        ..._visible(data.ownOfShot(shot), light),
       ],
       inherited: _withoutLights(base),
       drawings: data.drawingsOfShot(shot),
@@ -244,13 +246,25 @@ class PlanRenderer {
     showBeams: beams,
     jpeg: jpeg,
     documentLightNumbers: lightNumbers,
-    documentGutter: sheet == PlanSheetView.stage ? documentGutterFor(size) : 0,
+    documentGutter: switch (sheet) {
+      PlanSheetView.stage => documentGutterFor(size),
+      // La de luz lleva al margen el número y el nombre corto de cada
+      // foco (P.4).
+      PlanSheetView.light => documentLightGutterFor(size),
+      null => 0,
+    },
     documentLightOnly: sheet == PlanSheetView.light,
   );
 
   /// Ancho de cada margen de los nombres en una planta de cámara y actores.
   static double documentGutterFor(Size size) =>
       (size.width * 0.19).clamp(70.0, 130.0).toDouble();
+
+  /// Ancho de cada margen de la planta de luz: los nombres de los focos
+  /// son cortos («1 · Tubo 15X») y la planta suele ir pequeña, junto a su
+  /// leyenda.
+  static double documentLightGutterFor(Size size) =>
+      (size.width * 0.17).clamp(40.0, 96.0).toDouble();
 
   /// Las luces numeradas de [picture], en el mismo orden que sus números
   /// en la planta pintada con `lightNumbers`.

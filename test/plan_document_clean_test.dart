@@ -224,13 +224,17 @@ void main() {
       expect(png, isNotNull);
     });
 
-    test('la de luz se pinta con cámaras y actores atenuados', () async {
+    test('la de luz se pinta con cámaras y actores enteros y los focos al '
+        'margen', () async {
       final png = await PlanThumbnail.renderPng(
         elements: elements,
         size: const Size(624, 230),
         documentMarks: true,
         documentLightNumbers: true,
         documentLightOnly: true,
+        documentGutter: PlanRenderer.documentLightGutterFor(
+          const Size(624, 230),
+        ),
       );
       expect(png, isNotNull);
     });

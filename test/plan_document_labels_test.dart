@@ -92,4 +92,33 @@ void main() {
     final result = layoutDocumentLabels([shared], canvas);
     expect(result.placed.single.leader, isTrue);
   });
+
+  test('los nombres de los focos de una planta de luz pequeña van al '
+      'margen, con línea, sin pisarse', () {
+    // Como la planta de luz junto a su leyenda: 220 × 220 y márgenes de 40.
+    const sheet = Size(220, 220);
+    const drawing = Rect.fromLTRB(40, 0, 180, 220);
+    final labels = [
+      // «1 · Tubo 15X» y compañía, en la letra más pequeña.
+      for (var i = 0; i < 7; i++)
+        DocumentLabel(
+          anchors: [Offset(60 + (i % 3) * 40.0, 30 + i * 25.0)],
+          size: const Size(34, 16),
+          radius: 5,
+        ),
+    ];
+    final result = layoutDocumentLabels(
+      labels,
+      sheet,
+      drawing: drawing,
+      gap: 4,
+    );
+    expect(result.overflow, isFalse);
+    expect(result.placed, hasLength(labels.length));
+    _expectClean(result.placed, sheet);
+    for (final p in result.placed) {
+      expect(p.leader, isTrue);
+      expect(p.rect.overlaps(drawing), isFalse, reason: '${p.rect}');
+    }
+  });
 }

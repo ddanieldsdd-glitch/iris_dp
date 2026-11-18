@@ -7,6 +7,7 @@ import 'package:image/image.dart' as img;
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_painter.dart';
+import 'package:iris_dp/features/camera_plan/plan_renderer.dart';
 import 'package:iris_dp/features/camera_plan/plan_thumbnail.dart';
 import 'package:iris_dp/shared/pdf_export/shooting_plan_pdf.dart';
 
@@ -101,6 +102,16 @@ void main() {
         drawn: null,
       );
       expect(scale, 1.0);
+    });
+
+    test('la planta de luz deja márgenes para los nombres de los focos, '
+        'más estrechos que los de la de cámara', () {
+      const small = Size(220, 220);
+      final light = PlanRenderer.documentLightGutterFor(small);
+      expect(light, greaterThanOrEqualTo(40));
+      expect(light, lessThan(PlanRenderer.documentGutterFor(small)));
+      // El dibujo se queda con más de la mitad del ancho.
+      expect(small.width - light * 2, greaterThan(small.width / 2));
     });
 
     test('la planta numerada se pinta', () async {
