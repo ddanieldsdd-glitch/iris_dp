@@ -11,6 +11,7 @@ import '../../shared/annotations/annotation_document.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'camera_plan_painter.dart';
+import 'light_beam.dart';
 import 'plan_images.dart';
 import 'plan_light_map.dart';
 import 'plan_segment.dart';
@@ -284,12 +285,18 @@ class PlanThumbnail extends StatelessWidget {
     required List<PlanElement> all,
     List<PlanZone> zones = const [],
     Rect? crop,
+
+    /// En la planta de luz, los focos también son la acción: la sala se
+    /// encuadra con ellos dentro.
+    bool lights = false,
   }) {
     Rect? action;
     for (final el in all) {
-      if (el.type != ElementType.camera && el.type != ElementType.actor) {
-        continue;
-      }
+      final counts =
+          el.type == ElementType.camera ||
+          el.type == ElementType.actor ||
+          (lights && LightBeam.of(el) != null);
+      if (!counts) continue;
       for (final p in [el.position, ...el.pathPoints]) {
         final r = Rect.fromCircle(center: p, radius: 1);
         action = action?.expandToInclude(r) ?? r;
@@ -397,7 +404,14 @@ class PlanThumbnail extends StatelessWidget {
     // el decorado entero.
     var view = crop;
     if (documentGutter > 0) {
-      view = stageView(all: all, zones: zones, crop: crop) ?? crop;
+      view =
+          stageView(
+            all: all,
+            zones: zones,
+            crop: crop,
+            lights: documentLightOnly,
+          ) ??
+          crop;
     }
     final framed = frame(
       inner.size,
