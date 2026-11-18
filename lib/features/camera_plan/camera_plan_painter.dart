@@ -419,6 +419,11 @@ class CameraPlanPainter extends CustomPainter {
         highlightPathIndex: isSelected ? selectedPathIndex : null,
         showHandles: isSelected,
       );
+      // En papel, un foco en caliente enseña dónde está y qué cambia en
+      // cada posición (P.6).
+      if (documentMarks && el.type == ElementType.light) {
+        _drawDocumentLightStops(canvas, el);
+      }
     }
 
     final ordered = _paintOrder(elements);
@@ -2145,6 +2150,43 @@ class CameraPlanPainter extends CustomPainter {
           ..close(),
         head,
       );
+    }
+  }
+
+  /// Un foco en caliente en papel: el aparato en cada marca y su rótulo,
+  /// «2 · 50 % → 100 %».
+  void _drawDocumentLightStops(Canvas canvas, PlanElement el) {
+    final point = 1 / scale;
+    final color = _pathColor(el);
+    for (var i = 0; i < el.pathPoints.length; i++) {
+      final at = el.pathPoints[i];
+      canvas.saveLayer(null, Paint()..color = const Color(0xCCFFFFFF));
+      _drawElement(canvas, PlanMarks.atPosition(el, i + 1));
+      canvas.restore();
+      final text = [
+        '${i + 2}',
+        ...PlanMarks.lightChangeLabels(el, i),
+      ].join(' · ');
+      final tp = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: TextStyle(
+            color: color,
+            fontSize: 8.5 * point,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final origin = at + Offset(-tp.width / 2, 14 * point);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          (origin & tp.size).inflate(2 * point),
+          Radius.circular(2 * point),
+        ),
+        Paint()..color = _CanvasColors.background.withValues(alpha: 0.85),
+      );
+      tp.paint(canvas, origin);
     }
   }
 
