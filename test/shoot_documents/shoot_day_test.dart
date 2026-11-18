@@ -235,7 +235,13 @@ void main() {
     expect(find.textContaining('Previsión descargada el'), findsOneWidget);
 
     // Quitar el viento del documento: va dentro de las opciones plegadas.
+    // Las paradas del día alargan el panel: se baja hasta las opciones.
+    await tester.ensureVisible(
+      find.text('Qué sale en la jornada y en su documento'),
+    );
     await tester.tap(find.text('Qué sale en la jornada y en su documento'));
+    await settle();
+    await tester.ensureVisible(find.text('Viento'));
     await settle();
     await tester.tap(find.text('Viento'));
     await settle();

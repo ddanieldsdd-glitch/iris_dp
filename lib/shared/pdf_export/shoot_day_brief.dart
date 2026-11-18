@@ -10,7 +10,8 @@ import '../../core/utils/pdf_safe_image.dart';
 import '../../core/utils/shot_reference_import.dart';
 import '../../core/weather/weather_models.dart';
 import '../../features/locations/site_place.dart'
-    show sitePlaceLines, siteMapsUrl, siteWazeUrl;
+    show sitePlaceLines, siteMapsUrl, siteWazeUrl, siteAppleMapsUrl;
+import '../../features/shoot_documents/shoot_day_stops.dart';
 import '../../features/shoot_documents/shoot_day_timeline.dart';
 import '../../features/shoot_documents/shoot_plan.dart';
 import '../../features/technical_script/technical_script_export.dart'
@@ -55,6 +56,44 @@ class BriefRow {
     this.detail = '',
     this.shots = const [],
   });
+}
+
+/// Una parada de la jornada: dónde se rueda una tanda de escenas, cuánto y
+/// cómo llegar.
+class BriefStop {
+  final String name;
+
+  /// «Set KEBAB ENCENDIDO · Esc 6, 8».
+  final String detail;
+
+  /// «07:30 – 13:50».
+  final String time;
+
+  /// «4 h 20», el tiempo estimado allí.
+  final String minutes;
+
+  /// «Traslado 30 min», o vacío.
+  final String travel;
+  final double? latitude;
+  final double? longitude;
+  final Uint8List? map;
+
+  const BriefStop({
+    required this.name,
+    this.detail = '',
+    this.time = '',
+    this.minutes = '',
+    this.travel = '',
+    this.latitude,
+    this.longitude,
+    this.map,
+  });
+
+  bool get located => latitude != null && longitude != null;
+  String? get mapsUrl => located ? siteMapsUrl(latitude!, longitude!) : null;
+  String? get wazeUrl => located ? siteWazeUrl(latitude!, longitude!) : null;
+  String? get appleUrl =>
+      located ? siteAppleMapsUrl(latitude!, longitude!) : null;
 }
 
 /// Una hora de la previsión, para la tira del tiempo.
@@ -110,6 +149,9 @@ class ShootDayBrief {
   final List<(String, String)> sun;
   final List<BriefRow> rows;
 
+  /// Dónde se rueda, en orden. Con una sola, es [placeName].
+  final List<BriefStop> stops;
+
   const ShootDayBrief({
     required this.dayName,
     this.position = '',
@@ -128,6 +170,7 @@ class ShootDayBrief {
     this.hours = const [],
     this.sun = const [],
     this.rows = const [],
+    this.stops = const [],
   });
 
   bool get located => latitude != null && longitude != null;
@@ -149,9 +192,12 @@ class ShootDayBrief {
     note: note,
     sun: sun,
     rows: rows,
+    stops: stops,
   );
   String? get mapsUrl => located ? siteMapsUrl(latitude!, longitude!) : null;
   String? get wazeUrl => located ? siteWazeUrl(latitude!, longitude!) : null;
+  String? get appleUrl =>
+      located ? siteAppleMapsUrl(latitude!, longitude!) : null;
 
   /// Las jornadas [dayIds] (todas si está vacío), en el orden del plan. Con
   /// [thumbs], cada plano lleva su imagen. La portada es [coverPath] si se
@@ -179,6 +225,30 @@ class ShootDayBrief {
       for (final s in sites)
         if (s.uid != null) s.uid!: s,
     };
+    final zones = {
+      for (final z in await db.watchLocationsForProject(projectId).first)
+        z.id: z,
+    };
+    final setups = {
+      for (final s in await db.getLightSetupsForProject(projectId)) s.id: s,
+    };
+    final maps = <int, Uint8List?>{};
+    Future<Uint8List?> mapOf(LocationSite site) async {
+      if (maps.containsKey(site.id)) return maps[site.id];
+      final lat = site.latitude;
+      final lon = site.longitude;
+      if (lat == null || lon == null) return maps[site.id] = null;
+      final path = await ensureSiteMap(
+        projectId: projectId,
+        siteId: site.id,
+        latitude: lat,
+        longitude: lon,
+      ).catchError((Object _) => null);
+      return maps[site.id] = await PdfSafeImage.loadFromPathMaxEdge(
+        path,
+        maxEdge: 700,
+      );
+    }
     final chosenCover = await PdfSafeImage.loadFromPathMaxEdge(
       coverPath,
       maxEdge: 1400,
@@ -195,7 +265,59 @@ class ShootDayBrief {
       final blocks = await db.getBlocksForShootDocument(day.id);
       final site = siteById[day.locationSiteId];
       final rows = <BriefRow>[];
-      for (final entry in buildShootDayEntries(blocks, shots)) {
+      final entries = buildShootDayEntries(blocks, shots);
+      final stops = <BriefStop>[];
+      for (final stop in deriveShootDayStops(
+        entries,
+        scheduleShootDay(
+          entries,
+          shots,
+          dayStart: day.shootFromTime,
+          dayEnd: day.shootToTime,
+        ),
+        placeOf: (e) {
+          final scene = scenes[e.sceneId];
+          int? setId;
+          for (final b in e.blocks) {
+            setId ??= shots[b.shotId]?.lightSetupId;
+          }
+          return (
+            siteId:
+                siteById[scene?.locationSiteId]?.id ??
+                zones[scene?.locationId]?.siteId,
+            setId: setId,
+          );
+        },
+        siteOfUid: (uid) => siteByUid[uid]?.id,
+      )) {
+        final where = siteById[stop.siteId];
+        stops.add(
+          BriefStop(
+            name: where?.name ?? 'Sin localización',
+            detail: [
+              if (setups[stop.setId] case final setup?) 'Set ${setup.name}',
+              if (stop.sceneIds.isNotEmpty)
+                'Esc ${[
+                  for (final id in stop.sceneIds) ?scenes[id]?.label,
+                ].join(', ')}',
+            ].join(' · '),
+            time: stop.start == null
+                ? ''
+                : shootTimeRange(
+                    formatClock(stop.start!),
+                    stop.end == null ? null : formatClock(stop.end!),
+                  ),
+            minutes: stop.minutes == 0 ? '' : formatDuration(stop.minutes),
+            travel: stop.travelMinutes == 0
+                ? ''
+                : 'Traslado ${formatDuration(stop.travelMinutes)}',
+            latitude: where?.latitude,
+            longitude: where?.longitude,
+            map: where == null ? null : await mapOf(where),
+          ),
+        );
+      }
+      for (final entry in entries) {
         switch (entry) {
           case ShootStripEntry(:final block, :final strip):
             rows.add(
@@ -237,6 +359,7 @@ class ShootDayBrief {
           day,
           site,
           rows,
+          stops: stops,
           position: 'día ${i + 1} de ${days.length}',
           cover: chosenCover,
           fallbackCover: fallbackCover,
@@ -275,6 +398,7 @@ class ShootDayBrief {
     ShootDocument day,
     LocationSite? site,
     List<BriefRow> rows, {
+    List<BriefStop> stops = const [],
     required String position,
     Uint8List? cover,
     Uint8List? fallbackCover,
@@ -370,6 +494,7 @@ class ShootDayBrief {
       map: map,
       cover: photo,
       note: (day.description ?? '').trim(),
+      stops: stops,
       weatherLine: weatherLine,
       weatherNotice: forecast == null && weather.lines.isNotEmpty
           ? weather.lines.first
@@ -576,6 +701,7 @@ abstract final class BriefPdf {
               children: [
                 link('Google Maps', brief.mapsUrl!),
                 link('Waze', brief.wazeUrl!),
+                link('Apple Maps', brief.appleUrl!),
               ],
             ),
         ],
@@ -628,6 +754,159 @@ abstract final class BriefPdf {
           if (mapBox != null) ...[pw.SizedBox(width: 12), mapBox],
         ],
       ),
+    );
+  }
+
+  /// Las paradas de la jornada, una fila cada una: el número, dónde, a qué
+  /// hora y cuánto, los enlaces y un mapa pequeño con su QR. Con
+  /// [mapHeight] cero, sin mapa.
+  static pw.Widget stops(
+    List<BriefStop> stops, {
+    double mapHeight = 52,
+    double fontSize = 9,
+  }) {
+    pw.Widget link(String text, String url) => pw.UrlLink(
+      destination: url,
+      child: pw.Container(
+        margin: const pw.EdgeInsets.only(right: 4, top: 2),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: ink, width: 0.5),
+          borderRadius: pw.BorderRadius.circular(6),
+        ),
+        child: pw.Text(
+          text,
+          style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold),
+        ),
+      ),
+    );
+    pw.Widget map(BriefStop stop) => pw.SizedBox(
+      width: mapHeight * StaticMap.width / StaticMap.height,
+      height: mapHeight,
+      child: pw.Stack(
+        children: [
+          pw.Positioned.fill(
+            child: stop.map == null
+                ? pw.Container(color: paper)
+                : pw.Image(pw.MemoryImage(stop.map!), fit: pw.BoxFit.cover),
+          ),
+          pw.Positioned(
+            right: 2,
+            bottom: 2,
+            child: pw.UrlLink(
+              destination: stop.mapsUrl!,
+              child: pw.Container(
+                color: PdfColors.white,
+                padding: const pw.EdgeInsets.all(1.5),
+                child: pw.BarcodeWidget(
+                  barcode: pw.Barcode.qrCode(),
+                  data: stop.mapsUrl!,
+                  width: mapHeight * 0.62,
+                  height: mapHeight * 0.62,
+                  drawText: false,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        for (final (i, stop) in stops.indexed)
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(vertical: 3),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                bottom: pw.BorderSide(color: line, width: 0.5),
+              ),
+            ),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Container(
+                  width: fontSize + 5,
+                  height: fontSize + 5,
+                  alignment: pw.Alignment.center,
+                  decoration: const pw.BoxDecoration(
+                    color: ink,
+                    shape: pw.BoxShape.circle,
+                  ),
+                  child: pw.Text(
+                    '${i + 1}',
+                    style: pw.TextStyle(
+                      fontSize: fontSize - 1.5,
+                      color: PdfColors.white,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ),
+                pw.SizedBox(width: 6),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      if (stop.travel.isNotEmpty)
+                        pw.Text(
+                          stop.travel,
+                          style: pw.TextStyle(
+                            fontSize: fontSize - 2,
+                            color: stripColor(ShootStripKind.move),
+                          ),
+                        ),
+                      pw.Row(
+                        children: [
+                          pw.Expanded(
+                            child: pw.Text(
+                              stop.name,
+                              maxLines: 1,
+                              style: pw.TextStyle(
+                                fontSize: fontSize,
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          pw.Text(
+                            [
+                              stop.time,
+                              stop.minutes,
+                            ].where((t) => t.isNotEmpty).join('  ·  '),
+                            style: pw.TextStyle(
+                              fontSize: fontSize - 1,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (stop.detail.isNotEmpty)
+                        pw.Text(
+                          stop.detail,
+                          maxLines: 2,
+                          style: pw.TextStyle(
+                            fontSize: fontSize - 2,
+                            color: soft,
+                          ),
+                        ),
+                      if (stop.located)
+                        pw.Wrap(
+                          children: [
+                            link('Google Maps', stop.mapsUrl!),
+                            link('Waze', stop.wazeUrl!),
+                            link('Apple Maps', stop.appleUrl!),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                if (stop.located && mapHeight > 0) ...[
+                  pw.SizedBox(width: 6),
+                  map(stop),
+                ],
+              ],
+            ),
+          ),
+      ],
     );
   }
 

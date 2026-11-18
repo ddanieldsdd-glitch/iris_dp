@@ -776,7 +776,7 @@ List<(String, String)> locationMapLinks(double latitude, double longitude) => [
   ('Google Maps', siteMapsUrl(latitude, longitude)),
   ('Waze', siteWazeUrl(latitude, longitude)),
   ('Google Earth', 'https://earth.google.com/web/search/$latitude,$longitude'),
-  ('Apple Mapas', 'https://maps.apple.com/?ll=$latitude,$longitude&q=Rodaje'),
+  ('Apple Mapas', siteAppleMapsUrl(latitude, longitude)),
 ];
 
 class _FeaturedLocation extends ConsumerStatefulWidget {

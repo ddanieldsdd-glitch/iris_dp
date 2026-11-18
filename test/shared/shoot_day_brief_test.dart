@@ -75,6 +75,40 @@ void main() {
     );
   });
 
+  test('con varias paradas, cada una lleva sus enlaces y Apple Maps', () async {
+    final base = _brief();
+    final sheet = ShootDayBrief(
+      dayName: base.dayName,
+      latitude: base.latitude,
+      longitude: base.longitude,
+      placeName: base.placeName,
+      rows: base.rows,
+      stops: [
+        BriefStop(
+          name: 'LOCAL A',
+          detail: 'Set ENCENDIDO · Esc 6, 8',
+          time: '07:30 – 13:50',
+          minutes: '4 h',
+          latitude: 41.1,
+          longitude: 2.1,
+          map: _jpg(),
+        ),
+        const BriefStop(
+          name: 'CASA B',
+          travel: 'Traslado 30 min',
+          minutes: '2 h',
+          latitude: 41.2,
+          longitude: 2.2,
+        ),
+      ],
+    );
+    final text = latin1.decode(
+      await ShootDayOrderPdf.compose(projectName: 'P', sheets: [sheet]),
+    );
+    expect(text, contains('maps.apple.com'));
+    expect(text, contains('41.2,2.2'));
+  });
+
   test('sin ubicar no hay mapa ni enlaces, y no rompe', () async {
     final bytes = await ShootDayOrderPdf.compose(
       projectName: 'K',

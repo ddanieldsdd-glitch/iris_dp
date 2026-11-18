@@ -22,6 +22,7 @@ import '../technical_script/technical_script_export.dart';
 import 'shoot_day_duration.dart';
 import 'shoot_day_on_set.dart';
 import 'shoot_day_order.dart';
+import 'shoot_day_stops_card.dart';
 import 'shoot_day_timeline.dart';
 import 'shoot_day_widgets.dart';
 import 'shoot_document_block_types.dart';
@@ -235,7 +236,7 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
                 stream: db.watchBlocksForShootDocument(widget.documentId),
                 builder: (context, blockSnap) {
                   final blocks = blockSnap.data ?? const <ShootDocumentBlock>[];
-                  final header = _header(day, sites, site, palette);
+                  final header = _header(day, sites, site, palette, blocks);
                   Widget order({required bool embedded}) => _DayOrder(
                     projectId: widget.projectId,
                     documentId: widget.documentId,
@@ -283,6 +284,7 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
     List<LocationSite> sites,
     LocationSite? site,
     AppPalette palette,
+    List<ShootDocumentBlock> blocks,
   ) {
     final options = WeatherOptions.decode(day.weatherOptionsJson);
     final weather = shootDayWeather(day, site);
@@ -354,7 +356,7 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Text('Localización', style: label),
+          Text('Localización principal', style: label),
           const SizedBox(height: 6),
           DropdownButtonFormField<int>(
             key: ValueKey('site-${day.locationSiteId}'),
@@ -385,6 +387,14 @@ class _ShootDayScreenState extends ConsumerState<ShootDayScreen> {
             const SizedBox(height: 8),
             ShootSitePhotos(projectId: widget.projectId, site: site),
           ],
+          const SizedBox(height: AppSpacing.md),
+          ShootDayStopsCard(
+            projectId: widget.projectId,
+            documentId: widget.documentId,
+            blocks: blocks,
+            dayStart: day.shootFromTime,
+            dayEnd: day.shootToTime,
+          ),
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [

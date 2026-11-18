@@ -149,6 +149,16 @@ String siteMapsUrl(double latitude, double longitude) =>
 String siteWazeUrl(double latitude, double longitude) =>
     'https://waze.com/ul?ll=$latitude,$longitude&navigate=yes';
 
+/// Apple Mapas, con ruta hasta el punto.
+String siteAppleMapsUrl(double latitude, double longitude) =>
+    'https://maps.apple.com/?daddr=$latitude,$longitude&q=Rodaje';
+
+Future<void> openSiteInAppleMaps(double latitude, double longitude) =>
+    launchUrl(
+      Uri.parse(siteAppleMapsUrl(latitude, longitude)),
+      mode: LaunchMode.externalApplication,
+    );
+
 Future<void> openSiteInMaps(double latitude, double longitude) => launchUrl(
   Uri.parse(siteMapsUrl(latitude, longitude)),
   mode: LaunchMode.externalApplication,

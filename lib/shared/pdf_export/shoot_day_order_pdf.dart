@@ -103,6 +103,19 @@ abstract final class ShootDayOrderPdf {
             ),
             pw.SizedBox(height: 14),
             BriefPdf.facts(sheet),
+            if (sheet.stops.length > 1) ...[
+              pw.SizedBox(height: 6),
+              pw.Text(
+                'PARADAS',
+                style: const pw.TextStyle(
+                  fontSize: 7.5,
+                  color: BriefPdf.soft,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              pw.SizedBox(height: 2),
+              BriefPdf.stops(sheet.stops),
+            ],
             pw.SizedBox(height: 10),
             BriefPdf.weather(sheet),
             if (sheet.note.isNotEmpty)
