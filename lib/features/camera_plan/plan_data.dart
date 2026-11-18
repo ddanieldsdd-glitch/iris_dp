@@ -147,6 +147,7 @@ class PlanProjectData {
   final _lightOfShot = <(int, int?, String?), List<PlanElement>>{};
   final _baseOfShot = <(int, int?, int?, String?), List<PlanElement>>{};
   final _groupLight = <int, List<PlanElement>>{};
+  final _groupLightOfShot = <(int, int, String?), List<PlanElement>>{};
   final _inheritedOfSetup = <int, List<PlanElement>>{};
 
   LocationSite? site(int? id) => _siteById[id];
@@ -483,6 +484,31 @@ class PlanProjectData {
       LightOverrides.apply(ownOfSetup(own), shot.lightOverridesJson),
     );
   }
+
+  /// La luz compartida del grupo tal como la ve un plano: con sus ajustes
+  /// propios (apagar o mover un foco solo en él), como en el editor.
+  List<PlanElement> groupLightOfShot(Shot shot) {
+    final own = setup(shot.lightSetupId);
+    if (own == null) return const [];
+    return _groupLightOfShot[(
+      shot.id,
+      own.id,
+      shot.lightOverridesJson,
+    )] ??= List.unmodifiable(
+      LightOverrides.apply(groupLightOf(own), shot.lightOverridesJson),
+    );
+  }
+
+  /// Todos los focos que ve un plano, con sus ajustes propios aplicados:
+  /// los del entorno y el set, los del grupo y los de su esquema. Es lo que
+  /// enseña el editor; la usan la planta del documento y las miniaturas.
+  List<PlanElement> lightsOfShot(Shot shot) => [
+    for (final el in baseOfShot(shot))
+      if (el.type == ElementType.light) el,
+    ...groupLightOfShot(shot),
+    for (final el in lightOfShot(shot))
+      if (el.type == ElementType.light) el,
+  ];
 
   /// ¿Tiene el plano ajustes de luz propios sobre su esquema?
   bool hasLightOverrides(Shot shot) =>

@@ -158,12 +158,14 @@ class PlanRenderer {
     final base = data.baseOfShot(shot);
     return PlanPicture(
       elements: [
-        ..._lightsOf(base, light),
-        ..._visible([
-          if (setup != null) ...data.groupLightOf(setup),
+        // Los focos que ve el plano, con sus ajustes propios: igual que en
+        // el editor (B.1).
+        if (light) ...data.lightsOfShot(shot),
+        ..._withoutLights([
+          ...data.groupLightOfShot(shot),
           ...data.lightOfShot(shot),
-          ...data.ownOfShot(shot),
-        ], light),
+        ]),
+        ..._visible(data.ownOfShot(shot), light),
       ],
       inherited: _withoutLights(base),
       drawings: data.drawingsOfShot(shot),
