@@ -21,6 +21,7 @@ import '../rich_text/script_markup.dart';
 import '../technical_script_export/technical_script_doc.dart';
 import 'pdf_page_count.dart';
 import 'shoot_day_brief.dart';
+import 'shooting_plan_day_sheet.dart';
 import 'shoot_day_order_pdf.dart';
 
 /// Un plano listo para pintar.
@@ -50,9 +51,13 @@ class ShootingPlanBlock {
   /// altura y, con las dos plantas, la de luz junto a los datos.
   final bool fullPage;
 
-  /// La planta de luz que acompaña a la de cámara y actores, y sus luces.
+  /// La planta pequeña que acompaña a la grande (la de luz, o la de cámara
+  /// y actores si la grande es la de luz), y sus luces.
   final Uint8List? lightPlan;
   final List<ShootingPlanLegendLine> lightLegend;
+
+  /// El rótulo de la planta pequeña.
+  final String smallTitle;
 
   const ShootingPlanBlock({
     required this.sceneLabel,
@@ -74,6 +79,7 @@ class ShootingPlanBlock {
     this.fullPage = false,
     this.lightPlan,
     this.lightLegend = const [],
+    this.smallTitle = 'LUZ',
   });
 }
 
@@ -116,7 +122,10 @@ class ShootingPlanDay {
   final String order;
   final List<ShootingPlanEntry> entries;
 
-  const ShootingPlanDay(this.order, this.entries, {this.heading});
+  /// Su orden del día, para el resumen del índice.
+  final ShootDayBrief? brief;
+
+  const ShootingPlanDay(this.order, this.entries, {this.heading, this.brief});
 }
 
 /// Reparto en páginas, sin pintar nada: cada bloque ocupa media página, así
@@ -143,6 +152,9 @@ class ShootingPlanLayout {
   /// Primera página del plan de rodaje, si va.
   final int? schedulePage;
 
+  /// Página del resumen de cada jornada, cuando va en hoja propia.
+  final List<int> summaryPages;
+
   /// Primera página del cierre.
   final int overviewPage;
 
@@ -154,6 +166,7 @@ class ShootingPlanLayout {
     this.overviewPage, {
     required this.leadPages,
     this.schedulePage,
+    this.summaryPages = const [],
   });
 
   /// Líneas del índice: títulos de jornada, entradas y cierre.
@@ -171,18 +184,23 @@ class ShootingPlanLayout {
 
   /// Sin [index], la portada va sola. Con [schedulePages], el plan de
   /// rodaje va tras el índice con esas páginas y una línea en él.
+  /// Con [summaries], cada una de esas jornadas lleva su resumen en una
+  /// hoja tras el índice, con su línea en él.
   factory ShootingPlanLayout.of(
     List<ShootingPlanDay> days, {
     required bool overviews,
     bool index = true,
     int schedulePages = 0,
+    int summaries = 0,
   }) {
     final indexPages = index
         ? pagesForIndex(
-            lineCount(days, overviews: overviews) + (schedulePages > 0 ? 1 : 0),
+            lineCount(days, overviews: overviews) +
+                (schedulePages > 0 ? 1 : 0) +
+                summaries,
           )
         : 1;
-    final lead = indexPages + schedulePages;
+    final lead = indexPages + summaries + schedulePages;
     final pages = <List<ShootingPlanBlock>>[];
     final pageDays = <ShootingPlanDay>[];
     final entryPages = <ShootingPlanEntry, int>{};
@@ -211,7 +229,8 @@ class ShootingPlanLayout {
       indexPages,
       lead + pages.length + 1,
       leadPages: lead,
-      schedulePage: schedulePages > 0 ? indexPages + 1 : null,
+      schedulePage: schedulePages > 0 ? indexPages + summaries + 1 : null,
+      summaryPages: [for (var i = 0; i < summaries; i++) indexPages + 1 + i],
     );
   }
 }
@@ -248,8 +267,15 @@ class ShootingPlanPdf {
     List<ShootDayBrief> schedule = const [],
     String? coverImagePath,
     String? planBackdropPath,
+    PlanSheetView bigPlan = PlanSheetView.stage,
+    Set<PlanIndexPart> indexParts = const {},
+    List<ShootDayBrief> briefs = const [],
   }) async {
     final renderer = await PlanRenderer.load(db, project.id);
+    final briefOf = {
+      for (final b in briefs)
+        if (b.dayId != null) b.dayId!: b,
+    };
     final days = <ShootingPlanDay>[];
     for (final section in sections) {
       final entries = <ShootingPlanEntry>[];
@@ -274,6 +300,7 @@ class ShootingPlanPdf {
                 view,
                 withBeams,
                 planBackdropPath,
+                bigPlan,
               ),
             ),
           ),
@@ -285,6 +312,7 @@ class ShootingPlanPdf {
         ShootingPlanDay(
           orderLine(section),
           entries,
+          brief: briefOf[day?.id],
           heading: day == null
               ? null
               : [
@@ -309,6 +337,7 @@ class ShootingPlanPdf {
       view: view,
       withIndex: withIndex,
       schedule: schedule,
+      indexParts: indexParts,
       coverImage: await PdfSafeImage.loadFromPathMaxEdge(
         coverImagePath,
         maxEdge: 1800,
@@ -388,8 +417,9 @@ class ShootingPlanPdf {
     ExportShot item,
     PlanExportView view,
     bool withBeams,
-    String? backdrop,
-  ) async {
+    String? backdrop, [
+    PlanSheetView bigPlan = PlanSheetView.stage,
+  ]) async {
     final shot = item.shot;
     final slug = [
       scene.intExt.trim(),
@@ -399,22 +429,36 @@ class ShootingPlanPdf {
     // Con cámara y actores, el plano va a página entera: la planta, a toda
     // la altura.
     final full = view.hasStage;
+    // Con las dos, la grande es la elegida y la otra va pequeña al lado.
+    final lightBig = view == PlanExportView.both && bigPlan == PlanSheetView.light;
+    final bigView = !full
+        ? PlanSheetView.light
+        : lightBig
+        ? PlanSheetView.light
+        : PlanSheetView.stage;
     final sheet = await renderer.shotSheet(
       shot,
-      view: full ? PlanSheetView.stage : PlanSheetView.light,
+      view: bigView,
       beams: withBeams,
       size: full
-          ? Size(_fullPlanWidth, _bodyHeight)
+          ? Size(
+              _fullPlanWidth - (lightBig ? legendWidth : 0),
+              _bodyHeight,
+            )
           : Size(_planWidth - legendWidth, _blockHeight),
       pixelRatio: 4,
       backdrop: backdrop,
     );
+    final smallView = lightBig ? PlanSheetView.stage : PlanSheetView.light;
     final light = view == PlanExportView.both
         ? await renderer.shotSheet(
             shot,
-            view: PlanSheetView.light,
+            view: smallView,
             beams: withBeams,
-            size: Size(_infoWidth - _lightLegendWidth, _lightHeight - 16),
+            size: Size(
+              _infoWidth - (lightBig ? 0 : _lightLegendWidth),
+              _lightHeight - 16,
+            ),
             pixelRatio: 4,
             backdrop: backdrop,
           )
@@ -439,6 +483,7 @@ class ShootingPlanPdf {
       fullPage: full,
       lightPlan: light?.image,
       lightLegend: light == null ? const [] : _legendOf(light),
+      smallTitle: lightBig ? 'CÁMARA Y ACTORES' : 'LUZ',
     );
   }
 
@@ -593,6 +638,7 @@ class ShootingPlanPdf {
     bool withIndex = true,
     List<ShootDayBrief> schedule = const [],
     Uint8List? coverImage,
+    Set<PlanIndexPart> indexParts = const {},
   }) async {
     final fonts = await PdfExportFonts.load();
     final theme = PdfExportFonts.theme(
@@ -609,11 +655,33 @@ class ShootingPlanPdf {
               sheets: schedule,
             ),
           );
+    // El resumen de cada jornada (orden, lugares y datos): en la portada si
+    // es una sola y cabe con el índice; si no, una hoja por jornada.
+    final summaryDays = withIndex && indexParts.isNotEmpty
+        ? [
+            for (final day in days)
+              if (day.brief != null) day,
+          ]
+        : const <ShootingPlanDay>[];
+    final coverLines =
+        ShootingPlanLayout.lineCount(days, overviews: overviews.isNotEmpty) +
+        (schedulePages > 0 ? 1 : 0);
+    final summaryOnCover =
+        days.length == 1 &&
+        summaryDays.length == 1 &&
+        ShootingPlanDaySheet.fits(
+          summaryDays.single.brief!,
+          indexParts,
+          _coverSummaryHeight,
+          indexLines: coverLines,
+        );
+    final summaryPages = summaryOnCover ? 0 : summaryDays.length;
     final layout = ShootingPlanLayout.of(
       days,
       overviews: overviews.isNotEmpty,
       index: withIndex,
       schedulePages: schedulePages,
+      summaries: summaryPages,
     );
     final doc = pw.Document(title: '$documentTitle · $projectName');
 
@@ -628,6 +696,16 @@ class ShootingPlanPdf {
     }
     for (final day in days) {
       if (day.heading != null) lines.add(_indexDay(day.heading!));
+      final summary = summaryOnCover ? -1 : summaryDays.indexOf(day);
+      if (summary >= 0) {
+        lines.add(
+          _indexLine(
+            _summaryLabel(indexParts),
+            layout.summaryPages[summary],
+            'jornada_$summary',
+          ),
+        );
+      }
       for (final entry in day.entries) {
         final name = 'entrada_${entryIndex++}';
         anchors[entry] = name;
@@ -642,6 +720,7 @@ class ShootingPlanPdf {
     }
 
     final subtitle = days.length == 1 ? days.single.heading : null;
+    final coverBrief = summaryOnCover ? summaryDays.single.brief : null;
     doc.addPage(
       pw.Page(
         theme: theme,
@@ -652,6 +731,7 @@ class ShootingPlanPdf {
           children: [
             _coverBand(
               coverImage,
+              height: coverBrief == null ? 170 : _coverBandSlim,
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 mainAxisAlignment: pw.MainAxisAlignment.end,
@@ -705,7 +785,16 @@ class ShootingPlanPdf {
                         fontWeight: pw.FontWeight.bold,
                       ),
                     ),
-                  if (withIndex) ...[
+                  if (coverBrief != null) ...[
+                    pw.SizedBox(height: 10),
+                    ShootingPlanDaySheet.build(
+                      coverBrief,
+                      indexParts,
+                      height: _coverSummaryHeight,
+                      width: _format.width - 72,
+                      index: lines,
+                    ),
+                  ] else if (withIndex) ...[
                     pw.SizedBox(height: 12),
                     pw.Text('ÍNDICE', style: const pw.TextStyle(fontSize: 16)),
                     pw.SizedBox(height: 6),
@@ -719,7 +808,9 @@ class ShootingPlanPdf {
       ),
     );
     for (
-      var start = ShootingPlanLayout.firstIndexLines;
+      var start = coverBrief != null
+          ? lines.length
+          : ShootingPlanLayout.firstIndexLines;
       start < lines.length;
       start += ShootingPlanLayout.nextIndexLines
     ) {
@@ -742,6 +833,45 @@ class ShootingPlanPdf {
           ),
         ),
       );
+    }
+
+    // El resumen de cada jornada en su hoja, tras el índice.
+    if (!summaryOnCover) {
+      for (final (i, day) in summaryDays.indexed) {
+        doc.addPage(
+          pw.Page(
+            theme: theme,
+            pageFormat: _format,
+            margin: const pw.EdgeInsets.all(_margin),
+            build: (context) => _sheet(
+              projectName,
+              day.heading,
+              documentTitle,
+              layout.summaryPages[i],
+              pw.Anchor(
+                name: 'jornada_$i',
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                  children: [
+                    shootingPlanDaySummaryTitle(
+                      [
+                        if (day.heading != null) day.heading!,
+                        day.order,
+                      ].join('  ·  '),
+                    ),
+                    ShootingPlanDaySheet.build(
+                      day.brief!,
+                      indexParts,
+                      height: _bodyHeight - 30,
+                      width: _bodyWidth,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
     }
 
     // El plan de rodaje, tras el índice y antes de los planos.
@@ -824,10 +954,28 @@ class ShootingPlanPdf {
 
   /// La banda de la portada: negra o con la imagen elegida, oscurecida para
   /// que el título se lea.
-  static pw.Widget _coverBand(Uint8List? image, pw.Widget title) {
-    const height = 170.0;
+  /// La banda de la portada cuando lleva el resumen de la jornada, y lo
+  /// que queda debajo para él.
+  static const _coverBandSlim = 118.0;
+  static double get _coverSummaryHeight =>
+      _format.height - _coverBandSlim - 16 - 14 - 10 - 22;
+
+  /// La línea del índice que lleva al resumen de una jornada.
+  static String _summaryLabel(Set<PlanIndexPart> parts) => [
+    if (parts.contains(PlanIndexPart.order)) 'ORDEN',
+    if (parts.contains(PlanIndexPart.places)) 'LUGARES',
+    if (parts.contains(PlanIndexPart.facts)) 'DATOS DEL DÍA',
+  ].join(', ').replaceFirst(RegExp(r', (?=[^,]*$)'), ' Y ');
+
+  static pw.Widget _coverBand(
+    Uint8List? image,
+    pw.Widget title, {
+    double height = 170,
+  }) {
     final content = pw.Padding(
-      padding: const pw.EdgeInsets.fromLTRB(36, 30, 36, 24),
+      padding: height < 170
+          ? const pw.EdgeInsets.fromLTRB(36, 14, 36, 12)
+          : const pw.EdgeInsets.fromLTRB(36, 30, 36, 24),
       child: title,
     );
     if (image == null) {
@@ -1110,7 +1258,7 @@ class ShootingPlanPdf {
         pw.SizedBox(
           height: 16,
           child: pw.Text(
-            'LUZ',
+            block.smallTitle,
             style: pw.TextStyle(
               fontSize: 8,
               fontWeight: pw.FontWeight.bold,

@@ -22,7 +22,8 @@ import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
 import '../camera_plan/plan_data.dart';
-import '../camera_plan/plan_renderer.dart' show PlanExportView;
+import '../../shared/pdf_export/shooting_plan_day_sheet.dart' show PlanIndexPart;
+import '../camera_plan/plan_renderer.dart' show PlanExportView, PlanSheetView;
 import '../camera_plan/plan_view_picker.dart';
 import '../projects/project_card_actions.dart' show pickMoodboardCover;
 import '../shoot_documents/shoot_days_board.dart';
@@ -968,10 +969,36 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
               'Las luces numeradas, con su lista al lado. Cámaras y actores '
                   'atenuados.',
             PlanExportView.both =>
-              'Cada plano lleva su planta de cámara y actores y, debajo, la '
-                  'de luz.',
+              _options.planBig == PlanSheetView.light
+                  ? 'Cada plano lleva su planta de luz en grande y, debajo, '
+                        'la de cámara y actores.'
+                  : 'Cada plano lleva su planta de cámara y actores y, '
+                        'debajo, la de luz.',
           }, style: AppTypography.caption(palette)),
         ),
+        if (_options.planView == PlanExportView.both)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Row(
+              children: [
+                Text('En grande', style: AppTypography.caption(palette)),
+                const SizedBox(width: AppSpacing.sm),
+                SegmentedButton<PlanSheetView>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: PlanSheetView.stage,
+                      label: Text('Cámara'),
+                    ),
+                    ButtonSegment(value: PlanSheetView.light, label: Text('Luz')),
+                  ],
+                  selected: {_options.planBig},
+                  onSelectionChanged: (v) =>
+                      _setOptions(_options.copyWith(planBig: v.first)),
+                ),
+              ],
+            ),
+          ),
         if (_options.planView.hasLight)
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -1040,6 +1067,39 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
           title: const Text('Índice'),
           subtitle: const Text('En la portada, con la página de cada plano.'),
         ),
+      if (document == ExportDocument.shootingPlan && _options.planIndex)
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Con cada jornada, en la misma hoja: con una sola jornada va '
+                'en la portada.',
+                style: AppTypography.caption(context.palette),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  for (final part in PlanIndexPart.values)
+                    FilterChip(
+                      label: Text(part.label),
+                      selected: _options.planIndexParts.contains(part),
+                      onSelected: (on) => _setOptions(
+                        _options.copyWith(
+                          planIndexParts: on
+                              ? {..._options.planIndexParts, part}
+                              : ({..._options.planIndexParts}..remove(part)),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         value: schedule,
@@ -1056,7 +1116,10 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
                     'planos.',
         ),
       ),
-      if (schedule)
+      if (schedule ||
+          (document == ExportDocument.shootingPlan &&
+              _options.planIndex &&
+              _options.planIndexParts.contains(PlanIndexPart.facts)))
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: _options.withWeather,

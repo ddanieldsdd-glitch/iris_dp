@@ -90,6 +90,29 @@ class ExportRunner {
     schedule: await _schedule(sections, options),
   );
 
+  /// El orden del día de cada jornada para el índice de la planta, sin
+  /// imágenes: solo si el índice lleva algo de la jornada.
+  Future<List<ShootDayBrief>> _indexBriefs(
+    List<ExportDaySection> sections,
+    ExportOptions options,
+  ) async {
+    if (!options.planIndex || options.planIndexParts.isEmpty) return const [];
+    final dayIds = {
+      for (final section in sections)
+        if (section.day != null) section.day!.id,
+    };
+    if (dayIds.isEmpty) return const [];
+    final briefs = await ShootDayBrief.load(
+      db,
+      source.project.id,
+      dayIds: dayIds,
+      thumbs: false,
+    );
+    return options.withWeather
+        ? briefs
+        : [for (final b in briefs) b.withoutWeather()];
+  }
+
   Future<Uint8List> _plan(
     List<ExportDaySection> sections,
     ExportOptions options,
@@ -104,6 +127,9 @@ class ExportRunner {
     schedule: await _schedule(sections, options),
     coverImagePath: options.planCoverImage,
     planBackdropPath: options.planBackdropImage,
+    bigPlan: options.planBig,
+    indexParts: options.planIndexParts,
+    briefs: await _indexBriefs(sections, options),
   );
 
   Future<Uint8List> _script(

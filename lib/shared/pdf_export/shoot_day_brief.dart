@@ -119,6 +119,8 @@ class BriefHour {
 /// dónde (con mapa, QR y enlaces), el tiempo hora a hora, el sol y el
 /// horario. Una sola lectura para el orden del día y el guion técnico.
 class ShootDayBrief {
+  /// La jornada de la que sale, para emparejarla en otros documentos.
+  final int? dayId;
   final String dayName;
 
   /// «día 1 de 5».
@@ -153,6 +155,7 @@ class ShootDayBrief {
   final List<BriefStop> stops;
 
   const ShootDayBrief({
+    this.dayId,
     required this.dayName,
     this.position = '',
     this.date = '',
@@ -178,6 +181,7 @@ class ShootDayBrief {
   /// La misma jornada sin la previsión del tiempo. El sol se queda: es
   /// luz, no meteorología.
   ShootDayBrief withoutWeather() => ShootDayBrief(
+    dayId: dayId,
     dayName: dayName,
     position: position,
     date: date,
@@ -482,6 +486,7 @@ class ShootDayBrief {
     photo ??= fallbackCover;
     final lines = site == null ? null : sitePlaceLines(site);
     return ShootDayBrief(
+      dayId: day.id,
       dayName: day.name,
       position: position,
       date: formatShootDate(day.shootDate),

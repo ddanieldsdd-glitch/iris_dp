@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../camera_plan/plan_renderer.dart' show PlanExportView;
+import '../../shared/pdf_export/shooting_plan_day_sheet.dart' show PlanIndexPart;
+import '../camera_plan/plan_renderer.dart' show PlanExportView, PlanSheetView;
 import '../storyboard/shot_sheet_data.dart';
 import '../storyboard/storyboard_export_style.dart';
 import '../storyboard/storyboard_group_export_options.dart';
@@ -103,6 +104,13 @@ class ExportOptions {
   /// Índice en la portada del documento de planta.
   final bool planIndex;
 
+  /// Lo que lleva el índice de cada jornada además de sus escenas: el orden
+  /// de rodaje, dónde se rueda y los datos del día.
+  final Set<PlanIndexPart> planIndexParts;
+
+  /// Con las dos plantas, cuál va en grande.
+  final PlanSheetView planBig;
+
   /// Documentos que abren con el plan de rodaje de sus jornadas. En el guion
   /// técnico es la portada de la jornada, cuando se exporta una sola.
   final Set<ExportDocument> scheduleFor;
@@ -126,6 +134,12 @@ class ExportOptions {
     this.planCoverImage,
     this.planBackdropImage,
     this.planIndex = true,
+    this.planIndexParts = const {
+      PlanIndexPart.order,
+      PlanIndexPart.places,
+      PlanIndexPart.facts,
+    },
+    this.planBig = PlanSheetView.stage,
     this.scheduleFor = const {ExportDocument.technicalScript},
     this.withWeather = true,
     this.script = const ScriptExportOptions(),
@@ -153,6 +167,8 @@ class ExportOptions {
     String? planBackdropImage,
     bool clearPlanBackdropImage = false,
     bool? planIndex,
+    Set<PlanIndexPart>? planIndexParts,
+    PlanSheetView? planBig,
     Set<ExportDocument>? scheduleFor,
     bool? withWeather,
     ScriptExportOptions? script,
@@ -172,6 +188,8 @@ class ExportOptions {
         ? null
         : planBackdropImage ?? this.planBackdropImage,
     planIndex: planIndex ?? this.planIndex,
+    planIndexParts: planIndexParts ?? this.planIndexParts,
+    planBig: planBig ?? this.planBig,
     scheduleFor: scheduleFor ?? this.scheduleFor,
     withWeather: withWeather ?? this.withWeather,
     script: script ?? this.script,
@@ -196,6 +214,8 @@ class ExportOptions {
     'planCoverImage': planCoverImage,
     'planBackdropImage': planBackdropImage,
     'planIndex': planIndex,
+    'planIndexParts': [for (final p in planIndexParts) p.name],
+    'planBig': planBig.name,
     'scheduleFor': [for (final d in scheduleFor) d.name],
     'withWeather': withWeather,
     'script': script.toJson(),
@@ -221,6 +241,13 @@ class ExportOptions {
       planCoverImage: json['planCoverImage'] as String?,
       planBackdropImage: json['planBackdropImage'] as String?,
       planIndex: json['planIndex'] != false,
+      planIndexParts: json['planIndexParts'] is List
+          ? {
+              for (final name in json['planIndexParts'] as List)
+                ?_byName(PlanIndexPart.values, name),
+            }
+          : d.planIndexParts,
+      planBig: _byName(PlanSheetView.values, json['planBig']) ?? d.planBig,
       scheduleFor: schedule is List
           ? {for (final name in schedule) ?_byName(ExportDocument.values, name)}
           : d.scheduleFor,

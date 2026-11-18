@@ -3,7 +3,12 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
+import 'package:iris_dp/features/camera_plan/plan_renderer.dart';
 import 'package:iris_dp/features/export_center/export_options.dart';
+import 'package:iris_dp/features/shoot_documents/shoot_day_timeline.dart';
+import 'package:iris_dp/shared/pdf_export/pdf_page_count.dart';
+import 'package:iris_dp/shared/pdf_export/shoot_day_brief.dart';
+import 'package:iris_dp/shared/pdf_export/shooting_plan_day_sheet.dart';
 import 'package:iris_dp/shared/pdf_export/shooting_plan_pdf.dart';
 
 ShootingPlanBlock _block(int n) => ShootingPlanBlock(
@@ -18,6 +23,40 @@ ShootingPlanBlock _block(int n) => ShootingPlanBlock(
 
 ShootingPlanEntry _entry(String label, int blocks) =>
     ShootingPlanEntry(label, [for (var i = 1; i <= blocks; i++) _block(i)]);
+
+ShootDayBrief _dayBrief({int rows = 6, int stops = 2}) => ShootDayBrief(
+  dayId: 1,
+  dayName: 'Jornada 1',
+  call: '07:30',
+  window: '07:30 – 17:00',
+  sun: const [('Amanecer', '07:38'), ('Atardecer', '17:35')],
+  weatherLine: 'Cubierto · 16–20 °C',
+  rows: [
+    for (var i = 0; i < rows; i++)
+      i.isEven
+          ? BriefRow(
+              scene: true,
+              time: '1$i:00 – 1$i:30',
+              title: 'Esc. $i · INT. LOCAL · NOCHE',
+              shots: const [BriefShot(number: 1, framing: 'PML')],
+            )
+          : const BriefRow(
+              kind: ShootStripKind.meal,
+              time: '14:00 – 14:45',
+              title: 'COMIDA',
+            ),
+  ],
+  stops: [
+    for (var i = 0; i < stops; i++)
+      BriefStop(
+        name: 'SITIO $i',
+        time: '0$i:00 – 1$i:00',
+        minutes: '3 h',
+        latitude: 41.3 + i / 10,
+        longitude: 2.1,
+      ),
+  ],
+);
 
 void main() {
   setUp(() {
@@ -37,6 +76,93 @@ void main() {
     final cleared = back.copyWith(clearPlanCoverImage: true);
     expect(cleared.planCoverImage, isNull);
     expect(cleared.planBackdropImage, '/a/fondo.jpg');
+  });
+
+  test('las partes del índice y la planta grande se recuerdan', () {
+    final chosen = const ExportOptions().copyWith(
+      planIndexParts: {PlanIndexPart.places},
+      planBig: PlanSheetView.light,
+    );
+    final back = ExportOptions.fromJson(chosen.toJson());
+    expect(back.planIndexParts, {PlanIndexPart.places});
+    expect(back.planBig, PlanSheetView.light);
+    // Lo guardado antes de esto trae todas las partes y la de cámara.
+    final old = ExportOptions.fromJson({'planIndex': true});
+    expect(old.planIndexParts, PlanIndexPart.values.toSet());
+    expect(old.planBig, PlanSheetView.stage);
+  });
+
+  test('una jornada: orden, lugares y datos caben en la portada', () async {
+    final bytes = await ShootingPlanPdf.compose(
+      projectName: 'Prueba',
+      days: [
+        ShootingPlanDay(
+          'Orden',
+          [_entry('ESCENA 1 (1)', 1), _entry('ESCENA 2 (1)', 1)],
+          heading: 'Jornada 1',
+          brief: _dayBrief(),
+        ),
+      ],
+      indexParts: PlanIndexPart.values.toSet(),
+    );
+    final raw = latin1.decode(bytes);
+    // Portada y una página por cada dos planos: sin hojas de más.
+    expect(countPdfPages(bytes), 2);
+    expect(ShootingPlanPdf.debugEntryPages!['ESCENA 1 (1)'], 2);
+    expect(raw, contains('maps.apple.com'));
+    expect(raw, contains('waze.com'));
+  });
+
+  test('si no cabe, el resumen va en una hoja tras el índice', () async {
+    final bytes = await ShootingPlanPdf.compose(
+      projectName: 'Prueba',
+      days: [
+        ShootingPlanDay(
+          'Orden',
+          [for (var i = 0; i < 6; i++) _entry('ESCENA $i (1)', 1)],
+          heading: 'Jornada 1',
+          brief: _dayBrief(rows: 40),
+        ),
+      ],
+      indexParts: PlanIndexPart.values.toSet(),
+    );
+    // Portada con índice, resumen y tres páginas de planos.
+    expect(countPdfPages(bytes), 5);
+    expect(ShootingPlanPdf.debugEntryPages!['ESCENA 0 (1)'], 3);
+  });
+
+  test('sin partes elegidas, el índice es el de siempre', () async {
+    final bytes = await ShootingPlanPdf.compose(
+      projectName: 'Prueba',
+      days: [
+        ShootingPlanDay(
+          'Orden',
+          [_entry('ESCENA 1 (1)', 1)],
+          brief: _dayBrief(),
+        ),
+      ],
+    );
+    expect(countPdfPages(bytes), 2);
+    expect(latin1.decode(bytes), isNot(contains('maps.apple.com')));
+  });
+
+  test('varias jornadas: un resumen por jornada', () async {
+    final bytes = await ShootingPlanPdf.compose(
+      projectName: 'Prueba',
+      days: [
+        for (var d = 1; d <= 2; d++)
+          ShootingPlanDay(
+            'Orden',
+            [_entry('ESCENA $d (1)', 1)],
+            heading: 'Jornada $d',
+            brief: _dayBrief(),
+          ),
+      ],
+      indexParts: {PlanIndexPart.order},
+    );
+    expect(countPdfPages(bytes), 1 + 2 + 2);
+    expect(ShootingPlanPdf.debugEntryPages!['ESCENA 1 (1)'], 4);
+    expect(ShootingPlanPdf.debugEntryPages!['ESCENA 2 (1)'], 5);
   });
 
   test('la portada admite una imagen', () async {
