@@ -780,7 +780,8 @@ class _ElementPanelState extends State<_ElementPanel> {
                         ],
                       ),
                     ],
-                    if (PlanMarks.supports(element))
+                    if (PlanMarks.supports(element) ||
+                        (element.type == ElementType.light && widget.canUse))
                       _section(palette, 'Posiciones', 'marks', [
                         Text(
                           element.pathPoints.isEmpty
@@ -837,6 +838,16 @@ class _ElementPanelState extends State<_ElementPanel> {
                             ),
                           ],
                         ),
+                        // Un foco en caliente: cómo está en la marca elegida.
+                        if (element.type == ElementType.light &&
+                            widget.selectedPathIndex != null &&
+                            widget.selectedPathIndex! <
+                                element.pathPoints.length)
+                          PlanLightMarkControls(
+                            element: element,
+                            index: widget.selectedPathIndex!,
+                            onUpdate: widget.onUpdate,
+                          ),
                         if (element.pathPoints.isNotEmpty)
                           TextButton(
                             onPressed: widget.onClearPath,
@@ -848,9 +859,15 @@ class _ElementPanelState extends State<_ElementPanel> {
                             ),
                           ),
                         Text(
-                          'Doble toque en el lienzo para añadir una posición. Cada '
-                          'una se arrastra y se gira por separado: en la de una '
-                          'cámara se ve qué encuadra desde allí.',
+                          element.type == ElementType.light
+                              ? 'Un foco en caliente: en cada posición puede '
+                                    'moverse, encenderse o cambiar de '
+                                    'intensidad. Arriba, «Posición» enseña la '
+                                    'luz en cada una.'
+                              : 'Doble toque en el lienzo para añadir una '
+                                    'posición. Cada una se arrastra y se gira '
+                                    'por separado: en la de una cámara se ve '
+                                    'qué encuadra desde allí.',
                           style: AppTypography.caption(
                             palette,
                           ).copyWith(color: palette.textTertiary, fontSize: 10),

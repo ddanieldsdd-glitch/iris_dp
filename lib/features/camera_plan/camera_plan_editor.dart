@@ -54,6 +54,7 @@ import 'plan_sketch_promote.dart';
 import 'plan_view_picker.dart';
 import 'plan_start_from.dart' show createSetupAsked;
 import 'plan_light_map.dart';
+import 'plan_light_mark_controls.dart';
 import 'plan_light_use_panel.dart';
 import 'plan_project_gear_dialog.dart';
 import 'plan_marks.dart';
@@ -617,6 +618,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Elemento que se está arrastrando. Si no hay, el arrastre mueve el lienzo.
   PlanElement? _dragging;
   int? _selectedPathIndex;
+
+  /// La posición del plano que se ve (0 es la primera): la luz se calcula
+  /// con todo en esa marca (PL.3).
+  int _viewPosition = 0;
   Shot? _shot;
   Scene? _scene;
   LocationBasePlan? _linkedSet;
@@ -4729,7 +4734,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   int? _markOf(PlanElement el) {
     final index = _selectedPathIndex;
     return index != null &&
-            PlanMarks.supports(el) &&
+            _canMark(el) &&
             index >= 0 &&
             index < el.pathPoints.length
         ? index
@@ -4784,7 +4789,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   Future<void> _addPathPointAt(Offset canvasPos) async {
     final cam = _selected;
-    if (cam == null || !PlanMarks.supports(cam)) return;
+    if (cam == null || !_canMark(cam)) return;
+    // Un foco con posiciones es siempre un ajuste del plano (PL.3).
+    _ownLightForMarks(cam);
     setState(() {
       PlanMarks.add(cam, canvasPos);
       _selectedPathIndex = cam.pathPoints.length - 1;
@@ -4795,7 +4802,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Nueva posición, un paso más allá de la última, hacia donde mira.
   Future<void> _addPathPointAhead() async {
     final cam = _selected;
-    if (cam == null || !PlanMarks.supports(cam)) return;
+    if (cam == null || !_canMark(cam)) return;
     final last = cam.pathPoints.length - 1;
     final rad =
         (last < 0 ? cam.rotation : PlanMarks.rotationAt(cam, last)) *
@@ -4803,10 +4810,13 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         180;
     final forward = Offset(math.sin(rad), -math.cos(rad));
     final origin = cam.pathPoints.isEmpty ? cam.position : cam.pathPoints.last;
-    // Una cámara avanza; un actor suele cruzar el cuadro.
-    final step = cam.type == ElementType.camera
-        ? forward * 80
-        : Offset(-forward.dy, forward.dx) * 80;
+    // Una cámara avanza; un actor suele cruzar el cuadro; un foco suele
+    // cambiar sin moverse (se arrastra si se mueve).
+    final step = switch (cam.type) {
+      ElementType.camera => forward * 80,
+      ElementType.light => Offset(-forward.dy, forward.dx) * 30,
+      _ => Offset(-forward.dy, forward.dx) * 80,
+    };
     await _addPathPointAt(origin + step);
   }
 
@@ -4814,7 +4824,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final cam = _selected;
     final index = _selectedPathIndex;
     if (cam == null ||
-        !PlanMarks.supports(cam) ||
+        !_canMark(cam) ||
         index == null ||
         index < 0 ||
         index >= cam.pathPoints.length) {
@@ -4829,7 +4839,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   Future<void> _clearCameraPath() async {
     final cam = _selected;
-    if (cam == null || !PlanMarks.supports(cam)) return;
+    if (cam == null || !_canMark(cam)) return;
     setState(() {
       PlanMarks.clear(cam);
       _selectedPathIndex = null;
@@ -4883,7 +4893,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       return;
     }
     for (final el in _elements.reversed) {
-      if (!PlanMarks.supports(el)) continue;
+      if (!_canMark(el)) continue;
       final pathIdx = _pathPointIndexAt(el, canvasPos);
       if (pathIdx != null) {
         _isDraggingPathPoint = true;
@@ -5453,7 +5463,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       return;
     }
     for (final el in _elements.reversed) {
-      if (!PlanMarks.supports(el)) continue;
+      if (!_canMark(el)) continue;
       final pathIdx = _pathPointIndexAt(el, canvasPos);
       if (pathIdx != null) {
         setState(() {
@@ -5549,7 +5559,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       return;
     }
     final picked = _selected;
-    if (picked == null || !PlanMarks.supports(picked)) return;
+    if (picked == null || !_canMark(picked)) return;
     final canvasPos = _toCanvasCoords(d.localPosition);
     if (_elementAt(canvasPos) != null) return;
     if (CameraPlanPainter.pathPointAt(_selected!, canvasPos, scale: _scale) !=
@@ -5759,6 +5769,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
               _setupColor,
               onMenu: _chooseLightSetup,
             ),
+            // Qué posición del plano se ve: la luz en esa marca (PL.3).
+            if (_positionCount > 1)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _PositionPicker(
+                  palette: palette,
+                  count: _positionCount,
+                  value: _shownPosition,
+                  onChanged: (p) => setState(() => _viewPosition = p),
+                ),
+              ),
             // Qué focos del set usa este plano (PL.2).
             if (_lightUseLabel case final label?)
               Padding(
@@ -6730,6 +6751,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                         constraints.maxHeight,
                                                       ),
                                                       painter: CameraPlanPainter(
+                                                        viewPosition:
+                                                            _shownPosition,
                                                         images: _imageDraws,
                                                         elements:
                                                             _visibleElements,

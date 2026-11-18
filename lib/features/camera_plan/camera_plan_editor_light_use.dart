@@ -9,6 +9,35 @@ extension _LightUse on _CameraPlanEditorState {
       el.type == ElementType.light &&
       _CameraPlanEditorState._canShotOverride(el);
 
+  /// Las posiciones del plano: las de quien más tiene.
+  int get _positionCount {
+    if (_shot == null) return 1;
+    var most = 1;
+    for (final el in _elements) {
+      if (_canMark(el) && el.pathPoints.length + 1 > most) {
+        most = el.pathPoints.length + 1;
+      }
+    }
+    return most;
+  }
+
+  /// La posición que se ve, dentro de las que hay.
+  int get _shownPosition => _viewPosition.clamp(0, _positionCount - 1).toInt();
+
+  /// Puede tener posiciones: cámaras y actores siempre; un foco, solo en
+  /// un plano (PL.3).
+  bool _canMark(PlanElement el) =>
+      PlanMarks.supports(el) ||
+      (el.type == ElementType.light && _canToggleUse(el));
+
+  /// Un foco con posiciones es un ajuste del plano: no mueve el del set.
+  void _ownLightForMarks(PlanElement el) {
+    if (el.type != ElementType.light || el.shotOverride) return;
+    LightOverrides.ensureUids([el]);
+    _setupOriginals[LightOverrides.uidOf(el)!] = LightOverrides.clone(el);
+    el.shotOverride = true;
+  }
+
   /// Usa o deja de usar [el] en este plano. Sin [save], lo guarda quien
   /// llama (varios a la vez).
   Future<void> _setLightUsed(
@@ -251,5 +280,46 @@ extension _NewLightScope on _CameraPlanEditorState {
       LightOverrides.setUnused(own[uid]!, true);
       await _repo.saveLightOverrides(other.id, own);
     }
+  }
+}
+
+/// «Posición 1 2 3»: qué marca del plano se ve.
+class _PositionPicker extends StatelessWidget {
+  final AppPalette palette;
+  final int count;
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  const _PositionPicker({
+    required this.palette,
+    required this.count,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Posición', style: AppTypography.caption(palette)),
+        const SizedBox(width: 4),
+        for (var i = 0; i < count; i++)
+          Padding(
+            padding: const EdgeInsets.only(left: 2),
+            child: ChoiceChip(
+              key: ValueKey('plan-position-$i'),
+              visualDensity: VisualDensity.compact,
+              showCheckmark: false,
+              label: Text('${i + 1}'),
+              selected: i == value,
+              tooltip: i == 0
+                  ? 'La luz como empieza el plano'
+                  : 'La luz con todo en la posición ${i + 1}',
+              onSelected: (_) => onChanged(i),
+            ),
+          ),
+      ],
+    );
   }
 }

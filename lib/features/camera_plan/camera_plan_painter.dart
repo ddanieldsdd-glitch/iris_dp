@@ -121,6 +121,10 @@ class PlanZone {
 class CameraPlanPainter extends CustomPainter {
   final List<PlanElement> elements;
 
+  /// La posición del plano que se ve (0 es la primera): la luz se calcula
+  /// con los focos, cámaras y actores en esa marca (PL.3).
+  final int viewPosition;
+
   /// Capas de fondo: se ven atenuadas.
   final List<PlanElement> inheritedElements;
   final double inheritedOpacity;
@@ -288,6 +292,7 @@ class CameraPlanPainter extends CustomPainter {
     this.documentLightNumbers = false,
     this.documentDrawing,
     this.documentLightOnly = false,
+    this.viewPosition = 0,
   }) : _fixedScale = scale,
        _fixedOffset = offset,
        _contents = PlanLightKey.drawing([
@@ -307,10 +312,15 @@ class CameraPlanPainter extends CustomPainter {
   /// Todo lo que entra en la luz: las capas de fondo y las de la planta.
   late final List<PlanElement> _lit = [...inheritedElements, ...elements];
 
+  /// Lo que entra en el cálculo de la luz: en la posición que se ve.
+  late final List<PlanElement> _litScene = viewPosition == 0
+      ? _lit
+      : [for (final el in _lit) PlanMarks.atPosition(el, viewPosition)];
+
   // Un pintor se crea cada vez que cambia algo; mover la vista solo lo vuelve
   // a usar. Lo que no depende de la vista se calcula una vez por pintor.
   late final int _lightKey = PlanLightKey.light(
-    _lit,
+    _litScene,
     metersPerUnit: metersPerUnit ?? defaultMetersPerUnit,
     ambient: ambient,
   );
@@ -331,12 +341,12 @@ class CameraPlanPainter extends CustomPainter {
     _resolvedDraft = draft;
     return _resolvedScene =
         lightMap?.scene(
-          _lit,
+          _litScene,
           metersPerUnit: mpu,
           ambient: ambient,
           draft: draft,
         ) ??
-        LightScene.from(_lit, metersPerUnit: mpu, ambient: ambient);
+        LightScene.from(_litScene, metersPerUnit: mpu, ambient: ambient);
   }
 
   /// Asegura [_under] y [_over] para esta escala y [scene].
@@ -395,7 +405,13 @@ class CameraPlanPainter extends CustomPainter {
     for (final el in [
       if (documentMarks) ...inheritedElements,
       ...elements,
-    ].where((e) => PlanMarks.supports(e) && !documentLightOnly)) {
+    ].where(
+      (e) =>
+          (PlanMarks.supports(e) && !documentLightOnly) ||
+          // Los focos que se mueven en el plano (PL.3), también en la
+          // planta de luz del documento (P.6).
+          (e.type == ElementType.light && e.pathPoints.isNotEmpty),
+    )) {
       final isSelected = el.id == selectedElement?.id;
       _drawCameraPath(
         canvas,
@@ -1947,7 +1963,7 @@ class CameraPlanPainter extends CustomPainter {
     Offset canvasPos, {
     double scale = 1,
   }) {
-    if (!PlanMarks.supports(camera) || camera.pathPoints.isEmpty) {
+    if (!PlanMarks.canMark(camera) || camera.pathPoints.isEmpty) {
       return null;
     }
     // La marca lleva la figura dibujada: se coge por todo su cuerpo.
@@ -1973,9 +1989,7 @@ class CameraPlanPainter extends CustomPainter {
       return;
     }
 
-    final camColor = camera.type == ElementType.camera
-        ? cameraColorForLetter(camera.cameraLetter)
-        : camera.actorColor;
+    final camColor = _pathColor(camera);
     final pathPaint = Paint()
       ..color = camColor.withValues(alpha: 0.65)
       ..strokeWidth = 2
@@ -2013,12 +2027,17 @@ class CameraPlanPainter extends CustomPainter {
         null,
         Paint()..color = Color.fromRGBO(255, 255, 255, picked ? 0.9 : 0.5),
       );
-      canvas.translate(at.dx, at.dy);
-      canvas.rotate(rotation * math.pi / 180);
-      if (camera.type == ElementType.camera) {
-        _drawCamera(canvas, camera);
+      if (camera.type == ElementType.light) {
+        // Un foco en caliente: el aparato en esa marca, como queda en ella.
+        _drawElement(canvas, PlanMarks.atPosition(camera, i + 1));
       } else {
-        _drawActor(canvas, camera, rotation: rotation);
+        canvas.translate(at.dx, at.dy);
+        canvas.rotate(rotation * math.pi / 180);
+        if (camera.type == ElementType.camera) {
+          _drawCamera(canvas, camera);
+        } else {
+          _drawActor(canvas, camera, rotation: rotation);
+        }
       }
       canvas.restore();
       if (picked) {
@@ -2170,9 +2189,11 @@ class CameraPlanPainter extends CustomPainter {
   static double _rotationAtStop(PlanElement el, int stop) =>
       stop == 0 ? el.rotation : PlanMarks.rotationAt(el, stop - 1);
 
-  Color _pathColor(PlanElement el) => el.type == ElementType.camera
-      ? cameraColorForLetter(el.cameraLetter)
-      : el.actorColor;
+  Color _pathColor(PlanElement el) => switch (el.type) {
+    ElementType.camera => cameraColorForLetter(el.cameraLetter),
+    ElementType.light => LightBeam.of(el)?.color ?? const Color(0xFFFFB300),
+    _ => el.actorColor,
+  };
 
   static const _documentStopRadius = 4.4;
 
@@ -3097,7 +3118,7 @@ class CameraPlanPainter extends CustomPainter {
       );
       // Con una de sus posiciones seleccionada, el asa es la de esa
       // posición.
-      final onMark = selectedPathIndex != null && PlanMarks.supports(el);
+      final onMark = selectedPathIndex != null && PlanMarks.canMark(el);
       if (!onMark &&
           !isAttachedOpening(el, [...inheritedElements, ...elements])) {
         _drawRotationHandle(canvas, handleColor, el.rotation);
@@ -4496,6 +4517,7 @@ class CameraPlanPainter extends CustomPainter {
   bool shouldRepaint(CameraPlanPainter old) =>
       old._contents != _contents ||
       old.elements != elements ||
+      old.viewPosition != viewPosition ||
       old.images != images ||
       old.inheritedElements != inheritedElements ||
       old.inheritedOpacity != inheritedOpacity ||
