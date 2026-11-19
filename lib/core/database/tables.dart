@@ -181,6 +181,9 @@ class Shots extends Table {
 /// Documento de rodaje (Plani, jornada, referencia en set).
 class ShootDocuments extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos (schemaVersion 64). Las que
+  /// había se rellenan igual en todos los equipos: ver `shoot_uids.dart`.
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
   TextColumn get name => text()();
   TextColumn get description => text().nullable()();
@@ -214,6 +217,8 @@ class ShootDocuments extends Table {
 /// Bloque composable dentro de un documento de rodaje.
 class ShootDocumentBlocks extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Identidad permanente entre dispositivos (schemaVersion 64).
+  TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get documentId => integer().references(ShootDocuments, #id)();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   TextColumn get blockType => text()();

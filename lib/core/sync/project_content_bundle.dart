@@ -8,6 +8,7 @@ import 'package:drift/drift.dart'
 
 import '../../shared/visual_bible/bible_image_links.dart';
 import '../database/app_database.dart';
+import '../database/shoot_uids.dart';
 import 'media_entity_keys.dart';
 import 'media_slots.dart';
 import 'rental_bundle.dart';
@@ -326,6 +327,7 @@ class ProjectContentBundle {
               .get();
       for (final b in blocks) {
         shootBlocks.add({
+          if (b.uid != null) 'uid': b.uid,
           'documentKey': docKeyById[doc.id],
           'blockType': b.blockType,
           'sortOrder': b.sortOrder,
@@ -792,6 +794,7 @@ class ProjectContentBundle {
       'shootDocuments': shootDocs
           .map(
             (d) => {
+              if (d.uid != null) 'uid': d.uid,
               'documentKey': docKeyById[d.id],
               'name': d.name,
               'description': d.description,
@@ -1636,7 +1639,33 @@ class ProjectContentBundle {
     final shotIdByUid = inPlace
         ? {for (final s in localShots) s.uid!: s.id}
         : <String, int>{};
-    await db.deleteProjectContentOnly(projectId, keepScenesAndShots: inPlace);
+    // Las jornadas, igual: en su sitio por uid, para que En set y la
+    // jornada abierta sigan apuntando a sus filas (plan R).
+    final localDocs = await (db.select(
+      db.shootDocuments,
+    )..where((d) => d.projectId.equals(projectId))).get();
+    final localBlocks = localDocs.isEmpty
+        ? const <ShootDocumentBlock>[]
+        : await (db.select(db.shootDocumentBlocks)..where(
+                (b) => b.documentId.isIn([for (final d in localDocs) d.id]),
+              ))
+              .get();
+    final docsInPlace =
+        _uidsUsable(bundle['shootDocuments']) &&
+        _uidsUsable(bundle['shootDocumentBlocks']) &&
+        _uniqueUids(localDocs.map((d) => d.uid)) &&
+        _uniqueUids(localBlocks.map((b) => b.uid));
+    final docIdByUid = docsInPlace
+        ? {for (final d in localDocs) d.uid!: d.id}
+        : <String, int>{};
+    final blockIdByUid = docsInPlace
+        ? {for (final b in localBlocks) b.uid!: b.id}
+        : <String, int>{};
+    await db.deleteProjectContentOnly(
+      projectId,
+      keepScenesAndShots: inPlace,
+      keepShootDocuments: docsInPlace,
+    );
 
     final projectFields =
         bundle['projectFields'] as Map<String, dynamic>? ?? {};
@@ -2007,58 +2036,105 @@ class ProjectContentBundle {
     }
 
     final docKeyToId = <String, int>{};
+    final keptDocs = <int>{};
     for (final row in bundle['shootDocuments'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
-      final id = await db.insertShootDocument(
-        ShootDocumentsCompanion.insert(
-          projectId: projectId,
-          name: m['name'] as String,
-          description: Value(m['description'] as String?),
-          defaultVisibilityJson: Value(m['defaultVisibilityJson'] as String?),
-          layoutPreset: Value(m['layoutPreset'] as String? ?? 'freeform'),
-          shootDate: Value(m['shootDate'] as String?),
-          isPrimaryOnSet: Value(m['isPrimaryOnSet'] as bool? ?? false),
-          includeCoverInPdf: Value(m['includeCoverInPdf'] as bool? ?? true),
-          kind: Value(m['kind'] as String? ?? 'freeform'),
-          locationSiteId: Value(siteKeyToId[m['siteKey']]),
-          shootFromTime: Value(m['shootFromTime'] as String?),
-          shootToTime: Value(m['shootToTime'] as String?),
-          weatherOptionsJson: Value(m['weatherOptionsJson'] as String?),
-          weatherSnapshotJson: Value(m['weatherSnapshotJson'] as String?),
-          dayOrder: Value(m['dayOrder'] as int?),
-        ),
+      final uid = m['uid'] as String?;
+      final companion = ShootDocumentsCompanion.insert(
+        // Sin uid (de una versión anterior) se rellena luego como en la
+        // migración, igual en todos los equipos.
+        uid: Value(uid),
+        projectId: projectId,
+        name: m['name'] as String,
+        description: Value(m['description'] as String?),
+        defaultVisibilityJson: Value(m['defaultVisibilityJson'] as String?),
+        layoutPreset: Value(m['layoutPreset'] as String? ?? 'freeform'),
+        shootDate: Value(m['shootDate'] as String?),
+        isPrimaryOnSet: Value(m['isPrimaryOnSet'] as bool? ?? false),
+        includeCoverInPdf: Value(m['includeCoverInPdf'] as bool? ?? true),
+        kind: Value(m['kind'] as String? ?? 'freeform'),
+        locationSiteId: Value(siteKeyToId[m['siteKey']]),
+        shootFromTime: Value(m['shootFromTime'] as String?),
+        shootToTime: Value(m['shootToTime'] as String?),
+        weatherOptionsJson: Value(m['weatherOptionsJson'] as String?),
+        weatherSnapshotJson: Value(m['weatherSnapshotJson'] as String?),
+        dayOrder: Value(m['dayOrder'] as int?),
       );
+      final existing = docIdByUid[uid];
+      final int id;
+      if (existing == null) {
+        id = await db.into(db.shootDocuments).insert(companion);
+      } else {
+        await (db.update(
+          db.shootDocuments,
+        )..where((d) => d.id.equals(existing))).write(companion);
+        id = existing;
+      }
+      keptDocs.add(id);
       docKeyToId[m['documentKey'] as String] = id;
     }
 
+    final keptBlocks = <int>{};
     for (final row in bundle['shootDocumentBlocks'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final docId = docKeyToId[m['documentKey'] as String];
       if (docId == null) continue;
-      await db.insertShootDocumentBlock(
-        ShootDocumentBlocksCompanion.insert(
-          documentId: docId,
-          blockType: m['blockType'] as String,
-          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-          sceneId: Value(
-            m['sceneKey'] != null
-                ? sceneKeyToId[m['sceneKey'] as String]
-                : null,
-          ),
-          shotId: Value(
-            m['shotKey'] != null ? shotKeyToId[m['shotKey'] as String] : null,
-          ),
-          scriptExcerpt: Value(m['scriptExcerpt'] as String?),
-          customLabel: Value(m['customLabel'] as String?),
-          noteBody: Value(m['noteBody'] as String?),
-          imagePath: Value(m['imagePath'] as String?),
-          charactersJson: Value(m['charactersJson'] as String?),
-          durationSeconds: Value(m['durationSeconds'] as int?),
-          visibilityJson: Value(m['visibilityJson'] as String?),
-          contentOverridesJson: Value(m['contentOverridesJson'] as String?),
+      final uid = m['uid'] as String?;
+      final companion = ShootDocumentBlocksCompanion.insert(
+        uid: Value(uid),
+        documentId: docId,
+        blockType: m['blockType'] as String,
+        sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+        sceneId: Value(
+          m['sceneKey'] != null ? sceneKeyToId[m['sceneKey'] as String] : null,
         ),
+        shotId: Value(
+          m['shotKey'] != null ? shotKeyToId[m['shotKey'] as String] : null,
+        ),
+        scriptExcerpt: Value(m['scriptExcerpt'] as String?),
+        customLabel: Value(m['customLabel'] as String?),
+        noteBody: Value(m['noteBody'] as String?),
+        imagePath: Value(m['imagePath'] as String?),
+        charactersJson: Value(m['charactersJson'] as String?),
+        durationSeconds: Value(m['durationSeconds'] as int?),
+        visibilityJson: Value(m['visibilityJson'] as String?),
+        contentOverridesJson: Value(m['contentOverridesJson'] as String?),
       );
+      final existing = blockIdByUid[uid];
+      if (existing == null) {
+        keptBlocks.add(await db.into(db.shootDocumentBlocks).insert(companion));
+      } else {
+        await (db.update(
+          db.shootDocumentBlocks,
+        )..where((b) => b.id.equals(existing))).write(companion);
+        keptBlocks.add(existing);
+      }
     }
+    if (docsInPlace) {
+      // Lo que ya no está en la nube se va, con sus bloques.
+      final goneBlocks = [
+        for (final b in localBlocks)
+          if (!keptBlocks.contains(b.id)) b.id,
+      ];
+      if (goneBlocks.isNotEmpty) {
+        await (db.delete(
+          db.shootDocumentBlocks,
+        )..where((b) => b.id.isIn(goneBlocks))).go();
+      }
+      final goneDocs = [
+        for (final d in localDocs)
+          if (!keptDocs.contains(d.id)) d.id,
+      ];
+      if (goneDocs.isNotEmpty) {
+        await (db.delete(
+          db.shootDocumentBlocks,
+        )..where((b) => b.documentId.isIn(goneDocs))).go();
+        await (db.delete(
+          db.shootDocuments,
+        )..where((d) => d.id.isIn(goneDocs))).go();
+      }
+    }
+    await ShootUids.backfill(db);
 
     for (final row in bundle['projectEquipment'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);

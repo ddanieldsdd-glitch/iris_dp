@@ -8280,6 +8280,16 @@ class $ShootDocumentsTable extends ShootDocuments
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
+  );
   static const VerificationMeta _projectIdMeta = const VerificationMeta(
     'projectId',
   );
@@ -8484,6 +8494,7 @@ class $ShootDocumentsTable extends ShootDocuments
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     projectId,
     name,
     description,
@@ -8516,6 +8527,12 @@ class $ShootDocumentsTable extends ShootDocuments
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('project_id')) {
       context.handle(
@@ -8666,6 +8683,10 @@ class $ShootDocumentsTable extends ShootDocuments
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       projectId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}project_id'],
@@ -8745,6 +8766,10 @@ class $ShootDocumentsTable extends ShootDocuments
 
 class ShootDocument extends DataClass implements Insertable<ShootDocument> {
   final int id;
+
+  /// Identidad permanente entre dispositivos (schemaVersion 64). Las que
+  /// había se rellenan igual en todos los equipos: ver `shoot_uids.dart`.
+  final String? uid;
   final int projectId;
   final String name;
   final String? description;
@@ -8764,6 +8789,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
   final String? weatherSnapshotJson;
   const ShootDocument({
     required this.id,
+    this.uid,
     required this.projectId,
     required this.name,
     this.description,
@@ -8786,6 +8812,9 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['project_id'] = Variable<int>(projectId);
     map['name'] = Variable<String>(name);
     if (!nullToAbsent || description != null) {
@@ -8827,6 +8856,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
   ShootDocumentsCompanion toCompanion(bool nullToAbsent) {
     return ShootDocumentsCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       projectId: Value(projectId),
       name: Value(name),
       description: description == null && nullToAbsent
@@ -8872,6 +8902,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return ShootDocument(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       projectId: serializer.fromJson<int>(json['projectId']),
       name: serializer.fromJson<String>(json['name']),
       description: serializer.fromJson<String?>(json['description']),
@@ -8902,6 +8933,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'projectId': serializer.toJson<int>(projectId),
       'name': serializer.toJson<String>(name),
       'description': serializer.toJson<String?>(description),
@@ -8926,6 +8958,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
 
   ShootDocument copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? projectId,
     String? name,
     Value<String?> description = const Value.absent(),
@@ -8945,6 +8978,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
     Value<String?> weatherSnapshotJson = const Value.absent(),
   }) => ShootDocument(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     projectId: projectId ?? this.projectId,
     name: name ?? this.name,
     description: description.present ? description.value : this.description,
@@ -8976,6 +9010,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
   ShootDocument copyWithCompanion(ShootDocumentsCompanion data) {
     return ShootDocument(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       projectId: data.projectId.present ? data.projectId.value : this.projectId,
       name: data.name.present ? data.name.value : this.name,
       description: data.description.present
@@ -9020,6 +9055,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
   String toString() {
     return (StringBuffer('ShootDocument(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('name: $name, ')
           ..write('description: $description, ')
@@ -9044,6 +9080,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
   @override
   int get hashCode => Object.hash(
     id,
+    uid,
     projectId,
     name,
     description,
@@ -9067,6 +9104,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
       identical(this, other) ||
       (other is ShootDocument &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.projectId == this.projectId &&
           other.name == this.name &&
           other.description == this.description &&
@@ -9088,6 +9126,7 @@ class ShootDocument extends DataClass implements Insertable<ShootDocument> {
 
 class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> projectId;
   final Value<String> name;
   final Value<String?> description;
@@ -9107,6 +9146,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
   final Value<String?> weatherSnapshotJson;
   const ShootDocumentsCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.projectId = const Value.absent(),
     this.name = const Value.absent(),
     this.description = const Value.absent(),
@@ -9127,6 +9167,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
   });
   ShootDocumentsCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int projectId,
     required String name,
     this.description = const Value.absent(),
@@ -9148,6 +9189,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
        name = Value(name);
   static Insertable<ShootDocument> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? projectId,
     Expression<String>? name,
     Expression<String>? description,
@@ -9168,6 +9210,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (projectId != null) 'project_id': projectId,
       if (name != null) 'name': name,
       if (description != null) 'description': description,
@@ -9193,6 +9236,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
 
   ShootDocumentsCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? projectId,
     Value<String>? name,
     Value<String?>? description,
@@ -9213,6 +9257,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
   }) {
     return ShootDocumentsCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       projectId: projectId ?? this.projectId,
       name: name ?? this.name,
       description: description ?? this.description,
@@ -9239,6 +9284,9 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (projectId.present) {
       map['project_id'] = Variable<int>(projectId.value);
@@ -9302,6 +9350,7 @@ class ShootDocumentsCompanion extends UpdateCompanion<ShootDocument> {
   String toString() {
     return (StringBuffer('ShootDocumentsCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('projectId: $projectId, ')
           ..write('name: $name, ')
           ..write('description: $description, ')
@@ -9342,6 +9391,16 @@ class $ShootDocumentBlocksTable extends ShootDocumentBlocks
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'PRIMARY KEY AUTOINCREMENT',
     ),
+  );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
+  @override
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newEntityUid,
   );
   static const VerificationMeta _documentIdMeta = const VerificationMeta(
     'documentId',
@@ -9497,6 +9556,7 @@ class $ShootDocumentBlocksTable extends ShootDocumentBlocks
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uid,
     documentId,
     sortOrder,
     blockType,
@@ -9525,6 +9585,12 @@ class $ShootDocumentBlocksTable extends ShootDocumentBlocks
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uid')) {
+      context.handle(
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
+      );
     }
     if (data.containsKey('document_id')) {
       context.handle(
@@ -9639,6 +9705,10 @@ class $ShootDocumentBlocksTable extends ShootDocumentBlocks
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uid'],
+      ),
       documentId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}document_id'],
@@ -9703,6 +9773,9 @@ class $ShootDocumentBlocksTable extends ShootDocumentBlocks
 class ShootDocumentBlock extends DataClass
     implements Insertable<ShootDocumentBlock> {
   final int id;
+
+  /// Identidad permanente entre dispositivos (schemaVersion 64).
+  final String? uid;
   final int documentId;
   final int sortOrder;
   final String blockType;
@@ -9718,6 +9791,7 @@ class ShootDocumentBlock extends DataClass
   final String? contentOverridesJson;
   const ShootDocumentBlock({
     required this.id,
+    this.uid,
     required this.documentId,
     required this.sortOrder,
     required this.blockType,
@@ -9736,6 +9810,9 @@ class ShootDocumentBlock extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uid != null) {
+      map['uid'] = Variable<String>(uid);
+    }
     map['document_id'] = Variable<int>(documentId);
     map['sort_order'] = Variable<int>(sortOrder);
     map['block_type'] = Variable<String>(blockType);
@@ -9775,6 +9852,7 @@ class ShootDocumentBlock extends DataClass
   ShootDocumentBlocksCompanion toCompanion(bool nullToAbsent) {
     return ShootDocumentBlocksCompanion(
       id: Value(id),
+      uid: uid == null && nullToAbsent ? const Value.absent() : Value(uid),
       documentId: Value(documentId),
       sortOrder: Value(sortOrder),
       blockType: Value(blockType),
@@ -9818,6 +9896,7 @@ class ShootDocumentBlock extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return ShootDocumentBlock(
       id: serializer.fromJson<int>(json['id']),
+      uid: serializer.fromJson<String?>(json['uid']),
       documentId: serializer.fromJson<int>(json['documentId']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       blockType: serializer.fromJson<String>(json['blockType']),
@@ -9840,6 +9919,7 @@ class ShootDocumentBlock extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uid': serializer.toJson<String?>(uid),
       'documentId': serializer.toJson<int>(documentId),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'blockType': serializer.toJson<String>(blockType),
@@ -9858,6 +9938,7 @@ class ShootDocumentBlock extends DataClass
 
   ShootDocumentBlock copyWith({
     int? id,
+    Value<String?> uid = const Value.absent(),
     int? documentId,
     int? sortOrder,
     String? blockType,
@@ -9873,6 +9954,7 @@ class ShootDocumentBlock extends DataClass
     Value<String?> contentOverridesJson = const Value.absent(),
   }) => ShootDocumentBlock(
     id: id ?? this.id,
+    uid: uid.present ? uid.value : this.uid,
     documentId: documentId ?? this.documentId,
     sortOrder: sortOrder ?? this.sortOrder,
     blockType: blockType ?? this.blockType,
@@ -9900,6 +9982,7 @@ class ShootDocumentBlock extends DataClass
   ShootDocumentBlock copyWithCompanion(ShootDocumentBlocksCompanion data) {
     return ShootDocumentBlock(
       id: data.id.present ? data.id.value : this.id,
+      uid: data.uid.present ? data.uid.value : this.uid,
       documentId: data.documentId.present
           ? data.documentId.value
           : this.documentId,
@@ -9934,6 +10017,7 @@ class ShootDocumentBlock extends DataClass
   String toString() {
     return (StringBuffer('ShootDocumentBlock(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('documentId: $documentId, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('blockType: $blockType, ')
@@ -9954,6 +10038,7 @@ class ShootDocumentBlock extends DataClass
   @override
   int get hashCode => Object.hash(
     id,
+    uid,
     documentId,
     sortOrder,
     blockType,
@@ -9973,6 +10058,7 @@ class ShootDocumentBlock extends DataClass
       identical(this, other) ||
       (other is ShootDocumentBlock &&
           other.id == this.id &&
+          other.uid == this.uid &&
           other.documentId == this.documentId &&
           other.sortOrder == this.sortOrder &&
           other.blockType == this.blockType &&
@@ -9990,6 +10076,7 @@ class ShootDocumentBlock extends DataClass
 
 class ShootDocumentBlocksCompanion extends UpdateCompanion<ShootDocumentBlock> {
   final Value<int> id;
+  final Value<String?> uid;
   final Value<int> documentId;
   final Value<int> sortOrder;
   final Value<String> blockType;
@@ -10005,6 +10092,7 @@ class ShootDocumentBlocksCompanion extends UpdateCompanion<ShootDocumentBlock> {
   final Value<String?> contentOverridesJson;
   const ShootDocumentBlocksCompanion({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     this.documentId = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.blockType = const Value.absent(),
@@ -10021,6 +10109,7 @@ class ShootDocumentBlocksCompanion extends UpdateCompanion<ShootDocumentBlock> {
   });
   ShootDocumentBlocksCompanion.insert({
     this.id = const Value.absent(),
+    this.uid = const Value.absent(),
     required int documentId,
     this.sortOrder = const Value.absent(),
     required String blockType,
@@ -10038,6 +10127,7 @@ class ShootDocumentBlocksCompanion extends UpdateCompanion<ShootDocumentBlock> {
        blockType = Value(blockType);
   static Insertable<ShootDocumentBlock> custom({
     Expression<int>? id,
+    Expression<String>? uid,
     Expression<int>? documentId,
     Expression<int>? sortOrder,
     Expression<String>? blockType,
@@ -10054,6 +10144,7 @@ class ShootDocumentBlocksCompanion extends UpdateCompanion<ShootDocumentBlock> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uid != null) 'uid': uid,
       if (documentId != null) 'document_id': documentId,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (blockType != null) 'block_type': blockType,
@@ -10073,6 +10164,7 @@ class ShootDocumentBlocksCompanion extends UpdateCompanion<ShootDocumentBlock> {
 
   ShootDocumentBlocksCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uid,
     Value<int>? documentId,
     Value<int>? sortOrder,
     Value<String>? blockType,
@@ -10089,6 +10181,7 @@ class ShootDocumentBlocksCompanion extends UpdateCompanion<ShootDocumentBlock> {
   }) {
     return ShootDocumentBlocksCompanion(
       id: id ?? this.id,
+      uid: uid ?? this.uid,
       documentId: documentId ?? this.documentId,
       sortOrder: sortOrder ?? this.sortOrder,
       blockType: blockType ?? this.blockType,
@@ -10110,6 +10203,9 @@ class ShootDocumentBlocksCompanion extends UpdateCompanion<ShootDocumentBlock> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
     }
     if (documentId.present) {
       map['document_id'] = Variable<int>(documentId.value);
@@ -10159,6 +10255,7 @@ class ShootDocumentBlocksCompanion extends UpdateCompanion<ShootDocumentBlock> {
   String toString() {
     return (StringBuffer('ShootDocumentBlocksCompanion(')
           ..write('id: $id, ')
+          ..write('uid: $uid, ')
           ..write('documentId: $documentId, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('blockType: $blockType, ')
@@ -51762,6 +51859,7 @@ typedef $$ShotsTableProcessedTableManager =
 typedef $$ShootDocumentsTableCreateCompanionBuilder =
     ShootDocumentsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int projectId,
       required String name,
       Value<String?> description,
@@ -51783,6 +51881,7 @@ typedef $$ShootDocumentsTableCreateCompanionBuilder =
 typedef $$ShootDocumentsTableUpdateCompanionBuilder =
     ShootDocumentsCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> projectId,
       Value<String> name,
       Value<String?> description,
@@ -51890,6 +51989,11 @@ class $$ShootDocumentsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -52054,6 +52158,11 @@ class $$ShootDocumentsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -52187,6 +52296,9 @@ class $$ShootDocumentsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -52359,6 +52471,7 @@ class $$ShootDocumentsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> projectId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> description = const Value.absent(),
@@ -52378,6 +52491,7 @@ class $$ShootDocumentsTableTableManager
                 Value<String?> weatherSnapshotJson = const Value.absent(),
               }) => ShootDocumentsCompanion(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 name: name,
                 description: description,
@@ -52399,6 +52513,7 @@ class $$ShootDocumentsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int projectId,
                 required String name,
                 Value<String?> description = const Value.absent(),
@@ -52418,6 +52533,7 @@ class $$ShootDocumentsTableTableManager
                 Value<String?> weatherSnapshotJson = const Value.absent(),
               }) => ShootDocumentsCompanion.insert(
                 id: id,
+                uid: uid,
                 projectId: projectId,
                 name: name,
                 description: description,
@@ -52556,6 +52672,7 @@ typedef $$ShootDocumentsTableProcessedTableManager =
 typedef $$ShootDocumentBlocksTableCreateCompanionBuilder =
     ShootDocumentBlocksCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       required int documentId,
       Value<int> sortOrder,
       required String blockType,
@@ -52573,6 +52690,7 @@ typedef $$ShootDocumentBlocksTableCreateCompanionBuilder =
 typedef $$ShootDocumentBlocksTableUpdateCompanionBuilder =
     ShootDocumentBlocksCompanion Function({
       Value<int> id,
+      Value<String?> uid,
       Value<int> documentId,
       Value<int> sortOrder,
       Value<String> blockType,
@@ -52671,6 +52789,11 @@ class $$ShootDocumentBlocksTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -52808,6 +52931,11 @@ class $$ShootDocumentBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
     builder: (column) => ColumnOrderings(column),
@@ -52939,6 +53067,9 @@ class $$ShootDocumentBlocksTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
@@ -53089,6 +53220,7 @@ class $$ShootDocumentBlocksTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 Value<int> documentId = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<String> blockType = const Value.absent(),
@@ -53104,6 +53236,7 @@ class $$ShootDocumentBlocksTableTableManager
                 Value<String?> contentOverridesJson = const Value.absent(),
               }) => ShootDocumentBlocksCompanion(
                 id: id,
+                uid: uid,
                 documentId: documentId,
                 sortOrder: sortOrder,
                 blockType: blockType,
@@ -53121,6 +53254,7 @@ class $$ShootDocumentBlocksTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uid = const Value.absent(),
                 required int documentId,
                 Value<int> sortOrder = const Value.absent(),
                 required String blockType,
@@ -53136,6 +53270,7 @@ class $$ShootDocumentBlocksTableTableManager
                 Value<String?> contentOverridesJson = const Value.absent(),
               }) => ShootDocumentBlocksCompanion.insert(
                 id: id,
+                uid: uid,
                 documentId: documentId,
                 sortOrder: sortOrder,
                 blockType: blockType,

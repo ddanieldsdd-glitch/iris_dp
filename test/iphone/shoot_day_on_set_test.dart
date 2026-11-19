@@ -209,7 +209,9 @@ void main() {
     await unmount(tester);
   });
 
-  testWidgets('sobrevive a una bajada que recrea la jornada', (tester) async {
+  testWidgets('sobrevive a una bajada, y la jornada no cambia de id', (
+    tester,
+  ) async {
     iphone(tester);
     await seed(tester);
     await tester.pumpWidget(
@@ -240,7 +242,8 @@ void main() {
     expect(failure, isNull);
     expect(done, isTrue, reason: 'la importación debe terminar');
     await settle(tester);
-    expect((await dayIds(tester)).single, isNot(before));
+    // Plan R: la bajada actualiza la jornada en su sitio, por su uid.
+    expect((await dayIds(tester)).single, before);
     expect(find.text('0 de 3 hechos'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await unmount(tester);

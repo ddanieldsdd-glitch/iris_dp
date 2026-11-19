@@ -24,6 +24,7 @@ import 'seed_data.dart';
 import '../../shared/equipment/catalog_importer.dart';
 import 'plan_layer_migration.dart';
 import 'shoot_block_overrides.dart';
+import 'shoot_uids.dart';
 import 'tables.dart';
 
 part 'app_database.g.dart';
@@ -785,6 +786,14 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(rentalReservations);
         await m.createTable(rentalItems);
       }
+      if (from < 64) {
+        // Jornadas seguras (plan R): uid en jornadas y bloques para mezclar
+        // elemento a elemento. Las de antes, con el mismo uid en todos los
+        // equipos.
+        await add(shootDocuments, shootDocuments.uid);
+        await add(shootDocumentBlocks, shootDocumentBlocks.uid);
+        await ShootUids.backfill(this);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -1047,6 +1056,7 @@ class AppDatabase extends _$AppDatabase {
   Future<void> deleteProjectContentOnly(
     int id, {
     bool keepScenesAndShots = false,
+    bool keepShootDocuments = false,
   }) async {
     await transaction(() async {
       final vbs = await (select(
@@ -1133,15 +1143,19 @@ class AppDatabase extends _$AppDatabase {
         projectEquipment,
       )..where((e) => e.projectId.equals(id))).go();
 
-      final shootDocs = await (select(
-        shootDocuments,
-      )..where((d) => d.projectId.equals(id))).get();
-      for (final doc in shootDocs) {
+      if (!keepShootDocuments) {
+        final shootDocs = await (select(
+          shootDocuments,
+        )..where((d) => d.projectId.equals(id))).get();
+        for (final doc in shootDocs) {
+          await (delete(
+            shootDocumentBlocks,
+          )..where((b) => b.documentId.equals(doc.id))).go();
+        }
         await (delete(
-          shootDocumentBlocks,
-        )..where((b) => b.documentId.equals(doc.id))).go();
+          shootDocuments,
+        )..where((d) => d.projectId.equals(id))).go();
       }
-      await (delete(shootDocuments)..where((d) => d.projectId.equals(id))).go();
 
       final sets = await (select(
         locationBasePlans,
@@ -2252,6 +2266,17 @@ class AppDatabase extends _$AppDatabase {
       (select(shootDocuments)..where((d) => d.id.equals(id))).getSingleOrNull();
 
   Future<int> insertShootDocument(ShootDocumentsCompanion doc) async {
+    // Una copia hecha desde otra fila trae su uid: dos jornadas no pueden
+    // compartirlo, o la nube las tomaría por la misma.
+    if (doc.uid case Value(present: true, :final value?)) {
+      final taken = await (select(shootDocuments)
+            ..where(
+              (d) => d.uid.equals(value) & d.projectId.equals(doc.projectId.value),
+            )
+            ..limit(1))
+          .getSingleOrNull();
+      if (taken != null) doc = doc.copyWith(uid: Value(newEntityUid()));
+    }
     final id = await into(shootDocuments).insert(doc);
     await touchProjectContent(doc.projectId.value);
     return id;
@@ -2309,6 +2334,21 @@ class AppDatabase extends _$AppDatabase {
   Future<int> insertShootDocumentBlock(
     ShootDocumentBlocksCompanion block,
   ) async {
+    if (block.uid case Value(present: true, :final value?)) {
+      // En el mismo proyecto: dos proyectos con jornadas iguales pueden
+      // tener los mismos uid de relleno.
+      final taken = await customSelect(
+        'SELECT 1 FROM shoot_document_blocks b '
+        'JOIN shoot_documents d ON d.id = b.document_id '
+        'WHERE b.uid = ? AND d.project_id = '
+        '(SELECT project_id FROM shoot_documents WHERE id = ?) LIMIT 1',
+        variables: [
+          Variable.withString(value),
+          Variable.withInt(block.documentId.value),
+        ],
+      ).getSingleOrNull();
+      if (taken != null) block = block.copyWith(uid: Value(newEntityUid()));
+    }
     final id = await into(shootDocumentBlocks).insert(block);
     final doc = await getShootDocument(block.documentId.value);
     if (doc != null) await touchProjectContent(doc.projectId);
@@ -5470,7 +5510,7 @@ const kQueryIndexes = [
   ('project_annotation_documents', 'project_id'),
 ];
 
-const kSchemaVersion = 63;
+const kSchemaVersion = 64;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

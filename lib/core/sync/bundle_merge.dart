@@ -44,8 +44,9 @@ class BundleMergeResult {
 ///
 /// - Escenas, planos, referencias, localizaciones, sets, esquemas de luz y
 ///   sus imágenes se mezclan elemento a elemento por uid, y campo a campo.
+/// - Jornadas y sus bloques, igual, si las cuatro copias llevan uid (plan R).
 /// - El resto va en bloques que se enlazan por ids locales entre sí (biblia,
-///   documentos de rodaje, plantas, equipo, dibujos…): gana el lado que
+///   plantas, equipo, dibujos…): gana el lado que
 ///   cambió; si cambiaron los dos, el más reciente.
 /// - Si el mismo campo cambió en los dos lados gana [newer] y lo otro queda
 ///   en [BundleMergeResult.discards].
@@ -66,8 +67,15 @@ abstract final class BundleMerge {
     'shots',
     'shotReferences',
     'locationCaptures',
+    ...shootCollections,
     ...additiveCollections,
   ];
+
+  /// Jornadas y sus bloques (plan R): elemento a elemento solo los dos a la
+  /// vez, y solo si las cuatro copias llevan uid y las dos bases tienen los
+  /// mismos. Si no, en bloque, como antes (la primera vez tras actualizar,
+  /// o con un equipo que aún no tiene uid).
+  static const shootCollections = ['shootDocuments', 'shootDocumentBlocks'];
 
   /// Con borrado lógico: una lista ausente o vacía no significa que se haya
   /// borrado, sino que quien subió no conoce estas tablas (una versión
@@ -86,6 +94,7 @@ abstract final class BundleMerge {
     'lightSetups': 'lightSetupKey',
     'scenes': 'sceneKey',
     'shots': 'shotKey',
+    'shootDocuments': 'documentKey',
   };
 
   /// Campo de referencia → colección a la que apunta.
@@ -101,6 +110,7 @@ abstract final class BundleMerge {
     'setGroupKey': 'setGroups',
     'sceneKey': 'scenes',
     'shotKey': 'shots',
+    'documentKey': 'shootDocuments',
   };
 
   static const _routeRefs = ['siteKey', 'setKey', 'lightSetupKey'];
@@ -119,6 +129,7 @@ abstract final class BundleMerge {
     'shotReferences': 'shotKey',
     'siteImages': 'siteKey',
     'locationImages': 'setKey',
+    'shootDocumentBlocks': 'documentKey',
   };
 
   /// Bloques que se deciden enteros. Lo que no esté aquí ni en
@@ -197,6 +208,14 @@ abstract final class BundleMerge {
             [bl, bc, l, c].every((x) => _allHaveUid(x[k])))
           k,
     };
+    if (!shootCollections.every(elementWise.contains) ||
+        !shootCollections.every(
+          (k) =>
+              _uidSet(bl[k]).length == _uidSet(bc[k]).length &&
+              _uidSet(bl[k]).containsAll(_uidSet(bc[k])),
+        )) {
+      elementWise.removeAll(shootCollections);
+    }
     for (final k in elementWise) {
       out[k] = _mergeElements(k, bl[k], bc[k], l[k], c[k], newer, discards);
     }
@@ -206,7 +225,7 @@ abstract final class BundleMerge {
       for (final e in blocks.entries)
         e.key: [
           for (final k in e.value)
-            if (listKeys.contains(k)) k,
+            if (listKeys.contains(k) && !elementWise.contains(k)) k,
         ],
     };
     for (final k in listKeys) {
@@ -424,6 +443,17 @@ abstract final class BundleMerge {
               ? MergeSide.local
               : MergeSide.cloud;
         }
+      } else if (collection == 'shootDocumentBlocks' &&
+          k == 'contentOverridesJson') {
+        // Varias cosas en un JSON (marca de En set, hora, tiempo fijado…):
+        // se mezclan clave a clave para que un lado no borre lo del otro.
+        out[k] = mergeBlockOverrides(
+          base: (bl[k] ?? bc[k]) as String?,
+          local: l[k] as String?,
+          cloud: c[k] as String?,
+          newer: newer,
+        );
+        continue;
       } else {
         final vl = l[k], vc = c[k];
         final changedHere = !_eq(vl, bl[k]);
@@ -467,8 +497,11 @@ abstract final class BundleMerge {
     MergeSide newer,
     List<MergeDiscard> discards,
   ) {
-    final changedHere = _canon(_comparable(l)) != _canon(_comparable(bl));
-    final changedThere = _canon(_comparable(c)) != _canon(_comparable(bc));
+    // En las jornadas, poner uid (al actualizar a 64) no cuenta como cambio.
+    Object? cmp(Map<String, dynamic> m) =>
+        _comparable(name == shootBlockName ? _withoutUids(m) : m);
+    final changedHere = _canon(cmp(l)) != _canon(cmp(bl));
+    final changedThere = _canon(cmp(c)) != _canon(cmp(bc));
     if (!changedThere) return l;
     if (!changedHere) return c;
     discards.add(
@@ -493,6 +526,84 @@ abstract final class BundleMerge {
 
   static const shootBlockName = 'documentos de rodaje';
 
+  /// Para comparar sin uid: y la jornada de cada bloque por su clave, no
+  /// por el uid al que la pasó el enlazado.
+  static Map<String, dynamic> _withoutUids(Map<String, dynamic> blob) {
+    final keyOfUid = {
+      for (final d in _records(blob['shootDocuments']))
+        if (d['uid'] case final String uid)
+          '$_linkPrefix$uid': d['documentKey'],
+    };
+    return {
+      for (final e in blob.entries)
+        e.key: e.value is List
+            ? [
+                for (final r in e.value as List)
+                  r is Map
+                      ? {
+                          for (final f in r.entries)
+                            if (f.key != 'uid')
+                              f.key:
+                                  f.key == 'documentKey' &&
+                                      keyOfUid.containsKey(f.value)
+                                  ? keyOfUid[f.value]
+                                  : f.value,
+                        }
+                      : r,
+              ]
+            : e.value,
+    };
+  }
+
+  static Set<String> _uidSet(Object? list) => {
+    for (final r in _records(list))
+      if (r['uid'] case final String uid) uid,
+  };
+
+  static Map<String, dynamic> _decodeOverrides(String? raw) {
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final m = jsonDecode(raw);
+      return m is Map ? Map<String, dynamic>.from(m) : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Mezcla a tres bandas del `contentOverridesJson` de un bloque, clave a
+  /// clave. Si los dos cambiaron la misma clave gana [newer], salvo la marca
+  /// de En set, que gana la apuntada más tarde.
+  static String? mergeBlockOverrides({
+    required String? base,
+    required String? local,
+    required String? cloud,
+    required MergeSide newer,
+  }) {
+    if (_eq(local, cloud)) return local;
+    final b = _decodeOverrides(base);
+    final l = _decodeOverrides(local);
+    final c = _decodeOverrides(cloud);
+    final out = <String, dynamic>{};
+    for (final k in {...b.keys, ...l.keys, ...c.keys}) {
+      final changedHere = !_eq(l[k], b[k]);
+      final changedThere = !_eq(c[k], b[k]);
+      final Map<String, dynamic> from;
+      if (changedThere && !changedHere) {
+        from = c;
+      } else if (!changedThere || _eq(l[k], c[k])) {
+        from = l;
+      } else if (k == 'onSet') {
+        final a = '${(l[k] is Map ? l[k]['at'] : null) ?? ''}';
+        final z = '${(c[k] is Map ? c[k]['at'] : null) ?? ''}';
+        from = a.compareTo(z) >= 0 ? l : c;
+      } else {
+        from = newer == MergeSide.local ? l : c;
+      }
+      if (from.containsKey(k)) out[k] = _copy(from[k]);
+    }
+    return out.isEmpty ? null : jsonEncode(out);
+  }
+
   /// Clave de un bloque de jornada que no depende de los ids de cada equipo:
   /// jornada (nombre y fecha) y plano, o escena y tipo.
   static Map<String, Map<String, dynamic>> _shootBlocksByKey(
@@ -505,6 +616,8 @@ abstract final class BundleMerge {
       if (key is! String) continue;
       final name = '${d['name'] ?? ''}'.trim();
       docs[key] = byNameOnly ? name : '$name|${d['shootDate'] ?? ''}';
+      // Con uid, los bloques la nombran por él tras el enlazado.
+      if (d['uid'] case final String uid) docs['$_linkPrefix$uid'] = docs[key]!;
     }
     final out = <String, Map<String, dynamic>>{};
     final seen = <String, int>{};
@@ -868,6 +981,10 @@ abstract final class BundleMerge {
       case 'siteImages':
       case 'locationImages':
         return 'Imagen de localización';
+      case 'shootDocuments':
+        return '${rec['name'] ?? 'Jornada'}';
+      case 'shootDocumentBlocks':
+        return 'Elemento de jornada';
     }
     return rec['name'] as String? ?? rec['uid'] as String?;
   }
