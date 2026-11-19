@@ -13,6 +13,8 @@ import '../../core/utils/media_storage.dart';
 import '../../core/utils/photo_source_picker.dart';
 import '../../core/utils/user_error.dart';
 import '../../core/widgets/app_snackbar.dart';
+import '../../core/widgets/image_gallery_viewer.dart';
+import '../../core/utils/shot_reference_import.dart';
 import '../../shared/rich_text/script_markup.dart';
 import '../camera_plan/shot_cover.dart';
 import 'shoot_day_timeline.dart';
@@ -67,15 +69,59 @@ class ShootShotThumb extends StatelessWidget {
   final double width;
   final double height;
 
+  /// Con pulsación larga (o clic derecho) se amplían sus imágenes: el toque
+  /// sigue abriendo el plano.
+  final bool zoomable;
+
   const ShootShotThumb({
     super.key,
     required this.shot,
     this.width = 64,
     this.height = 36,
+    this.zoomable = true,
   });
+
+  /// Portada, storyboard y referencias del plano, a pantalla entera.
+  static Future<void> openImages(BuildContext context, Shot shot) async {
+    final db = ProviderScope.containerOf(context).read(databaseProvider);
+    final refs = await db.getReferencesForShot(shot.id);
+    final seen = <String>{};
+    final paths = [
+      for (final p in [
+        ?coverImageOf(shot),
+        ?storyboardImageOf(shot),
+        ...referenceImagesOf(shot, refs),
+      ])
+        if (seen.add(p) && File(p).existsSync()) p,
+    ];
+    if (!context.mounted) return;
+    if (paths.isEmpty) {
+      AppSnackBar.show(context, 'Este plano aún no tiene imágenes.');
+      return;
+    }
+    await showImageGallery(
+      context,
+      title: shootShotTitle(shot),
+      images: [for (final p in paths) GalleryImage.file(p)],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final image = _image(context);
+    if (!zoomable) return image;
+    return Tooltip(
+      message: 'Mantén pulsado para ampliar',
+      waitDuration: const Duration(milliseconds: 800),
+      child: GestureDetector(
+        onLongPress: () => openImages(context, shot),
+        onSecondaryTap: () => openImages(context, shot),
+        child: image,
+      ),
+    );
+  }
+
+  Widget _image(BuildContext context) {
     final palette = context.palette;
     return ClipRRect(
       borderRadius: BorderRadius.circular(4),
