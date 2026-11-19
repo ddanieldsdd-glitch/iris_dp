@@ -59,12 +59,14 @@ PeerEditing? lockHolder(
   PeerEditing? holder;
   for (final p in peers) {
     if (p.shotUid != shotUid || p.installId == myInstallId) continue;
-    if (holder == null || _before(p.since, p.installId, holder.since, holder.installId)) {
+    if (holder == null ||
+        _before(p.since, p.installId, holder.since, holder.installId)) {
       holder = p;
     }
   }
   if (holder == null) return null;
-  if (myShotUid == shotUid && mySince != null &&
+  if (myShotUid == shotUid &&
+      mySince != null &&
       _before(mySince, myInstallId, holder.since, holder.installId)) {
     return null;
   }
@@ -137,7 +139,7 @@ class LiveEditing extends ChangeNotifier {
 
   /// Envía lo que se escribe (`text == null`: se dejó de escribir).
   final void Function(String shotUid, String column, String? text)
-      publishTyping;
+  publishTyping;
 
   /// Perder el foco no es haber terminado: se esconde el teclado del iPad,
   /// se abre un menú o se pulsa la barra de formato. Se suelta tras este
@@ -232,12 +234,10 @@ class LiveEditing extends ChangeNotifier {
   void typing(String? shotUid, String column, String text) {
     if (shotUid == null || shotUid != _myShot) return;
     _throttles
-        .putIfAbsent(
-          (shotUid, column),
-          () => TypingThrottle(
-            send: (t) => publishTyping(shotUid, column, t),
-          ),
-        )
+        .putIfAbsent((
+          shotUid,
+          column,
+        ), () => TypingThrottle(send: (t) => publishTyping(shotUid, column, t)))
         .add(text);
   }
 

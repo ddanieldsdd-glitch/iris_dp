@@ -1,3 +1,4 @@
+import '../access/app_access_gate.dart' show accessControlEnforced;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -51,7 +52,10 @@ class _CloudLinkPanelState extends ConsumerState<CloudLinkPanel> {
     super.dispose();
   }
 
-  Future<void> _afterChange({required bool active, required String message}) async {
+  Future<void> _afterChange({
+    required bool active,
+    required String message,
+  }) async {
     ref.invalidate(supabaseClientProvider);
     ref.invalidate(authStateProvider);
     ref.invalidate(isCloudModeProvider);
@@ -60,7 +64,9 @@ class _CloudLinkPanelState extends ConsumerState<CloudLinkPanel> {
     if (widget.promptRestart) {
       await _promptRestart(message);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -77,9 +83,9 @@ class _CloudLinkPanelState extends ConsumerState<CloudLinkPanel> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo activar: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('No se pudo activar: $e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -102,9 +108,9 @@ class _CloudLinkPanelState extends ConsumerState<CloudLinkPanel> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -230,11 +236,13 @@ class _CloudLinkPanelState extends ConsumerState<CloudLinkPanel> {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
-          OutlinedButton.icon(
-            onPressed: _busy ? null : _disable,
-            icon: const Icon(Icons.cloud_off),
-            label: const Text('Volver a solo local'),
-          ),
+          // Las versiones que se reparten necesitan la nube de IRIS.
+          if (!accessControlEnforced)
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _disable,
+              icon: const Icon(Icons.cloud_off),
+              label: const Text('Volver a solo local'),
+            ),
         ] else ...[
           Text(
             user.email ?? 'Sesión activa',
@@ -249,11 +257,12 @@ class _CloudLinkPanelState extends ConsumerState<CloudLinkPanel> {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
-          OutlinedButton.icon(
-            onPressed: _busy ? null : _disable,
-            icon: const Icon(Icons.cloud_off),
-            label: const Text('Desvincular nube (seguir en local)'),
-          ),
+          if (!accessControlEnforced)
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _disable,
+              icon: const Icon(Icons.cloud_off),
+              label: const Text('Desvincular nube (seguir en local)'),
+            ),
         ],
         if (widget.showCloudinaryStatus) ...[
           const SizedBox(height: AppSpacing.md),
@@ -322,18 +331,16 @@ class CloudinaryStatusBanner extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: AppTypography.titleMedium(palette).copyWith(
-                    color: color,
-                    fontSize: 14,
-                  ),
+                  style: AppTypography.titleMedium(
+                    palette,
+                  ).copyWith(color: color, fontSize: 14),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   body,
-                  style: AppTypography.caption(palette).copyWith(
-                    color: palette.textSecondary,
-                    height: 1.35,
-                  ),
+                  style: AppTypography.caption(
+                    palette,
+                  ).copyWith(color: palette.textSecondary, height: 1.35),
                 ),
               ],
             ),

@@ -27,6 +27,8 @@ import '../../core/widgets/account/account_menu_button.dart';
 import '../../core/widgets/sync_status_indicator.dart';
 import '../../core/update/update_available_banner.dart';
 import '../../core/cloud/connectivity_gate.dart';
+import '../../core/access/app_access_service.dart';
+import '../../core/access/guest_projects_screen.dart';
 
 class ProjectsScreen extends ConsumerWidget {
   const ProjectsScreen({super.key});
@@ -65,6 +67,15 @@ class ProjectsScreen extends ConsumerWidget {
             const UpdateAvailableBanner(),
             ProjectsHeader(
               statusActions: [
+                if (ref.watch(isAppAdminProvider))
+                  IconButton(
+                    tooltip: 'Proyectos de invitados',
+                    icon: Icon(
+                      Icons.group_outlined,
+                      color: palette.textSecondary,
+                    ),
+                    onPressed: () => GuestProjectsScreen.open(context),
+                  ),
                 IconButton(
                   tooltip: 'Ajustes',
                   icon: Icon(
@@ -88,7 +99,11 @@ class ProjectsScreen extends ConsumerWidget {
                   return StreamBuilder<List<Project>>(
                     stream: db.watchProjects(),
                     builder: (context, projectSnap) {
-                      final allProjects = projectSnap.data ?? [];
+                      // Las copias de invitados van en su propia pantalla.
+                      final allProjects = [
+                        for (final p in projectSnap.data ?? const <Project>[])
+                          if (p.mirrorCloudId == null) p,
+                      ];
 
                       if (allProjects.isEmpty) {
                         return ListView(

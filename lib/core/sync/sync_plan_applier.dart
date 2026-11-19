@@ -88,28 +88,34 @@ class SyncPlanApplier {
     }
 
     return switch (item.action) {
-      SyncPlanAction.pushNewLocal =>
-        _pushNewLocal(item.localProject!, workspaceId),
-      SyncPlanAction.importFromCloud =>
-        _importCloudRow(item.cloudRow!),
-      SyncPlanAction.updateLocalFromCloud =>
-        _pullCloudRow(item.cloudRow!, item.localProjectId),
-      SyncPlanAction.updateCloudFromLocal =>
-        _pushLocalProject(item.localProject!),
-      SyncPlanAction.deleteLocal =>
-        _deleteLocal(item.localProjectId!),
-      SyncPlanAction.deleteCloud =>
-        _deleteCloud(item.cloudId!, item.localProjectId),
+      SyncPlanAction.pushNewLocal => _pushNewLocal(
+        item.localProject!,
+        workspaceId,
+      ),
+      SyncPlanAction.importFromCloud => _importCloudRow(item.cloudRow!),
+      SyncPlanAction.updateLocalFromCloud => _pullCloudRow(
+        item.cloudRow!,
+        item.localProjectId,
+      ),
+      SyncPlanAction.updateCloudFromLocal => _pushLocalProject(
+        item.localProject!,
+      ),
+      SyncPlanAction.deleteLocal => _deleteLocal(item.localProjectId!),
+      SyncPlanAction.deleteCloud => _deleteCloud(
+        item.cloudId!,
+        item.localProjectId,
+      ),
       SyncPlanAction.pushContentLocal => _pushContent(
         item.localProjectId!,
         item.cloudId!,
         item.cloudContentHash,
       ),
-      SyncPlanAction.pullContentCloud =>
-        _pullContent(item.localProjectId!, item.cloudId!),
+      SyncPlanAction.pullContentCloud => _pullContent(
+        item.localProjectId!,
+        item.cloudId!,
+      ),
       SyncPlanAction.conflict ||
-      SyncPlanAction.contentConflict =>
-        (pushed: 0, pulled: 0, deleted: 0),
+      SyncPlanAction.contentConflict => (pushed: 0, pulled: 0, deleted: 0),
     };
   }
 
@@ -161,11 +167,14 @@ class SyncPlanApplier {
       'icon_code': project.iconCode,
       'sort_order': project.sortOrder,
     });
-    await (_db.update(_db.projects)..where((p) => p.id.equals(project.id)))
-        .write(ProjectsCompanion(
-      cloudId: Value(cloudId),
-      syncUpdatedAt: Value(DateTime.now()),
-    ));
+    await (_db.update(
+      _db.projects,
+    )..where((p) => p.id.equals(project.id))).write(
+      ProjectsCompanion(
+        cloudId: Value(cloudId),
+        syncUpdatedAt: Value(DateTime.now()),
+      ),
+    );
     final sync = ProjectContentSyncService(_db, _client);
     try {
       // Proyecto recién creado en la nube: no tiene copia de contenido.
@@ -180,16 +189,19 @@ class SyncPlanApplier {
     Project project,
   ) async {
     if (project.cloudId == null) return (pushed: 0, pulled: 0, deleted: 0);
-    await _client.from('cloud_projects').update({
-      'name': project.name,
-      'director_display': project.director,
-      'description': project.description,
-      'client_name': project.clientName,
-      'status': project.status,
-      'icon_code': project.iconCode,
-      'sort_order': project.sortOrder,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', project.cloudId!);
+    await _client
+        .from('cloud_projects')
+        .update({
+          'name': project.name,
+          'director_display': project.director,
+          'description': project.description,
+          'client_name': project.clientName,
+          'status': project.status,
+          'icon_code': project.iconCode,
+          'sort_order': project.sortOrder,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', project.cloudId!);
     await (_db.update(_db.projects)..where((p) => p.id.equals(project.id)))
         .write(ProjectsCompanion(syncUpdatedAt: Value(DateTime.now().toUtc())));
     // Solo los datos del proyecto. El contenido tiene su propio ítem en el
@@ -214,9 +226,9 @@ class SyncPlanApplier {
     final companion = _companionFromRow(row);
     final cloudId = row['id'] as String;
     if (localProjectId != null) {
-      await (_db.update(_db.projects)
-            ..where((p) => p.id.equals(localProjectId)))
-          .write(companion);
+      await (_db.update(
+        _db.projects,
+      )..where((p) => p.id.equals(localProjectId))).write(companion);
       // Solo los datos del proyecto (nombre, director, estado…). El
       // contenido tiene su propio ítem en el plan: descargarlo aquí
       // reemplazaría lo local sin haberlo comparado.
@@ -290,4 +302,3 @@ class SyncApplyException implements Exception {
   @override
   String toString() => '$error';
 }
-

@@ -16,11 +16,7 @@ enum SyncPlanAction {
 }
 
 /// Elección del usuario para resolver un ítem.
-enum SyncResolutionChoice {
-  useLocal,
-  useCloud,
-  skip,
-}
+enum SyncResolutionChoice { useLocal, useCloud, skip }
 
 /// Diferencia de un campo concreto.
 class SyncFieldDiff {
@@ -80,16 +76,13 @@ class SyncPlanItem {
       SyncPlanAction.pushNewLocal ||
       SyncPlanAction.updateCloudFromLocal ||
       SyncPlanAction.deleteCloud ||
-      SyncPlanAction.pushContentLocal =>
-        SyncResolutionChoice.useLocal,
+      SyncPlanAction.pushContentLocal => SyncResolutionChoice.useLocal,
       SyncPlanAction.importFromCloud ||
       SyncPlanAction.updateLocalFromCloud ||
       SyncPlanAction.deleteLocal ||
-      SyncPlanAction.pullContentCloud =>
-        SyncResolutionChoice.useCloud,
+      SyncPlanAction.pullContentCloud => SyncResolutionChoice.useCloud,
       SyncPlanAction.conflict ||
-      SyncPlanAction.contentConflict =>
-        SyncResolutionChoice.useLocal,
+      SyncPlanAction.contentConflict => SyncResolutionChoice.useLocal,
     };
   }
 
@@ -98,12 +91,11 @@ class SyncPlanItem {
   /// revisar lo que puede perder trabajo: los conflictos y borrar aquí un
   /// proyecto porque ya no aparece en la nube.
   bool get appliesSilently => switch (action) {
-        SyncPlanAction.conflict ||
-        SyncPlanAction.contentConflict ||
-        SyncPlanAction.deleteLocal =>
-          false,
-        _ => true,
-      };
+    SyncPlanAction.conflict ||
+    SyncPlanAction.contentConflict ||
+    SyncPlanAction.deleteLocal => false,
+    _ => true,
+  };
 
   /// La elección con la que se presenta el ítem si nadie la cambia.
   SyncResolutionChoice get defaultChoice => _defaultChoice(action);
@@ -119,19 +111,19 @@ class SyncPlanItem {
           !cloudContentSummary!.isEmpty);
 
   SyncPlanItem copyWith({SyncResolutionChoice? choice}) => SyncPlanItem(
-        action: action,
-        title: title,
-        description: description,
-        localProjectId: localProjectId,
-        cloudId: cloudId,
-        localProject: localProject,
-        cloudRow: cloudRow,
-        diffs: diffs,
-        localContentSummary: localContentSummary,
-        cloudContentSummary: cloudContentSummary,
-        cloudContentHash: cloudContentHash,
-        choice: choice ?? this.choice,
-      );
+    action: action,
+    title: title,
+    description: description,
+    localProjectId: localProjectId,
+    cloudId: cloudId,
+    localProject: localProject,
+    cloudRow: cloudRow,
+    diffs: diffs,
+    localContentSummary: localContentSummary,
+    cloudContentSummary: cloudContentSummary,
+    cloudContentHash: cloudContentHash,
+    choice: choice ?? this.choice,
+  );
 }
 
 /// Plan completo antes de aplicar cambios.
@@ -142,14 +134,18 @@ class SyncPlan {
 
   bool get isEmpty => items.isEmpty;
 
-  bool get hasConflicts =>
-      items.any((i) =>
-          i.action == SyncPlanAction.conflict ||
-          i.action == SyncPlanAction.contentConflict);
+  bool get hasConflicts => items.any(
+    (i) =>
+        i.action == SyncPlanAction.conflict ||
+        i.action == SyncPlanAction.contentConflict,
+  );
 
   /// Lo que no se aplica solo: ver [SyncPlanItem.appliesSilently].
-  List<SyncPlanItem> get reviewItems =>
-      [for (final i in items) if (!i.appliesSilently) i];
+  List<SyncPlanItem> get reviewItems => [
+    for (final i in items)
+      if (!i.appliesSilently) i,
+  ];
 
-  int get pendingCount => items.where((i) => i.choice != SyncResolutionChoice.skip).length;
+  int get pendingCount =>
+      items.where((i) => i.choice != SyncResolutionChoice.skip).length;
 }

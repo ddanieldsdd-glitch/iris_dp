@@ -1,4 +1,4 @@
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show BooleanExpressionOperators, Value;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -56,9 +56,9 @@ class ProjectSyncService {
       }
 
       cloudIds.add(cloudId);
-      final existing = await (_db.select(_db.projects)
-            ..where((p) => p.cloudId.equals(cloudId)))
-          .getSingleOrNull();
+      final existing = await (_db.select(
+        _db.projects,
+      )..where((p) => p.cloudId.equals(cloudId))).getSingleOrNull();
 
       final companion = ProjectsCompanion(
         cloudId: Value(cloudId),
@@ -70,20 +70,23 @@ class ProjectSyncService {
         iconCode: Value(row['icon_code'] as int? ?? 0xe3f4),
         coverImagePath: const Value(null),
         sortOrder: Value(row['sort_order'] as int? ?? 0),
-        syncUpdatedAt: Value(DateTime.tryParse(row['updated_at'] as String? ?? '')),
+        syncUpdatedAt: Value(
+          DateTime.tryParse(row['updated_at'] as String? ?? ''),
+        ),
         updatedAt: Value(DateTime.now()),
       );
 
       if (existing != null) {
-        final cloudUpdated =
-            DateTime.tryParse(row['updated_at'] as String? ?? '');
+        final cloudUpdated = DateTime.tryParse(
+          row['updated_at'] as String? ?? '',
+        );
         final localUpdated = existing.syncUpdatedAt ?? existing.updatedAt;
-        if (cloudUpdated != null &&
-            localUpdated.isAfter(cloudUpdated)) {
+        if (cloudUpdated != null && localUpdated.isAfter(cloudUpdated)) {
           continue;
         }
-        await (_db.update(_db.projects)..where((p) => p.id.equals(existing.id)))
-            .write(companion);
+        await (_db.update(
+          _db.projects,
+        )..where((p) => p.id.equals(existing.id))).write(companion);
       } else {
         await _db.into(_db.projects).insert(companion);
       }
@@ -95,9 +98,9 @@ class ProjectSyncService {
   }
 
   Future<void> _purgeOrphanCloudProjects(Set<String> cloudIds) async {
-    final linked = await (_db.select(_db.projects)
-          ..where((p) => p.cloudId.isNotNull()))
-        .get();
+    final linked = await (_db.select(
+      _db.projects,
+    )..where((p) => p.cloudId.isNotNull())).get();
     for (final local in linked) {
       final id = local.cloudId;
       if (id != null && !cloudIds.contains(id)) {
@@ -108,9 +111,9 @@ class ProjectSyncService {
 
   /// Sube proyectos locales sin cloudId al workspace.
   Future<int> pushLocalProjects(String workspaceId) async {
-    final locals = await (_db.select(_db.projects)
-          ..where((p) => p.cloudId.isNull()))
-        .get();
+    final locals = await (_db.select(
+      _db.projects,
+    )..where((p) => p.cloudId.isNull() & p.mirrorCloudId.isNull())).get();
 
     var count = 0;
     for (final project in locals) {
@@ -128,11 +131,14 @@ class ProjectSyncService {
       };
       await _client.from('cloud_projects').upsert(payload);
 
-      await (_db.update(_db.projects)..where((p) => p.id.equals(project.id)))
-          .write(ProjectsCompanion(
-        cloudId: Value(cloudId),
-        syncUpdatedAt: Value(DateTime.now()),
-      ));
+      await (_db.update(
+        _db.projects,
+      )..where((p) => p.id.equals(project.id))).write(
+        ProjectsCompanion(
+          cloudId: Value(cloudId),
+          syncUpdatedAt: Value(DateTime.now()),
+        ),
+      );
       count++;
     }
     return count;
@@ -158,7 +164,9 @@ class ProjectSyncService {
       'icon_code': iconCode,
     });
 
-    return _db.into(_db.projects).insert(
+    return _db
+        .into(_db.projects)
+        .insert(
           ProjectsCompanion.insert(
             name: name,
             director: Value(directorDisplay),
@@ -173,15 +181,18 @@ class ProjectSyncService {
 
   Future<void> updateProject(Project project) async {
     if (project.cloudId == null) return;
-    await _client.from('cloud_projects').update({
-      'name': project.name,
-      'director_display': project.director,
-      'description': project.description,
-      'client_name': project.clientName,
-      'status': project.status,
-      'icon_code': project.iconCode,
-      'sort_order': project.sortOrder,
-    }).eq('id', project.cloudId!);
+    await _client
+        .from('cloud_projects')
+        .update({
+          'name': project.name,
+          'director_display': project.director,
+          'description': project.description,
+          'client_name': project.clientName,
+          'status': project.status,
+          'icon_code': project.iconCode,
+          'sort_order': project.sortOrder,
+        })
+        .eq('id', project.cloudId!);
 
     await (_db.update(_db.projects)..where((p) => p.id.equals(project.id)))
         .write(ProjectsCompanion(syncUpdatedAt: Value(DateTime.now())));
@@ -190,7 +201,10 @@ class ProjectSyncService {
   Future<void> deleteProject(Project project) async {
     if (project.cloudId != null) {
       try {
-        await _client.from('cloud_projects').delete().eq('id', project.cloudId!);
+        await _client
+            .from('cloud_projects')
+            .delete()
+            .eq('id', project.cloudId!);
         await CloudSessionStore.clearTombstone(project.cloudId!);
       } catch (_) {
         await CloudSessionStore.tombstoneCloudProject(project.cloudId!);

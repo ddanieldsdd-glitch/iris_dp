@@ -72,8 +72,10 @@ class MediaHydrateService {
       }
       try {
         if (await _hydrateAsset(projectId, projectCloudId, asset)) {
-          debugPrint('[medios ${DateTime.now().toIso8601String().substring(11, 23)}] '
-              'bajada ${asset['entity_type']} ${asset['entity_key']}');
+          debugPrint(
+            '[medios ${DateTime.now().toIso8601String().substring(11, 23)}] '
+            'bajada ${asset['entity_type']} ${asset['entity_key']}',
+          );
           downloaded++;
           onProgress?.call(downloaded, checked + 1, assets.length);
         }
@@ -259,13 +261,14 @@ class MediaHydrateService {
   ) async {
     final cloudHash = asset['content_hash'] as String?;
     if (cloudHash == null) return false;
-    final row = await (_db.select(_db.pendingMediaUploads)..where(
-          (t) =>
-              t.projectId.equals(projectId) &
-              t.entityType.equals(asset['entity_type'] as String) &
-              t.entityKey.equals(asset['entity_key'] as String),
-        ))
-        .getSingleOrNull();
+    final row =
+        await (_db.select(_db.pendingMediaUploads)..where(
+              (t) =>
+                  t.projectId.equals(projectId) &
+                  t.entityType.equals(asset['entity_type'] as String) &
+                  t.entityKey.equals(asset['entity_key'] as String),
+            ))
+            .getSingleOrNull();
     if (row == null) {
       // Sin historia (bajado o subido antes de las versiones): lo de aquí
       // se toma como la versión de la nube.
@@ -298,13 +301,14 @@ class MediaHydrateService {
       asset['storage_path'] as String?,
     }..remove(null);
     if (cloudIds.isEmpty) return null;
-    final row = await (_db.select(_db.pendingMediaUploads)..where(
-          (t) =>
-              t.projectId.equals(projectId) &
-              t.entityType.equals(asset['entity_type'] as String) &
-              t.entityKey.equals(asset['entity_key'] as String),
-        ))
-        .getSingleOrNull();
+    final row =
+        await (_db.select(_db.pendingMediaUploads)..where(
+              (t) =>
+                  t.projectId.equals(projectId) &
+                  t.entityType.equals(asset['entity_type'] as String) &
+                  t.entityKey.equals(asset['entity_key'] as String),
+            ))
+            .getSingleOrNull();
     if (row == null ||
         row.status != 'done' ||
         !cloudIds.contains(row.publicId)) {
@@ -367,7 +371,6 @@ class MediaHydrateService {
 
   Future<int> repairDuplicatePrimaryReferences(int projectId) =>
       repair_refs.repairDuplicatePrimaryReferences(_db, projectId);
-
 
   String _subfolderFor(String entityType) {
     return switch (entityType) {
@@ -479,28 +482,28 @@ class MediaHydrateService {
       final parsed = _parseMoodboardKey(entityKey);
       if (parsed == null) return null;
       final (groupKey, sortOrder) = parsed;
-      final images = await (_db.select(_db.moodboardImages)
-            ..where((m) => m.projectId.equals(projectId)))
-          .get();
+      final images = await (_db.select(
+        _db.moodboardImages,
+      )..where((m) => m.projectId.equals(projectId))).get();
       if (groupKey == null) {
         final img = images.cast<MoodboardImage?>().firstWhere(
-              (m) => m!.sortOrder == sortOrder && m.groupId == null,
-              orElse: () => null,
-            );
+          (m) => m!.sortOrder == sortOrder && m.groupId == null,
+          orElse: () => null,
+        );
         return img?.imagePath;
       }
-      final groups = await (_db.select(_db.moodboardGroups)
-            ..where((g) => g.projectId.equals(projectId)))
-          .get();
+      final groups = await (_db.select(
+        _db.moodboardGroups,
+      )..where((g) => g.projectId.equals(projectId))).get();
       final group = groups.cast<MoodboardGroup?>().firstWhere(
-            (g) => g != null && 'mbg:${g.sortOrder}:${g.name}' == groupKey,
-            orElse: () => null,
-          );
+        (g) => g != null && 'mbg:${g.sortOrder}:${g.name}' == groupKey,
+        orElse: () => null,
+      );
       if (group == null) return null;
       final img = images.cast<MoodboardImage?>().firstWhere(
-            (m) => m!.groupId == group.id && m.sortOrder == sortOrder,
-            orElse: () => null,
-          );
+        (m) => m!.groupId == group.id && m.sortOrder == sortOrder,
+        orElse: () => null,
+      );
       return img?.imagePath;
     }
 
@@ -517,13 +520,13 @@ class MediaHydrateService {
       final key = parts.first;
       final shot = await _findShotByKey(projectId, key);
       if (shot == null) return null;
-      final refs = await (_db.select(_db.shotReferences)
-            ..where((r) => r.shotId.equals(shot.id)))
-          .get();
+      final refs = await (_db.select(
+        _db.shotReferences,
+      )..where((r) => r.shotId.equals(shot.id))).get();
       final ref = refs.cast<ShotReference?>().firstWhere(
-            (r) => r!.sortOrder == sortOrder,
-            orElse: () => null,
-          );
+        (r) => r!.sortOrder == sortOrder,
+        orElse: () => null,
+      );
       return ref?.imagePath;
     }
 
@@ -567,28 +570,28 @@ class MediaHydrateService {
       final parsed = _parseMoodboardKey(entityKey);
       if (parsed == null) return;
       final (groupKey, sortOrder) = parsed;
-      final images = await (_db.select(_db.moodboardImages)
-            ..where((m) => m.projectId.equals(projectId)))
-          .get();
+      final images = await (_db.select(
+        _db.moodboardImages,
+      )..where((m) => m.projectId.equals(projectId))).get();
       MoodboardImage? target;
       if (groupKey == null) {
         target = images.cast<MoodboardImage?>().firstWhere(
-              (m) => m!.sortOrder == sortOrder && m.groupId == null,
-              orElse: () => null,
-            );
+          (m) => m!.sortOrder == sortOrder && m.groupId == null,
+          orElse: () => null,
+        );
       } else {
-        final groups = await (_db.select(_db.moodboardGroups)
-              ..where((g) => g.projectId.equals(projectId)))
-            .get();
+        final groups = await (_db.select(
+          _db.moodboardGroups,
+        )..where((g) => g.projectId.equals(projectId))).get();
         final group = groups.cast<MoodboardGroup?>().firstWhere(
-              (g) => g != null && 'mbg:${g.sortOrder}:${g.name}' == groupKey,
-              orElse: () => null,
-            );
+          (g) => g != null && 'mbg:${g.sortOrder}:${g.name}' == groupKey,
+          orElse: () => null,
+        );
         if (group != null) {
           target = images.cast<MoodboardImage?>().firstWhere(
-                (m) => m!.groupId == group.id && m.sortOrder == sortOrder,
-                orElse: () => null,
-              );
+            (m) => m!.groupId == group.id && m.sortOrder == sortOrder,
+            orElse: () => null,
+          );
         }
       }
       if (target != null) {
@@ -616,13 +619,13 @@ class MediaHydrateService {
       final key = shotKey.split(':ref:').first;
       final shot = await _findShotByKey(projectId, key);
       if (shot == null) return;
-      final refs = await (_db.select(_db.shotReferences)
-            ..where((r) => r.shotId.equals(shot.id)))
-          .get();
+      final refs = await (_db.select(
+        _db.shotReferences,
+      )..where((r) => r.shotId.equals(shot.id))).get();
       final ref = refs.cast<ShotReference?>().firstWhere(
-            (r) => r!.sortOrder == sortOrder,
-            orElse: () => null,
-          );
+        (r) => r!.sortOrder == sortOrder,
+        orElse: () => null,
+      );
       if (ref != null) {
         await (_db.update(_db.shotReferences)
               ..where((r) => r.id.equals(ref.id)))
@@ -662,22 +665,22 @@ class MediaHydrateService {
     final shotNum = int.tryParse(parts[2]);
     if (sceneNum == null || shotNum == null) return null;
 
-    final scenes = await (_db.select(_db.scenes)
-          ..where(
-            (s) => s.projectId.equals(projectId) & s.number.equals(sceneNum),
-          ))
-        .get();
+    final scenes =
+        await (_db.select(_db.scenes)..where(
+              (s) => s.projectId.equals(projectId) & s.number.equals(sceneNum),
+            ))
+            .get();
     if (scenes.isEmpty) return null;
     final sceneId = scenes.first.id;
 
-    final shots = await (_db.select(_db.shots)
-          ..where(
-            (s) =>
-                s.projectId.equals(projectId) &
-                s.sceneId.equals(sceneId) &
-                s.number.equals(shotNum),
-          ))
-        .get();
+    final shots =
+        await (_db.select(_db.shots)..where(
+              (s) =>
+                  s.projectId.equals(projectId) &
+                  s.sceneId.equals(sceneId) &
+                  s.number.equals(shotNum),
+            ))
+            .get();
     return shots.isEmpty ? null : shots.first;
   }
 

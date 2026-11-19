@@ -49,16 +49,17 @@ class ProjectPosterCard extends StatefulWidget {
 class _ProjectPosterCardState extends State<ProjectPosterCard> {
   bool _hover = false;
 
-  static Color syncColor(AppPalette palette, ProjectSyncState? state) =>
-      switch (state) {
-        ProjectSyncState.upToDate => palette.success,
-        ProjectSyncState.toUpload || ProjectSyncState.toDownload =>
-          palette.accent,
-        ProjectSyncState.conflict || ProjectSyncState.imagesFailed =>
-          palette.error,
-        ProjectSyncState.imagesPending => palette.warning,
-        ProjectSyncState.localOnly || null => palette.textTertiary,
-      };
+  static Color syncColor(
+    AppPalette palette,
+    ProjectSyncState? state,
+  ) => switch (state) {
+    ProjectSyncState.upToDate => palette.success,
+    ProjectSyncState.toUpload || ProjectSyncState.toDownload => palette.accent,
+    ProjectSyncState.conflict || ProjectSyncState.imagesFailed => palette.error,
+    ProjectSyncState.imagesPending => palette.warning,
+    ProjectSyncState.guestCopy => palette.warning,
+    ProjectSyncState.localOnly || null => palette.textTertiary,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -293,7 +294,12 @@ class _ProjectPosterCardState extends State<ProjectPosterCard> {
         ),
       const PopupMenuDivider(),
       _item('edit', Icons.edit_outlined, 'Editar', palette.textSecondary),
-      _item('duplicate', Icons.copy_outlined, 'Duplicar', palette.textSecondary),
+      _item(
+        'duplicate',
+        Icons.copy_outlined,
+        'Duplicar',
+        palette.textSecondary,
+      ),
       _item('delete', Icons.delete_outline, 'Eliminar', palette.error),
     ],
   );
@@ -372,48 +378,49 @@ class _Bar extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: LayoutBuilder(
-        builder: (context, box) =>
-            box.maxWidth < 84 + 44 + 40 ? _compact(style, count) : _full(style, count),
+        builder: (context, box) => box.maxWidth < 84 + 44 + 40
+            ? _compact(style, count)
+            : _full(style, count),
       ),
     );
   }
 
   /// Tarjeta pequeña: sin sitio para la barra, solo etiqueta y cifra.
   Widget _compact(TextStyle style, String count) => Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: style,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(count, style: style),
-        ],
-      );
+    children: [
+      Expanded(
+        child: Text(
+          label,
+          style: style,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      const SizedBox(width: 4),
+      Text(count, style: style),
+    ],
+  );
 
   Widget _full(TextStyle style, String count) => Row(
-        children: [
-          SizedBox(width: 84, child: Text(label, style: style)),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: LinearProgressIndicator(
-                value: total == 0 ? 0 : done / total,
-                minHeight: 5,
-                color: Colors.white,
-                backgroundColor: Colors.white.withValues(alpha: 0.25),
-              ),
-            ),
+    children: [
+      SizedBox(width: 84, child: Text(label, style: style)),
+      Expanded(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: LinearProgressIndicator(
+            value: total == 0 ? 0 : done / total,
+            minHeight: 5,
+            color: Colors.white,
+            backgroundColor: Colors.white.withValues(alpha: 0.25),
           ),
-          SizedBox(
-            width: 44,
-            child: Text(count, textAlign: TextAlign.right, style: style),
-          ),
-        ],
-      );
+        ),
+      ),
+      SizedBox(
+        width: 44,
+        child: Text(count, textAlign: TextAlign.right, style: style),
+      ),
+    ],
+  );
 }
 
 /// Una cifra: icono, etiqueta y número.
@@ -490,12 +497,8 @@ class _SyncPill extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white, fontSize: 12),
-        ),
+        Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
       ],
     ),
   );
 }
-

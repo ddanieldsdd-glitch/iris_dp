@@ -86,11 +86,11 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
     final db = ref.read(databaseProvider);
     // Cada edición deja una entrada en la cola de contenido: cuando crece,
     // hay algo nuevo que subir.
-    _queueWatch = (db.select(db.cloudSyncQueue)
-          ..where((q) => q.processed.equals(false)))
-        .watch()
-        .map((rows) => rows.length)
-        .listen(_onQueueCount);
+    _queueWatch =
+        (db.select(db.cloudSyncQueue)..where((q) => q.processed.equals(false)))
+            .watch()
+            .map((rows) => rows.length)
+            .listen(_onQueueCount);
   }
 
   @override
@@ -120,8 +120,7 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   );
 
   /// Trae lo guardado en la biblioteca desde los otros equipos.
-  Future<void> _syncLibrary() async =>
-      (await PlanLibraryStore.open())?.sync();
+  Future<void> _syncLibrary() async => (await PlanLibraryStore.open())?.sync();
 
   /// Una vez por arranque, cuando la app ya está tranquila. Solo informa.
   Future<void> _checkDatabase() async {
@@ -142,13 +141,14 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
         _startTicker();
         unawaited(_connectLive());
         final last = _lastFullPass;
-        final full = wasAway ||
+        final full =
+            wasAway ||
             last == null ||
             DateTime.now().difference(last) > AutoSyncScheduler.fullPassGap;
         _run(full: full);
       case AppLifecycleState.paused ||
-            AppLifecycleState.hidden ||
-            AppLifecycleState.detached:
+          AppLifecycleState.hidden ||
+          AppLifecycleState.detached:
         _foreground = false;
         // Lo que se editaba queda libre para los demás equipos.
         ref.read(liveEditingProvider).releaseAll();
@@ -156,8 +156,10 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
         // tiene que estar al volver, y lo de aquí no puede quedarse sin
         // subir. Solo el iPad y el móvil se paran (batería y datos).
         if (_isMobile) {
-          debugPrint('[sync ${_now()}] app en segundo plano ($state): '
-              'se para la sincronización automática');
+          debugPrint(
+            '[sync ${_now()}] app en segundo plano ($state): '
+            'se para la sincronización automática',
+          );
           _ticker?.cancel();
           _ticker = null;
         }
@@ -196,8 +198,10 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       // de contenido: su fila sube ya, sin esperar a la pasada de cada
       // minuto, para que los demás sepan dónde va.
       _liveDebounce?.cancel();
-      _liveDebounce =
-          Timer(AutoSyncScheduler.liveDelay, () => _run(full: false));
+      _liveDebounce = Timer(
+        AutoSyncScheduler.liveDelay,
+        () => _run(full: false),
+      );
     };
     if (!identical(hub, _liveHub)) {
       await _liveNotices?.cancel();
@@ -213,7 +217,9 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   /// Otro equipo subió imágenes: se bajan ya, sin esperar a la pasada de
   /// cada minuto.
   void _onMediaNotice(String projectCloudId) {
-    debugPrint('[medios ${_now()}] aviso recibido: imágenes de $projectCloudId');
+    debugPrint(
+      '[medios ${_now()}] aviso recibido: imágenes de $projectCloudId',
+    );
     ref.read(syncEngineProvider).followMedia(projectCloudId);
     _liveDebounce?.cancel();
     _liveDebounce = Timer(AutoSyncScheduler.liveDelay, () => _run(full: false));
@@ -226,8 +232,10 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       defaultTargetPlatform == TargetPlatform.android;
 
   Future<void> _onLiveNotice(SnapshotNotice notice) async {
-    debugPrint('[medios ${_now()}] aviso recibido: contenido de '
-        '${notice.projectCloudId} (${notice.device})');
+    debugPrint(
+      '[medios ${_now()}] aviso recibido: contenido de '
+      '${notice.projectCloudId} (${notice.device})',
+    );
     if (!await liveNoticeIsNew(ref.read(databaseProvider), notice)) return;
     // Un segundo de margen: si llegan varios seguidos, una sola pasada.
     _liveDebounce?.cancel();
@@ -262,9 +270,11 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   }
 
   Future<void> _run({required bool full}) async {
-    debugPrint('[sync ${_now()}] pasada ${full ? 'completa' : 'ligera'}'
-        '${_canSync ? '' : ' · NO SE PUEDE: sin sesión, sin red o nube apagada'}'
-        '${_foreground ? '' : ' · app en segundo plano'}');
+    debugPrint(
+      '[sync ${_now()}] pasada ${full ? 'completa' : 'ligera'}'
+      '${_canSync ? '' : ' · NO SE PUEDE: sin sesión, sin red o nube apagada'}'
+      '${_foreground ? '' : ' · app en segundo plano'}',
+    );
     if (!_canSync) return;
     // Cada pasada comprueba también que se sigue en el canal en vivo.
     if (!(ref.read(realtimeHubProvider)?.isLive ?? true)) {
@@ -319,9 +329,9 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
 /// equipo conoce de ese proyecto ya es esa (la mezcló o subió él), no hace
 /// falta bajar nada.
 Future<bool> liveNoticeIsNew(AppDatabase db, SnapshotNotice notice) async {
-  final project = await (db.select(db.projects)
-        ..where((p) => p.cloudId.equals(notice.projectCloudId)))
-      .getSingleOrNull();
+  final project = await (db.select(
+    db.projects,
+  )..where((p) => p.cloudId.equals(notice.projectCloudId))).getSingleOrNull();
   if (project == null) return true;
   final base = await ContentSyncBaseStore.load(db, project.id);
   return base?.cloudHash != notice.hash;

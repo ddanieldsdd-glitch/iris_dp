@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/access/app_access_service.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/settings/settings_center_screen.dart';
 import '../../core/theme/app_colors.dart';
@@ -21,10 +22,11 @@ Future<void> openSettingsCenter(
     projectName = (await db.getProject(projectId))?.name;
   }
   if (!context.mounted) return;
+  final admin = ProviderScope.containerOf(context).read(isAppAdminProvider);
   await Navigator.of(context).push<void>(
     MaterialPageRoute(
       builder: (_) => SettingsCenterScreen(
-        sections: appSettingsSections(),
+        sections: appSettingsSections(admin: admin),
         initialSectionId: sectionId,
         projectId: projectId,
         projectName: projectName,

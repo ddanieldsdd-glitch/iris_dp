@@ -58,6 +58,10 @@ class Projects extends Table {
   /// Color de la tarjeta del proyecto (ARGB). Nulo: el de acento.
   IntColumn get cardColor => integer().nullable()();
 
+  /// Copia de consulta del proyecto de un invitado (su id en la nube). Solo
+  /// la tiene el administrador; no se sube ni se sincroniza nunca.
+  TextColumn get mirrorCloudId => text().nullable()();
+
   /// Tamaño de la tarjeta: s, m, l o xl. Nulo: m.
   TextColumn get cardSize => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -77,6 +81,7 @@ class CloudSyncQueue extends Table {
 
 class Scenes extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
@@ -123,6 +128,7 @@ class Scenes extends Table {
 
 class Shots extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get sceneId => integer().references(Scenes, #id)();
@@ -231,6 +237,7 @@ class ShootDocumentBlocks extends Table {
 
 class ShotReferences extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get shotId => integer().references(Shots, #id)();
@@ -270,6 +277,7 @@ class CameraPlanElements extends Table {
 /// Añadido en schemaVersion 42.
 class LightSetups extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
@@ -306,6 +314,7 @@ class LightSetups extends Table {
 /// [planJson] es la luz compartida: cambia una vez y cambia en todos.
 class SetGroups extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
@@ -327,6 +336,7 @@ class CameraPathPoints extends Table {
 /// Localización de rodaje (contenedor): ej. BOSQUE, HOSPITAL.
 class LocationSites extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
@@ -352,6 +362,7 @@ class LocationSites extends Table {
 /// Imágenes de la localización contenedora (nivel sitio, no set).
 class SiteImages extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get siteId => integer().references(LocationSites, #id)();
@@ -366,6 +377,7 @@ class SiteImages extends Table {
 /// Set de rodaje: unidad de scout con galería, color y escenas vinculadas.
 class LocationBasePlans extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
@@ -388,6 +400,7 @@ class LocationBasePlans extends Table {
 
 class LocationImages extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get locationId => integer().references(LocationBasePlans, #id)();
@@ -577,6 +590,7 @@ class LookBibles extends Table {
 /// PDFs reimportados desde GoodNotes u otras apps de anotación.
 class ProjectAnnotatedPdfs extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
@@ -701,6 +715,7 @@ class VisualBibles extends Table {
 
 class BibleSectionEvidence extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get bibleId => integer().references(VisualBibles, #id)();
@@ -727,6 +742,7 @@ class ExposureBlocks extends Table {
 
 class LightingSetups extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get bibleId => integer().references(VisualBibles, #id)();
@@ -748,6 +764,7 @@ class LightingSetups extends Table {
 
 class CameraTests extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get bibleId => integer().references(VisualBibles, #id)();
@@ -875,6 +892,7 @@ class MoodboardGroups extends Table {
 
 class MoodboardImages extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
@@ -895,8 +913,10 @@ class MoodboardImages extends Table {
 
   /// JSON: secciones de la biblia donde debe aparecer (ej. ["lighting","concept"]).
   TextColumn get assignedSections => text().nullable()();
+
   /// JSON: ids de narrative cards donde refuerza el detalle (ej. [12, 34]).
   TextColumn get assignedCardIds => text().nullable()();
+
   /// JSON: MoodboardReferenceMeta (tags, luz, composición, etc.)
   /// Migrado desde SharedPreferences en schemaVersion 39.
   TextColumn get metaJson => text().nullable()();
@@ -907,8 +927,10 @@ class MoodboardImages extends Table {
 class VisualBibleNarrativeCards extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get bibleId => integer().references(VisualBibles, #id)();
+
   /// BibleSectionId (p. ej. lighting); reutilizable en color/texture.
   TextColumn get sectionId => text()();
+
   /// style | film_ref | location_light | overview
   TextColumn get kind => text()();
   TextColumn get title => text()();
@@ -917,6 +939,7 @@ class VisualBibleNarrativeCards extends Table {
       integer().nullable().references(MoodboardImages, #id)();
   IntColumn get locationBasePlanId =>
       integer().nullable().references(LocationBasePlans, #id)();
+
   /// JSON libre (summary, filmTitle, year, dp…).
   TextColumn get metaJson => text().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
@@ -925,6 +948,7 @@ class VisualBibleNarrativeCards extends Table {
 /// Imágenes de muestra del laboratorio óptico (FLT), por proyecto (máx. 10).
 class OpticsLabSamples extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Identidad permanente entre dispositivos: ver [newEntityUid].
   TextColumn get uid => text().nullable().clientDefault(newEntityUid)();
   IntColumn get projectId => integer().references(Projects, #id)();
