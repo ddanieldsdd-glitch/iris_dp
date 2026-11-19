@@ -35,6 +35,13 @@ class BibleEquipmentItem {
   /// Datos de la ficha: «Sensor» → «27.99×19.22 mm».
   final Map<String, String> facts;
 
+  /// Piezas que lo componen, cada una con sus datos: las focales de un
+  /// juego de lentes («Focal» → «32 mm», «T» → «T2»…).
+  final List<Map<String, String>> details;
+
+  /// Imagen de referencia del material (moodboard).
+  final int? imageId;
+
   /// Alternativa por si la principal no puede ser.
   final int? altCatalogId;
   final String altName;
@@ -47,6 +54,8 @@ class BibleEquipmentItem {
     this.status = BibleEquipmentStatus.tentative,
     this.note = '',
     this.facts = const {},
+    this.details = const [],
+    this.imageId,
     this.altCatalogId,
     this.altName = '',
     this.altNote = '',
@@ -67,9 +76,26 @@ class BibleEquipmentItem {
     status: status ?? this.status,
     note: note ?? this.note,
     facts: facts,
+    details: details,
+    imageId: imageId,
     altCatalogId: altCatalogId,
     altName: altName,
     altNote: altNote ?? this.altNote,
+  );
+
+  /// Con otra imagen de referencia, o sin ella.
+  BibleEquipmentItem withImage(int? id) => BibleEquipmentItem(
+    role: role,
+    catalogId: catalogId,
+    name: name,
+    status: status,
+    note: note,
+    facts: facts,
+    details: details,
+    imageId: id,
+    altCatalogId: altCatalogId,
+    altName: altName,
+    altNote: altNote,
   );
 
   /// Cambia la pieza principal; conserva papel, estado y alternativa.
@@ -77,6 +103,7 @@ class BibleEquipmentItem {
     required int? catalogId,
     required String name,
     Map<String, String> facts = const {},
+    List<Map<String, String>> details = const [],
   }) => BibleEquipmentItem(
     role: role,
     catalogId: catalogId,
@@ -84,6 +111,8 @@ class BibleEquipmentItem {
     status: status,
     note: note,
     facts: facts,
+    details: details,
+    imageId: imageId,
     altCatalogId: altCatalogId,
     altName: altName,
     altNote: altNote,
@@ -97,6 +126,8 @@ class BibleEquipmentItem {
         status: status,
         note: note,
         facts: facts,
+        details: details,
+        imageId: imageId,
         altCatalogId: catalogId,
         altName: name,
         altNote: name.isEmpty ? '' : altNote,
@@ -109,6 +140,9 @@ class BibleEquipmentItem {
     'status': status.name,
     if (note.isNotEmpty) 'note': note,
     if (facts.isNotEmpty) 'facts': facts,
+    if (details.isNotEmpty) 'details': details,
+    // Con esta clave el PDF precarga la imagen como la de una tarjeta.
+    if (imageId != null) 'images': [imageId],
     if (altCatalogId != null) 'altId': altCatalogId,
     if (altName.isNotEmpty) 'alt': altName,
     if (altNote.isNotEmpty) 'altNote': altNote,
@@ -133,6 +167,18 @@ class BibleEquipmentItem {
                     for (final f in (e['facts'] as Map).entries)
                       f.key.toString(): f.value.toString(),
                 },
+                details: [
+                  if (e['details'] is List)
+                    for (final d in e['details'] as List)
+                      if (d is Map)
+                        {
+                          for (final f in d.entries)
+                            f.key.toString(): f.value.toString(),
+                        },
+                ],
+                imageId: e['images'] is List && (e['images'] as List).isNotEmpty
+                    ? ((e['images'] as List).first as num?)?.toInt()
+                    : null,
                 altCatalogId: (e['altId'] as num?)?.toInt(),
                 altName: e['alt']?.toString() ?? '',
                 altNote: e['altNote']?.toString() ?? '',
