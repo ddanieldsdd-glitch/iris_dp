@@ -180,6 +180,38 @@ void main() {
       expect(await StaticMap(client: client).render(41.0, 2.0), isNull);
     });
 
+    test('varias paradas: caben todas y van numeradas', () async {
+      final asked = <String>[];
+      final client = MockClient((request) async {
+        asked.add(request.url.path);
+        return http.Response.bytes(tile(), 200);
+      });
+      // Dos sitios a unos 2 km: no caben a zoom 16.
+      const stops = [
+        (latitude: 41.3800, longitude: 2.1600, label: '1'),
+        (latitude: 41.3900, longitude: 2.1800, label: '2·3'),
+      ];
+      final zoom = StaticMap.fitZoom([
+        for (final s in stops) (latitude: s.latitude, longitude: s.longitude),
+      ]);
+      expect(zoom, lessThan(StaticMap.zoom));
+      expect(zoom, greaterThan(10));
+      final png = await StaticMap(client: client).renderStops(stops);
+      final image = img.decodePng(png!)!;
+      expect(image.width, StaticMap.width);
+      expect(asked.every((a) => a.startsWith('/$zoom/')), isTrue);
+    });
+
+    test('un sitio cercano se queda en el zoom de calle', () {
+      expect(
+        StaticMap.fitZoom([
+          (latitude: 41.3800, longitude: 2.1600),
+          (latitude: 41.3802, longitude: 2.1603),
+        ]),
+        StaticMap.zoom,
+      );
+    });
+
     test('el punto 0,0 cae en el centro del mundo', () {
       final p = StaticMap.worldPixel(0, 0, zoom: 1);
       expect(p.x, closeTo(256, 1e-6));

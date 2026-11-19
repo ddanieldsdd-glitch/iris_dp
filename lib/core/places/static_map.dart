@@ -39,11 +39,82 @@ class StaticMap {
 
   /// El mapa en PNG, o nulo si no hay red o el servidor no responde.
   Future<Uint8List?> render(double latitude, double longitude) async {
+    final center = worldPixel(latitude, longitude);
+    final canvas = await _tiles(center.x, center.y, zoom);
+    if (canvas == null) return null;
+    _drawPin(canvas);
+    _drawAttribution(canvas);
+    return Uint8List.fromList(img.encodePng(canvas));
+  }
+
+  /// El zoom más cercano (de [zoom] hacia fuera) en el que caben todos los
+  /// [points] con margen para sus chinchetas.
+  static int fitZoom(List<({double latitude, double longitude})> points) {
+    for (var z = zoom; z > 3; z--) {
+      final px = [
+        for (final p in points) worldPixel(p.latitude, p.longitude, zoom: z),
+      ];
+      final xs = px.map((p) => p.x);
+      final ys = px.map((p) => p.y);
+      final w = xs.reduce(math.max) - xs.reduce(math.min);
+      final h = ys.reduce(math.max) - ys.reduce(math.min);
+      if (w <= width - 90 && h <= height - 90) return z;
+    }
+    return 3;
+  }
+
+  /// Un mapa con varias paradas numeradas: cada punto lleva sus números
+  /// («1» o «1·3» si se vuelve al mismo sitio). Nulo sin red.
+  Future<Uint8List?> renderStops(
+    List<({double latitude, double longitude, String label})> stops,
+  ) async {
+    if (stops.isEmpty) return null;
+    final z = fitZoom([
+      for (final s in stops) (latitude: s.latitude, longitude: s.longitude),
+    ]);
+    final px = [
+      for (final s in stops) worldPixel(s.latitude, s.longitude, zoom: z),
+    ];
+    final xs = px.map((p) => p.x);
+    final ys = px.map((p) => p.y);
+    final cx = (xs.reduce(math.max) + xs.reduce(math.min)) / 2;
+    final cy = (ys.reduce(math.max) + ys.reduce(math.min)) / 2;
+    final canvas = await _tiles(cx, cy, z);
+    if (canvas == null) return null;
+    final left = cx - width / 2;
+    final top = cy - height / 2;
+    // Una línea fina de parada a parada, en orden.
+    for (var i = 1; i < px.length; i++) {
+      img.drawLine(
+        canvas,
+        x1: (px[i - 1].x - left).round(),
+        y1: (px[i - 1].y - top).round(),
+        x2: (px[i].x - left).round(),
+        y2: (px[i].y - top).round(),
+        color: img.ColorRgba8(226, 55, 45, 170),
+        thickness: 3,
+        antialias: true,
+      );
+    }
+    for (final (i, s) in stops.indexed) {
+      _drawNumberedPin(
+        canvas,
+        (px[i].x - left).round(),
+        (px[i].y - top).round(),
+        s.label,
+      );
+    }
+    _drawAttribution(canvas);
+    return Uint8List.fromList(img.encodePng(canvas));
+  }
+
+  /// Las teselas alrededor de un píxel del mundo a [z]; nulo si no llega
+  /// ninguna.
+  Future<img.Image?> _tiles(double centerX, double centerY, int z) async {
     final client = _client ?? http.Client();
     try {
-      final center = worldPixel(latitude, longitude);
-      final left = center.x - width / 2;
-      final top = center.y - height / 2;
+      final left = centerX - width / 2;
+      final top = centerY - height / 2;
       final firstX = (left / tileSize).floor();
       final firstY = (top / tileSize).floor();
       final lastX = ((left + width) / tileSize).floor();
@@ -51,14 +122,14 @@ class StaticMap {
       final canvas = img.Image(width: width, height: height, numChannels: 3)
         ..clear(img.ColorRgb8(236, 234, 228));
       var any = false;
-      const max = 1 << zoom;
+      final max = 1 << z;
       for (var tx = firstX; tx <= lastX; tx++) {
         for (var ty = firstY; ty <= lastY; ty++) {
           if (ty < 0 || ty >= max) continue;
           final wrapped = ((tx % max) + max) % max;
           final uri = Uri.https(
             'tile.openstreetmap.org',
-            '/$zoom/$wrapped/$ty.png',
+            '/$z/$wrapped/$ty.png',
           );
           final response = await client
               .get(uri, headers: {'User-Agent': kPlacesUserAgent})
@@ -75,15 +146,46 @@ class StaticMap {
           any = true;
         }
       }
-      if (!any) return null;
-      _drawPin(canvas);
-      _drawAttribution(canvas);
-      return Uint8List.fromList(img.encodePng(canvas));
+      return any ? canvas : null;
     } on Exception {
       return null;
     } finally {
       if (_client == null) client.close();
     }
+  }
+
+  static void _drawNumberedPin(img.Image canvas, int x, int y, String label) {
+    final textW = label.length * 8;
+    final r = math.max(12, textW ~/ 2 + 6);
+    img.fillCircle(
+      canvas,
+      x: x + 1,
+      y: y + 2,
+      radius: r + 1,
+      color: img.ColorRgba8(0, 0, 0, 90),
+    );
+    img.fillCircle(
+      canvas,
+      x: x,
+      y: y,
+      radius: r,
+      color: img.ColorRgb8(255, 255, 255),
+    );
+    img.fillCircle(
+      canvas,
+      x: x,
+      y: y,
+      radius: r - 3,
+      color: img.ColorRgb8(226, 55, 45),
+    );
+    img.drawString(
+      canvas,
+      label,
+      font: img.arial14,
+      x: x - textW ~/ 2,
+      y: y - 8,
+      color: img.ColorRgb8(255, 255, 255),
+    );
   }
 
   static void _drawPin(img.Image canvas) {
@@ -182,5 +284,28 @@ Future<String?> savedSiteMap({
     longitude: longitude,
   );
   if (path == null || !await File(path).exists()) return null;
+  return path;
+}
+
+/// El mapa de las paradas de un día, guardado por sus puntos: si no cambian,
+/// no se vuelve a pedir. Nulo sin almacenamiento o sin red.
+Future<String?> ensureStopsMap({
+  required int projectId,
+  required List<({double latitude, double longitude, String label})> stops,
+  StaticMap? maker,
+}) async {
+  final key = [
+    for (final s in stops)
+      '${s.latitude.toStringAsFixed(5)},${s.longitude.toStringAsFixed(5)},'
+          '${s.label}',
+  ].join(';');
+  final path = await MediaStorage.stopsMapPath(projectId: projectId, key: key);
+  if (path == null) return null;
+  final file = File(path);
+  if (await file.exists()) return path;
+  final bytes = await (maker ?? StaticMap()).renderStops(stops);
+  if (bytes == null) return null;
+  await file.parent.create(recursive: true);
+  await file.writeAsBytes(bytes, flush: true);
   return path;
 }

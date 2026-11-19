@@ -104,7 +104,9 @@ class MediaStorage {
     final source = File(sourcePath);
     if (!await source.exists()) return null;
 
-    final ext = p.extension(sourcePath).isEmpty ? '.jpg' : p.extension(sourcePath);
+    final ext = p.extension(sourcePath).isEmpty
+        ? '.jpg'
+        : p.extension(sourcePath);
     return copyFileIntoProject(
       projectId: destProjectId,
       sourcePath: sourcePath,
@@ -129,11 +131,10 @@ class MediaStorage {
       await destDir.create(recursive: true);
     }
 
-    final ext = p.extension(sourcePath).isEmpty ? '.jpg' : p.extension(sourcePath);
-    final destPath = p.join(
-      destDir.path,
-      'img_${_stamp()}$ext',
-    );
+    final ext = p.extension(sourcePath).isEmpty
+        ? '.jpg'
+        : p.extension(sourcePath);
+    final destPath = p.join(destDir.path, 'img_${_stamp()}$ext');
     await File(sourcePath).copy(destPath);
     return destPath;
   }
@@ -169,15 +170,34 @@ class MediaStorage {
   }) async {
     final dir = await _documentsRoot();
     if (dir == null) return null;
-    final key =
-        '${latitude.toStringAsFixed(5)}_${longitude.toStringAsFixed(5)}'
-            .replaceAll('-', 'm')
-            .replaceAll('.', 'p');
+    final key = '${latitude.toStringAsFixed(5)}_${longitude.toStringAsFixed(5)}'
+        .replaceAll('-', 'm')
+        .replaceAll('.', 'p');
     return p.join(
       _projectPath(dir, projectId),
       'sites',
       '$siteId',
       'map_$key.png',
+    );
+  }
+
+  /// El mapa de las paradas de un día, por una clave de sus puntos.
+  static Future<String?> stopsMapPath({
+    required int projectId,
+    required String key,
+  }) async {
+    final dir = await _documentsRoot();
+    if (dir == null) return null;
+    // Hash estable (FNV-1a), sin depender del hashCode de la plataforma.
+    var h = 0x811c9dc5;
+    for (final c in key.codeUnits) {
+      h = ((h ^ c) * 0x01000193) & 0xffffffff;
+    }
+    return p.join(
+      _projectPath(dir, projectId),
+      'sites',
+      'stops',
+      'map_${h.toRadixString(16)}.png',
     );
   }
 
@@ -197,11 +217,10 @@ class MediaStorage {
       await destDir.create(recursive: true);
     }
 
-    final ext = p.extension(sourcePath).isEmpty ? '.jpg' : p.extension(sourcePath);
-    final destPath = p.join(
-      destDir.path,
-      'img_${_stamp()}$ext',
-    );
+    final ext = p.extension(sourcePath).isEmpty
+        ? '.jpg'
+        : p.extension(sourcePath);
+    final destPath = p.join(destDir.path, 'img_${_stamp()}$ext');
     await File(sourcePath).copy(destPath);
     return destPath;
   }
@@ -222,11 +241,10 @@ class MediaStorage {
       await destDir.create(recursive: true);
     }
 
-    final ext = p.extension(sourcePath).isEmpty ? '.jpg' : p.extension(sourcePath);
-    final destPath = p.join(
-      destDir.path,
-      'shot_${shotId}_${_stamp()}$ext',
-    );
+    final ext = p.extension(sourcePath).isEmpty
+        ? '.jpg'
+        : p.extension(sourcePath);
+    final destPath = p.join(destDir.path, 'shot_${shotId}_${_stamp()}$ext');
     await File(sourcePath).copy(destPath);
     return destPath;
   }
@@ -250,10 +268,7 @@ class MediaStorage {
 
     var ext = p.extension(fileName);
     if (ext.isEmpty) ext = '.jpg';
-    final destPath = p.join(
-      destDir.path,
-      'shot_${shotId}_${_stamp()}$ext',
-    );
+    final destPath = p.join(destDir.path, 'shot_${shotId}_${_stamp()}$ext');
     await File(destPath).writeAsBytes(bytes, flush: true);
     return destPath;
   }
@@ -289,22 +304,14 @@ class MediaStorage {
       throw StateError('Almacenamiento no disponible');
     }
     final destDir = Directory(
-      p.join(
-        _projectPath(dir, projectId),
-        scopeFolder,
-        '$scopeId',
-        'scans',
-      ),
+      p.join(_projectPath(dir, projectId), scopeFolder, '$scopeId', 'scans'),
     );
     if (!await destDir.exists()) {
       await destDir.create(recursive: true);
     }
 
     final ext = p.extension(sourcePath).isEmpty ? '' : p.extension(sourcePath);
-    final destPath = p.join(
-      destDir.path,
-      '${prefix}_${_stamp()}$ext',
-    );
+    final destPath = p.join(destDir.path, '${prefix}_${_stamp()}$ext');
     await File(sourcePath).copy(destPath);
     return destPath;
   }

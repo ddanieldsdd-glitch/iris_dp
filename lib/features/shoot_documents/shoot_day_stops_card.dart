@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
+import '../../core/places/static_map.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -52,6 +55,39 @@ List<ShootDayStop> shootDayStopsOf(
     placeOf: (e) => shootPlaceOf(data, shots, e),
     siteOfUid: (uid) => siteByUid[uid],
   );
+}
+
+/// Los puntos del mapa del día: uno por sitio ubicado, con los números de
+/// sus paradas («1·3» si se vuelve), en el orden en que se llega.
+List<({double latitude, double longitude, String label})> stopsMapPoints(
+  PlanProjectData data,
+  List<ShootDayStop> stops,
+) {
+  final order = <String>[];
+  final at = <String, ({double latitude, double longitude})>{};
+  final numbers = <String, List<int>>{};
+  for (final (i, stop) in stops.indexed) {
+    final site = data.site(stop.siteId);
+    final lat = site?.latitude;
+    final lon = site?.longitude;
+    if (lat == null || lon == null) continue;
+    final key = '${lat.toStringAsFixed(5)},${lon.toStringAsFixed(5)}';
+    if (!at.containsKey(key)) {
+      order.add(key);
+      at[key] = (latitude: lat, longitude: lon);
+    }
+    final list = numbers.putIfAbsent(key, () => []);
+    // Dos paradas seguidas en el mismo sitio (dos sets) van como una.
+    if (list.isEmpty || list.last != i) list.add(i + 1);
+  }
+  return [
+    for (final key in order)
+      (
+        latitude: at[key]!.latitude,
+        longitude: at[key]!.longitude,
+        label: numbers[key]!.join('·'),
+      ),
+  ];
 }
 
 /// Las paradas de la jornada en el panel izquierdo: dónde se rueda, cuánto
@@ -108,14 +144,25 @@ class ShootDayStopsCard extends ConsumerWidget {
               'su tiempo.',
               style: AppTypography.caption(palette),
             )
-          else
+          else ...[
+            if (stopsMapPoints(data, stops) case final points
+                when points.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: _StopsMap(projectId: projectId, points: points),
+              ),
             for (final (i, stop) in stops.indexed)
               _StopTile(
                 number: i + 1,
                 stop: stop,
                 data: data,
                 onFix: (minutes) => _fix(ref, stop, minutes),
+                onPlace: data.site(stop.siteId) == null
+                    ? null
+                    : () =>
+                          pickSitePlace(context, ref, data.site(stop.siteId)!),
               ),
+          ],
         ],
       );
     },
@@ -207,11 +254,15 @@ class _StopTile extends StatelessWidget {
   final PlanProjectData data;
   final ValueChanged<int?> onFix;
 
+  /// Fija el punto exacto de su localización en el mapa.
+  final VoidCallback? onPlace;
+
   const _StopTile({
     required this.number,
     required this.stop,
     required this.data,
     required this.onFix,
+    this.onPlace,
   });
 
   Future<void> _pickMinutes(BuildContext context) async {
@@ -420,15 +471,22 @@ class _StopTile extends StatelessWidget {
               ),
             ],
           ),
-          if (lat != null && lon != null)
+          if ((lat != null && lon != null) || onPlace != null)
             Padding(
               padding: const EdgeInsets.only(top: 4, left: 24),
               child: Wrap(
                 spacing: 2,
                 children: [
-                  link('Maps', () => openSiteInMaps(lat, lon)),
-                  link('Waze', () => openSiteInWaze(lat, lon)),
-                  link('Apple', () => openSiteInAppleMaps(lat, lon)),
+                  if (lat != null && lon != null) ...[
+                    link('Maps', () => openSiteInMaps(lat, lon)),
+                    link('Waze', () => openSiteInWaze(lat, lon)),
+                    link('Apple', () => openSiteInAppleMaps(lat, lon)),
+                  ],
+                  if (onPlace != null)
+                    link(
+                      lat == null ? 'Ubicar en el mapa' : 'Cambiar punto',
+                      onPlace!,
+                    ),
                 ],
               ),
             ),
@@ -436,4 +494,59 @@ class _StopTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// El mapa del día con las paradas numeradas. Se pide una vez con red y se
+/// guarda por sus puntos.
+class _StopsMap extends StatefulWidget {
+  final int projectId;
+  final List<({double latitude, double longitude, String label})> points;
+
+  const _StopsMap({required this.projectId, required this.points});
+
+  @override
+  State<_StopsMap> createState() => _StopsMapState();
+}
+
+class _StopsMapState extends State<_StopsMap> {
+  Future<String?>? _map;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_StopsMap old) {
+    super.didUpdateWidget(old);
+    if (old.points.toString() != widget.points.toString()) _load();
+  }
+
+  void _load() {
+    _map = ensureStopsMap(
+      projectId: widget.projectId,
+      stops: widget.points,
+    ).catchError((Object _) => null);
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String?>(
+    future: _map,
+    builder: (context, snap) {
+      final path = snap.data;
+      if (path == null) return const SizedBox.shrink();
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: AspectRatio(
+          aspectRatio: StaticMap.width / StaticMap.height,
+          child: Image.file(
+            File(path),
+            fit: BoxFit.cover,
+            cacheWidth: StaticMap.width,
+          ),
+        ),
+      );
+    },
+  );
 }
