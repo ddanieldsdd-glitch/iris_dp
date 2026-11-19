@@ -5469,6 +5469,11 @@ LazyDatabase _openConnection() {
     return NativeDatabase.createInBackground(
       file,
       setup: (raw) {
+        // Si otro proceso la tiene ocupada (la versión anterior aún cerrándose
+        // tras una actualización), se espera en vez de fallar al momento: el
+        // 2026-11-19 dos actualizaciones seguidas dejaron la migración a 64 a
+        // medias por eso.
+        raw.execute('PRAGMA busy_timeout = 10000');
         if (restored) LocalDatabaseBackup.forgetSyncBases(raw.execute);
         final version =
             raw.select('PRAGMA user_version').first.values.first as int;
