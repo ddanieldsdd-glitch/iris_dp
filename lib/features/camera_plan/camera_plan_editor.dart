@@ -57,6 +57,7 @@ import 'plan_light_map.dart';
 import 'plan_light_mark_controls.dart';
 import 'plan_light_use_panel.dart';
 import 'plan_project_gear_dialog.dart';
+import 'plan_follow.dart';
 import 'plan_marks.dart';
 import 'plan_room_panel.dart';
 import 'plan_trash_ui.dart';
@@ -1005,6 +1006,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final otherCameraShot = <PlanElement, PlanTarget>{};
     final unlitShots = <int>{};
     final cameraLinks = <String, int>{};
+    final followLabels = scene == null
+        ? const <String, String>{}
+        : await PlanFollow.sceneLabels(db, scene);
     final setupCameraUids = {
       for (final el in setupLights)
         if (el.type == ElementType.camera) ?LightOverrides.uidOf(el),
@@ -1181,6 +1185,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         ..addAll(otherCameraShot);
       _unlitShots = unlitShots;
       _cameraLinks = cameraLinks;
+      _followLabels = followLabels;
       _shot = shot;
       _scene = scene;
       _linkedSet = linkedSet;
@@ -2046,6 +2051,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
 
   /// Planos vinculados a cada cámara del esquema, por su identificador.
   Map<String, int> _cameraLinks = const {};
+
+  /// Planos de la escena abierta por su identificador («6/1»), para decir
+  /// a quién sigue un actor (PL.4).
+  Map<String, String> _followLabels = const {};
 
   /// Una cámara de la planta de luz (sin plano abierto) se puede vincular.
   bool _canLinkShots(PlanElement el) =>
@@ -3489,6 +3498,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         el.pathPoints.map((p) => (x: p.dx, y: p.dy)).toList(),
       );
     } else {
+      // Cómo estaba un actor, para llevar el cambio a los que le siguen.
+      final before = el.type == ElementType.actor
+          ? await PlanFollow(db).loadElement(el.id)
+          : null;
       await db.updateCameraPlanElement(
         CameraPlanElement(
           id: el.id,
@@ -3519,6 +3532,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         el.id,
         el.pathPoints.map((p) => (x: p.dx, y: p.dy)).toList(),
       );
+      if (before != null) {
+        await PlanFollow(db).elementSaved(shotId, before, el);
+      }
     }
 
     await db.touchProjectContent(widget.projectId);
@@ -7025,6 +7041,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                       _selected!,
                                     )] ??
                                     0,
+                                followLabels: _followLabels,
                                 reading:
                                     _selected!.type == ElementType.actor ||
                                         _selected!.propType == PropType.meter

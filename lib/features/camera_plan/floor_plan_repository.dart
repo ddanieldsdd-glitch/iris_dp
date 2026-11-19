@@ -17,6 +17,7 @@ import 'light/ambient.dart';
 import 'env_overrides.dart';
 import 'light_overrides.dart';
 import 'set_environment.dart';
+import 'plan_follow.dart';
 import 'plan_images.dart';
 import 'plan_prefs.dart';
 
@@ -154,7 +155,10 @@ class FloorPlanRepository {
         await CameraLinks(db).followCameras(lightSetupId, before, elements);
       case FloorPlanScope.shot:
         if (shotId == null) return;
+        final before = await _shotElements(shotId);
         await _replaceShotElements(shotId, elements);
+        // Los actores que siguen a los de este plano se mueven con ellos.
+        await PlanFollow(db).shotSaved(shotId, before, elements);
     }
   }
 
