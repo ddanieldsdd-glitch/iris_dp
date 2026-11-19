@@ -7031,6 +7031,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 onOverride: (own) =>
                                     _setShotOverride(_selected!, own),
                                 canUse: _canToggleUse(_selected!),
+                                onApplyToScene: _shot == null
+                                    ? null
+                                    : () => _applyLightToScene(_selected!),
                                 onUse: (used) =>
                                     _setLightUsed(_selected!, used),
                                 onLinkShots: _canLinkShots(_selected!)

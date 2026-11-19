@@ -59,6 +59,9 @@ class _ElementPanel extends StatefulWidget {
   final bool canUse;
   final ValueChanged<bool>? onUse;
 
+  /// Deja este foco igual en los demás planos de la escena.
+  final VoidCallback? onApplyToScene;
+
   /// En la planta de luz, una cámara se vincula a planos: abre la lista.
   final VoidCallback? onLinkShots;
 
@@ -99,6 +102,7 @@ class _ElementPanel extends StatefulWidget {
     this.onOverride,
     this.canUse = false,
     this.onUse,
+    this.onApplyToScene,
     this.onLinkShots,
     this.linkedShots = 0,
     this.followLabels = const {},
@@ -725,6 +729,21 @@ class _ElementPanelState extends State<_ElementPanel> {
                             onChanged: widget.onOverride,
                           ),
                         ],
+                      ),
+                    if (widget.canOverride && widget.onApplyToScene != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          key: const ValueKey('light-apply-scene'),
+                          onPressed: widget.onApplyToScene,
+                          icon: const Icon(Icons.view_carousel_outlined, size: 16),
+                          label: Text(
+                            element.shotOverride
+                                ? 'Igual en toda la escena'
+                                : 'Como el set en toda la escena',
+                            style: AppTypography.caption(palette),
+                          ),
+                        ),
                       ),
                     if (element.type == ElementType.camera &&
                         widget.onLinkShots != null) ...[

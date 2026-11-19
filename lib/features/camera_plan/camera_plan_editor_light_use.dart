@@ -139,6 +139,44 @@ extension _LightUse on _CameraPlanEditorState {
     return 'Focos $used/${lights.length}';
   }
 
+  /// Deja [el] en los demás planos de la escena (del mismo set) como está
+  /// en este: con su ajuste, sin usar o con sus posiciones; o, si aquí es
+  /// el del set, les quita el suyo.
+  Future<void> _applyLightToScene(PlanElement el) async {
+    final shot = _shot;
+    if (shot == null || !_CameraPlanEditorState._canShotOverride(el)) return;
+    LightOverrides.ensureUids([el]);
+    final uid = LightOverrides.uidOf(el)!;
+    final db = ref.read(databaseProvider);
+    final others = [
+      for (final s in await (db.select(
+        db.shots,
+      )..where((s) => s.sceneId.equals(shot.sceneId))).get())
+        if (s.lightSetupId == shot.lightSetupId && s.id != shot.id) s,
+    ];
+    if (!mounted) return;
+    if (others.isEmpty) {
+      AppSnackBar.show(context, 'No hay más planos de la escena en este set.');
+      return;
+    }
+    for (final other in others) {
+      final own = LightOverrides.decode(other.lightOverridesJson);
+      if (el.shotOverride) {
+        own[uid] = LightOverrides.clone(el)..shotOverride = false;
+      } else {
+        own.remove(uid);
+      }
+      await _repo.saveLightOverrides(other.id, own);
+    }
+    if (!mounted) return;
+    final n = others.length;
+    AppSnackBar.show(
+      context,
+      '${el.displayLabel}: igual en $n plano${n == 1 ? '' : 's'} más de la '
+      'escena.',
+    );
+  }
+
   /// Este plano toma la luz entera de [from]: qué focos usa, sus
   /// posiciones y sus ajustes (PL.5).
   Future<void> _copyLightOf(Shot from) async {
@@ -203,9 +241,7 @@ extension _LightUse on _CameraPlanEditorState {
           : previous.sceneId == shot.sceneId
           ? 'el plano ${previous.number}'
           : 'el plano anterior del set',
-      onCopyPrevious: previous == null
-          ? null
-          : () => _copyLightOf(previous),
+      onCopyPrevious: previous == null ? null : () => _copyLightOf(previous),
       onApply: (unused) => _setLightsUsed({
         for (final el in _shotLights)
           el: !unused.contains(LightOverrides.uidOf(el)),
