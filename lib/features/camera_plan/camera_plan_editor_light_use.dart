@@ -382,8 +382,10 @@ class _PositionPicker extends StatelessWidget {
               label: Text('${i + 1}'),
               selected: i == value,
               tooltip: i == 0
-                  ? 'La luz como empieza el plano'
-                  : 'La luz con todo en la posición ${i + 1}',
+                  ? 'La luz como empieza el plano (tecla 1). Con ⌥, '
+                        'arrastra algo para sacar una posición nueva'
+                  : 'La luz con todo en la posición ${i + 1} '
+                        '(tecla ${i + 1})',
               onSelected: (_) => onChanged(i),
             ),
           ),

@@ -369,6 +369,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// qué plano lleva cada una.
   List<PlanElement> _otherCameras = const [];
   final Map<PlanElement, PlanTarget> _otherCameraShot = {};
+
   /// Las cámaras de otros planos ya no se dibujan encima (SV.2): cada set
   /// enseña solo sus cámaras; los demás planos están en la tira de arriba.
   final bool _showOtherCameras = false;
@@ -557,6 +558,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   final AnnotationCanvasController _annotationController =
       AnnotationCanvasController();
   PlanElement? _selected;
+
   /// La vista del lienzo. Moverla repinta solo el lienzo.
   final _canvasView = PlanCanvasView();
 
@@ -895,7 +897,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         ? await db.getSetGroupById(lightSetup!.groupId!)
         : null;
     addLayer(PlanLayer.groupLight, [
-      for (final el in GroupLight.visible(group?.planJson, lightSetup?.planJson))
+      for (final el in GroupLight.visible(
+        group?.planJson,
+        lightSetup?.planJson,
+      ))
         if (overrides[LightOverrides.uidOf(el)] case final own?)
           () {
             final uid = LightOverrides.uidOf(el)!;
@@ -956,9 +961,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final envBaseline = _baselineOf([
       for (final e in elements)
         if (e.layer == PlanLayer.environment || e.layer == PlanLayer.set)
-          e.shotOverride
-              ? originals[LightOverrides.uidOf(e)] ?? e
-              : e,
+          e.shotOverride ? originals[LightOverrides.uidOf(e)] ?? e : e,
     ]);
     final groupBaseline = _baselineOf(
       elements.where((e) => e.layer == PlanLayer.groupLight),
@@ -1232,15 +1235,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       FloorPlanScope.set =>
         _linkedSet?.uid == null ? null : LiveKey.set(_linkedSet!.uid!),
       FloorPlanScope.lightSetup =>
-        _lightSetup?.uid == null
-            ? null
-            : LiveKey.lightSetup(_lightSetup!.uid!),
+        _lightSetup?.uid == null ? null : LiveKey.lightSetup(_lightSetup!.uid!),
       FloorPlanScope.shot =>
         _shot?.uid == null ? null : LiveKey.shot(_shot!.uid!),
     };
-    _layerKeys = [
-      for (final scope in FloorPlanScope.values) ?keyOf(scope),
-    ];
+    _layerKeys = [for (final scope in FloorPlanScope.values) ?keyOf(scope)];
     final key = keyOf(widget.scope);
     if (key == null || key == _liveKey) return;
     _liveKey = key;
@@ -1807,9 +1806,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       final stored = [
         ...FloorPlanJson.decode((await db.getSetGroupById(group.id))?.planJson),
       ];
-      stored.removeWhere(
-        (e) => diff.removed.contains(LightOverrides.uidOf(e)),
-      );
+      stored.removeWhere((e) => diff.removed.contains(LightOverrides.uidOf(e)));
       for (final entry in diff.changed.entries) {
         final at = stored.indexWhere(
           (e) => LightOverrides.uidOf(e) == entry.key,
@@ -1905,8 +1902,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     };
     if (answer.scope == EnvScope.site) {
       // El entorno definitivo cambia; este set deja de cambiarlo.
-      siteBase.removeWhere((e) => diff.removed.contains(LightOverrides.uidOf(e)));
-      zoneBase.removeWhere((e) => diff.removed.contains(LightOverrides.uidOf(e)));
+      siteBase.removeWhere(
+        (e) => diff.removed.contains(LightOverrides.uidOf(e)),
+      );
+      zoneBase.removeWhere(
+        (e) => diff.removed.contains(LightOverrides.uidOf(e)),
+      );
       for (final entry in diff.changed.entries) {
         final copy = LightOverrides.clone(entry.value);
         int at(List<PlanElement> l) =>
@@ -2430,7 +2431,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                   groupValue: next.kind,
                   title: Text(kind.label),
                   subtitle: Text(kind.hint),
-                  onChanged: (v) => setInner(() => next = next.copyWith(kind: v)),
+                  onChanged: (v) =>
+                      setInner(() => next = next.copyWith(kind: v)),
                 ),
               if (next.isExterior) ...[
                 const SizedBox(height: AppSpacing.sm),
@@ -2736,12 +2738,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Widget _imageToolbar(PlanImage image) => PlanImageToolbar(
     image: image,
     shots: _imageShotOptions,
-    onAbove: (v) => _saveImage(image.copyWith(above: v, terrain: v ? false : null)),
+    onAbove: (v) =>
+        _saveImage(image.copyWith(above: v, terrain: v ? false : null)),
     onOpacity: (v) {
       // Al momento en pantalla; se guarda al soltar el deslizador.
       setState(() {
         _images = [
-          for (final i in _images) i.id == image.id ? i.copyWith(opacity: v) : i,
+          for (final i in _images)
+            i.id == image.id ? i.copyWith(opacity: v) : i,
         ];
       });
       _opacityDebounce?.cancel();
@@ -2786,9 +2790,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           action: SnackBarAction(
             label: 'Deshacer',
             onPressed: () async {
-              await ref.read(databaseProvider).into(
-                ref.read(databaseProvider).planImages,
-              ).insert(image);
+              await ref
+                  .read(databaseProvider)
+                  .into(ref.read(databaseProvider).planImages)
+                  .insert(image);
               await ref
                   .read(databaseProvider)
                   .touchProjectContent(image.projectId);
@@ -2807,7 +2812,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       above: false,
       locked: true,
       terrain: true,
-      targetType: site == null ? null : PlanImageStore.targetType(FloorPlanScope.site),
+      targetType: site == null
+          ? null
+          : PlanImageStore.targetType(FloorPlanScope.site),
       targetId: site?.id,
     );
     await _saveImage(moved);
@@ -2894,7 +2901,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _showSnack('No encuentro esa imagen en este equipo.');
       return;
     }
-    final ext = path.contains('.') ? path.substring(path.lastIndexOf('.')) : '.jpg';
+    final ext = path.contains('.')
+        ? path.substring(path.lastIndexOf('.'))
+        : '.jpg';
     await _addImage(
       await file.readAsBytes(),
       ext,
@@ -3165,7 +3174,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     var step = PlanGuideStep.location;
     if (guide.shotId != null) {
       final shot = await db.getShotById(guide.shotId!);
-      if (shot != null) step = (await PlanEntryState.resolve(db, shot)).startStep;
+      if (shot != null)
+        step = (await PlanEntryState.resolve(db, shot)).startStep;
     }
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
@@ -3981,7 +3991,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     return [
       for (final m in _roster.visible)
         if (seen.add(m.key))
-          (_knownCast[m.key]?.name ?? m.name, _knownCast[m.key]?.color ?? m.color),
+          (
+            _knownCast[m.key]?.name ?? m.name,
+            _knownCast[m.key]?.color ?? m.color,
+          ),
       for (final entry in _knownCast.entries)
         if (!settings.hidden.contains(entry.key) &&
             !settings.removed.contains(entry.key) &&
@@ -4177,6 +4190,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _lookThroughNext = false;
     return v;
   }
+
   bool _loadedOnce = false;
 
   /// Lo que se puede añadir y editar desde el 3D (ED.2): lo mismo que la
@@ -4207,12 +4221,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           () => _addActor(_nextActorColor),
         ),
         for (final (name, color) in _paletteCast.take(8))
-          item(
-            people,
-            name,
-            Icons.person,
-            () => _addActor(color, name: name),
-          ),
+          item(people, name, Icons.person, () => _addActor(color, name: name)),
         for (final light in _gear.lights.take(10))
           item(
             lights,
@@ -4230,7 +4239,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           LightType.par,
           LightType.flo4Tubes,
         ])
-          item(lights, type.label, Icons.highlight_outlined, () => _addLight(type)),
+          item(
+            lights,
+            type.label,
+            Icons.highlight_outlined,
+            () => _addLight(type),
+          ),
         for (final type in const [
           LightType.flag,
           LightType.cutter,
@@ -4436,9 +4450,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// «Abrir en Unreal» del proyecto de esta planta: lo crea, lo prepara,
   /// abre Unreal y conecta.
   Future<void> _openInUnreal() async {
-    final project = await ref.read(databaseProvider).getProject(
-      widget.projectId,
-    );
+    final project = await ref
+        .read(databaseProvider)
+        .getProject(widget.projectId);
     await UnrealStageLauncher.instance.open(
       projectId: widget.projectId,
       projectName: project?.name ?? 'Proyecto ${widget.projectId}',
@@ -4456,7 +4470,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       );
     }
     if (_linkedSite case final site?) {
-      return UnrealWorld(key: 'site${site.id}', name: site.name, site: site.name);
+      return UnrealWorld(
+        key: 'site${site.id}',
+        name: site.name,
+        site: site.name,
+      );
     }
     return null;
   }
@@ -4600,8 +4618,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       lo = Offset(math.min(lo.dx, p.dx), math.min(lo.dy, p.dy));
       hi = Offset(math.max(hi.dx, p.dx), math.max(hi.dy, p.dy));
     }
-    final origin =
-        traced?.$1 ?? _snapToGrid(_viewCenter - (lo + hi) / 2 / mpu);
+    final origin = traced?.$1 ?? _snapToGrid(_viewCenter - (lo + hi) / 2 / mpu);
     final layer = await _layerForNew(ElementType.wall);
     if (!mounted) return;
     final added = recipe.place(origin, mpu);
@@ -4866,6 +4883,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   int? _pathPointIndexAt(PlanElement camera, Offset canvasPos) =>
       CameraPlanPainter.pathPointAt(camera, canvasPos, scale: _scale);
 
+  /// Lo que admite marcas bajo [canvasPos]: una de sus marcas o el propio
+  /// elemento.
+  PlanElement? _markSourceAt(Offset canvasPos) {
+    for (final el in _elements.reversed) {
+      if (_canMark(el) && _pathPointIndexAt(el, canvasPos) != null) return el;
+    }
+    final hit = _elementAt(canvasPos);
+    return hit != null && _canMark(hit) ? hit : null;
+  }
+
   void _onPanStart(DragStartDetails d) {
     _canvasFocus.requestFocus();
     final canvasPos = _toCanvasCoords(d.localPosition);
@@ -4907,6 +4934,23 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (_tool == PlanTool.measure) {
       setState(() => _measure = (from: canvasPos, to: canvasPos));
       return;
+    }
+    // ⌥ arrastrar: saca una posición nueva del elemento o de una de sus
+    // marcas y la lleva donde se suelte (PL.6).
+    if (HardwareKeyboard.instance.isAltPressed && _tool == PlanTool.select) {
+      final from = _markSourceAt(canvasPos);
+      if (from != null) {
+        _ownLightForMarks(from);
+        _isDraggingPathPoint = true;
+        _isRotating = false;
+        _dragDirty = true;
+        setState(() {
+          PlanMarks.add(from, canvasPos);
+          _selected = from;
+          _selectedPathIndex = from.pathPoints.length - 1;
+        });
+        return;
+      }
     }
     for (final el in _elements.reversed) {
       if (!_canMark(el)) continue;
@@ -5108,9 +5152,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _clipboard = FloorPlanJson.encode(picked);
     // Marca en el portapapeles del sistema: si al pegar sigue ahí, se pega
     // esto; si no, lo último copiado fue de fuera (una imagen, quizá).
-    Clipboard.setData(const ClipboardData(text: _clipboardMark)).catchError(
-      (_) {},
-    );
+    Clipboard.setData(
+      const ClipboardData(text: _clipboardMark),
+    ).catchError((_) {});
     _showSnack(
       picked.length == 1 ? 'Copiado.' : '${picked.length} elementos copiados.',
     );
@@ -5233,7 +5277,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           child: Text('Duplicar   ${modKey}D'),
         ),
         const PopupMenuDivider(),
-        PopupMenuItem(value: 'all', child: Text('Seleccionar todo   ${modKey}A')),
+        PopupMenuItem(
+          value: 'all',
+          child: Text('Seleccionar todo   ${modKey}A'),
+        ),
         PopupMenuItem(
           value: 'delete',
           enabled: has,
@@ -5265,11 +5312,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         'Mover la vista',
         'Dos dedos en el trackpad · Espacio + arrastrar · botón central',
       ),
-      ('Zoom', 'Pellizco · rueda del ratón · $modKey + dos dedos · $modKey= y $modKey−'),
+      (
+        'Zoom',
+        'Pellizco · rueda del ratón · $modKey + dos dedos · $modKey= y $modKey−',
+      ),
       ('Encajar todo', '${modKey}0'),
       ('Seleccionar varios', 'Arrastrar en vacío · Mayús + clic · ${modKey}A'),
       ('Deshacer / rehacer', '${modKey}Z / ⇧${modKey}Z'),
-      ('Copiar / cortar / pegar', '${modKey}C / ${modKey}X / ${modKey}V (pega bajo el cursor)'),
+      (
+        'Copiar / cortar / pegar',
+        '${modKey}C / ${modKey}X / ${modKey}V (pega bajo el cursor)',
+      ),
       ('Duplicar', '${modKey}D'),
       ('Eliminar', '⌫'),
       ('Mover 1 cm / 10 cm', 'Flechas / ⇧ + flechas'),
@@ -6179,932 +6232,991 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         actions: compact
             ? _compactActions(palette)
             : [
-          if (_isShotMode && _shot != null)
-            IconButton(
-              tooltip: 'Bocetos de planta del plano (imágenes)',
-              icon: Icon(Icons.image_outlined, color: palette.textSecondary),
-              onPressed: () => showShotImageMenu(
-                context,
-                _shot!,
-                target: ShotImageTarget.planSketch,
-              ),
-            ),
-          if (!_isShotMode && _linkedSet != null)
-            IconButton(
-              tooltip: 'Asociar planos a «${_linkedSet!.locationName}»',
-              icon: Icon(
-                Icons.playlist_add_check,
-                color: palette.textSecondary,
-              ),
-              onPressed: _associateToLinkedSet,
-            ),
-          _addImageMenu(palette),
-          _clearPlanMenu(palette),
-          IconButton(
-            tooltip: 'Deshacer',
-            icon: const Icon(Icons.undo),
-            color: palette.textSecondary,
-            onPressed: _undoStack.isEmpty ? null : _undo,
-          ),
-          IconButton(
-            tooltip: 'Rehacer',
-            icon: const Icon(Icons.redo),
-            color: palette.textSecondary,
-            onPressed: _redoStack.isEmpty ? null : _redo,
-          ),
-          IconButton(
-            tooltip: _snap ? 'Imán activado' : 'Imán desactivado',
-            icon: Icon(
-              Icons.grid_goldenratio,
-              color: _snap ? palette.accent : palette.textTertiary,
-            ),
-            onPressed: () => setState(() => _snap = !_snap),
-          ),
-          PopupMenuButton<LightView>(
-            tooltip: 'Luz: ${_lightView.label.toLowerCase()}',
-            icon: Icon(
-              _lightView == LightView.camera
-                  ? Icons.camera_outlined
-                  : Icons.visibility_outlined,
-              color: palette.textSecondary,
-            ),
-            initialValue: _lightView,
-            onSelected: (view) => setState(() => _lightView = view),
-            itemBuilder: (_) => [
-              for (final view in LightView.values)
-                CheckedPopupMenuItem<LightView>(
-                  value: view,
-                  checked: view == _lightView,
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(view.label),
-                    subtitle: Text(switch (view) {
-                      LightView.camera =>
-                        'Como la ve la cámara a ${formatStop(_targetStop)}: '
-                            'lo que sobra se quema y lo que falta se apaga',
-                      LightView.all =>
-                        'Lo más iluminado al máximo, para ver hasta dónde '
-                            'llega cada luz',
-                    }),
+                if (_isShotMode && _shot != null)
+                  IconButton(
+                    tooltip: 'Bocetos de planta del plano (imágenes)',
+                    icon: Icon(
+                      Icons.image_outlined,
+                      color: palette.textSecondary,
+                    ),
+                    onPressed: () => showShotImageMenu(
+                      context,
+                      _shot!,
+                      target: ShotImageTarget.planSketch,
+                    ),
+                  ),
+                if (!_isShotMode && _linkedSet != null)
+                  IconButton(
+                    tooltip: 'Asociar planos a «${_linkedSet!.locationName}»',
+                    icon: Icon(
+                      Icons.playlist_add_check,
+                      color: palette.textSecondary,
+                    ),
+                    onPressed: _associateToLinkedSet,
+                  ),
+                _addImageMenu(palette),
+                _clearPlanMenu(palette),
+                IconButton(
+                  tooltip: 'Deshacer',
+                  icon: const Icon(Icons.undo),
+                  color: palette.textSecondary,
+                  onPressed: _undoStack.isEmpty ? null : _undo,
+                ),
+                IconButton(
+                  tooltip: 'Rehacer',
+                  icon: const Icon(Icons.redo),
+                  color: palette.textSecondary,
+                  onPressed: _redoStack.isEmpty ? null : _redo,
+                ),
+                IconButton(
+                  tooltip: _snap ? 'Imán activado' : 'Imán desactivado',
+                  icon: Icon(
+                    Icons.grid_goldenratio,
+                    color: _snap ? palette.accent : palette.textTertiary,
+                  ),
+                  onPressed: () => setState(() => _snap = !_snap),
+                ),
+                PopupMenuButton<LightView>(
+                  tooltip: 'Luz: ${_lightView.label.toLowerCase()}',
+                  icon: Icon(
+                    _lightView == LightView.camera
+                        ? Icons.camera_outlined
+                        : Icons.visibility_outlined,
+                    color: palette.textSecondary,
+                  ),
+                  initialValue: _lightView,
+                  onSelected: (view) => setState(() => _lightView = view),
+                  itemBuilder: (_) => [
+                    for (final view in LightView.values)
+                      CheckedPopupMenuItem<LightView>(
+                        value: view,
+                        checked: view == _lightView,
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(view.label),
+                          subtitle: Text(switch (view) {
+                            LightView.camera =>
+                              'Como la ve la cámara a ${formatStop(_targetStop)}: '
+                                  'lo que sobra se quema y lo que falta se apaga',
+                            LightView.all =>
+                              'Lo más iluminado al máximo, para ver hasta dónde '
+                                  'llega cada luz',
+                          }),
+                        ),
+                      ),
+                  ],
+                ),
+                IconButton(
+                  tooltip: _wide
+                      ? (_show3d ? 'Cerrar el 3D' : '3D junto a la planta')
+                      : '3D',
+                  icon: Icon(
+                    Icons.threed_rotation,
+                    color: _show3d ? palette.accent : palette.textSecondary,
+                  ),
+                  onPressed: _toggle3d,
+                ),
+                IconButton(
+                  tooltip: 'Alzado y perfil · exportar DXF y MVR',
+                  icon: Icon(
+                    Icons.view_in_ar_outlined,
+                    color: palette.textSecondary,
+                  ),
+                  onPressed: _showElevation,
+                ),
+                IconButton(
+                  tooltip: _gearLabels
+                      ? 'Quitar rótulos de equipo'
+                      : 'Rótulos de equipo: unidad, vatios, lúmenes y leyenda',
+                  icon: Icon(
+                    Icons.sell_outlined,
+                    color: _gearLabels ? palette.accent : palette.textSecondary,
+                  ),
+                  onPressed: () => setState(() => _gearLabels = !_gearLabels),
+                ),
+                // Reconocer cada elemento: colores por tipo, nombres y la imagen
+                // de su asset de Unreal (F6.20). Se recuerdan entre sesiones.
+                PopupMenuButton<String>(
+                  tooltip:
+                      'Vista: colores por tipo, nombres, assets y haces de luz',
+                  icon: Icon(
+                    Icons.palette_outlined,
+                    color:
+                        _colorByType || _showNames || _assetView || !_showBeams
+                        ? palette.accent
+                        : palette.textSecondary,
+                  ),
+                  itemBuilder: (_) => [
+                    CheckedPopupMenuItem(
+                      value: 'types',
+                      checked: _colorByType,
+                      child: const Text('Colorear por tipo, con leyenda'),
+                    ),
+                    CheckedPopupMenuItem(
+                      value: 'names',
+                      checked: _showNames,
+                      child: const Text('Nombres'),
+                    ),
+                    CheckedPopupMenuItem(
+                      value: 'assets',
+                      checked: _assetView,
+                      child: const Text('Vista de assets de Unreal'),
+                    ),
+                    CheckedPopupMenuItem(
+                      value: 'beams',
+                      checked: _showBeams,
+                      child: const Text('Haces de luz'),
+                    ),
+                  ],
+                  onSelected: (v) {
+                    switch (v) {
+                      case 'types':
+                        setState(() => _colorByType = !_colorByType);
+                        _setViewPref(_colorByTypeKey, _colorByType);
+                      case 'names':
+                        setState(() => _showNames = !_showNames);
+                        _setViewPref(_namesKey, _showNames);
+                      case 'assets':
+                        setState(() => _assetView = !_assetView);
+                        _setViewPref(_assetViewKey, _assetView);
+                      case 'beams':
+                        setState(() => _showBeams = !_showBeams);
+                        _setViewPref(_beamsKey, _showBeams);
+                    }
+                  },
+                ),
+                IconButton(
+                  tooltip: 'Biblioteca de Unreal: poner un asset en la planta',
+                  icon: Icon(
+                    Icons.collections_outlined,
+                    color: palette.textSecondary,
+                  ),
+                  onPressed: () => UnrealLibraryScreen.open(
+                    context,
+                    projectId: widget.projectId,
+                    onPlace: _placeFromLibrary,
                   ),
                 ),
-            ],
-          ),
-          IconButton(
-            tooltip: _wide
-                ? (_show3d ? 'Cerrar el 3D' : '3D junto a la planta')
-                : '3D',
-            icon: Icon(
-              Icons.threed_rotation,
-              color: _show3d ? palette.accent : palette.textSecondary,
-            ),
-            onPressed: _toggle3d,
-          ),
-          IconButton(
-            tooltip: 'Alzado y perfil · exportar DXF y MVR',
-            icon: Icon(
-              Icons.view_in_ar_outlined,
-              color: palette.textSecondary,
-            ),
-            onPressed: _showElevation,
-          ),
-          IconButton(
-            tooltip: _gearLabels
-                ? 'Quitar rótulos de equipo'
-                : 'Rótulos de equipo: unidad, vatios, lúmenes y leyenda',
-            icon: Icon(
-              Icons.sell_outlined,
-              color: _gearLabels ? palette.accent : palette.textSecondary,
-            ),
-            onPressed: () => setState(() => _gearLabels = !_gearLabels),
-          ),
-          // Reconocer cada elemento: colores por tipo, nombres y la imagen
-          // de su asset de Unreal (F6.20). Se recuerdan entre sesiones.
-          PopupMenuButton<String>(
-            tooltip: 'Vista: colores por tipo, nombres, assets y haces de luz',
-            icon: Icon(
-              Icons.palette_outlined,
-              color: _colorByType || _showNames || _assetView || !_showBeams
-                  ? palette.accent
-                  : palette.textSecondary,
-            ),
-            itemBuilder: (_) => [
-              CheckedPopupMenuItem(
-                value: 'types',
-                checked: _colorByType,
-                child: const Text('Colorear por tipo, con leyenda'),
-              ),
-              CheckedPopupMenuItem(
-                value: 'names',
-                checked: _showNames,
-                child: const Text('Nombres'),
-              ),
-              CheckedPopupMenuItem(
-                value: 'assets',
-                checked: _assetView,
-                child: const Text('Vista de assets de Unreal'),
-              ),
-              CheckedPopupMenuItem(
-                value: 'beams',
-                checked: _showBeams,
-                child: const Text('Haces de luz'),
-              ),
-            ],
-            onSelected: (v) {
-              switch (v) {
-                case 'types':
-                  setState(() => _colorByType = !_colorByType);
-                  _setViewPref(_colorByTypeKey, _colorByType);
-                case 'names':
-                  setState(() => _showNames = !_showNames);
-                  _setViewPref(_namesKey, _showNames);
-                case 'assets':
-                  setState(() => _assetView = !_assetView);
-                  _setViewPref(_assetViewKey, _assetView);
-                case 'beams':
-                  setState(() => _showBeams = !_showBeams);
-                  _setViewPref(_beamsKey, _showBeams);
-              }
-            },
-          ),
-          IconButton(
-            tooltip: 'Biblioteca de Unreal: poner un asset en la planta',
-            icon: Icon(
-              Icons.collections_outlined,
-              color: palette.textSecondary,
-            ),
-            onPressed: () => UnrealLibraryScreen.open(
-              context,
-              projectId: widget.projectId,
-              onPlace: _placeFromLibrary,
-            ),
-          ),
-          IconButton(
-            tooltip: 'Lista de elementos',
-            icon: Icon(
-              Icons.format_list_bulleted,
-              color: _showOutliner ? palette.accent : palette.textSecondary,
-            ),
-            onPressed: _toggleOutliner,
-          ),
-          IconButton(
-            tooltip: _exposureMap
-                ? 'Volver a los haces de luz'
-                : 'Mapa de exposición',
-            icon: Icon(
-              Icons.gradient,
-              color: _exposureMap ? palette.accent : palette.textSecondary,
-            ),
-            onPressed: () => setState(() => _exposureMap = !_exposureMap),
-          ),
-          IconButton(
-            tooltip: _showReadings
-                ? 'Ocultar lecturas de los actores'
-                : 'Mostrar lecturas de los actores',
-            icon: Icon(
-              Icons.speed_outlined,
-              color: _showReadings ? palette.accent : palette.textTertiary,
-            ),
-            onPressed: () => setState(() => _showReadings = !_showReadings),
-          ),
-          if (widget.shotId != null || _lightSetup != null)
-            IconButton(
-              tooltip: 'Sección para documentos',
-              icon: Icon(Icons.crop_free, color: palette.textSecondary),
-              onPressed: _pickDocumentSection,
-            ),
-          IconButton(
-            tooltip: 'Guardar',
-            icon: Icon(Icons.save_outlined, color: palette.textSecondary),
-            onPressed: _saveCurrentPlan,
-          ),
-          IconButton(
-            tooltip: 'Atajos',
-            icon: Icon(Icons.keyboard_outlined, color: palette.textSecondary),
-            onPressed: _showShortcuts,
-          ),
-          ScreenSettingsButton(
-            sectionId: SettingsSectionIds.cameraPlan,
-            projectId: widget.projectId,
-          ),
-          IconButton(
-            tooltip: 'Encajar todo (${modKey}0)',
-            icon: Icon(Icons.fit_screen_outlined, color: palette.textSecondary),
-            onPressed: _fitAll,
-          ),
-          IconButton(
-            tooltip: 'Alejar',
-            icon: Icon(Icons.remove, color: palette.textSecondary),
-            onPressed: () => _zoomBy(-0.1),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            child: ListenableBuilder(
-              listenable: _canvasView,
-              builder: (context, _) => Text(
-                '${(_scale * 100).round()}%',
-                style: AppTypography.caption(palette),
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Acercar',
-            icon: Icon(Icons.add, color: palette.textSecondary),
-            onPressed: () => _zoomBy(0.1),
-          ),
-        ],
+                IconButton(
+                  tooltip: 'Lista de elementos',
+                  icon: Icon(
+                    Icons.format_list_bulleted,
+                    color: _showOutliner
+                        ? palette.accent
+                        : palette.textSecondary,
+                  ),
+                  onPressed: _toggleOutliner,
+                ),
+                IconButton(
+                  tooltip: _exposureMap
+                      ? 'Volver a los haces de luz'
+                      : 'Mapa de exposición',
+                  icon: Icon(
+                    Icons.gradient,
+                    color: _exposureMap
+                        ? palette.accent
+                        : palette.textSecondary,
+                  ),
+                  onPressed: () => setState(() => _exposureMap = !_exposureMap),
+                ),
+                IconButton(
+                  tooltip: _showReadings
+                      ? 'Ocultar lecturas de los actores'
+                      : 'Mostrar lecturas de los actores',
+                  icon: Icon(
+                    Icons.speed_outlined,
+                    color: _showReadings
+                        ? palette.accent
+                        : palette.textTertiary,
+                  ),
+                  onPressed: () =>
+                      setState(() => _showReadings = !_showReadings),
+                ),
+                if (widget.shotId != null || _lightSetup != null)
+                  IconButton(
+                    tooltip: 'Sección para documentos',
+                    icon: Icon(Icons.crop_free, color: palette.textSecondary),
+                    onPressed: _pickDocumentSection,
+                  ),
+                IconButton(
+                  tooltip: 'Guardar',
+                  icon: Icon(Icons.save_outlined, color: palette.textSecondary),
+                  onPressed: _saveCurrentPlan,
+                ),
+                IconButton(
+                  tooltip: 'Atajos',
+                  icon: Icon(
+                    Icons.keyboard_outlined,
+                    color: palette.textSecondary,
+                  ),
+                  onPressed: _showShortcuts,
+                ),
+                ScreenSettingsButton(
+                  sectionId: SettingsSectionIds.cameraPlan,
+                  projectId: widget.projectId,
+                ),
+                IconButton(
+                  tooltip: 'Encajar todo (${modKey}0)',
+                  icon: Icon(
+                    Icons.fit_screen_outlined,
+                    color: palette.textSecondary,
+                  ),
+                  onPressed: _fitAll,
+                ),
+                IconButton(
+                  tooltip: 'Alejar',
+                  icon: Icon(Icons.remove, color: palette.textSecondary),
+                  onPressed: () => _zoomBy(-0.1),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: ListenableBuilder(
+                    listenable: _canvasView,
+                    builder: (context, _) => Text(
+                      '${(_scale * 100).round()}%',
+                      style: AppTypography.caption(palette),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Acercar',
+                  icon: Icon(Icons.add, color: palette.textSecondary),
+                  onPressed: () => _zoomBy(0.1),
+                ),
+              ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _LiveLock(
               device: blocker,
               child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (_wide)
-                  PlanPalette(
-                    tool: _tool,
-                    onTool: _setTool,
-                    onAddCamera: _addCamera,
-                    onAddActor: () => _addActor(_nextActorColor),
-                    cast: _paletteCast,
-                    onAddCast: (name, color) => _addActor(color, name: name),
-                    scriptProposals: _scriptProposals,
-                    castGroups: [
-                      for (final g in _roster.settings.groups)
-                        (
-                          g.name,
-                          [for (final m in _roster.membersOf(g)) m.color],
-                        ),
-                    ],
-                    onAddCastGroup: _addCastGroup,
-                    onManageCast: _manageCast,
-                    onAddLight: _addLight,
-                    onAddStreetLamp: _addStreetLamp,
-                    onAddPalio: _addPalio,
-                    onAddProp: _addProp,
-                    onAddBox: _addBox,
-                    onAddMeter: _addMeter,
-                    projectLights: _gear.lights,
-                    onAddCatalogLight: _addCatalogLight,
-                    onQuickAddLight: _quickAddLight,
-                    catalogLights: _gear.catalogLights,
-                    onAddArchitecture: _addArchitecture,
-                    onAddHall: _openHallBuilder,
-                    wallsToEnvironment:
-                        _linkedSet != null && _linkedSite != null
-                        ? _wallsToEnvironment
-                        : null,
-                    onWallsToEnvironment: (v) =>
-                        setState(() => _wallsToEnvironment = v),
-                  ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      if (_guideStep != null) _buildGuideBar(),
-                      _buildLayerBar(palette),
-                      if (_calibrating != null)
-                        _Notice(
-                          palette: palette,
-                          icon: Icons.straighten,
-                          text: _calibrationPoints.isEmpty
-                              ? 'Terreno a escala: toca un extremo de algo '
-                                    'cuya medida conozcas (una calle, una '
-                                    'fachada).'
-                              : 'Ahora el otro extremo.',
-                          actionLabel: 'Cancelar',
-                          onAction: () => setState(() {
-                            _calibrating = null;
-                            _calibrationPoints.clear();
-                          }),
-                        )
-                      else if (_zoneEditRect != null)
-                        _Notice(
-                          palette: palette,
-                          icon: Icons.crop_free,
-                          text:
-                              'Arrastra las esquinas para cambiar el tamaño '
-                              'de la zona, o el interior para moverla.',
-                          actionLabel: 'Listo',
-                          onAction: _finishZoneEdit,
-                        )
-                      else if (_tool.drawsSegment)
-                        _Notice(
-                          palette: palette,
-                          icon: _tool.icon,
-                          text:
-                              '${_tool.label}: toca punto a punto para '
-                              'encadenar tramos, o arrastra para uno solo. '
-                              'Doble toque o Esc para terminar.',
-                          actionLabel: 'Terminar',
-                          onAction: () => _setTool(PlanTool.select),
-                        )
-                      else if (_tool == PlanTool.measure)
-                        _Notice(
-                          palette: palette,
-                          icon: Icons.straighten,
-                          text: 'Medir: arrastra entre dos puntos.',
-                          actionLabel: 'Terminar',
-                          onAction: () => _setTool(PlanTool.select),
-                        )
-                      else if (_zoneMode)
-                        _Notice(
-                          palette: palette,
-                          icon: Icons.crop_free,
-                          text:
-                              'Arrastra sobre el plano para marcar la zona de '
-                              '«${(_zoneTarget ?? _linkedSet)?.locationName ?? ''}».',
-                          actionLabel: 'Cancelar',
-                          onAction: () => setState(() {
-                            _zoneMode = false;
-                            _zoneDraft = null;
-                            _zoneTarget = null;
-                          }),
-                        )
-                      else if (_misplaced.isNotEmpty)
-                        _Notice(
-                          palette: palette,
-                          icon: Icons.layers_outlined,
-                          text:
-                              'Hay cámaras o actores guardados en el entorno. '
-                              'Pásalos a su capa para vincularlos a planos.',
-                          actionLabel: 'Ordenar capas',
-                          onAction: _tidyLayers,
-                        )
-                      else if (!_annotationController.document.isEmpty)
-                        _Notice(
-                          palette: palette,
-                          icon: Icons.draw_outlined,
-                          text:
-                              'Esta planta tiene un dibujo a mano encima. Los '
-                              'bocetos a mano van ahora en su propio lienzo.',
-                          actionLabel: 'Pasar a boceto…',
-                          onAction: _resolveOldDrawing,
-                        )
-                      else if (_linkedSet != null &&
-                          _linkedSite != null &&
-                          _setZone == null)
-                        _Notice(
-                          palette: palette,
-                          icon: Icons.crop_free,
-                          text:
-                              'Este set aún no tiene zona en el plano de '
-                              '«${_linkedSite!.name}».',
-                          actionLabel: 'Marcar zona',
-                          onAction: () => setState(() {
-                            _zoneMode = true;
-                            _selected = null;
-                          }),
-                        )
-                      else if (_lightSetup case final sketch?
-                          when LightSetupKind.isSketch(sketch))
-                        _Notice(
-                          palette: palette,
-                          icon: Icons.verified_outlined,
-                          text: 'Esto es un boceto: no lleva planos.',
-                          actionLabel: 'Hacer planta oficial…',
-                          onAction: _promoteSketch,
-                        ),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _stripDropTarget(LayoutBuilder(
-                                builder: (context, constraints) {
-                                  _canvasSize = constraints.biggest;
-                                  final fit = _pendingFit;
-                                  if (fit != null) {
-                                    _pendingFit = null;
-                                    WidgetsBinding.instance
-                                        .addPostFrameCallback((_) {
-                                          if (mounted) _fitTo(fit);
-                                        });
-                                  }
-                                  return ClipRect(
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        IgnorePointer(
-                                          ignoring: false,
-                                          child: CallbackShortcuts(
-                                            bindings: _shortcuts,
-                                            child: Focus(
-                                              focusNode: _canvasFocus,
-                                              autofocus: true,
-                                              child: MouseRegion(
-                                                // Al entrar con el ratón, el
-                                                // lienzo coge el foco (salvo
-                                                // que se esté escribiendo):
-                                                // así los atajos responden.
-                                                onEnter: (_) {
-                                                  final focused = FocusManager
-                                                      .instance
-                                                      .primaryFocus
-                                                      ?.context
-                                                      ?.widget;
-                                                  if (focused
-                                                      is! EditableText) {
-                                                    _canvasFocus.requestFocus();
-                                                  }
-                                                },
-                                                cursor: _tool == PlanTool.select
-                                                    ? MouseCursor.defer
-                                                    : SystemMouseCursors
-                                                          .precise,
-                                                onHover: (e) {
-                                                  if (_tool.drawsSegment &&
-                                                      _segmentStart != null) {
-                                                    setState(
-                                                      () => _segmentHover =
-                                                          _snapSegmentPoint(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_wide)
+                    PlanPalette(
+                      tool: _tool,
+                      onTool: _setTool,
+                      onAddCamera: _addCamera,
+                      onAddActor: () => _addActor(_nextActorColor),
+                      cast: _paletteCast,
+                      onAddCast: (name, color) => _addActor(color, name: name),
+                      scriptProposals: _scriptProposals,
+                      castGroups: [
+                        for (final g in _roster.settings.groups)
+                          (
+                            g.name,
+                            [for (final m in _roster.membersOf(g)) m.color],
+                          ),
+                      ],
+                      onAddCastGroup: _addCastGroup,
+                      onManageCast: _manageCast,
+                      onAddLight: _addLight,
+                      onAddStreetLamp: _addStreetLamp,
+                      onAddPalio: _addPalio,
+                      onAddProp: _addProp,
+                      onAddBox: _addBox,
+                      onAddMeter: _addMeter,
+                      projectLights: _gear.lights,
+                      onAddCatalogLight: _addCatalogLight,
+                      onQuickAddLight: _quickAddLight,
+                      catalogLights: _gear.catalogLights,
+                      onAddArchitecture: _addArchitecture,
+                      onAddHall: _openHallBuilder,
+                      wallsToEnvironment:
+                          _linkedSet != null && _linkedSite != null
+                          ? _wallsToEnvironment
+                          : null,
+                      onWallsToEnvironment: (v) =>
+                          setState(() => _wallsToEnvironment = v),
+                    ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        if (_guideStep != null) _buildGuideBar(),
+                        _buildLayerBar(palette),
+                        if (_calibrating != null)
+                          _Notice(
+                            palette: palette,
+                            icon: Icons.straighten,
+                            text: _calibrationPoints.isEmpty
+                                ? 'Terreno a escala: toca un extremo de algo '
+                                      'cuya medida conozcas (una calle, una '
+                                      'fachada).'
+                                : 'Ahora el otro extremo.',
+                            actionLabel: 'Cancelar',
+                            onAction: () => setState(() {
+                              _calibrating = null;
+                              _calibrationPoints.clear();
+                            }),
+                          )
+                        else if (_zoneEditRect != null)
+                          _Notice(
+                            palette: palette,
+                            icon: Icons.crop_free,
+                            text:
+                                'Arrastra las esquinas para cambiar el tamaño '
+                                'de la zona, o el interior para moverla.',
+                            actionLabel: 'Listo',
+                            onAction: _finishZoneEdit,
+                          )
+                        else if (_tool.drawsSegment)
+                          _Notice(
+                            palette: palette,
+                            icon: _tool.icon,
+                            text:
+                                '${_tool.label}: toca punto a punto para '
+                                'encadenar tramos, o arrastra para uno solo. '
+                                'Doble toque o Esc para terminar.',
+                            actionLabel: 'Terminar',
+                            onAction: () => _setTool(PlanTool.select),
+                          )
+                        else if (_tool == PlanTool.measure)
+                          _Notice(
+                            palette: palette,
+                            icon: Icons.straighten,
+                            text: 'Medir: arrastra entre dos puntos.',
+                            actionLabel: 'Terminar',
+                            onAction: () => _setTool(PlanTool.select),
+                          )
+                        else if (_zoneMode)
+                          _Notice(
+                            palette: palette,
+                            icon: Icons.crop_free,
+                            text:
+                                'Arrastra sobre el plano para marcar la zona de '
+                                '«${(_zoneTarget ?? _linkedSet)?.locationName ?? ''}».',
+                            actionLabel: 'Cancelar',
+                            onAction: () => setState(() {
+                              _zoneMode = false;
+                              _zoneDraft = null;
+                              _zoneTarget = null;
+                            }),
+                          )
+                        else if (_misplaced.isNotEmpty)
+                          _Notice(
+                            palette: palette,
+                            icon: Icons.layers_outlined,
+                            text:
+                                'Hay cámaras o actores guardados en el entorno. '
+                                'Pásalos a su capa para vincularlos a planos.',
+                            actionLabel: 'Ordenar capas',
+                            onAction: _tidyLayers,
+                          )
+                        else if (!_annotationController.document.isEmpty)
+                          _Notice(
+                            palette: palette,
+                            icon: Icons.draw_outlined,
+                            text:
+                                'Esta planta tiene un dibujo a mano encima. Los '
+                                'bocetos a mano van ahora en su propio lienzo.',
+                            actionLabel: 'Pasar a boceto…',
+                            onAction: _resolveOldDrawing,
+                          )
+                        else if (_linkedSet != null &&
+                            _linkedSite != null &&
+                            _setZone == null)
+                          _Notice(
+                            palette: palette,
+                            icon: Icons.crop_free,
+                            text:
+                                'Este set aún no tiene zona en el plano de '
+                                '«${_linkedSite!.name}».',
+                            actionLabel: 'Marcar zona',
+                            onAction: () => setState(() {
+                              _zoneMode = true;
+                              _selected = null;
+                            }),
+                          )
+                        else if (_lightSetup case final sketch?
+                            when LightSetupKind.isSketch(sketch))
+                          _Notice(
+                            palette: palette,
+                            icon: Icons.verified_outlined,
+                            text: 'Esto es un boceto: no lleva planos.',
+                            actionLabel: 'Hacer planta oficial…',
+                            onAction: _promoteSketch,
+                          ),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _stripDropTarget(
+                                  LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      _canvasSize = constraints.biggest;
+                                      final fit = _pendingFit;
+                                      if (fit != null) {
+                                        _pendingFit = null;
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                              if (mounted) _fitTo(fit);
+                                            });
+                                      }
+                                      return ClipRect(
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            IgnorePointer(
+                                              ignoring: false,
+                                              child: CallbackShortcuts(
+                                                bindings: _shortcuts,
+                                                child: Focus(
+                                                  focusNode: _canvasFocus,
+                                                  autofocus: true,
+                                                  child: MouseRegion(
+                                                    // Al entrar con el ratón, el
+                                                    // lienzo coge el foco (salvo
+                                                    // que se esté escribiendo):
+                                                    // así los atajos responden.
+                                                    onEnter: (_) {
+                                                      final focused =
+                                                          FocusManager
+                                                              .instance
+                                                              .primaryFocus
+                                                              ?.context
+                                                              ?.widget;
+                                                      if (focused
+                                                          is! EditableText) {
+                                                        _canvasFocus
+                                                            .requestFocus();
+                                                      }
+                                                    },
+                                                    cursor:
+                                                        _tool == PlanTool.select
+                                                        ? MouseCursor.defer
+                                                        : SystemMouseCursors
+                                                              .precise,
+                                                    onHover: (e) {
+                                                      if (_tool.drawsSegment &&
+                                                          _segmentStart !=
+                                                              null) {
+                                                        setState(
+                                                          () => _segmentHover =
+                                                              _snapSegmentPoint(
+                                                                _toCanvasCoords(
+                                                                  e.localPosition,
+                                                                ),
+                                                              ),
+                                                        );
+                                                      }
+                                                    },
+                                                    child: Listener(
+                                                      onPointerHover: (e) =>
+                                                          _cursor =
+                                                              _toCanvasCoords(
+                                                                e.localPosition,
+                                                              ),
+                                                      onPointerDown: (e) {
+                                                        _cursor =
                                                             _toCanvasCoords(
                                                               e.localPosition,
-                                                            ),
-                                                          ),
-                                                    );
-                                                  }
-                                                },
-                                                child: Listener(
-                                                  onPointerHover: (e) =>
-                                                      _cursor = _toCanvasCoords(
-                                                        e.localPosition,
-                                                      ),
-                                                  onPointerDown: (e) {
-                                                    _cursor = _toCanvasCoords(
-                                                      e.localPosition,
-                                                    );
-                                                    if (e.buttons ==
-                                                        kMiddleMouseButton) {
-                                                      _middlePan = true;
-                                                    } else if (e.buttons ==
-                                                        kSecondaryMouseButton) {
-                                                      _canvasFocus
-                                                          .requestFocus();
-                                                      _rightDown = e.position;
-                                                      _rightDownCanvas =
-                                                          _cursor;
-                                                      _rightPanned = false;
-                                                    }
-                                                  },
-                                                  onPointerMove: (e) {
-                                                    if (_middlePan) {
-                                                      _canvasOffset += e.delta;
-                                                    } else if (_rightDown !=
-                                                            null &&
-                                                        e.buttons ==
+                                                            );
+                                                        if (e.buttons ==
+                                                            kMiddleMouseButton) {
+                                                          _middlePan = true;
+                                                        } else if (e.buttons ==
                                                             kSecondaryMouseButton) {
-                                                      // Más de 4 px: es un
-                                                      // arrastre, no un clic.
-                                                      if (!_rightPanned &&
-                                                          (e.position -
-                                                                      _rightDown!)
-                                                                  .distance >
-                                                              4) {
-                                                        _rightPanned = true;
-                                                      }
-                                                      if (_rightPanned) {
-                                                        _canvasOffset +=
-                                                            e.delta;
-                                                      }
-                                                    }
-                                                  },
-                                                  onPointerUp: (e) {
-                                                    _middlePan = false;
-                                                    final down = _rightDown;
-                                                    final at = _rightDownCanvas;
-                                                    _rightDown = null;
-                                                    if (down != null &&
-                                                        at != null &&
-                                                        !_rightPanned) {
-                                                      _showContextMenu(
-                                                        down,
-                                                        at,
-                                                      );
-                                                    }
-                                                    _rightPanned = false;
-                                                  },
-                                                  onPointerCancel: (_) {
-                                                    _middlePan = false;
-                                                    _rightDown = null;
-                                                    _rightPanned = false;
-                                                  },
-                                                  // La rueda del ratón: zoom
-                                                  // hacia el cursor.
-                                                  onPointerSignal: (e) {
-                                                    if (e
-                                                        is PointerScrollEvent) {
-                                                      GestureBinding
-                                                          .instance
-                                                          .pointerSignalResolver
-                                                          .register(
-                                                            e,
-                                                            (_) => _zoomAt(
-                                                              e.localPosition,
-                                                              math.exp(
-                                                                -e.scrollDelta.dy /
-                                                                    400,
-                                                              ),
+                                                          _canvasFocus
+                                                              .requestFocus();
+                                                          _rightDown =
+                                                              e.position;
+                                                          _rightDownCanvas =
+                                                              _cursor;
+                                                          _rightPanned = false;
+                                                        }
+                                                      },
+                                                      onPointerMove: (e) {
+                                                        if (_middlePan) {
+                                                          _canvasOffset +=
+                                                              e.delta;
+                                                        } else if (_rightDown !=
+                                                                null &&
+                                                            e.buttons ==
+                                                                kSecondaryMouseButton) {
+                                                          // Más de 4 px: es un
+                                                          // arrastre, no un clic.
+                                                          if (!_rightPanned &&
+                                                              (e.position -
+                                                                          _rightDown!)
+                                                                      .distance >
+                                                                  4) {
+                                                            _rightPanned = true;
+                                                          }
+                                                          if (_rightPanned) {
+                                                            _canvasOffset +=
+                                                                e.delta;
+                                                          }
+                                                        }
+                                                      },
+                                                      onPointerUp: (e) {
+                                                        _middlePan = false;
+                                                        final down = _rightDown;
+                                                        final at =
+                                                            _rightDownCanvas;
+                                                        _rightDown = null;
+                                                        if (down != null &&
+                                                            at != null &&
+                                                            !_rightPanned) {
+                                                          _showContextMenu(
+                                                            down,
+                                                            at,
+                                                          );
+                                                        }
+                                                        _rightPanned = false;
+                                                      },
+                                                      onPointerCancel: (_) {
+                                                        _middlePan = false;
+                                                        _rightDown = null;
+                                                        _rightPanned = false;
+                                                      },
+                                                      // La rueda del ratón: zoom
+                                                      // hacia el cursor.
+                                                      onPointerSignal: (e) {
+                                                        if (e
+                                                            is PointerScrollEvent) {
+                                                          GestureBinding
+                                                              .instance
+                                                              .pointerSignalResolver
+                                                              .register(
+                                                                e,
+                                                                (_) => _zoomAt(
+                                                                  e.localPosition,
+                                                                  math.exp(
+                                                                    -e.scrollDelta.dy /
+                                                                        400,
+                                                                  ),
+                                                                ),
+                                                              );
+                                                        }
+                                                      },
+                                                      // El trackpad: dos dedos
+                                                      // mueven la vista y el
+                                                      // pellizco hace zoom.
+                                                      onPointerPanZoomStart:
+                                                          (_) =>
+                                                              _pinchScale = 1,
+                                                      onPointerPanZoomUpdate: (e) {
+                                                        if (HardwareKeyboard
+                                                                .instance
+                                                                .isMetaPressed ||
+                                                            HardwareKeyboard
+                                                                .instance
+                                                                .isControlPressed) {
+                                                          _zoomAt(
+                                                            e.localPosition,
+                                                            math.exp(
+                                                              -e.localPanDelta.dy /
+                                                                  300,
                                                             ),
                                                           );
-                                                    }
-                                                  },
-                                                  // El trackpad: dos dedos
-                                                  // mueven la vista y el
-                                                  // pellizco hace zoom.
-                                                  onPointerPanZoomStart: (_) =>
-                                                      _pinchScale = 1,
-                                                  onPointerPanZoomUpdate: (e) {
-                                                    if (HardwareKeyboard
-                                                            .instance
-                                                            .isMetaPressed ||
-                                                        HardwareKeyboard
-                                                            .instance
-                                                            .isControlPressed) {
-                                                      _zoomAt(
-                                                        e.localPosition,
-                                                        math.exp(
-                                                          -e.localPanDelta.dy /
-                                                              300,
+                                                          return;
+                                                        }
+                                                        if (e.scale !=
+                                                            _pinchScale) {
+                                                          _zoomAt(
+                                                            e.localPosition,
+                                                            e.scale /
+                                                                _pinchScale,
+                                                          );
+                                                          _pinchScale = e.scale;
+                                                        }
+                                                        _canvasOffset +=
+                                                            e.localPanDelta;
+                                                      },
+                                                      child: GestureDetector(
+                                                        // El trackpad no arrastra
+                                                        // elementos con dos dedos:
+                                                        // eso mueve la vista.
+                                                        supportedDevices: const {
+                                                          ui
+                                                              .PointerDeviceKind
+                                                              .touch,
+                                                          ui
+                                                              .PointerDeviceKind
+                                                              .mouse,
+                                                          ui
+                                                              .PointerDeviceKind
+                                                              .stylus,
+                                                          ui
+                                                              .PointerDeviceKind
+                                                              .invertedStylus,
+                                                        },
+                                                        // El arrastre empieza donde se tocó, no donde se
+                                                        // reconoció: si no, las asas pequeñas se escapan
+                                                        // en pantalla táctil.
+                                                        dragStartBehavior:
+                                                            DragStartBehavior
+                                                                .down,
+                                                        onPanStart: _onPanStart,
+                                                        onPanUpdate:
+                                                            _onPanUpdate,
+                                                        onPanEnd: _onPanEnd,
+                                                        onTapDown: _onTapCanvas,
+                                                        onDoubleTapDown:
+                                                            _onDoubleTapCanvas,
+                                                        // Un solo sitio repinta en
+                                                        // cada fotograma: el lienzo.
+                                                        child: RepaintBoundary(
+                                                          child: ListenableBuilder(
+                                                            listenable:
+                                                                _canvasTick,
+                                                            builder: (context, _) => CustomPaint(
+                                                              size: Size(
+                                                                constraints
+                                                                    .maxWidth,
+                                                                constraints
+                                                                    .maxHeight,
+                                                              ),
+                                                              painter: CameraPlanPainter(
+                                                                viewPosition:
+                                                                    _shownPosition,
+                                                                images:
+                                                                    _imageDraws,
+                                                                elements:
+                                                                    _visibleElements,
+                                                                inheritedElements:
+                                                                    _showOtherCameras
+                                                                    ? _otherCameras
+                                                                    : const [],
+                                                                ambient:
+                                                                    _lightSetup ==
+                                                                        null
+                                                                    ? null
+                                                                    : _effectiveAmbient,
+                                                                zones:
+                                                                    _zoneDraws,
+                                                                alsoSelected:
+                                                                    _multi,
+                                                                rotating:
+                                                                    _isRotating,
+                                                                marquee:
+                                                                    _marquee,
+                                                                lightMap:
+                                                                    _lightMap,
+                                                                interacting:
+                                                                    _dragDirty,
+                                                                selectedRoom:
+                                                                    _selectedRoom,
+                                                                segmentPreview:
+                                                                    _segmentStart !=
+                                                                            null &&
+                                                                        _segmentHover !=
+                                                                            null
+                                                                    ? (
+                                                                        from:
+                                                                            _segmentStart!,
+                                                                        to: _segmentHover!,
+                                                                        kind:
+                                                                            _segmentKind,
+                                                                      )
+                                                                    : null,
+                                                                measure:
+                                                                    _measure,
+                                                                zoneHandles:
+                                                                    _zoneEditRect,
+                                                                metersPerUnit:
+                                                                    _metersPerUnit,
+                                                                exposure:
+                                                                    _exposure,
+                                                                targetStop:
+                                                                    _targetStop,
+                                                                showReadings:
+                                                                    _showReadings,
+                                                                exposureMap:
+                                                                    _exposureMap,
+                                                                lightView:
+                                                                    _lightView,
+                                                                gearLabels:
+                                                                    _gearLabels,
+                                                                colorByType:
+                                                                    _colorByType,
+                                                                showNames:
+                                                                    _showNames,
+                                                                assetView:
+                                                                    _assetView,
+                                                                showBeams:
+                                                                    _showBeams,
+                                                                thumbOf:
+                                                                    _thumbOf,
+                                                                selectedElement:
+                                                                    _selected,
+                                                                selectedPathIndex:
+                                                                    _selectedPathIndex,
+                                                                view:
+                                                                    _canvasView,
+                                                                palette:
+                                                                    palette,
+                                                                backgroundImage:
+                                                                    _backgroundImage,
+                                                                backgroundRect:
+                                                                    _backgroundRect,
+                                                                backgroundOpacity:
+                                                                    _backgroundOpacity,
+                                                              ),
+                                                              child: Container(
+                                                                color: Colors
+                                                                    .transparent,
+                                                              ),
+                                                            ),
+                                                          ),
                                                         ),
-                                                      );
-                                                      return;
-                                                    }
-                                                    if (e.scale !=
-                                                        _pinchScale) {
-                                                      _zoomAt(
-                                                        e.localPosition,
-                                                        e.scale / _pinchScale,
-                                                      );
-                                                      _pinchScale = e.scale;
-                                                    }
-                                                    _canvasOffset +=
-                                                        e.localPanDelta;
-                                                  },
-                                                  child: GestureDetector(
-                                                    // El trackpad no arrastra
-                                                    // elementos con dos dedos:
-                                                    // eso mueve la vista.
-                                                    supportedDevices: const {
-                                                      ui
-                                                          .PointerDeviceKind
-                                                          .touch,
-                                                      ui
-                                                          .PointerDeviceKind
-                                                          .mouse,
-                                                      ui
-                                                          .PointerDeviceKind
-                                                          .stylus,
-                                                      ui
-                                                          .PointerDeviceKind
-                                                          .invertedStylus,
-                                                    },
-                                                    // El arrastre empieza donde se tocó, no donde se
-                                                    // reconoció: si no, las asas pequeñas se escapan
-                                                    // en pantalla táctil.
-                                                    dragStartBehavior:
-                                                        DragStartBehavior.down,
-                                                    onPanStart: _onPanStart,
-                                                    onPanUpdate: _onPanUpdate,
-                                                    onPanEnd: _onPanEnd,
-                                                    onTapDown: _onTapCanvas,
-                                                    onDoubleTapDown:
-                                                        _onDoubleTapCanvas,
-                                                    // Un solo sitio repinta en
-                                                    // cada fotograma: el lienzo.
-                                                    child: RepaintBoundary(
-                                                    child: ListenableBuilder(
-                                                    listenable: _canvasTick,
-                                                    builder: (context, _) => CustomPaint(
-                                                      size: Size(
-                                                        constraints.maxWidth,
-                                                        constraints.maxHeight,
                                                       ),
-                                                      painter: CameraPlanPainter(
-                                                        viewPosition:
-                                                            _shownPosition,
-                                                        images: _imageDraws,
-                                                        elements:
-                                                            _visibleElements,
-                                                        inheritedElements:
-                                                            _showOtherCameras
-                                                            ? _otherCameras
-                                                            : const [],
-                                                        ambient:
-                                                            _lightSetup == null
-                                                            ? null
-                                                            : _effectiveAmbient,
-                                                        zones: _zoneDraws,
-                                                        alsoSelected: _multi,
-                                                        rotating: _isRotating,
-                                                        marquee: _marquee,
-                                                        lightMap: _lightMap,
-                                                        interacting:
-                                                            _dragDirty,
-                                                        selectedRoom:
-                                                            _selectedRoom,
-                                                        segmentPreview:
-                                                            _segmentStart !=
-                                                                    null &&
-                                                                _segmentHover !=
-                                                                    null
-                                                            ? (
-                                                                from:
-                                                                    _segmentStart!,
-                                                                to: _segmentHover!,
-                                                                kind:
-                                                                    _segmentKind,
-                                                              )
-                                                            : null,
-                                                        measure: _measure,
-                                                        zoneHandles:
-                                                            _zoneEditRect,
-                                                        metersPerUnit:
-                                                            _metersPerUnit,
-                                                        exposure: _exposure,
-                                                        targetStop: _targetStop,
-                                                        showReadings:
-                                                            _showReadings,
-                                                        exposureMap:
-                                                            _exposureMap,
-                                                        lightView: _lightView,
-                                                        gearLabels:
-                                                            _gearLabels,
-                                                        colorByType:
-                                                            _colorByType,
-                                                        showNames: _showNames,
-                                                        assetView: _assetView,
-                                                        showBeams: _showBeams,
-                                                        thumbOf: _thumbOf,
-                                                        selectedElement:
-                                                            _selected,
-                                                        selectedPathIndex:
-                                                            _selectedPathIndex,
-                                                        view: _canvasView,
-                                                        palette: palette,
-                                                        backgroundImage:
-                                                            _backgroundImage,
-                                                        backgroundRect:
-                                                            _backgroundRect,
-                                                        backgroundOpacity:
-                                                            _backgroundOpacity,
-                                                      ),
-                                                      child: Container(
-                                                        color:
-                                                            Colors.transparent,
-                                                      ),
-                                                    ))),
+                                                    ),
                                                   ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        ),
-                                        // Un dibujo a mano de antes se ve,
-                                        // pero ya no se dibuja encima de la
-                                        // planta: va a un boceto aparte.
-                                        IgnorePointer(
-                                          child: ListenableBuilder(
-                                            listenable: _canvasView,
-                                            builder: (context, _) =>
-                                                AnnotationCanvas(
-                                                  controller:
-                                                      _annotationController,
-                                                  enabled: false,
-                                                  tool: AnnotationToolType.pen,
-                                                  color: const Color(
-                                                    0xFF007AFF,
-                                                  ),
-                                                  width: 6,
-                                                  viewport: AnnotationViewport(
-                                                    documentSize:
-                                                        _annotationDocumentSize,
-                                                    offset: _canvasOffset,
-                                                    scale: _scale,
-                                                  ),
-                                                  onChanged: _saveAnnotations,
+                                            // Un dibujo a mano de antes se ve,
+                                            // pero ya no se dibuja encima de la
+                                            // planta: va a un boceto aparte.
+                                            IgnorePointer(
+                                              child: ListenableBuilder(
+                                                listenable: _canvasView,
+                                                builder: (context, _) =>
+                                                    AnnotationCanvas(
+                                                      controller:
+                                                          _annotationController,
+                                                      enabled: false,
+                                                      tool: AnnotationToolType
+                                                          .pen,
+                                                      color: const Color(
+                                                        0xFF007AFF,
+                                                      ),
+                                                      width: 6,
+                                                      viewport: AnnotationViewport(
+                                                        documentSize:
+                                                            _annotationDocumentSize,
+                                                        offset: _canvasOffset,
+                                                        scale: _scale,
+                                                      ),
+                                                      onChanged:
+                                                          _saveAnnotations,
+                                                    ),
+                                              ),
+                                            ),
+                                            if (_selectedImage
+                                                case final image?)
+                                              Positioned(
+                                                top: 8,
+                                                left: 8,
+                                                right: 8,
+                                                child: Center(
+                                                  child: _imageToolbar(image),
                                                 ),
-                                          ),
+                                              ),
+                                          ],
                                         ),
-                                        if (_selectedImage case final image?)
-                                          Positioned(
-                                            top: 8,
-                                            left: 8,
-                                            right: 8,
-                                            child: Center(
-                                              child: _imageToolbar(image),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                              if (_wide && _showOutliner) ...[
+                                Container(width: 1, color: palette.border),
+                                SizedBox(
+                                  width: 300,
+                                  child: _outliner(
+                                    onClose: () =>
+                                        setState(() => _showOutliner = false),
+                                  ),
+                                ),
+                              ],
+                              if (_wide && _show3d) ...[
+                                // El borde se arrastra para ensanchar el 3D.
+                                MouseRegion(
+                                  cursor: SystemMouseCursors.resizeColumn,
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onHorizontalDragUpdate: (d) => setState(
+                                      () => _view3dWidth =
+                                          (_view3dWidth - d.delta.dx).clamp(
+                                            360.0,
+                                            math.max(
+                                              360.0,
+                                              MediaQuery.sizeOf(context).width *
+                                                  0.7,
                                             ),
                                           ),
-                                      ],
                                     ),
-                                  );
-                                },
-                              )),
-                            ),
-                            if (_wide && _showOutliner) ...[
-                              Container(width: 1, color: palette.border),
-                              SizedBox(
-                                width: 300,
-                                child: _outliner(
-                                  onClose: () =>
-                                      setState(() => _showOutliner = false),
-                                ),
-                              ),
-                            ],
-                            if (_wide && _show3d) ...[
-                              // El borde se arrastra para ensanchar el 3D.
-                              MouseRegion(
-                                cursor: SystemMouseCursors.resizeColumn,
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onHorizontalDragUpdate: (d) => setState(
-                                    () => _view3dWidth =
-                                        (_view3dWidth - d.delta.dx).clamp(
-                                          360.0,
-                                          math.max(
-                                            360.0,
-                                            MediaQuery.sizeOf(context).width *
-                                                0.7,
-                                          ),
-                                        ),
-                                  ),
-                                  child: Container(
-                                    width: 6,
-                                    color: palette.border,
+                                    child: Container(
+                                      width: 6,
+                                      color: palette.border,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              SizedBox(
-                                width: _view3dWidth,
-                                child: Plan3dView(
-                                  elements: _visibleElements,
-                                  metersPerUnit: _metersPerUnit,
-                                  name: _planName,
-                                  selected: _selected,
-                                  onSelect: _selectFrom3d,
-                                  ambient: _lightSetup == null
-                                      ? null
-                                      : _effectiveAmbient,
-                                  environment: _environment,
-                                  onChanged: _changedFrom3d,
-                                  onExpand: _open3dScreen,
-                                  onClose: _toggle3d,
-                                  unrealWorld: _unrealWorld,
-                                  onUnrealCapture: widget.shotId == null
-                                      ? null
-                                      : _saveUnrealCapture,
-                                  onOpenUnreal: _openInUnreal,
+                                SizedBox(
+                                  width: _view3dWidth,
+                                  child: Plan3dView(
+                                    elements: _visibleElements,
+                                    metersPerUnit: _metersPerUnit,
+                                    name: _planName,
+                                    selected: _selected,
+                                    onSelect: _selectFrom3d,
+                                    ambient: _lightSetup == null
+                                        ? null
+                                        : _effectiveAmbient,
+                                    environment: _environment,
+                                    onChanged: _changedFrom3d,
+                                    onExpand: _open3dScreen,
+                                    onClose: _toggle3d,
+                                    unrealWorld: _unrealWorld,
+                                    onUnrealCapture: widget.shotId == null
+                                        ? null
+                                        : _saveUnrealCapture,
+                                    onOpenUnreal: _openInUnreal,
+                                    projectId: widget.projectId,
+                                    onScanTop: _addScanTop,
+                                    onCapture: _saveCapture,
+                                    onRoom: _saveRoom,
+                                    exposure: _exposure,
+                                    stop: _targetStop,
+                                    navTarget: _navTarget,
+                                    onNavigate: _navigateFrom3d,
+                                    lookThrough: _lookThrough,
+                                    editing: _editing3d,
+                                    onCameraStill: widget.shotId == null
+                                        ? null
+                                        : _saveCameraStill,
+                                  ),
+                                ),
+                              ],
+                              if (_selected != null)
+                                _ElementPanel(
+                                  palette: palette,
+                                  element: _selected!,
                                   projectId: widget.projectId,
-                                  onScanTop: _addScanTop,
-                                  onCapture: _saveCapture,
-                                  onRoom: _saveRoom,
-                                  exposure: _exposure,
-                                  stop: _targetStop,
-                                  navTarget: _navTarget,
-                                  onNavigate: _navigateFrom3d,
-                                  lookThrough: _lookThrough,
-                                  editing: _editing3d,
-                                  onCameraStill: widget.shotId == null
-                                      ? null
-                                      : _saveCameraStill,
-                                ),
-                              ),
-                            ],
-                            if (_selected != null)
-                              _ElementPanel(
-                                palette: palette,
-                                element: _selected!,
-                                projectId: widget.projectId,
-                                scopeNotice: _scopeNotice(_selected!.layer),
-                                moveTargets: [
-                                  for (final layer in PlanLayer.values)
-                                    if (layer != _selected!.layer &&
-                                        _hasLayer(layer))
-                                      layer,
-                                ],
-                                onMove: (layer) =>
-                                    _moveToLayer(_selected!, layer),
-                                selectedPathIndex: _selectedPathIndex,
-                                onManageGear: _manageGear,
-                                cast: _knownCast,
-                                onRecolourCast: (color) =>
-                                    _recolourCast(_selected!, color),
-                                onAddPathPoint: _addPathPointAhead,
-                                onDeletePathPoint: _deleteSelectedPathPoint,
-                                onClearPath: _clearCameraPath,
-                                onPreview: () => setState(() {}),
-                                onUpdate: () async {
-                                  final el = _selected!;
-                                  await _syncCameraSensor(el);
-                                  // Una luz de pared se pega a la pared.
-                                  if (LightWallMount.isOn(el)) {
-                                    LightWallMount.snap(
-                                      el,
-                                      _visibleElements,
-                                      _metersPerUnit,
-                                    );
-                                  }
-                                  final hung = _settleRig([el]);
-                                  if (mounted) setState(() {});
-                                  await _persistElement(el);
-                                  if (hung.isNotEmpty) await _persistMany(hung);
-                                },
-                                onAddElements: (els) async {
-                                  for (final e in els) {
-                                    await _addElement(
-                                      e,
-                                      keepPosition: true,
-                                      select: false,
-                                    );
-                                  }
-                                },
-                                onDelete: _deleteSelected,
-                                onDuplicate: _duplicateSelection,
-                                selectionCount: _selection.length,
-                                metersPerUnit: _metersPerUnit,
-                                exposure: _exposure,
-                                targetStop: _targetStop,
-                                gear: _gear,
-                                canOverride:
-                                    _shot != null &&
-                                    _canShotOverride(_selected!),
-                                onOverride: (own) =>
-                                    _setShotOverride(_selected!, own),
-                                canUse: _canToggleUse(_selected!),
-                                onApplyToScene: _shot == null
-                                    ? null
-                                    : () => _applyLightToScene(_selected!),
-                                onUse: (used) =>
-                                    _setLightUsed(_selected!, used),
-                                onLinkShots: _canLinkShots(_selected!)
-                                    ? () => _linkCameraToShots(_selected!)
-                                    : null,
-                                linkedShots:
-                                    _cameraLinks[LightOverrides.uidOf(
-                                      _selected!,
-                                    )] ??
-                                    0,
-                                followLabels: _followLabels,
-                                reading:
-                                    _selected!.type == ElementType.actor ||
-                                        _selected!.propType == PropType.meter
-                                    ? _readingFor(_selected!)
-                                    : null,
-                                lengthLabel: PlanSegment.isSegment(_selected!)
-                                    ? formatMeters(
-                                        PlanSegment.length(_selected!),
+                                  scopeNotice: _scopeNotice(_selected!.layer),
+                                  moveTargets: [
+                                    for (final layer in PlanLayer.values)
+                                      if (layer != _selected!.layer &&
+                                          _hasLayer(layer))
+                                        layer,
+                                  ],
+                                  onMove: (layer) =>
+                                      _moveToLayer(_selected!, layer),
+                                  selectedPathIndex: _selectedPathIndex,
+                                  onManageGear: _manageGear,
+                                  cast: _knownCast,
+                                  onRecolourCast: (color) =>
+                                      _recolourCast(_selected!, color),
+                                  onAddPathPoint: _addPathPointAhead,
+                                  onDeletePathPoint: _deleteSelectedPathPoint,
+                                  onClearPath: _clearCameraPath,
+                                  onPreview: () => setState(() {}),
+                                  onUpdate: () async {
+                                    final el = _selected!;
+                                    await _syncCameraSensor(el);
+                                    // Una luz de pared se pega a la pared.
+                                    if (LightWallMount.isOn(el)) {
+                                      LightWallMount.snap(
+                                        el,
+                                        _visibleElements,
                                         _metersPerUnit,
-                                      )
-                                    : null,
-                              )
-                            else if (_selectedRoom != null &&
-                                _lightScene.roomAt(_selectedRoom!) != null)
-                              Container(
-                                width: 280,
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    left: BorderSide(color: palette.border),
-                                  ),
-                                ),
-                                child: PlanRoomPanel(
-                                  room: _lightScene.roomAt(_selectedRoom!)!,
+                                      );
+                                    }
+                                    final hung = _settleRig([el]);
+                                    if (mounted) setState(() {});
+                                    await _persistElement(el);
+                                    if (hung.isNotEmpty)
+                                      await _persistMany(hung);
+                                  },
+                                  onAddElements: (els) async {
+                                    for (final e in els) {
+                                      await _addElement(
+                                        e,
+                                        keepPosition: true,
+                                        select: false,
+                                      );
+                                    }
+                                  },
+                                  onDelete: _deleteSelected,
+                                  onDuplicate: _duplicateSelection,
+                                  selectionCount: _selection.length,
                                   metersPerUnit: _metersPerUnit,
-                                  anchor: _selectedRoom!,
-                                  onChanged: _saveRoom,
-                                  onClose: () =>
-                                      setState(() => _selectedRoom = null),
-                                ),
-                              )
-                            else if (_wide)
-                              Container(
-                                width: 240,
-                                decoration: BoxDecoration(
-                                  color: palette.surface,
-                                  border: Border(
-                                    left: BorderSide(color: palette.border),
+                                  exposure: _exposure,
+                                  targetStop: _targetStop,
+                                  gear: _gear,
+                                  canOverride:
+                                      _shot != null &&
+                                      _canShotOverride(_selected!),
+                                  onOverride: (own) =>
+                                      _setShotOverride(_selected!, own),
+                                  canUse: _canToggleUse(_selected!),
+                                  onApplyToScene: _shot == null
+                                      ? null
+                                      : () => _applyLightToScene(_selected!),
+                                  onUse: (used) =>
+                                      _setLightUsed(_selected!, used),
+                                  onLinkShots: _canLinkShots(_selected!)
+                                      ? () => _linkCameraToShots(_selected!)
+                                      : null,
+                                  linkedShots:
+                                      _cameraLinks[LightOverrides.uidOf(
+                                        _selected!,
+                                      )] ??
+                                      0,
+                                  followLabels: _followLabels,
+                                  reading:
+                                      _selected!.type == ElementType.actor ||
+                                          _selected!.propType == PropType.meter
+                                      ? _readingFor(_selected!)
+                                      : null,
+                                  lengthLabel: PlanSegment.isSegment(_selected!)
+                                      ? formatMeters(
+                                          PlanSegment.length(_selected!),
+                                          _metersPerUnit,
+                                        )
+                                      : null,
+                                )
+                              else if (_selectedRoom != null &&
+                                  _lightScene.roomAt(_selectedRoom!) != null)
+                                Container(
+                                  width: 280,
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      left: BorderSide(color: palette.border),
+                                    ),
+                                  ),
+                                  child: PlanRoomPanel(
+                                    room: _lightScene.roomAt(_selectedRoom!)!,
+                                    metersPerUnit: _metersPerUnit,
+                                    anchor: _selectedRoom!,
+                                    onChanged: _saveRoom,
+                                    onClose: () =>
+                                        setState(() => _selectedRoom = null),
+                                  ),
+                                )
+                              else if (_wide)
+                                Container(
+                                  width: 240,
+                                  decoration: BoxDecoration(
+                                    color: palette.surface,
+                                    border: Border(
+                                      left: BorderSide(color: palette.border),
+                                    ),
+                                  ),
+                                  child: PlanGearListPanel(
+                                    gear: _gearList,
+                                    title: _gearTitle,
+                                    onPick: _pickGearLine,
+                                    onPower: _openPower,
                                   ),
                                 ),
-                                child: PlanGearListPanel(
-                                  gear: _gearList,
-                                  title: _gearTitle,
-                                  onPick: _pickGearLine,
-                                  onPower: _openPower,
-                                ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      if (!_wide)
-                        _BottomToolbar(
-                          palette: palette,
-                          onAdd: _showAddMenu,
-                          onSave: _saveCurrentPlan,
-                        ),
-                    ],
+                        if (!_wide)
+                          _BottomToolbar(
+                            palette: palette,
+                            onAdd: _showAddMenu,
+                            onSave: _saveCurrentPlan,
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
             ),
     );
   }

@@ -473,11 +473,11 @@ void main() {
         'arrastran a un set nuevo y a otro set de la localización', (
       tester,
     ) async {
-    // Sin canal de carpetas en la prueba: una biblioteca vacía y a mano.
-    PlanLibraryStore.local = PlanLibraryStore(
-      Directory('${Directory.systemTemp.path}/iris_sin_biblioteca'),
-    );
-    addTearDown(() => PlanLibraryStore.local = null);
+      // Sin canal de carpetas en la prueba: una biblioteca vacía y a mano.
+      PlanLibraryStore.local = PlanLibraryStore(
+        Directory('${Directory.systemTemp.path}/iris_sin_biblioteca'),
+      );
+      addTearDown(() => PlanLibraryStore.local = null);
       await seed(
         tester,
         siteJson: '{"version":2,"elements":[${element('wall', 300, 300)}]}',
@@ -1140,6 +1140,76 @@ void main() {
       expect(saved.rotation, 0);
       expect(PlanMarks.rotationAt(saved, 0), closeTo(90, 2));
       expect(saved.pathPoints.single, mark);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('⌥ arrastrar saca una posición nueva y el actor se queda', (
+      tester,
+    ) async {
+      await seed(tester, siteJson: '{"version":2,"elements":[]}');
+      await tester.runAsync(() async {
+        await db.insertCameraPlanElement(
+          CameraPlanElementsCompanion.insert(
+            shotId: shotId,
+            type: 'actor',
+            x: const Value(400),
+            y: const Value(300),
+            label: const Value('Gala'),
+          ),
+        );
+      });
+      await tester.pumpWidget(
+        host(
+          CameraPlanEditor.shot(
+            projectId: projectId,
+            shotId: shotId,
+            shotLabel: 'Esc 1 · Plano 1',
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final state = tester.state(find.byType(CameraPlanEditor));
+      // ignore: avoid_dynamic_calls
+      final view =
+          (state as dynamic).debugView as ({Offset offset, double scale});
+      final canvas = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CameraPlanPainter,
+      );
+      Offset onScreen(Offset p) =>
+          tester.getTopLeft(canvas) + view.offset + p * view.scale;
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      final gesture = await tester.startGesture(
+        onScreen(const Offset(400, 300)),
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      for (var i = 1; i <= 10; i++) {
+        await gesture.moveTo(onScreen(Offset(400 + 15.0 * i, 300)));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      await gesture.up();
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await settle(tester);
+
+      final row = (await tester.runAsync(
+        () => db.getCameraPlanElementsForShot(shotId),
+      ))!.single;
+      final saved = PlanElement.fromDb(
+        row,
+        pathRows: (await tester.runAsync(
+          () => db.getPathPointsForElement(row.id),
+        ))!,
+      );
+      expect(saved.position, const Offset(400, 300));
+      expect(saved.pathPoints, hasLength(1));
+      expect(saved.pathPoints.single.dx, closeTo(550, 30));
+      expect(saved.pathPoints.single.dy, closeTo(300, 5));
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
