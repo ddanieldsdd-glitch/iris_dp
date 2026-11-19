@@ -58,34 +58,45 @@ List<ShootDayStop> shootDayStopsOf(
 }
 
 /// Los puntos del mapa del día: uno por sitio ubicado, con los números de
-/// sus paradas («1·3» si se vuelve), en el orden en que se llega.
+/// sus paradas, en el orden en que se llega. Las seguidas en el mismo sitio
+/// (varios sets) van juntas, «1-3»; si se vuelve más tarde, «1·4».
 List<({double latitude, double longitude, String label})> stopsMapPoints(
   PlanProjectData data,
   List<ShootDayStop> stops,
 ) {
   final order = <String>[];
   final at = <String, ({double latitude, double longitude})>{};
-  final numbers = <String, List<int>>{};
+  final runs = <String, List<(int, int)>>{};
+  String? previous;
   for (final (i, stop) in stops.indexed) {
     final site = data.site(stop.siteId);
     final lat = site?.latitude;
     final lon = site?.longitude;
-    if (lat == null || lon == null) continue;
+    if (lat == null || lon == null) {
+      previous = null;
+      continue;
+    }
     final key = '${lat.toStringAsFixed(5)},${lon.toStringAsFixed(5)}';
     if (!at.containsKey(key)) {
       order.add(key);
       at[key] = (latitude: lat, longitude: lon);
     }
-    final list = numbers.putIfAbsent(key, () => []);
-    // Dos paradas seguidas en el mismo sitio (dos sets) van como una.
-    if (list.isEmpty || list.last != i) list.add(i + 1);
+    final list = runs.putIfAbsent(key, () => []);
+    if (previous == key && list.isNotEmpty) {
+      list[list.length - 1] = (list.last.$1, i + 1);
+    } else {
+      list.add((i + 1, i + 1));
+    }
+    previous = key;
   }
   return [
     for (final key in order)
       (
         latitude: at[key]!.latitude,
         longitude: at[key]!.longitude,
-        label: numbers[key]!.join('·'),
+        label: [
+          for (final (a, b) in runs[key]!) a == b ? '$a' : '$a-$b',
+        ].join('·'),
       ),
   ];
 }

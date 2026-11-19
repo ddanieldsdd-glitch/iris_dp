@@ -860,30 +860,27 @@ abstract final class BriefPdf {
                             color: stripColor(ShootStripKind.move),
                           ),
                         ),
-                      pw.Row(
-                        children: [
-                          pw.Expanded(
-                            child: pw.Text(
-                              stop.name,
-                              maxLines: 1,
-                              style: pw.TextStyle(
-                                fontSize: fontSize,
-                                fontWeight: pw.FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          pw.Text(
-                            [
-                              stop.time,
-                              stop.minutes,
-                            ].where((t) => t.isNotEmpty).join('  ·  '),
-                            style: pw.TextStyle(
-                              fontSize: fontSize - 1,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                      // El nombre entero; la hora, debajo: en una columna
+                      // estrecha no caben los dos en la misma línea.
+                      pw.Text(
+                        stop.name,
+                        maxLines: 2,
+                        style: pw.TextStyle(
+                          fontSize: fontSize,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
                       ),
+                      if ([stop.time, stop.minutes].any((t) => t.isNotEmpty))
+                        pw.Text(
+                          [
+                            stop.time,
+                            stop.minutes,
+                          ].where((t) => t.isNotEmpty).join('  ·  '),
+                          style: pw.TextStyle(
+                            fontSize: fontSize - 1,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
                       if (stop.detail.isNotEmpty)
                         pw.Text(
                           stop.detail,
