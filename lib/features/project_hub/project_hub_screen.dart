@@ -11,6 +11,8 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/compact_nav_shell.dart';
+import '../../core/cloud/cloud_runtime_config.dart';
+import '../auth/project_activity_sheet.dart';
 import '../auth/project_team_sheet.dart';
 import '../shoot_documents/shoot_day_screen.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
@@ -194,6 +196,12 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
             backgroundColor: palette.surface,
             iconTheme: IconThemeData(color: palette.textPrimary),
             actions: [
+              if (CloudRuntimeConfig.isActive)
+                IconButton(
+                  tooltip: 'Actividad: quién cambió qué',
+                  icon: const Icon(Icons.history),
+                  onPressed: () => openProjectActivity(context, widget.project),
+                ),
               if (canManageProjectTeam(widget.project))
                 Padding(
                   padding: const EdgeInsets.only(right: AppSpacing.sm),

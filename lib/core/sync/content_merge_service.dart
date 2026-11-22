@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -5,9 +6,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../database/app_database.dart';
 import '../database/local_database_backup.dart';
+import 'bundle_changes.dart';
 import 'bundle_merge.dart';
 import 'content_sync_base_store.dart';
 import 'device_label.dart';
+import 'project_activity_service.dart';
 import 'project_content_bundle.dart';
 import 'project_content_sync_service.dart';
 import 'server_clock.dart';
@@ -89,6 +92,12 @@ class ContentMergeService {
       } on CloudContentChanged {
         continue;
       }
+      // Autoría: solo lo que cambió aquí, no lo que llegó de la nube.
+      unawaited(
+        ProjectActivityService(
+          _client,
+        ).record(cloudId, BundleChanges.between(base.local, local)),
+      );
 
       // Después aquí, como una descarga.
       await LocalDatabaseBackup.create(_db, label: 'antes-de-mezclar');

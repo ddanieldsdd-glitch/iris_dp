@@ -77,7 +77,7 @@ Tres pruebas, de menos a más gente, con la nube gratuita y sin tiendas de apps.
 
 ### Prueba 2 · Un equipo en un mismo proyecto
 - [ ] Invitar a director, 1.º ayudante de dirección y gaffer al mismo proyecto. Requiere de P0 el canal por proyecto, la persona en la presencia y la hora del servidor en los bloqueos.
-- [~] Traer de P2 los roles por proyecto y la autoría. Roles hechos (019 y hoja «Equipo del proyecto»); falta la autoría.
+- [x] Traer de P2 los roles por proyecto y la autoría. Roles: 019 y hoja «Equipo del proyecto» (v1.16.0). **Autoría (2026-11-22, rama `plan/autoria`):** migración 021 `project_activity`; al subir, `BundleChanges` compara con la última sincronización y anota por plano (planta incluida), escena, set, localización, esquema de luz, jornada y bloque; pantalla «Actividad» y «Último cambio» en los datos del plano.
 - [ ] Pasar las pruebas del plan de colaboración: mismo set a la vez, sin cobertura, borrar contra editar.
 - [x] Comprobar que las invitaciones sirven para cualquier rol. No funcionaban por las reglas de `project_members`; arreglado con la 019 (probado en PGlite). Falta probarlo con dos cuentas reales.
 - [ ] **[Mac]** Jornadas: marcar En set en el iPhone mientras otro reordena en el Mac, y que no se pierda nada. Es lo que arregla el plan R; falta probarlo con dos personas.

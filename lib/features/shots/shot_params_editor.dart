@@ -9,6 +9,7 @@ import '../../core/sync/realtime_hub.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/widgets/activity/last_change_line.dart';
 import '../../core/utils/scene_characters.dart';
 import '../../core/utils/shot_technical_options.dart';
 import '../../shared/history/edit_history.dart';
@@ -141,6 +142,11 @@ class _ShotParamsEditorState extends ConsumerState<ShotParamsEditor> {
     final form = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        LastChangeLine(
+          projectId: shot.projectId,
+          collection: 'shots',
+          uid: shot.uid,
+        ),
         text(
           'Encuadre',
           shot.framing,

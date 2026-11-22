@@ -7,9 +7,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/error_log.dart';
 import '../database/app_database.dart';
 import '../database/local_database_backup.dart';
+import 'bundle_changes.dart';
 import 'content_sync_base_store.dart';
 import 'device_label.dart';
 import 'sync_merge_store.dart';
+import 'project_activity_service.dart';
 import 'project_content_bundle.dart';
 
 /// La tabla `cloud_project_snapshots` aún no está en Supabase (migración 007).
@@ -62,11 +64,20 @@ class ProjectContentSyncService {
     required String? expectedCloudHash,
   }) async {
     final bundle = await ProjectContentBundle.export(_db, localProjectId);
+    final before = await _lastSynced(localProjectId);
     final hash = await uploadBundle(
       projectCloudId,
       bundle,
       expectedCloudHash: expectedCloudHash,
     );
+    // Autoría: lo que este equipo cambió desde la última sincronización.
+    if (before != null) {
+      unawaited(
+        ProjectActivityService(
+          _client,
+        ).record(projectCloudId, BundleChanges.between(before, bundle)),
+      );
+    }
 
     final syncedAt = DateTime.now().toUtc();
     await (_db.update(_db.projects)..where((p) => p.id.equals(localProjectId)))
@@ -85,6 +96,23 @@ class ProjectContentSyncService {
       local: bundle,
       cloud: bundle,
     );
+  }
+
+  /// Lo que este equipo tenía en la última sincronización, si se guardó.
+  Future<Map<String, dynamic>?> _lastSynced(int localProjectId) async {
+    try {
+      final base = await ContentSyncBaseStore.load(_db, localProjectId);
+      if (base == null) return null;
+      return (await ContentBaseBundleStore.load(
+        _db,
+        localProjectId,
+        localHash: base.localHash,
+        cloudHash: base.cloudHash,
+      ))?.local;
+    } catch (_) {
+      // Sin base no hay autoría de esta subida; subir sigue igual.
+      return null;
+    }
   }
 
   /// Escribe [bundle] en la nube con la misma condición que [upload], sin

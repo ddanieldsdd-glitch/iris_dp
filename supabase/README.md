@@ -3,7 +3,7 @@
 ## Setup
 
 1. Crea un proyecto en [supabase.com](https://supabase.com)
-2. Ejecuta las migraciones en orden (SQL Editor): `001` … `016_access_admin.sql` `018_snapshot_version_guard.sql` `019_project_roles.sql` y `020_invite_links.sql`. La `017` solo cuando quieras recortar el historial (ver abajo)
+2. Ejecuta las migraciones en orden (SQL Editor): `001` … `016_access_admin.sql` `018_snapshot_version_guard.sql` `019_project_roles.sql` `020_invite_links.sql` y `021_project_activity.sql`. La `017` solo cuando quieras recortar el historial (ver abajo)
 3. Verifica el bucket Storage `project-media` (privado, RLS activo — la migración 008 crea políticas) y `avatars` (público, cada usuario escribe solo en su carpeta — migración 012)
 4. Copia URL y anon key a las variables de entorno de la app
 
@@ -48,6 +48,10 @@ El DP invita por email desde la app → fila en `project_invitations` → el dir
 ## Equipo del proyecto (019)
 
 Papeles por proyecto (dirección de fotografía, dirección, gaffer, 1.º ayudante de cámara, auxiliar de cámara, 1.º ayudante de dirección y solo consulta) y aceptar invitaciones desde el servidor con `iris_accept_invitations()`: antes la persona invitada no podía añadirse al proyecto por las reglas de `project_members`. El dueño puede cambiar papeles, quitar a alguien y retirar invitaciones. Sin la 019 la app sigue funcionando, pero las invitaciones no entran.
+
+## Actividad: quién cambió qué (021)
+
+Cada subida anota qué cambió (un plano, su planta, una escena, un set, la biblia…), quién y cuándo. La app lo enseña en «Actividad» (menú de la tarjeta del proyecto y botón con el reloj dentro del proyecto) y como «Último cambio» en los datos de cada plano. Sin la 021 la app sigue igual, sin anotar nada.
 
 ## Invitaciones con enlace y planes (020)
 
