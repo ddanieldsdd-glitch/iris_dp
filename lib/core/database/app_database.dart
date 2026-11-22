@@ -800,8 +800,11 @@ class AppDatabase extends _$AppDatabase {
         await add(projects, projects.mirrorCloudId);
       }
       if (from < 66) {
-        // Tu papel en cada proyecto, para las páginas de inicio (LZ.2).
+        // Tu papel en cada proyecto, para las páginas de inicio (LZ.2), y el
+        // que te dieron al invitarte (LZ.3).
         await add(projects, projects.myRole);
+        // Tu papel si te invitaron: abre la vista de eléctricos (LZ.3).
+        await add(projects, projects.memberRole);
       }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
@@ -1227,6 +1230,12 @@ class AppDatabase extends _$AppDatabase {
   Future<void> setProjectMyRole(int id, String? role) =>
       (update(projects)..where((p) => p.id.equals(id))).write(
         ProjectsCompanion(myRole: Value(role)),
+      );
+
+  /// Tu papel en la nube si te invitaron (LZ.3). Solo de este aparato.
+  Future<void> setProjectMemberRole(int id, String? role) =>
+      (update(projects)..where((p) => p.id.equals(id))).write(
+        ProjectsCompanion(memberRole: Value(role)),
       );
 
   // Duplicar proyecto: copia escenas, planos, localizaciones e imágenes.

@@ -390,19 +390,27 @@ Future<bool> liveNoticeIsNew(AppDatabase db, SnapshotNotice notice) async {
   return base?.cloudHash != notice.hash;
 }
 
-/// Los proyectos a los que te invitaron caen en la página de tu papel
-/// (LZ.2): solo los que aún no tienen uno elegido en este aparato, y solo
-/// los papeles que tienen página.
+/// Apunta en cada proyecto al que te invitaron tu papel en él (LZ.3), y
+/// lo pone en la página que le toca si aún no elegiste una (LZ.2): los
+/// eléctricos, en la de gaffer. Un papel sin página no elige ninguna.
 Future<void> fillMyRolesFromMembers(
   AppDatabase db,
   Map<String, String> roleByCloudId,
 ) async {
-  const paged = {'dp', 'gaffer', 'first_ac'};
+  const pageOf = {
+    'dp': 'dp',
+    'gaffer': 'gaffer',
+    'first_ac': 'first_ac',
+    'best_boy': 'gaffer',
+    'electrician': 'gaffer',
+  };
   for (final p in await db.select(db.projects).get()) {
-    if (p.myRole != null) continue;
     final code = roleByCloudId[p.cloudId];
-    if (code == null || !paged.contains(code)) continue;
-    await db.setProjectMyRole(p.id, code);
+    if (code == null) continue;
+    if (p.memberRole != code) await db.setProjectMemberRole(p.id, code);
+    if (p.myRole != null) continue;
+    final page = pageOf[code];
+    if (page != null) await db.setProjectMyRole(p.id, page);
   }
 }
 

@@ -70,5 +70,17 @@ void main() {
     expect((await db.getProject(chosen))!.myRole, 'first_ac');
     // Un papel sin página no se apunta: va a la de siempre.
     expect((await db.getProject(director))!.myRole, isNull);
+    // Pero el papel de la invitación queda apuntado en todos.
+    expect((await db.getProject(invited))!.memberRole, 'gaffer');
+    expect((await db.getProject(chosen))!.memberRole, 'gaffer');
+    expect((await db.getProject(director))!.memberRole, 'director');
+  });
+
+  test('un eléctrico invitado cae en la página de gaffer', () async {
+    final id = await project('Feria', cloudId: 'nube-9');
+    await fillMyRolesFromMembers(db, {'nube-9': 'electrician'});
+    final p = (await db.getProject(id))!;
+    expect(p.memberRole, 'electrician');
+    expect(MyProjectRole.ofProject(p), MyProjectRole.gaffer);
   });
 }

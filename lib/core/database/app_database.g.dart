@@ -556,6 +556,17 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _memberRoleMeta = const VerificationMeta(
+    'memberRole',
+  );
+  @override
+  late final GeneratedColumn<String> memberRole = GeneratedColumn<String>(
+    'member_role',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -609,6 +620,7 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     mirrorCloudId,
     cardSize,
     myRole,
+    memberRole,
     createdAt,
     updatedAt,
   ];
@@ -830,6 +842,12 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         myRole.isAcceptableOrUnknown(data['my_role']!, _myRoleMeta),
       );
     }
+    if (data.containsKey('member_role')) {
+      context.handle(
+        _memberRoleMeta,
+        memberRole.isAcceptableOrUnknown(data['member_role']!, _memberRoleMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -959,6 +977,10 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         DriftSqlType.string,
         data['${effectivePrefix}my_role'],
       ),
+      memberRole: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}member_role'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -1028,6 +1050,12 @@ class Project extends DataClass implements Insertable<Project> {
   /// los proyectos en páginas (LZ.2). Solo de este aparato: no se sube.
   /// Nulo: dirección de fotografía.
   final String? myRole;
+
+  /// Tu papel en `project_members` si te invitaron (`gaffer`,
+  /// `electrician`…). Nulo: el proyecto es tuyo. Lo apunta cada
+  /// sincronización; con un papel de solo consulta de eléctricos, el
+  /// proyecto se abre en la vista de luz (LZ.3). Solo de este aparato.
+  final String? memberRole;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Project({
@@ -1058,6 +1086,7 @@ class Project extends DataClass implements Insertable<Project> {
     this.mirrorCloudId,
     this.cardSize,
     this.myRole,
+    this.memberRole,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -1134,6 +1163,9 @@ class Project extends DataClass implements Insertable<Project> {
     }
     if (!nullToAbsent || myRole != null) {
       map['my_role'] = Variable<String>(myRole);
+    }
+    if (!nullToAbsent || memberRole != null) {
+      map['member_role'] = Variable<String>(memberRole);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -1213,6 +1245,9 @@ class Project extends DataClass implements Insertable<Project> {
       myRole: myRole == null && nullToAbsent
           ? const Value.absent()
           : Value(myRole),
+      memberRole: memberRole == null && nullToAbsent
+          ? const Value.absent()
+          : Value(memberRole),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -1263,6 +1298,7 @@ class Project extends DataClass implements Insertable<Project> {
       mirrorCloudId: serializer.fromJson<String?>(json['mirrorCloudId']),
       cardSize: serializer.fromJson<String?>(json['cardSize']),
       myRole: serializer.fromJson<String?>(json['myRole']),
+      memberRole: serializer.fromJson<String?>(json['memberRole']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -1300,6 +1336,7 @@ class Project extends DataClass implements Insertable<Project> {
       'mirrorCloudId': serializer.toJson<String?>(mirrorCloudId),
       'cardSize': serializer.toJson<String?>(cardSize),
       'myRole': serializer.toJson<String?>(myRole),
+      'memberRole': serializer.toJson<String?>(memberRole),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -1333,6 +1370,7 @@ class Project extends DataClass implements Insertable<Project> {
     Value<String?> mirrorCloudId = const Value.absent(),
     Value<String?> cardSize = const Value.absent(),
     Value<String?> myRole = const Value.absent(),
+    Value<String?> memberRole = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Project(
@@ -1389,6 +1427,7 @@ class Project extends DataClass implements Insertable<Project> {
         : this.mirrorCloudId,
     cardSize: cardSize.present ? cardSize.value : this.cardSize,
     myRole: myRole.present ? myRole.value : this.myRole,
+    memberRole: memberRole.present ? memberRole.value : this.memberRole,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1453,6 +1492,9 @@ class Project extends DataClass implements Insertable<Project> {
           : this.mirrorCloudId,
       cardSize: data.cardSize.present ? data.cardSize.value : this.cardSize,
       myRole: data.myRole.present ? data.myRole.value : this.myRole,
+      memberRole: data.memberRole.present
+          ? data.memberRole.value
+          : this.memberRole,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1488,6 +1530,7 @@ class Project extends DataClass implements Insertable<Project> {
           ..write('mirrorCloudId: $mirrorCloudId, ')
           ..write('cardSize: $cardSize, ')
           ..write('myRole: $myRole, ')
+          ..write('memberRole: $memberRole, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1523,6 +1566,7 @@ class Project extends DataClass implements Insertable<Project> {
     mirrorCloudId,
     cardSize,
     myRole,
+    memberRole,
     createdAt,
     updatedAt,
   ]);
@@ -1557,6 +1601,7 @@ class Project extends DataClass implements Insertable<Project> {
           other.mirrorCloudId == this.mirrorCloudId &&
           other.cardSize == this.cardSize &&
           other.myRole == this.myRole &&
+          other.memberRole == this.memberRole &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1589,6 +1634,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
   final Value<String?> mirrorCloudId;
   final Value<String?> cardSize;
   final Value<String?> myRole;
+  final Value<String?> memberRole;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   const ProjectsCompanion({
@@ -1619,6 +1665,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.mirrorCloudId = const Value.absent(),
     this.cardSize = const Value.absent(),
     this.myRole = const Value.absent(),
+    this.memberRole = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -1650,6 +1697,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.mirrorCloudId = const Value.absent(),
     this.cardSize = const Value.absent(),
     this.myRole = const Value.absent(),
+    this.memberRole = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   }) : name = Value(name);
@@ -1681,6 +1729,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Expression<String>? mirrorCloudId,
     Expression<String>? cardSize,
     Expression<String>? myRole,
+    Expression<String>? memberRole,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -1717,6 +1766,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       if (mirrorCloudId != null) 'mirror_cloud_id': mirrorCloudId,
       if (cardSize != null) 'card_size': cardSize,
       if (myRole != null) 'my_role': myRole,
+      if (memberRole != null) 'member_role': memberRole,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -1750,6 +1800,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Value<String?>? mirrorCloudId,
     Value<String?>? cardSize,
     Value<String?>? myRole,
+    Value<String?>? memberRole,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
   }) {
@@ -1781,6 +1832,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       mirrorCloudId: mirrorCloudId ?? this.mirrorCloudId,
       cardSize: cardSize ?? this.cardSize,
       myRole: myRole ?? this.myRole,
+      memberRole: memberRole ?? this.memberRole,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -1880,6 +1932,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     if (myRole.present) {
       map['my_role'] = Variable<String>(myRole.value);
     }
+    if (memberRole.present) {
+      map['member_role'] = Variable<String>(memberRole.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1919,6 +1974,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
           ..write('mirrorCloudId: $mirrorCloudId, ')
           ..write('cardSize: $cardSize, ')
           ..write('myRole: $myRole, ')
+          ..write('memberRole: $memberRole, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -41936,6 +41992,7 @@ typedef $$ProjectsTableCreateCompanionBuilder =
       Value<String?> mirrorCloudId,
       Value<String?> cardSize,
       Value<String?> myRole,
+      Value<String?> memberRole,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -41968,6 +42025,7 @@ typedef $$ProjectsTableUpdateCompanionBuilder =
       Value<String?> mirrorCloudId,
       Value<String?> cardSize,
       Value<String?> myRole,
+      Value<String?> memberRole,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -42627,6 +42685,11 @@ class $$ProjectsTableFilterComposer
 
   ColumnFilters<String> get myRole => $composableBuilder(
     column: $table.myRole,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get memberRole => $composableBuilder(
+    column: $table.memberRole,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -43380,6 +43443,11 @@ class $$ProjectsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get memberRole => $composableBuilder(
+    column: $table.memberRole,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -43532,6 +43600,11 @@ class $$ProjectsTableAnnotationComposer
 
   GeneratedColumn<String> get myRole =>
       $composableBuilder(column: $table.myRole, builder: (column) => column);
+
+  GeneratedColumn<String> get memberRole => $composableBuilder(
+    column: $table.memberRole,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -44227,6 +44300,7 @@ class $$ProjectsTableTableManager
                 Value<String?> mirrorCloudId = const Value.absent(),
                 Value<String?> cardSize = const Value.absent(),
                 Value<String?> myRole = const Value.absent(),
+                Value<String?> memberRole = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion(
@@ -44257,6 +44331,7 @@ class $$ProjectsTableTableManager
                 mirrorCloudId: mirrorCloudId,
                 cardSize: cardSize,
                 myRole: myRole,
+                memberRole: memberRole,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),
@@ -44289,6 +44364,7 @@ class $$ProjectsTableTableManager
                 Value<String?> mirrorCloudId = const Value.absent(),
                 Value<String?> cardSize = const Value.absent(),
                 Value<String?> myRole = const Value.absent(),
+                Value<String?> memberRole = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion.insert(
@@ -44319,6 +44395,7 @@ class $$ProjectsTableTableManager
                 mirrorCloudId: mirrorCloudId,
                 cardSize: cardSize,
                 myRole: myRole,
+                memberRole: memberRole,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),

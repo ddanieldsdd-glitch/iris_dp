@@ -16,7 +16,7 @@ import '../../shared/pdf_export/shooting_plan_pdf.dart';
 import '../../shared/pdf_export/storyboard_pdf.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
 import '../../shared/technical_script_export/technical_script_docx.dart';
-import '../camera_plan/camera_plan_constants.dart';
+import '../camera_plan/light_sheet_jobs.dart';
 import '../camera_plan/plan_data.dart';
 import '../technical_script/technical_script_export.dart';
 import '../technical_script/technical_script_settings.dart';
@@ -129,45 +129,16 @@ class ExportRunner {
     ExportOptions options,
   ) async {
     final data = await PlanProjectData.load(db, source.project.id);
-    final scenesOf = <int, List<String>>{};
-    final daysOf = <int, List<String>>{};
-    for (final section in sections) {
-      for (final tract in section.scenes) {
-        for (final item in tract.shots) {
-          final id = data.setup(item.shot.lightSetupId)?.id;
-          if (id == null) continue;
-          final scenes = scenesOf.putIfAbsent(id, () => []);
-          if (!scenes.contains(tract.scene.label)) {
-            scenes.add(tract.scene.label);
-          }
-          final day = section.day?.name;
-          final days = daysOf.putIfAbsent(id, () => []);
-          if (day != null && !days.contains(day)) days.add(day);
-        }
-      }
-    }
-    final jobs = <RigSheetJob>[];
-    for (final MapEntry(key: id, value: scenes) in scenesOf.entries) {
-      final setup = data.setup(id);
-      if (setup == null) continue;
-      final sheet = data.lightSheetOf(setup);
-      if (!sheet.elements.any((e) => e.type == ElementType.light)) continue;
-      jobs.add(
-        RigSheetJob(
-          sheet.elements,
-          sheet.metersPerUnit,
-          RigSheetInfo(
-            project: source.project.name,
-            set: data.set(setup.locationBasePlanId)?.locationName ?? '',
-            location: data.site(data.siteIdOfSetup(setup))?.name ?? '',
-            scheme: setup.name,
-            scenes: 'Esc ${scenes.join(', ')}',
-            shootDay: (daysOf[id] ?? const []).join(' · '),
-            date: DateTime.now(),
-          ),
-        ),
-      );
-    }
+    final schemes = lightSchemesOf(data, [
+      for (final section in sections)
+        for (final tract in section.scenes)
+          for (final item in tract.shots)
+            (shot: item.shot, scene: tract.scene.label, day: section.day?.name),
+    ]);
+    final jobs = [
+      for (final use in schemes)
+        lightSheetJob(data, use, project: source.project.name),
+    ];
     return RigSheetPdf.buildAll(
       jobs,
       options: RigSheetOptions(

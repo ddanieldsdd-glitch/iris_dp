@@ -1,3 +1,4 @@
+import '../light_crew/light_crew_screen.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -202,6 +203,11 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
                   icon: const Icon(Icons.history),
                   onPressed: () => openProjectActivity(context, widget.project),
                 ),
+              IconButton(
+                tooltip: 'Vista de eléctricos: la luz de cada jornada',
+                icon: const Icon(Icons.electrical_services_outlined),
+                onPressed: () => LightCrewScreen.open(context, widget.project),
+              ),
               if (canManageProjectTeam(widget.project))
                 Padding(
                   padding: const EdgeInsets.only(right: AppSpacing.sm),

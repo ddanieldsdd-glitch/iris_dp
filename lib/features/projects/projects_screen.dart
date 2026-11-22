@@ -19,6 +19,8 @@ import 'projects_header.dart';
 import '../../core/theme/app_layout.dart';
 import 'project_poster_card.dart';
 import 'project_my_role.dart';
+import '../light_crew/light_crew_screen.dart';
+import '../../core/cloud/project_role.dart';
 import '../project_hub/project_hub_screen.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../core/widgets/sync/sync_conflict_resolution_sheet.dart';
@@ -276,6 +278,11 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   }
 
   void _openProject(BuildContext context, Project p) {
+    // Los eléctricos solo consultan la luz (LZ.3).
+    if (ProjectRole.fromCode(p.memberRole)?.isLightCrew ?? false) {
+      LightCrewScreen.open(context, p);
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => ProjectHubScreen(project: p)),

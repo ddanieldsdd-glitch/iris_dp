@@ -69,6 +69,12 @@ class Projects extends Table {
   /// los proyectos en páginas (LZ.2). Solo de este aparato: no se sube.
   /// Nulo: dirección de fotografía.
   TextColumn get myRole => text().nullable()();
+
+  /// Tu papel en `project_members` si te invitaron (`gaffer`,
+  /// `electrician`…). Nulo: el proyecto es tuyo. Lo apunta cada
+  /// sincronización; con un papel de solo consulta de eléctricos, el
+  /// proyecto se abre en la vista de luz (LZ.3). Solo de este aparato.
+  TextColumn get memberRole => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }

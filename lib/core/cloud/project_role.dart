@@ -1,6 +1,7 @@
 /// Qué hace una persona en un proyecto compartido (`project_members.role`,
-/// migración 019). Todos editan todo salvo [viewer]: los permisos finos
-/// llegarán si las pruebas con equipo los piden.
+/// migraciones 019 y 022). Todos editan todo salvo [viewer] y los
+/// eléctricos ([bestBoy] y [electrician], LZ.3), que solo consultan: en la
+/// nube lo hace cumplir `iris_role_can_edit` (022).
 enum ProjectRole {
   dp('dp', 'Dirección de fotografía'),
   director('director', 'Dirección'),
@@ -8,6 +9,8 @@ enum ProjectRole {
   firstAc('first_ac', '1.º ayudante de cámara'),
   cameraAssistant('camera_assistant', 'Auxiliar de cámara'),
   firstAd('first_ad', '1.º ayudante de dirección'),
+  bestBoy('best_boy', 'Best boy (solo consulta)'),
+  electrician('electrician', 'Eléctrico (solo consulta)'),
   viewer('viewer', 'Solo consulta');
 
   const ProjectRole(this.code, this.label);
@@ -16,7 +19,10 @@ enum ProjectRole {
   final String code;
   final String label;
 
-  bool get canEdit => this != viewer;
+  bool get canEdit => this != viewer && !isLightCrew;
+
+  /// Eléctricos: entran a la vista de consulta de luz (LZ.3).
+  bool get isLightCrew => this == bestBoy || this == electrician;
 
   static ProjectRole? fromCode(String? code) {
     for (final r in values) {
@@ -33,6 +39,8 @@ enum ProjectRole {
     if (role == null) return code;
     return switch (role) {
       gaffer => 'gaffer',
+      bestBoy => 'best boy',
+      electrician => 'eléctrico',
       _ => role.label[0].toLowerCase() + role.label.substring(1),
     };
   }

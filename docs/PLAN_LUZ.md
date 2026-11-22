@@ -100,6 +100,20 @@ Daniel suele trabajar como director de foto, y ahora tiene una película grande 
   - las plantas de luz por jornada;
   - las hojas de luz;
   - el material del día con sus vatios.
+- **Hecho (2026-11-22, rama `plan/autoria`):**
+  - `supabase/migrations/022_light_crew_roles.sql`: papeles `best_boy` y `electrician` en miembros, invitaciones y enlaces. Un disparador pone `can_edit` según el papel (`iris_role_can_edit`), así que las funciones de 019 y 020 no se tocan. **Hay que ejecutarla en Supabase**, después de 021.
+  - En la app, «Best boy» y «Eléctrico» salen en el selector del equipo, como solo consulta.
+  - Columna local `memberRole` (esquema 66): tu papel en la nube, apuntado en cada sincronización. Un eléctrico invitado cae en la página de gaffer.
+  - **Vista de eléctricos** (`lib/features/light_crew/`), para el móvil:
+    - la jornada de hoy, o la próxima;
+    - cada esquema con su planta (se amplía), alzado y perfil, hoja de luz en PDF, focos, vatios y amperios;
+    - el esquema más cargado del día;
+    - el material de luz del día, cruzado con las reservas.
+  - Un eléctrico que abre el proyecto entra directo en esta vista. Desde el proyecto, el icono del enchufe la abre para ver lo que ven ellos.
+  - `light_sheet_jobs.dart` reparte los esquemas por escena y jornada, y lo comparte con el centro de exportación.
+- **Falta:**
+  - probarlo con dos cuentas reales (invitación de eléctrico en un iPhone);
+  - que la app no deje editar en local a un papel de solo consulta. Hoy la nube rechaza lo que suba, pero la app no lo avisa. Pasa igual con «solo consulta».
 
 ### LZ.4 · Material de luz por jornada, en pantalla
 
