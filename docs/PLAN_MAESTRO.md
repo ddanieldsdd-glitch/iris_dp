@@ -60,7 +60,7 @@ Sin coste. Que los datos de otros estén seguros y que varias personas puedan tr
 
 ### Fiabilidad básica
 - [ ] **Errores a `ErrorLog`** en las rutas de guardado y sincronización que aún los tragan: quedan 28 `catch (_)` en `lib/core/sync` y `lib/core/database`. [FI.4]
-- [ ] **Exportación local de la sincronización** fuera del hilo de la interfaz. [RD.1]
+- [x] **Exportación local de la sincronización** fuera del hilo de la interfaz. [RD.1] **Medido el 2026-11-22: no hace falta.** Con la base real, KEBAB se exporta en ~60 ms y la interfaz no se bloquea más de 4–12 ms, porque la base ya trabaja en su propio hilo; la huella ya iba aparte.
 - [x] Rechazo de paquetes de una versión más nueva (`assertReadable`, FI.1).
 - [x] **[Mac]** Jornadas con uid y mezcla por elemento (DR.6, v1.13.0).
 - [x] **[Mac]** `busy_timeout` en la base (v1.13.1).
@@ -211,7 +211,7 @@ Las pantallas de la biblia V2 congelada no se revisan: se decide si se borran.
 ### Rendimiento y código [RD, Fase R]
 - [ ] Terminar de partir `camera_plan_editor.dart` (RD.4).
   - **[Mac]** El plan JP sacó su código nuevo a `camera_plan_editor_light_use.dart` y paneles propios, pero el `State` sigue entero.
-- [ ] Medir en perfil en Windows y en iPad (R7), y la pausa de 1,5 s al soltar (R8). WAL (R6) sube a P0.
+- [ ] Medir en perfil en Windows y en iPad (R7). WAL (R6) sube a P0. **R8 medido el 2026-11-22:** al soltar, la interfaz paga 15–50 ms; los 1,5 s eran el rasterizado por CPU del test.
 - [ ] Sacar los textos a archivos de traducción; el inglés, al final de la beta.
 
 ### Equipo y biblia
