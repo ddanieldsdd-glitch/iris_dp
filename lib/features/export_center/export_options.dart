@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../shared/pdf_export/shooting_plan_day_sheet.dart' show PlanIndexPart;
+import '../../shared/pdf_export/rig_sheet_pdf.dart';
 import '../camera_plan/plan_renderer.dart' show PlanExportView, PlanSheetView;
 import '../storyboard/shot_sheet_data.dart';
 import '../storyboard/storyboard_export_style.dart';
@@ -123,6 +124,10 @@ class ExportOptions {
   final bool withWeather;
   final ScriptExportOptions script;
 
+  /// Hojas de luz: planta y alzados aparte o en una hoja, y el papel.
+  final RigSheetLayout lightLayout;
+  final RigSheetPaper lightPaper;
+
   /// Este documento abre con el plan de rodaje.
   bool get withSchedule => scheduleFor.contains(document);
 
@@ -149,6 +154,8 @@ class ExportOptions {
     this.scheduleFor = const {ExportDocument.technicalScript},
     this.withWeather = true,
     this.script = const ScriptExportOptions(),
+    this.lightLayout = RigSheetLayout.split,
+    this.lightPaper = RigSheetPaper.a3,
   });
 
   /// Planos que entran en la vista previa: los justos para ver cómo sale,
@@ -157,6 +164,8 @@ class ExportOptions {
     ExportDocument.storyboard => look.isSheet ? 6 : 18,
     ExportDocument.shootingPlan => 8,
     ExportDocument.technicalScript => 24,
+    // Una hoja por esquema: con pocos planos ya salen casi todos.
+    ExportDocument.lightSheets => 400,
   };
 
   ExportOptions copyWith({
@@ -179,7 +188,11 @@ class ExportOptions {
     Set<ExportDocument>? scheduleFor,
     bool? withWeather,
     ScriptExportOptions? script,
+    RigSheetLayout? lightLayout,
+    RigSheetPaper? lightPaper,
   }) => ExportOptions(
+    lightLayout: lightLayout ?? this.lightLayout,
+    lightPaper: lightPaper ?? this.lightPaper,
     document: document ?? this.document,
     scope: scope ?? this.scope,
     split: split ?? this.split,
@@ -228,6 +241,8 @@ class ExportOptions {
     'scheduleFor': [for (final d in scheduleFor) d.name],
     'withWeather': withWeather,
     'script': script.toJson(),
+    'lightLayout': lightLayout.name,
+    'lightPaper': lightPaper.name,
   };
 
   factory ExportOptions.fromJson(Map<String, dynamic> json) {
@@ -267,6 +282,10 @@ class ExportOptions {
       script: script is Map
           ? ScriptExportOptions.fromJson(Map<String, dynamic>.from(script))
           : d.script,
+      lightLayout:
+          _byName(RigSheetLayout.values, json['lightLayout']) ?? d.lightLayout,
+      lightPaper:
+          _byName(RigSheetPaper.values, json['lightPaper']) ?? d.lightPaper,
     );
   }
 

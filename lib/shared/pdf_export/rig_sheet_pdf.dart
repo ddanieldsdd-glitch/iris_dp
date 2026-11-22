@@ -49,6 +49,15 @@ class RigSheetInfo {
   });
 }
 
+/// Un esquema para [RigSheetPdf.buildAll].
+class RigSheetJob {
+  final List<PlanElement> elements;
+  final double metersPerUnit;
+  final RigSheetInfo info;
+
+  const RigSheetJob(this.elements, this.metersPerUnit, this.info);
+}
+
 /// Cómo se reparten las vistas.
 enum RigSheetLayout {
   /// La planta en una hoja y el alzado y el perfil en otra, como las hojas
@@ -137,6 +146,52 @@ abstract final class RigSheetPdf {
               : PdfPageFormat.a4.landscape,
           margin: pw.EdgeInsets.zero,
           build: (_) => page.build(),
+        ),
+      );
+    }
+    return doc.save();
+  }
+
+  /// Las hojas de varios esquemas en un solo PDF: cada uno con su planta,
+  /// sus alzados y su lista, numeradas por esquema.
+  static Future<Uint8List> buildAll(
+    List<RigSheetJob> jobs, {
+    RigSheetOptions options = const RigSheetOptions(),
+    String title = 'Hojas de luz',
+  }) async {
+    final fonts = await PdfExportFonts.load();
+    final doc = pw.Document(
+      theme: PdfExportFonts.theme(regular: fonts.regular, bold: fonts.bold),
+      title: title,
+      creator: 'IRIS',
+    );
+    final format = options.paper == RigSheetPaper.a3
+        ? PdfPageFormat.a3.landscape
+        : PdfPageFormat.a4.landscape;
+    for (final job in jobs) {
+      final data = _Data(job.elements, job.metersPerUnit, job.info, options);
+      final kinds = data.pageKinds();
+      for (final (i, (kind, from)) in kinds.indexed) {
+        final page = _Page(data, kind, i + 1, kinds.length, from: from);
+        doc.addPage(
+          pw.Page(
+            pageFormat: format,
+            margin: pw.EdgeInsets.zero,
+            build: (_) => page.build(),
+          ),
+        );
+      }
+    }
+    if (jobs.isEmpty) {
+      doc.addPage(
+        pw.Page(
+          pageFormat: format,
+          build: (_) => pw.Center(
+            child: pw.Text(
+              'Lo elegido no tiene esquemas de luz con focos.',
+              style: const pw.TextStyle(fontSize: 14),
+            ),
+          ),
         ),
       );
     }

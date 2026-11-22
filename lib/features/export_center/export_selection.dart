@@ -3,7 +3,7 @@ import '../camera_plan/camera_plan_grouping.dart';
 import '../shoot_documents/shoot_plan.dart';
 
 /// Los tres documentos que salen del proyecto o del plan de rodaje.
-enum ExportDocument { storyboard, shootingPlan, technicalScript }
+enum ExportDocument { storyboard, shootingPlan, technicalScript, lightSheets }
 
 /// Desde dónde se elige lo que se exporta.
 enum ExportScope { all, days, scenes, shots }

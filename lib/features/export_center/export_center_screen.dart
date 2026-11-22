@@ -23,6 +23,7 @@ import '../../core/widgets/app_snackbar.dart';
 import '../../shared/technical_script_export/technical_script_doc.dart';
 import '../camera_plan/plan_data.dart';
 import '../../shared/pdf_export/shooting_plan_day_sheet.dart' show PlanIndexPart;
+import '../../shared/pdf_export/rig_sheet_pdf.dart';
 import '../camera_plan/plan_renderer.dart' show PlanExportView, PlanSheetView;
 import '../camera_plan/plan_view_picker.dart';
 import '../projects/project_card_actions.dart' show pickMoodboardCover;
@@ -186,6 +187,7 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
   bool get _showsPlan => switch (_options.document) {
     ExportDocument.shootingPlan || ExportDocument.technicalScript => true,
     ExportDocument.storyboard => _options.look == StoryboardLook.shotPlan,
+    ExportDocument.lightSheets => false,
   };
 
   /// Vuelve a leer lo que ha podido cambiar al elegir una sección.
@@ -1044,6 +1046,7 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
         ),
       ],
       ExportDocument.technicalScript => _scriptFormat(palette),
+      ExportDocument.lightSheets => _lightSheetFormat(palette),
     };
     return [
       ...body,
@@ -1065,9 +1068,48 @@ class _ExportCenterScreenState extends ConsumerState<ExportCenterScreen> {
     ];
   }
 
+  /// Hojas de luz: una por esquema de luz de lo elegido (LZ.1).
+  List<Widget> _lightSheetFormat(AppPalette palette) => [
+    Text(
+      'Una hoja por cada esquema de luz de lo elegido: planta, alzado y '
+      'perfil a escala, cada aparato con su dibujo y color, cotas, leyenda '
+      'y la lista de focos. En el cajetín, sus escenas y jornadas.',
+      style: AppTypography.caption(palette),
+    ),
+    const SizedBox(height: AppSpacing.sm),
+    SegmentedButton<RigSheetLayout>(
+      showSelectedIcon: false,
+      segments: const [
+        ButtonSegment(
+          value: RigSheetLayout.split,
+          label: Text('Planta y alzados aparte'),
+        ),
+        ButtonSegment(
+          value: RigSheetLayout.compact,
+          label: Text('Todo en una hoja'),
+        ),
+      ],
+      selected: {_options.lightLayout},
+      onSelectionChanged: (v) =>
+          _setOptions(_options.copyWith(lightLayout: v.first)),
+    ),
+    const SizedBox(height: AppSpacing.sm),
+    SegmentedButton<RigSheetPaper>(
+      showSelectedIcon: false,
+      segments: [
+        for (final p in RigSheetPaper.values)
+          ButtonSegment(value: p, label: Text(p.label)),
+      ],
+      selected: {_options.lightPaper},
+      onSelectionChanged: (v) =>
+          _setOptions(_options.copyWith(lightPaper: v.first)),
+    ),
+  ];
+
   /// Lo que abre el documento: índice, plan de rodaje y tiempo.
   List<Widget> _documentSwitches() {
     final document = _options.document;
+    if (document == ExportDocument.lightSheets) return const [];
     final schedule = _options.withSchedule;
     return [
       if (document == ExportDocument.shootingPlan)
@@ -1378,7 +1420,7 @@ class _PreviewDoc {
   bool get partial => shown < total;
 }
 
-/// Las tres tarjetas de documento, cada una con su dibujo.
+/// Las tarjetas de documento, cada una con su dibujo.
 class _DocumentPicker extends StatelessWidget {
   final ExportDocument value;
   final ValueChanged<ExportDocument> onChanged;
@@ -1495,6 +1537,15 @@ class _DocumentPicker extends StatelessWidget {
         card(ExportDocument.storyboard, 'Storyboard', storyboard),
         card(ExportDocument.shootingPlan, 'Planta de cámara y luz', plan),
         card(ExportDocument.technicalScript, 'Guion técnico', script),
+        card(
+          ExportDocument.lightSheets,
+          'Hojas de luz',
+          Icon(
+            Icons.architecture_outlined,
+            size: 36,
+            color: palette.textTertiary,
+          ),
+        ),
       ],
     );
   }

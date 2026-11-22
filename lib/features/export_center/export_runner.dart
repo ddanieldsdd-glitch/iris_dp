@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/database/app_database.dart';
 import '../../core/utils/export_file_saver.dart';
 import '../../core/utils/pdf_safe_image.dart';
+import '../../shared/pdf_export/rig_sheet_pdf.dart';
 import '../../shared/pdf_export/shoot_day_brief.dart';
 import '../../shared/pdf_export/shooting_plan_day_sheet.dart'
     show PlanIndexPart;
@@ -15,6 +16,8 @@ import '../../shared/pdf_export/shooting_plan_pdf.dart';
 import '../../shared/pdf_export/storyboard_pdf.dart';
 import '../../shared/pdf_export/technical_script_pdf.dart';
 import '../../shared/technical_script_export/technical_script_docx.dart';
+import '../camera_plan/camera_plan_constants.dart';
+import '../camera_plan/plan_data.dart';
 import '../technical_script/technical_script_export.dart';
 import '../technical_script/technical_script_settings.dart';
 import 'export_options.dart';
@@ -118,6 +121,63 @@ class ExportRunner {
         : [for (final b in briefs) b.withoutWeather()];
   }
 
+  /// Una hoja de luz por esquema de luz de lo elegido, en un solo PDF:
+  /// planta, alzados y lista de focos, con sus escenas y jornadas en el
+  /// cajetín (LZ.1).
+  Future<Uint8List> _lightSheets(
+    List<ExportDaySection> sections,
+    ExportOptions options,
+  ) async {
+    final data = await PlanProjectData.load(db, source.project.id);
+    final scenesOf = <int, List<String>>{};
+    final daysOf = <int, List<String>>{};
+    for (final section in sections) {
+      for (final tract in section.scenes) {
+        for (final item in tract.shots) {
+          final id = data.setup(item.shot.lightSetupId)?.id;
+          if (id == null) continue;
+          final scenes = scenesOf.putIfAbsent(id, () => []);
+          if (!scenes.contains(tract.scene.label)) {
+            scenes.add(tract.scene.label);
+          }
+          final day = section.day?.name;
+          final days = daysOf.putIfAbsent(id, () => []);
+          if (day != null && !days.contains(day)) days.add(day);
+        }
+      }
+    }
+    final jobs = <RigSheetJob>[];
+    for (final MapEntry(key: id, value: scenes) in scenesOf.entries) {
+      final setup = data.setup(id);
+      if (setup == null) continue;
+      final sheet = data.lightSheetOf(setup);
+      if (!sheet.elements.any((e) => e.type == ElementType.light)) continue;
+      jobs.add(
+        RigSheetJob(
+          sheet.elements,
+          sheet.metersPerUnit,
+          RigSheetInfo(
+            project: source.project.name,
+            set: data.set(setup.locationBasePlanId)?.locationName ?? '',
+            location: data.site(data.siteIdOfSetup(setup))?.name ?? '',
+            scheme: setup.name,
+            scenes: 'Esc ${scenes.join(', ')}',
+            shootDay: (daysOf[id] ?? const []).join(' · '),
+            date: DateTime.now(),
+          ),
+        ),
+      );
+    }
+    return RigSheetPdf.buildAll(
+      jobs,
+      options: RigSheetOptions(
+        layout: options.lightLayout,
+        paper: options.lightPaper,
+      ),
+      title: '${source.project.name} · hojas de luz',
+    );
+  }
+
   Future<Uint8List> _plan(
     List<ExportDaySection> sections,
     ExportOptions options,
@@ -174,6 +234,7 @@ class ExportRunner {
       ExportDocument.storyboard => _storyboard(sections, options),
       ExportDocument.shootingPlan => _plan(sections, options),
       ExportDocument.technicalScript => _script(sections, options, word: false),
+      ExportDocument.lightSheets => _lightSheets(sections, options),
     },
   );
 
@@ -211,6 +272,7 @@ class ExportRunner {
         options.look == StoryboardLook.shotList ? 'SL' : 'SB',
       ExportDocument.shootingPlan => 'planta',
       ExportDocument.technicalScript => 'guion_tecnico',
+      ExportDocument.lightSheets => 'hojas_de_luz',
     };
     final project = _safe(source.project.name);
     final seen = <String, int>{};

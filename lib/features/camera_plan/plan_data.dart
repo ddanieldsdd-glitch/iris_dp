@@ -19,6 +19,7 @@ import 'env_overrides.dart';
 import 'floor_plan_json.dart';
 import 'group_light.dart';
 import 'light_overrides.dart';
+import 'plan_segment.dart' show defaultMetersPerUnit;
 
 /// Colores de los esquemas de luz, por orden dentro de su set.
 const kLightSetupColors = [
@@ -739,6 +740,27 @@ class PlanProjectData {
       _inheritedOfSetup[setup.id] ??= List.unmodifiable(
         _resolveInheritedOfSetup(setup),
       );
+
+  /// Todo lo de un esquema de luz para su hoja de luz (LZ.1): entorno, set,
+  /// luz del grupo y la del esquema, con la escala de su planta.
+  ({List<PlanElement> elements, double metersPerUnit}) lightSheetOf(
+    LightSetup setup,
+  ) {
+    final owner = set(setup.locationBasePlanId);
+    final site = this.site(siteIdOfSetup(setup));
+    return (
+      elements: [
+        ...inheritedOfSetup(setup),
+        ...groupLightOf(setup),
+        ...ownOfSetup(setup),
+      ],
+      metersPerUnit:
+          FloorPlanJson.decodeDocument(site?.floorPlanJson).metersPerUnit ??
+          FloorPlanJson.decodeDocument(owner?.floorPlanJson).metersPerUnit ??
+          FloorPlanJson.decodeDocument(setup.planJson).metersPerUnit ??
+          defaultMetersPerUnit,
+    );
+  }
 
   List<PlanElement> _resolveInheritedOfSetup(LightSetup setup) {
     final owner = set(setup.locationBasePlanId);
