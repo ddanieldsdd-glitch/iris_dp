@@ -5,12 +5,47 @@ import '../../core/access/app_invite.dart';
 import '../../core/access/app_invite_service.dart';
 import '../../core/access/invite_share_sheet.dart';
 import '../../core/cloud/cloud_providers.dart';
+import '../../core/cloud/cloud_runtime_config.dart';
 import '../../core/cloud/project_role.dart';
+import '../../core/database/app_database.dart';
+import '../../core/database/database_provider.dart';
 import '../../core/sync/project_sync_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_snackbar.dart';
+
+/// Se puede invitar a este proyecto desde este equipo: hay nube y el
+/// proyecto es propio (no una copia de consulta del de otra cuenta).
+bool canManageProjectTeam(Project project) =>
+    CloudRuntimeConfig.isActive && project.mirrorCloudId == null;
+
+/// Abre «Equipo del proyecto». Mira el proyecto en la base por si se acaba
+/// de subir; si aún no está en la nube, lo explica.
+Future<void> openProjectTeam(BuildContext context, Project project) async {
+  final db = ProviderScope.containerOf(
+    context,
+    listen: false,
+  ).read(databaseProvider);
+  final fresh = await (db.select(
+    db.projects,
+  )..where((p) => p.id.equals(project.id))).getSingleOrNull();
+  final cloudId = (fresh ?? project).cloudId;
+  if (!context.mounted) return;
+  if (cloudId == null) {
+    AppSnackBar.show(
+      context,
+      'Este proyecto aún no está en la nube. Se sube solo en la próxima '
+      'sincronización; después podrás invitar.',
+    );
+    return;
+  }
+  await ProjectTeamSheet.show(
+    context,
+    projectCloudId: cloudId,
+    projectName: (fresh ?? project).name,
+  );
+}
 
 /// Equipo de un proyecto compartido: quién está, con qué papel, a quién se
 /// ha invitado, e invitar a alguien nuevo (solo el dueño del proyecto).

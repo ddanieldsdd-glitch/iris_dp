@@ -18,7 +18,7 @@ Marca cada punto al probarlo. Si algo falla, anota qué hiciste justo antes.
 
 ## 1. Equipo del proyecto (019)
 
-- [ ] **Ver el equipo:** en la pantalla de proyectos, menú de la tarjeta de un proyecto subido a la nube › Editar, el botón dice «Equipo del proyecto», no «Invitar director». Al abrirlo, carga el equipo, o dice «Aún no hay nadie más».
+- [ ] **Ver el equipo:** se llega de tres maneras: menú ••• de la tarjeta del proyecto › «Equipo e invitaciones»; dentro del proyecto, botón «Invitar» arriba a la derecha; o en Editar, «Equipo del proyecto» (ya no dice «Invitar director»). Al abrirlo, carga el equipo, o dice «Aún no hay nadie más».
 - [ ] **Invitar:** pon un correo inventado (por ejemplo `prueba1@ejemplo.com`), papel Gaffer y pulsa «Crear invitación».
   - Se abre «Invitación lista» con un código tipo `K7M2-QX9P-4C`.
   - Al volver, sale en la lista como «Invitación pendiente · Gaffer».

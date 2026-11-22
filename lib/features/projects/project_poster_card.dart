@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/database/app_database.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_layout.dart';
+import '../auth/project_team_sheet.dart';
 import 'project_card_stats.dart';
 
 /// Tarjeta de proyecto: la portada a sangre, el anillo de preparación arriba
@@ -262,6 +263,7 @@ class _ProjectPosterCardState extends State<ProjectPosterCard> {
       for (final size in ProjectCardSize.values) {
         if (v == 'size_${size.name}') widget.onSetSize(size);
       }
+      if (v == 'team') openProjectTeam(context, widget.project);
       if (v == 'edit') widget.onEdit();
       if (v == 'duplicate') widget.onDuplicate();
       if (v == 'delete') widget.onDelete();
@@ -293,6 +295,13 @@ class _ProjectPosterCardState extends State<ProjectPosterCard> {
           child: Text('Tamaño ${size.label}'),
         ),
       const PopupMenuDivider(),
+      if (canManageProjectTeam(widget.project))
+        _item(
+          'team',
+          Icons.group_add_outlined,
+          'Equipo e invitaciones',
+          palette.textSecondary,
+        ),
       _item('edit', Icons.edit_outlined, 'Editar', palette.textSecondary),
       _item(
         'duplicate',

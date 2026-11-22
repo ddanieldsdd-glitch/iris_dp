@@ -11,6 +11,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/compact_nav_shell.dart';
+import '../auth/project_team_sheet.dart';
 import '../shoot_documents/shoot_day_screen.dart';
 import '../shoot_documents/shoot_document_import_actions.dart';
 import '../shoot_documents/state/shoot_document_providers.dart';
@@ -192,6 +193,21 @@ class _ProjectHubScreenState extends ConsumerState<ProjectHubScreen> {
             pinned: true,
             backgroundColor: palette.surface,
             iconTheme: IconThemeData(color: palette.textPrimary),
+            actions: [
+              if (canManageProjectTeam(widget.project))
+                Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.sm),
+                  child: TextButton.icon(
+                    onPressed: () => openProjectTeam(context, widget.project),
+                    icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+                    label: const Text('Invitar'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: palette.textPrimary,
+                      backgroundColor: palette.surface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: const EdgeInsets.only(left: 16, bottom: 14, right: 16),
               title: Text(
