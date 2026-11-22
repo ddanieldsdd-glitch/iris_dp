@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import '../arch/arch_material.dart';
+import '../arch/arch_solid.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../plan_marks.dart';
@@ -860,6 +861,31 @@ class LightScene {
     }
   }
 
+  /// Forjado o volumen (AM.2): cada lado de su contorno tapa de su cota
+  /// de abajo a la de arriba. Una tarima o una barra tapan poco; una
+  /// entreplanta deja pasar la luz por debajo.
+  static void _addSolid(
+    List<LightBlocker> blockers,
+    PlanElement el,
+    double metersPerUnit,
+  ) {
+    final pts = ArchSolid.outline(el, metersPerUnit);
+    if (pts.length < 3) return;
+    final base = ArchSolid.bottomM(el), top = ArchSolid.topM(el);
+    if (top - base < 0.01) return;
+    for (var i = 0; i < pts.length; i++) {
+      blockers.add(
+        LightBlocker(
+          pts[i],
+          pts[(i + 1) % pts.length],
+          heightM: top,
+          baseM: base,
+          element: el,
+        ),
+      );
+    }
+  }
+
   /// Una tela: tapa de su bajo a su borde de arriba, que sigue la
   /// catenaria, y deja pasar lo que deja su tejido.
   static void _addDrape(
@@ -1128,6 +1154,10 @@ class LightScene {
         case ElementType.prop:
           if (PlanPillar.isPillar(el)) {
             _addPillar(blockers, el, metersPerUnit);
+            continue;
+          }
+          if (ArchSolid.isSolid(el)) {
+            _addSolid(blockers, el, metersPerUnit);
             continue;
           }
           final radius = propSizeM(el) / metersPerUnit;

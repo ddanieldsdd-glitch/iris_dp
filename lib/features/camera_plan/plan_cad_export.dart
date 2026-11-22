@@ -7,6 +7,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/painting.dart';
 import 'package:xml/xml.dart';
 
+import 'arch/arch_solid.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/light_scene.dart';
@@ -127,6 +128,9 @@ class PlanCadExport {
   static const layerRigging = 'RIGGING';
   static const layerDrapes = 'TELAS';
 
+  /// Forjados y volúmenes (AM.2): su contorno.
+  static const layerSolids = 'VOLUMENES';
+
   /// La planta en DXF, en metros, con el norte hacia arriba.
   static String planDxf(List<PlanElement> elements, double metersPerUnit) {
     final dxf = _Dxf({
@@ -141,6 +145,7 @@ class PlanCadExport {
       layerTruss,
       layerRigging,
       layerDrapes,
+      layerSolids,
     });
     // El lienzo crece hacia abajo; el CAD, hacia arriba.
     Offset m(Offset p) => Offset(p.dx * metersPerUnit, -p.dy * metersPerUnit);
@@ -192,6 +197,11 @@ class PlanCadExport {
               c + Offset(-r, r),
             ], closed: true);
           }
+          continue;
+        case RigType.slab || RigType.volume:
+          dxf.polyline(layerSolids, [
+            for (final p in ArchSolid.outline(el, metersPerUnit)) m(p),
+          ], closed: true);
           continue;
         case RigType.hall || RigType.scan:
           continue;

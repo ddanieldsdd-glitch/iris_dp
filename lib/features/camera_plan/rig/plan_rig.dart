@@ -19,6 +19,10 @@ enum RigType {
   groundSupport,
   pillar,
   scan,
+
+  /// Forjado y volumen del motor arquitectónico (AM.2, `ArchSolid`).
+  slab,
+  volume,
 }
 
 extension RigTypeCodec on RigType {
@@ -31,6 +35,8 @@ extension RigTypeCodec on RigType {
     RigType.groundSupport => 'Ground support',
     RigType.pillar => 'Pilar',
     RigType.scan => 'Escaneo',
+    RigType.slab => 'Forjado',
+    RigType.volume => 'Volumen',
   };
 
   /// El tipo de estructura de un elemento, o `null` si no lo es.

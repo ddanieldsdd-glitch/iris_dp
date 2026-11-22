@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import 'arch/arch_solid.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/ambient.dart';
@@ -1072,13 +1073,20 @@ class CameraPlanPainter extends CustomPainter {
   static List<PlanElement> _paintOrder(List<PlanElement> elements) {
     bool isWall(PlanElement e) =>
         PlanSegment.isSegment(e) && PlanSegment.kind(e) == PlanSegment.kindWall;
-    bool isRig(PlanElement e) => RigTypeCodec.of(e) != null;
+    // Forjados y volúmenes (AM.2), debajo de todo: son el suelo de lo
+    // demás. Una entreplanta, a trazos, va con la estructura.
+    bool isGround(PlanElement e) =>
+        ArchSolid.isSolid(e) && !ArchSolid.isOverhead(e);
+    bool isRig(PlanElement e) => RigTypeCodec.of(e) != null && !isGround(e);
     return [
+      ...elements.where(isGround),
       ...elements.where((e) => PlanSegment.isSegment(e) && !isWall(e)),
       ...elements.where(isWall),
       // Truss, pilares y motores, debajo de las luces que cuelgan de ellos.
       ...elements.where((e) => !PlanSegment.isSegment(e) && isRig(e)),
-      ...elements.where((e) => !PlanSegment.isSegment(e) && !isRig(e)),
+      ...elements.where(
+        (e) => !PlanSegment.isSegment(e) && !isRig(e) && !isGround(e),
+      ),
     ];
   }
 
@@ -1099,7 +1107,21 @@ class CameraPlanPainter extends CustomPainter {
       );
     }
     final preview = segmentPreview;
-    if (preview != null) {
+    if (preview != null && preview.kind.startsWith('arch-')) {
+      // Forjado o volumen (AM.2): el rectángulo de esquina a esquina, con
+      // su ancho y su fondo.
+      final r = Rect.fromPoints(preview.from, preview.to);
+      canvas.drawRect(r, Paint()..color = const Color(0x3348A0D8));
+      canvas.drawRect(
+        r,
+        Paint()
+          ..color = _CanvasColors.accent
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5 / scale,
+      );
+      _drawLengthLabel(canvas, r.topCenter, r.width);
+      _drawLengthLabel(canvas, r.centerLeft, r.height);
+    } else if (preview != null) {
       final ghost = PlanSegment.create(
         start: preview.from,
         end: preview.to,
@@ -1785,6 +1807,8 @@ class CameraPlanPainter extends CustomPainter {
       );
       return;
     }
+    // Un forjado o un volumen se marca con su contorno.
+    if (ArchSolid.isSolid(el)) return;
     canvas.drawCircle(
       el.position,
       24,

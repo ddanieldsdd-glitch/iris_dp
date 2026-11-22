@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'arch/arch_solid.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/light_scene.dart';
@@ -250,6 +251,26 @@ class PlanElevation {
               bottom: PlanLevel.of(el),
               top: PlanLevel.of(el) + PlanPillar.heightM(el),
               depth: p.depth,
+            ),
+          );
+          continue;
+        case RigType.slab || RigType.volume:
+          // Forjado o volumen (AM.2): de su cota de abajo a la de arriba,
+          // a lo ancho de su contorno visto desde este lado.
+          final pts = [
+            for (final p in ArchSolid.outline(el, mpu)) at(p),
+          ];
+          if (pts.isEmpty) continue;
+          final level = PlanLevel.of(el);
+          items.add(
+            ElevationItem(
+              kind: ElevationKind.prop,
+              element: el,
+              from: pts.map((p) => p.across).reduce(math.min),
+              to: pts.map((p) => p.across).reduce(math.max),
+              bottom: level + ArchSolid.bottomM(el),
+              top: level + ArchSolid.topM(el),
+              depth: pts.map((p) => p.depth).reduce(math.min),
             ),
           );
           continue;

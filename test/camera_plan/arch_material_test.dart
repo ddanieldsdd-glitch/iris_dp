@@ -267,6 +267,7 @@ void main() {
           ),
         ),
       );
+      expect(PlanPieceControls.appliesTo(hall), isTrue);
       expect(find.text('Suelo de la nave'), findsOneWidget);
       expect(find.text('Solera de hormigón · Hormigón'), findsOneWidget);
       expect(find.text('Cubierta (si no es de lona)'), findsOneWidget);

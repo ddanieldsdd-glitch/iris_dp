@@ -20,6 +20,7 @@ import '../light/plan_light.dart';
 import '../light/surfaces.dart';
 import '../light/wall_mount.dart';
 import '../arch/arch_material.dart';
+import '../arch/arch_solid.dart';
 import '../plan_classes.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
@@ -121,6 +122,7 @@ class PlanScene3d {
     final scans = <Map<String, dynamic>>[];
     final cameras = <Map<String, dynamic>>[];
     final props = <Map<String, dynamic>>[];
+    final solids = <Map<String, dynamic>>[];
 
     // Techos de los recintos, solo si alguna luz cuelga sin altura propia.
     List<SceneRoom>? rooms;
@@ -238,6 +240,20 @@ class PlanScene3d {
               'scale': PlanScan.scale(el),
             });
           }
+        case RigType.slab || RigType.volume:
+          // Forjado o volumen (AM.2): su contorno estirado de su cota de
+          // abajo a la de arriba, con su material.
+          solids.add({
+            'id': uid,
+            'name': el.displayLabel,
+            'cat': PlanCategory.of(el).name,
+            'cls': PlanClass.of(el).name,
+            'kind': RigTypeCodec.of(el)!.name,
+            'outline': [for (final p in ArchSolid.outline(el, mpu)) xy(p)],
+            'z0': _r(level + ArchSolid.bottomM(el)),
+            'z1': _r(level + ArchSolid.topM(el)),
+            'mat': ArchSolid.material(el).id,
+          });
         case RigType.hall || null:
           break;
       }
@@ -245,7 +261,11 @@ class PlanScene3d {
         case ElementType.light:
           final f = _fixture(el, uid, mpu, level, xy, ceilingAt);
           if (f != null) fixtures.add(f);
-        case ElementType.prop when furniture.contains(el.propType):
+        // Una pieza de rigging o de arquitectura (truss, nave, volumen…) no
+        // es atrezzo, aunque su etiqueta se lea como «rectángulo».
+        case ElementType.prop
+            when furniture.contains(el.propType) &&
+                RigTypeCodec.of(el) == null:
           props.add({
             'id': uid,
             'name': el.customName ?? el.propType!.label,
@@ -331,6 +351,7 @@ class PlanScene3d {
     out
       ..['walls'] = walls
       ..['surfaces'] = surfaces
+      ..['solids'] = solids
       ..['drapes'] = drapes
       ..['pillars'] = pillars
       ..['trusses'] = trusses
@@ -357,7 +378,7 @@ class PlanScene3d {
   /// el visor y el glTF de Unreal los construyen una vez.
   static Map<String, dynamic> materialsOf(Map<String, dynamic> scene) {
     final used = <String>{};
-    for (final k in const ['walls', 'surfaces', 'drapes', 'halls']) {
+    for (final k in const ['walls', 'surfaces', 'drapes', 'halls', 'solids']) {
       for (final item in (scene[k] as List?) ?? const []) {
         if (item is! Map) continue;
         for (final key in const ['mat', 'floorMat', 'roofMat']) {
@@ -575,7 +596,15 @@ class PlanScene3d {
   /// pilares, truss, rigging y naves. Mover un foco o una cámara no la
   /// cambia; mover una pared, sí. `null` si no hay estructura.
   static String? structureKey(Map<String, dynamic> scene) {
-    const kinds = ['walls', 'drapes', 'pillars', 'trusses', 'rigging', 'halls'];
+    const kinds = [
+      'walls',
+      'drapes',
+      'pillars',
+      'trusses',
+      'rigging',
+      'halls',
+      'solids',
+    ];
     final parts = {
       for (final k in kinds)
         if ((scene[k] as List?)?.isNotEmpty ?? false) k: scene[k],

@@ -952,6 +952,34 @@
     L.walls.add(m);
   }
 
+  // Forjado o volumen (AM.2): su contorno estirado de z0 a z1, con el
+  // material de la biblioteca en todas sus caras.
+  const solidFallback = new THREE.MeshStandardMaterial({ color: 0xcfcac2, roughness: 0.85 });
+  function addSolid(s) {
+    if (!s.outline || s.outline.length < 3) return;
+    const h = (s.z1 || 0) - (s.z0 || 0);
+    if (h < 0.005) return;
+    const shape = new THREE.Shape(s.outline.map((p) => new THREE.Vector2(p[0], p[1])));
+    let geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false });
+    const mat = (s.mat && archMaterial(s.mat, false)) || solidFallback;
+    if (mat.map) geo = boxUV(geo, mat) || geo;
+    const m = new THREE.Mesh(geo, mat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = s.z0 || 0;
+    m.castShadow = m.receiveShadow = true;
+    m.userData.id = s.id;
+    picks.push(m);
+    tagPiece(m, s);
+    L.walls.add(m);
+    if (clearView) {
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), edgeMat);
+      edges.rotation.x = -Math.PI / 2;
+      edges.position.y = s.z0 || 0;
+      edges.userData.edges = true;
+      L.walls.add(edges);
+    }
+  }
+
   function addLeaves(o, z0, top) {
     if (!o.span) return;
     const a = [o.span[0], o.span[1]], b = [o.span[2], o.span[3]];
@@ -1428,6 +1456,7 @@
     const grow = (x, y, z) => box.expandByPoint(V(x, y, z || 0));
     (sc.halls || []).forEach((h) => h.outline.forEach((p) => grow(p[0], p[1], 0)));
     (sc.surfaces || []).forEach((s) => s.outline.forEach((p) => grow(p[0], p[1], 0)));
+    (sc.solids || []).forEach((s) => s.outline.forEach((p) => grow(p[0], p[1], s.z1 || 0)));
     (sc.walls || []).forEach((w) => w.points.forEach((p, i) => grow(p[0], p[1], (w.z0 || 0) + w.tops[i])));
     (sc.trusses || []).forEach((t) => { grow(t.from[0], t.from[1], t.z); grow(t.to[0], t.to[1], t.z); });
     (sc.fixtures || []).forEach((f) => grow(f.pos[0], f.pos[1], f.pos[2]));
@@ -1463,6 +1492,7 @@
     (sc.halls || []).forEach(addHall);
     (sc.walls || []).forEach(addWall);
     (sc.surfaces || []).forEach(addSurface);
+    (sc.solids || []).forEach(addSolid);
     (sc.drapes || []).forEach(addDrape);
 
     for (const p of sc.pillars || []) {

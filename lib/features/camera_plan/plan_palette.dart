@@ -23,6 +23,10 @@ enum PlanTool {
 
   /// Tramo de truss de un punto a otro.
   truss,
+
+  /// Forjado y volumen (AM.2): un rectángulo de esquina a esquina.
+  slab,
+  volume,
   measure,
 }
 
@@ -34,6 +38,8 @@ extension PlanToolInfo on PlanTool {
     PlanTool.relief => 'Relieve',
     PlanTool.drape => 'Tela',
     PlanTool.truss => 'Truss',
+    PlanTool.slab => 'Forjado',
+    PlanTool.volume => 'Volumen',
     PlanTool.measure => 'Medir',
   };
 
@@ -44,6 +50,8 @@ extension PlanToolInfo on PlanTool {
     PlanTool.relief => Icons.terrain_outlined,
     PlanTool.drape => Icons.curtains_outlined,
     PlanTool.truss => Icons.view_week_outlined,
+    PlanTool.slab => Icons.layers_outlined,
+    PlanTool.volume => Icons.view_in_ar_outlined,
     PlanTool.measure => Icons.straighten,
   };
 
@@ -53,7 +61,9 @@ extension PlanToolInfo on PlanTool {
       this == PlanTool.street ||
       this == PlanTool.relief ||
       this == PlanTool.drape ||
-      this == PlanTool.truss;
+      this == PlanTool.truss ||
+      this == PlanTool.slab ||
+      this == PlanTool.volume;
 }
 
 /// Paleta fija de la planta: lo que se puede añadir, siempre a la vista.

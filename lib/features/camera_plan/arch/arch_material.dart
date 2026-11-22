@@ -153,21 +153,17 @@ class ArchMaterial {
     return byte(r) << 16 | byte(g) << 8 | byte(b);
   }
 
-  /// Lo que multiplica la textura (lineal, por canal) para dar
-  /// [albedoRgb]: 1 si el material sale de su textura.
+  /// Lo que multiplica la textura (lineal) para que su brillo sea el que
+  /// usa la luz: el mismo en los tres canales, así la textura conserva su
+  /// color (una tarima de roble sigue siendo marrón). 1 si el material sale
+  /// de su textura.
   List<double> get tint {
     final t = texture;
     if (t == null) return const [1, 1, 1];
-    final rgb = albedoRgb;
-    final want = [
-      (rgb >> 16 & 255) / 255,
-      (rgb >> 8 & 255) / 255,
-      (rgb & 255) / 255,
-    ];
     final (r, g, b) = t.mean;
-    double ratio(double w, double m) =>
-        ((w / math.max(m, 0.01)) * 1000).round() / 1000;
-    return [ratio(want[0], r), ratio(want[1], g), ratio(want[2], b)];
+    final lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    final k = ((reflectance / math.max(lum, 0.005)) * 1000).round() / 1000;
+    return [k, k, k];
   }
 
   /// Para el visor 3D y el glTF que va a Unreal (`iris.scene3d`).

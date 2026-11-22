@@ -232,6 +232,17 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - **Luz:** el forjado da techo y suelo a los recintos que cubre. El volumen bloquea y rebota.
 - **3D:** `slabs` y `volumes` en el JSON, construidos con `ExtrudeGeometry` y material por cara.
 
+*Hecho en parte (2026-11-22, rama `plan/motor-arquitectonico`, sin publicar). Cómo quedó:*
+- `arch/arch_solid.dart`: forjado (`RigType.slab`: cota de arriba y grosor) y volumen (`RigType.volume`: alto), con el contorno en metros respecto a su centro, giro, material de la biblioteca y `uid`. Una versión anterior de IRIS los lee como un atrezzo cualquiera.
+- Herramientas «Forjado» y «Volumen» en la paleta: un rectángulo de esquina a esquina, con su ancho y su fondo mientras se dibuja. Se cogen tocando dentro.
+- Panel: ancho, fondo, alto o cota y grosor, material y área. El empujar/tirar va por ahora con el control de alto; falta el asa en la planta y en el 3D.
+- Planta: relleno del color de su material, debajo de todo; un forjado por encima de 2 m (entreplanta) va a trazos. Clase AR.1 «Arquitectura», capa DXF `VOLUMENES` y alzado de su cota de abajo a la de arriba.
+- Luz: cada lado tapa de su cota de abajo a la de arriba; bajo una entreplanta pasa la luz. **Falta:** que el forjado dé techo y suelo a los recintos, que el volumen rebote y que una tarima suba a quien está encima.
+- 3D y Unreal: lista `solids` (contorno, `z0`, `z1`, material) extruida con textura a escala; va al GLB como pieza propia.
+- Corregido de paso: los truss, motores, pilares y naves salían además como cajas «Rectángulo» en el 3D.
+- Los materiales de siempre ya no pierden el color de su textura: el tinte solo ajusta el brillo.
+- Falta: polígonos de más de cuatro lados y huecos (dibujar punto a punto), y crear un forjado desde paredes que cierran.
+
 **AM.3 · Cubiertas para cualquier contorno**
 - Se sacan `HallRoof` y `roofGrid` de la nave a un `ArchRoof` común: plana, a un agua, a dos aguas, a cuatro aguas, en bóveda y de lona. Con alero, pendiente o altura de cumbrera, y material.
 - Se aplica a una nave, a un volumen o a un recinto cerrado.

@@ -5,6 +5,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'arch/arch_material.dart';
 import 'arch/arch_material_picker.dart';
+import 'arch/arch_solid.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/plan_grip.dart';
@@ -71,6 +72,8 @@ class PlanPieceControls extends StatelessWidget {
       PlanOpening.isOpening(el) ||
       PlanSegment.isSegment(el) ||
       RigControls.appliesTo(el) ||
+      PlanHall.isHall(el) ||
+      ArchSolid.isSolid(el) ||
       _isTerrain(el) ||
       _isGrip(el) ||
       el.type == ElementType.actor ||
@@ -430,6 +433,80 @@ class PlanPieceControls extends StatelessWidget {
           max: 6,
           onChanged: (v) =>
               el.props[PlanOpening.headKey] = (v * 20).round() / 20,
+        ),
+      ]);
+    } else if (ArchSolid.isSolid(el)) {
+      // Forjado o volumen (AM.2): medidas, altura y material.
+      final size = ArchSolid.sizeM(el);
+      String m(double v) => '${v.toStringAsFixed(2)} m';
+      children.addAll([
+        slider(
+          'Ancho',
+          m(size.width),
+          current: size.width,
+          min: 0.2,
+          max: 60,
+          onChanged: (v) => ArchSolid.resize(
+            el,
+            Size((v * 20).round() / 20, size.height),
+          ),
+        ),
+        slider(
+          'Fondo',
+          m(size.height),
+          current: size.height,
+          min: 0.2,
+          max: 60,
+          onChanged: (v) => ArchSolid.resize(
+            el,
+            Size(size.width, (v * 20).round() / 20),
+          ),
+        ),
+        if (ArchSolid.isVolume(el))
+          slider(
+            'Alto',
+            m(ArchSolid.heightM(el)),
+            current: ArchSolid.heightM(el),
+            min: 0.05,
+            max: 40,
+            onChanged: (v) =>
+                el.props[ArchSolid.heightKey] = (v * 20).round() / 20,
+          )
+        else ...[
+          slider(
+            'Cota de arriba',
+            '+${m(ArchSolid.slabTopM(el))}',
+            current: ArchSolid.slabTopM(el),
+            min: 0.05,
+            max: 30,
+            onChanged: (v) =>
+                el.props[ArchSolid.topKey] = (v * 20).round() / 20,
+          ),
+          slider(
+            'Grosor',
+            '${(ArchSolid.slabThickM(el) * 100).round()} cm',
+            current: ArchSolid.slabThickM(el),
+            min: 0.02,
+            max: 1.5,
+            onChanged: (v) =>
+                el.props[ArchSolid.thickKey] = (v * 100).round() / 100,
+          ),
+        ],
+        ArchMaterialField(
+          label: 'Material',
+          value: ArchSolid.material(el),
+          onChanged: (mat) {
+            el.props[ArchMaterials.key] = mat.id;
+            onUpdate();
+          },
+        ),
+        Text(
+          '${ArchSolid.areaM2(el).toStringAsFixed(1)} m² en planta'
+          '${ArchSolid.isOverhead(el) ? ' · por encima de la cabeza: '
+                    'la luz pasa por debajo' : ''}.',
+          style: AppTypography.caption(
+            palette,
+          ).copyWith(color: palette.textTertiary),
         ),
       ]);
     } else if (PlanHall.isHall(el)) {

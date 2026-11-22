@@ -27,6 +27,7 @@ import '../../shared/annotations/annotation_canvas.dart';
 import '../../shared/equipment/light_optics.dart';
 import '../../shared/annotations/annotation_document.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
+import 'arch/arch_solid.dart';
 import 'camera_plan_grouping.dart';
 import '../equipment/widgets/light_quick_add_sheet.dart';
 import 'camera_links.dart';
@@ -2910,6 +2911,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     PlanTool.street => PlanSegment.kindStreet,
     PlanTool.relief => PlanSegment.kindRelief,
     PlanTool.drape => PlanDrape.kind,
+    PlanTool.slab => 'arch-slab',
+    PlanTool.volume => 'arch-volume',
     _ => PlanSegment.kindWall,
   };
 
@@ -2919,6 +2922,18 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       switch (_tool) {
         PlanTool.drape => PlanDrape.create(from, to),
         PlanTool.truss => PlanTruss.create(from, to),
+        PlanTool.slab => ArchSolid.rectangle(
+          RigType.slab,
+          from,
+          to,
+          _metersPerUnit,
+        ),
+        PlanTool.volume => ArchSolid.rectangle(
+          RigType.volume,
+          from,
+          to,
+          _metersPerUnit,
+        ),
         _ => PlanSegment.create(start: from, end: to, kind: _segmentKind),
       },
       keepPosition: true,

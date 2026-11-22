@@ -35,7 +35,10 @@ enum PlanClass {
             : PlanClass.grip;
       case ElementType.prop:
         final rig = RigTypeCodec.of(el);
-        if (rig == RigType.hall || rig == RigType.pillar) {
+        if (rig == RigType.hall ||
+            rig == RigType.pillar ||
+            rig == RigType.slab ||
+            rig == RigType.volume) {
           return PlanClass.architecture;
         }
         if (rig != null) return PlanClass.rigging;

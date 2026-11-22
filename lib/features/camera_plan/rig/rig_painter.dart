@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../arch/arch_solid.dart';
 import '../camera_plan_element_model.dart';
 import '../plan_segment.dart';
 import 'plan_drape.dart';
@@ -44,6 +45,8 @@ class RigPainter {
         drawHall(canvas, el, metersPerUnit, selected: selected, ink: color);
       case RigType.scan:
         drawScan(canvas, el.position, metersPerUnit, color: color);
+      case RigType.slab || RigType.volume:
+        drawSolid(canvas, el, metersPerUnit, selected: selected, ink: color);
       case null:
         return false;
     }
@@ -340,6 +343,73 @@ class RigPainter {
       selected ? 6 : 4,
       Paint()..color = rigColor.withValues(alpha: selected ? 1 : 0.6),
     );
+  }
+
+  /// Forjado o volumen (AM.2): su contorno relleno del color de su
+  /// material y, dentro, su altura. Un forjado por encima de la cabeza va
+  /// a trazos, como lo que queda por encima del corte de la planta.
+  static void drawSolid(
+    Canvas canvas,
+    PlanElement el,
+    double mpu, {
+    bool selected = false,
+    Color ink = RigPainter.ink,
+  }) {
+    final pts = ArchSolid.outline(el, mpu);
+    if (pts.length < 3) return;
+    final path = Path()..addPolygon(pts, true);
+    final overhead = ArchSolid.isOverhead(el);
+    final rgb = ArchSolid.material(el).albedoRgb;
+    int srgb(int c) {
+      final v = c / 255;
+      final s = v <= 0.0031308 ? v * 12.92 : 1.055 * math.pow(v, 1 / 2.4) - 0.055;
+      return (s.clamp(0.0, 1.0) * 255).round();
+    }
+
+    final fill = Color.fromARGB(
+      255,
+      srgb(rgb >> 16 & 255),
+      srgb(rgb >> 8 & 255),
+      srgb(rgb & 255),
+    );
+    if (!overhead) {
+      canvas.drawPath(path, Paint()..color = fill.withValues(alpha: 0.55));
+    }
+    final stroke = Paint()
+      ..color = selected ? rigColor : ink.withValues(alpha: 0.85)
+      ..strokeWidth = selected ? 2 : 1.2
+      ..style = PaintingStyle.stroke;
+    if (overhead) {
+      for (var i = 0; i < pts.length; i++) {
+        _dashed(canvas, pts[i], pts[(i + 1) % pts.length], stroke);
+      }
+    } else {
+      canvas.drawPath(path, stroke);
+    }
+    // La altura en el centro: «+0,40» la cota de un forjado, «1,10 m» el
+    // alto de un volumen.
+    String m(double v) => v.toStringAsFixed(2).replaceAll('.', ',');
+    final text = ArchSolid.isSlab(el)
+        ? '+${m(ArchSolid.topM(el))}'
+        : '${m(ArchSolid.topM(el))} m';
+    var c = Offset.zero;
+    for (final p in pts) {
+      c += p;
+    }
+    c /= pts.length.toDouble();
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: ink,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          backgroundColor: _fillFor(ink).withValues(alpha: 0.7),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
   }
 
   /// Relleno de un símbolo: claro sobre papel, oscuro sobre la planta

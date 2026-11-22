@@ -26,6 +26,14 @@ extension _EditorGestures on _CameraPlanEditorState {
       final reach = PlanSegment.kind(el) == PlanSegment.kindStreet ? 30 : 10;
       if (PlanSegment.distanceTo(el, canvasPos) < reach * slack) return el;
     }
+    // Forjados y volúmenes (AM.2), tocando dentro: lo último, porque lo
+    // que está encima se coge antes.
+    for (final el in _drawnElements.reversed) {
+      if (ArchSolid.isSolid(el) &&
+          ArchSolid.contains(el, canvasPos, _metersPerUnit)) {
+        return el;
+      }
+    }
     return null;
   }
 
