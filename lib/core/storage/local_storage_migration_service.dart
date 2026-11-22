@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../database/database_journal.dart';
+import '../database/local_database_backup.dart';
 import 'app_storage_config.dart';
 import 'legacy_storage_discovery.dart';
 
@@ -59,8 +61,9 @@ abstract final class LocalStorageMigrationService {
     try {
       final targetDbFile = File(target.databaseFile);
       if (await targetDbFile.exists()) {
-        final sourceModified = await sourceDb.lastModified();
-        final targetModified = await targetDbFile.lastModified();
+        // En WAL lo último está en el `-wal`, no en el `.db`.
+        final sourceModified = DatabaseJournal.lastWrite(sourceDb.path);
+        final targetModified = DatabaseJournal.lastWrite(target.databaseFile);
         if (targetModified.isAfter(sourceModified)) {
           return StorageMigrationResult(
             success: false,
@@ -72,11 +75,16 @@ abstract final class LocalStorageMigrationService {
         final backup = File(
           '${target.databaseFile}.pre-migration-${DateTime.now().millisecondsSinceEpoch}',
         );
-        await targetDbFile.copy(backup.path);
+        DatabaseJournal.copy(target.databaseFile, backup.path);
       }
 
+      // La base actual está abierta: no se sustituye en caliente (en WAL la
+      // conexión volcaría su `-wal` encima y la estropearía). Se prepara la
+      // copia al lado, con su `-wal`, y se pone en su sitio al reiniciar.
       await Directory(p.dirname(target.databaseFile)).create(recursive: true);
-      await sourceDb.copy(target.databaseFile);
+      final staged =
+          '${target.databaseFile}.reubicada-${DateTime.now().millisecondsSinceEpoch}';
+      DatabaseJournal.copy(sourceDb.path, staged);
 
       final projectsCopied = await _copyProjectFolders(
         source.documentsPath,
@@ -84,10 +92,12 @@ abstract final class LocalStorageMigrationService {
       );
 
       final pathsUpdated = await _rewriteStoredPaths(
-        databasePath: target.databaseFile,
+        databasePath: staged,
         oldRoot: source.documentsPath,
         newRoot: target.documentsPath,
       );
+
+      await LocalDatabaseBackup.scheduleReplace(staged);
 
       return StorageMigrationResult(
         success: true,

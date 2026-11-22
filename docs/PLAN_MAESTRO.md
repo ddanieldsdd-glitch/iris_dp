@@ -64,7 +64,7 @@ Sin coste. Que los datos de otros estén seguros y que varias personas puedan tr
 - [x] Rechazo de paquetes de una versión más nueva (`assertReadable`, FI.1).
 - [x] **[Mac]** Jornadas con uid y mezcla por elemento (DR.6, v1.13.0).
 - [x] **[Mac]** `busy_timeout` en la base (v1.13.1).
-- [ ] **[Mac] Base en WAL (R6):** la base sigue en modo diario. Con WAL, leer no bloquea al que escribe, y se quita de raíz el «database is locked» entre dos procesos. Antes hay que resolver la duda de R6: base en una carpeta elegida a mano. Sube de P2 a P0. [PLAN_ACCION · R6]
+- [x] **[Mac] Base en WAL (R6):** hecho el 2026-11-22 en `plan/r6-wal`, solo en la carpeta propia de la app. la base sigue en modo diario. Con WAL, leer no bloquea al que escribe, y se quita de raíz el «database is locked» entre dos procesos. Antes hay que resolver la duda de R6: base en una carpeta elegida a mano. Sube de P2 a P0. [PLAN_ACCION · R6]
 
 ## P1 · Pruebas reales y modo gaffer
 

@@ -205,6 +205,20 @@ abstract final class LocalDatabaseBackup {
     ).writeAsString(copy.path, flush: true);
   }
 
+  /// Deja anotado que al abrir la app la base pase a ser [path] (una copia
+  /// preparada al lado, p. ej. al reubicar el almacenamiento): con la base
+  /// abierta, y más en WAL, no se puede sustituir el archivo en caliente.
+  static Future<void> scheduleReplace(
+    String path, {
+    @visibleForTesting String? databaseFileOverride,
+  }) async {
+    final databaseFile = await _databaseFile(databaseFileOverride);
+    if (databaseFile == null) {
+      throw StateError('No se encuentra la base de datos');
+    }
+    await File('$databaseFile$_restoreSuffix').writeAsString(path, flush: true);
+  }
+
   /// Antes de abrir la base: si hay una restauración anotada, guarda lo
   /// actual como copia y pone la elegida en su lugar. Devuelve si la hizo.
   static bool applyPendingRestore(String databasePath, {DateTime? now}) {

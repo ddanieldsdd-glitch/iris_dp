@@ -1,3 +1,4 @@
+import 'database_journal.dart';
 import 'local_database_backup.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -5457,13 +5458,17 @@ class AppDatabase extends _$AppDatabase {
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
-    final File file;
-    if (AppStorageConfig.isConfigured) {
-      file = File(AppStorageConfig.current!.databaseFile);
-    } else {
-      final defaults = await AppStorageConfig.defaultPaths();
-      file = File(defaults.databaseFile);
-    }
+    final defaults = await AppStorageConfig.defaultPaths();
+    final file = File(
+      AppStorageConfig.isConfigured
+          ? AppStorageConfig.current!.databaseFile
+          : defaults.databaseFile,
+    );
+    // R6: WAL solo en la carpeta propia de la app (ver DatabaseJournal).
+    final wal = DatabaseJournal.useWal(
+      databasePath: file.path,
+      defaultDatabasePath: defaults.databaseFile,
+    );
     await Directory(p.dirname(file.path)).create(recursive: true);
     final path = file.path;
     final oldRoot = IosContainerPaths.previousRoot;
@@ -5478,6 +5483,11 @@ LazyDatabase _openConnection() {
         // 2026-11-19 dos actualizaciones seguidas dejaron la migración a 64 a
         // medias por eso.
         raw.execute('PRAGMA busy_timeout = 10000');
+        DatabaseJournal.apply(
+          wal: wal,
+          firstValue: (sql) => raw.select(sql).first.values.first,
+          execute: raw.execute,
+        );
         if (restored) LocalDatabaseBackup.forgetSyncBases(raw.execute);
         final version =
             raw.select('PRAGMA user_version').first.values.first as int;
