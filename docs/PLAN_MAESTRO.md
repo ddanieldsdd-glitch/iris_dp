@@ -43,12 +43,12 @@ Sin coste. Que los datos de otros estén seguros y que varias personas puedan tr
 - [ ] **Tableros:** con todo subido, actualizar `PLAN_ACCION.md` y `PLAN_F6_3D_PREVIS.md` para que reflejen lo hecho.
 
 ### Acceso y datos
-- [ ] **Traer `plan/invitados-control` a main** y ejecutar sus migraciones 016 y 017: aprobación de cuentas, cierre de acceso, mantenimiento, `min_build` y cupo de espacio por cuenta. [rama IN]
+- [ ] **Traer `plan/invitados-control` a main** y ejecutar sus migraciones 016 y 017. **[2026-11-22] Código traído en la rama `plan/in-sobre-main` (esquema 65, tests y base real bien); falta publicarlo y que Daniel ejecute 016 en Supabase**: aprobación de cuentas, cierre de acceso, mantenimiento, `min_build` y cupo de espacio por cuenta. [rama IN]
   - **[Mac] Choca con main:** la rama usa el **esquema 64** (`mirrorCloudId`), que ya lo ocupa el plan R. Hay que renumerarla a 65 y rehacer su instantánea de `drift_schemas/`.
   - **[Mac]** Viene de v1.9.0, con 51 archivos y unas 3.300 líneas. Conviene rehacerla sobre main más que fusionarla.
   - **[Mac]** La 016 hace administradora a la cuenta más antigua de `auth.users`: comprobarlo con la consulta final de la migración.
 - [x] ~~Ejecutar y comprobar en Supabase las migraciones 013 y 014~~: Daniel ejecutó 013, 014 y 015 el 2026-11-10 y la comprobación salió bien. v1.8.0 quedó sin huella; las versiones siguientes la tienen. [Mac, FI.2, FI.3, FI.6]
-- [ ] **[Mac] Trigger en Supabase que impide bajar la versión del snapshot:** era parte del plan R y no se hizo. [RC · R]
+- [ ] **[Mac] Trigger en Supabase que impide bajar la versión del snapshot:** era parte del plan R y no se hizo. [RC · R] **[2026-11-22] Escrito: migración 018 y aviso «Actualiza IRIS» en la app, en `plan/in-sobre-main`; falta ejecutarla en Supabase.**
 - [ ] **Separar Supabase** en dos proyectos gratuitos: desarrollo y producción. [Colaboración, fase 0]
 - [ ] **Subida de fotos firmada** (fuera el preset sin firmar de Cloudinary) y paso a Cloudflare R2, para que el cupo cuente también las imágenes. [Colaboración, fase 0; rama IN]
 
