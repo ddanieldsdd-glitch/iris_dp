@@ -221,7 +221,8 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - Las texturas van **a 512 px y no a 1K**: 4 MB en la app en lugar de unos 25 MB. La descarga al usarlo (a 1K o 2K, y Poly Haven) **queda pendiente**.
 - Escena 3D: `mat` en paredes (y en calzada, acera, suelo de nave y telas) y un registro `materials` con lo que usa la escena. La luz lee `mat` antes que `material`; al elegir uno de los de siempre se guardan los dos, para que una versión anterior lo siga leyendo.
 - Visor: registro por `id`, coordenadas de textura en metros proyectadas por caras. Los metales se rebajan en pantalla (sin mapa de entorno se ven negros); al glTF va el valor real.
-- Selector: en el panel de la pared, con miniaturas por familias. Falta en suelos de recinto, calle y nave.
+- Selector con miniaturas por familias en: pared, suelo del recinto (la luz de la mancha de sol lo lee), calle (calzada, aceras y fachadas; al separar las fachadas en paredes se quedan con el suyo) y nave (suelo y cubierta, salvo la de lona). Al elegir uno de los de siempre se guarda su `id` de siempre.
+- Pendiente de AM.1: la descarga al usarlo, a más resolución.
 
 **AM.2 · Forjados y volúmenes: dibujar y estirar**
 - Herramienta polígono (o rectángulo) que crea:

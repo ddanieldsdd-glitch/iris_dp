@@ -148,7 +148,12 @@ class PlanScene3d {
             'id': '$uid:${band.kind}${surfaces.length}',
             'kind': band.kind,
             'cls': PlanClass.architecture.name,
-            'mat': band.kind == 'road' ? 'asphalt' : 'stone-paving',
+            'mat': ArchMaterials.streetMat(
+              el,
+              band.kind == 'road'
+                  ? ArchMaterials.roadKey
+                  : ArchMaterials.walkKey,
+            ),
             'outline': [for (final p in band.outline) xy(p)],
             'z0': level,
             'top': _r(band.topM),
@@ -680,7 +685,13 @@ class PlanScene3d {
     return {
       'id': uid,
       'cls': PlanClass.architecture.name,
-      'floorMat': 'concrete-floor',
+      'floorMat':
+          ArchMaterials.byId(el.props[ArchMaterials.hallFloorKey] as String?)
+              ?.id ??
+          ArchMaterials.defaultHallFloor,
+      if (ArchMaterials.byId(el.props[ArchMaterials.hallRoofKey] as String?)
+          case final roof? when r.roof != HallRoof.tensile)
+        'roofMat': roof.id,
       'z0': r.levelM,
       'eaveM': r.eaveM,
       'roof': r.roof.name,

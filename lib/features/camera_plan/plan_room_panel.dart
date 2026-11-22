@@ -5,7 +5,8 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'light/ambient.dart';
 import 'light/light_scene.dart';
-import 'light/surfaces.dart';
+import 'arch/arch_material.dart';
+import 'arch/arch_material_picker.dart';
 
 /// Propiedades de un recinto cerrado: si tiene techo, a qué altura y de
 /// qué es el suelo.
@@ -112,24 +113,14 @@ class PlanRoomPanel extends StatelessWidget {
               divisions: 100,
               onChanged: (v) => save(ceilingM: (v * 10).round() / 10),
             ),
-            Text('Suelo', style: AppTypography.caption(palette)),
-            DropdownButtonFormField<String>(
-              key: ValueKey('floor_${room.floor.id}'),
-              isExpanded: true,
-              initialValue: room.floor.id,
-              decoration: const InputDecoration(isDense: true),
-              items: [
-                for (final m in kFloorMaterials)
-                  DropdownMenuItem(
-                    value: m.id,
-                    child: Text(
-                      '${m.name} · devuelve el '
-                      '${(m.reflectance * 100).round()} %',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-              onChanged: (id) => save(floor: id),
+            // La biblioteca de materiales (AM.1).
+            ArchMaterialField(
+              label: 'Suelo · devuelve el '
+                  '${(room.floor.reflectance * 100).round()} %',
+              value: ArchMaterials.floorOf(room.floor.id),
+              onChanged: (m) => save(
+                floor: ArchMaterials.storedId(m, ArchMaterials.floorLegacy),
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(

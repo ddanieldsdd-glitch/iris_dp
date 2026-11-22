@@ -8,7 +8,11 @@ import 'package:iris_dp/features/camera_plan/arch/arch_material_picker.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/light/light_scene.dart';
 import 'package:iris_dp/features/camera_plan/light/surfaces.dart';
+import 'package:iris_dp/features/camera_plan/plan_piece_controls.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
+import 'package:iris_dp/features/camera_plan/plan_street.dart';
+import 'package:iris_dp/features/camera_plan/rig/plan_hall.dart';
+import 'package:iris_dp/features/camera_plan/street_controls.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_drape.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
 
@@ -157,6 +161,115 @@ void main() {
       final drape = (scene['drapes'] as List).single as Map;
       expect(drape['mat'], 'drape-molleton');
       expect((scene['materials'] as Map).keys, ['drape-molleton']);
+    });
+  });
+
+  group('suelos, calle y nave', () {
+    test('el suelo de un recinto: de siempre o de la biblioteca', () {
+      expect(ArchMaterials.floorOf('dark').id, 'carpet-dark');
+      expect(ArchMaterials.floorOf(null).id, 'wood-floor-oak');
+      expect(ArchMaterials.floorOf('sand').id, 'sand');
+      expect(ArchMaterials.floorSurface('dark').reflectance, 0.08);
+      expect(
+        ArchMaterials.floorSurface('sand').reflectance,
+        ArchMaterials.byId('sand')!.reflectance,
+      );
+      // Al elegir uno de los de siempre se guarda su id de siempre.
+      final oak = ArchMaterials.byId('wood-floor-oak')!;
+      expect(ArchMaterials.storedId(oak, ArchMaterials.floorLegacy), 'wood');
+      final sand = ArchMaterials.byId('sand')!;
+      expect(ArchMaterials.storedId(sand, ArchMaterials.floorLegacy), 'sand');
+    });
+
+    PlanElement street() {
+      final st = PlanSegment.create(
+        start: Offset.zero,
+        end: const Offset(3000, 0),
+        kind: PlanSegment.kindStreet,
+      )..props['uid'] = 'S';
+      kStreetPresets.first.$2.writeTo(st);
+      return st;
+    }
+
+    test('la calle: asfalto y adoquín, o lo elegido', () {
+      final st = street();
+      var sc = PlanScene3d.build([st], metersPerUnit: 0.01);
+      var surfaces = (sc['surfaces'] as List).cast<Map>();
+      expect(
+        surfaces.firstWhere((x) => x['kind'] == 'road')['mat'],
+        'asphalt',
+      );
+      expect(
+        surfaces.firstWhere((x) => x['kind'] == 'walk')['mat'],
+        'stone-paving',
+      );
+      st.props[ArchMaterials.roadKey] = 'earth';
+      st.props[ArchMaterials.facadeKey] = 'brick-tan';
+      sc = PlanScene3d.build([st], metersPerUnit: 0.01);
+      surfaces = (sc['surfaces'] as List).cast<Map>();
+      expect(surfaces.firstWhere((x) => x['kind'] == 'road')['mat'], 'earth');
+      final walls = (sc['walls'] as List).cast<Map>();
+      expect(walls, isNotEmpty);
+      expect(walls.every((w) => w['mat'] == 'brick-tan'), isTrue);
+      expect((sc['materials'] as Map).keys, containsAll(['earth', 'brick-tan']));
+      // Al separarlas en paredes, se quedan con su material.
+      final split = StreetControls.facadeWalls(st, 0.01);
+      expect(split.every((w) => w.props[ArchMaterials.key] == 'brick-tan'),
+          isTrue);
+      // Y la luz lo lee en la calle.
+      expect(
+        ArchMaterials.wallSurface(st, null).reflectance,
+        ArchMaterials.byId('brick-tan')!.reflectance,
+      );
+    });
+
+    test('la nave: suelo de hormigón y cubierta elegida', () {
+      final hall = PlanHall.create(
+        Offset.zero,
+        HallRecipe.rectangle(
+          width: 10,
+          depth: 6,
+        ).copyWith(roof: HallRoof.gable),
+      )..props['uid'] = 'H';
+      var sc = PlanScene3d.build([hall], metersPerUnit: 0.01);
+      var h = (sc['halls'] as List).single as Map;
+      expect(h['floorMat'], 'concrete-floor');
+      expect(h.containsKey('roofMat'), isFalse);
+      hall.props[ArchMaterials.hallRoofKey] = 'metal-corrugated';
+      hall.props[ArchMaterials.hallFloorKey] = 'tile-light';
+      sc = PlanScene3d.build([hall], metersPerUnit: 0.01);
+      h = (sc['halls'] as List).single as Map;
+      expect(h['floorMat'], 'tile-light');
+      expect(h['roofMat'], 'metal-corrugated');
+      expect(
+        (sc['materials'] as Map).keys,
+        containsAll(['tile-light', 'metal-corrugated']),
+      );
+    });
+
+    testWidgets('el panel de la nave tiene suelo y cubierta', (tester) async {
+      final hall = PlanHall.create(
+        Offset.zero,
+        HallRecipe.rectangle(width: 10, depth: 6),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.dark,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: PlanPieceControls(
+                element: hall,
+                metersPerUnit: 0.01,
+                onPreview: () {},
+                onUpdate: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Suelo de la nave'), findsOneWidget);
+      expect(find.text('Solera de hormigón · Hormigón'), findsOneWidget);
+      expect(find.text('Cubierta (si no es de lona)'), findsOneWidget);
     });
   });
 

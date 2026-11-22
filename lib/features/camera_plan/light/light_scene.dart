@@ -821,7 +821,7 @@ class LightScene {
       room,
       roofed: !(own?.openSky ?? false),
       ceilingM: own?.ceilingM ?? wallHeightM,
-      floor: SurfaceMaterial.byId(own?.floor, kFloorMaterials),
+      floor: ArchMaterials.floorSurface(own?.floor),
     );
   }
 

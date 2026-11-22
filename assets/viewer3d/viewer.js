@@ -666,10 +666,16 @@
       tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
       tx.colorSpace = THREE.SRGBColorSpace;
       mat = new THREE.MeshStandardMaterial({ map: tx, roughness: 0.8, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+    } else if (h.roofMat && matDefs[h.roofMat]) {
+      // La cubierta de la biblioteca (AM.1): translúcida, para ver dentro.
+      mat = archMaterial(h.roofMat, true);
     } else {
       mat = new THREE.MeshStandardMaterial({ color: 0x9aa3ab, metalness: 0.3, roughness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.6, depthWrite: false });
     }
-    const roof = new THREE.Mesh(geo, mat);
+    let roofGeo = geo;
+    if (mat.map) roofGeo = boxUV(geo, mat) || geo;
+    const roof = new THREE.Mesh(roofGeo, mat);
+    tagPiece(roof, { uid: h.id + ':cubierta', cls: h.cls, mat: h.roofMat });
     roof.visible = showRoof;
     roofs.push(roof);
     root.add(roof);

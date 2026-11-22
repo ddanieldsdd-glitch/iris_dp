@@ -21,6 +21,7 @@ import 'prop_box.dart';
 import 'street_controls.dart';
 import 'rig/drape_controls.dart';
 import 'rig/plan_drape.dart';
+import 'rig/plan_hall.dart';
 import 'rig/rig_controls.dart';
 import 'rig/plan_scene3d.dart';
 
@@ -431,6 +432,31 @@ class PlanPieceControls extends StatelessWidget {
               el.props[PlanOpening.headKey] = (v * 20).round() / 20,
         ),
       ]);
+    } else if (PlanHall.isHall(el)) {
+      // Suelo y cubierta de la nave (AM.1).
+      children.addAll([
+        ArchMaterialField(
+          label: 'Suelo de la nave',
+          value: ArchMaterials.byId(
+            el.props[ArchMaterials.hallFloorKey] as String? ??
+                ArchMaterials.defaultHallFloor,
+          ),
+          onChanged: (m) {
+            el.props[ArchMaterials.hallFloorKey] = m.id;
+            onUpdate();
+          },
+        ),
+        ArchMaterialField(
+          label: 'Cubierta (si no es de lona)',
+          value: ArchMaterials.byId(
+            el.props[ArchMaterials.hallRoofKey] as String?,
+          ),
+          onChanged: (m) {
+            el.props[ArchMaterials.hallRoofKey] = m.id;
+            onUpdate();
+          },
+        ),
+      ]);
     } else if (RigControls.appliesTo(el)) {
       children.add(
         RigControls(
@@ -495,12 +521,9 @@ class PlanPieceControls extends StatelessWidget {
           onChanged: (m) {
             el.props[ArchMaterials.key] = m.id;
             // Una versión anterior de IRIS sigue leyendo el de siempre.
-            final legacy = ArchMaterials.wallLegacy.entries
-                .where((e) => e.value == m.id)
-                .map((e) => e.key)
-                .firstOrNull;
-            if (legacy != null) {
-              el.props[LightScene.materialKey] = legacy;
+            final stored = ArchMaterials.storedId(m, ArchMaterials.wallLegacy);
+            if (stored != m.id) {
+              el.props[LightScene.materialKey] = stored;
             } else {
               el.props.remove(LightScene.materialKey);
             }

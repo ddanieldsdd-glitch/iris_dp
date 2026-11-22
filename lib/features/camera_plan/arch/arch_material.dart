@@ -224,14 +224,51 @@ abstract final class ArchMaterials {
   /// (`material`). `null` si no se le ha elegido ninguno.
   static ArchMaterial? ofWall(PlanElement el) {
     if (byId(el.props[key] as String?) case final m?) return m;
+    // Las fachadas de una calle, el de sus fachadas.
+    if (byId(el.props[facadeKey] as String?) case final m?) return m;
     return byId(wallLegacy[el.props['material']]);
   }
 
   /// Lo que devuelve la pared para la luz: el de siempre si no hay
   /// material de la biblioteca.
   static SurfaceMaterial wallSurface(PlanElement el, String? legacyId) =>
-      byId(el.props[key] as String?)?.surface ??
+      (byId(el.props[key] as String?) ??
+              byId(el.props[facadeKey] as String?))
+          ?.surface ??
       SurfaceMaterial.byId(legacyId, kWallMaterials);
+
+  /// Lo que devuelve el suelo de un recinto: uno de la biblioteca o uno
+  /// de los de siempre (`kFloorMaterials`).
+  static SurfaceMaterial floorSurface(String? id) =>
+      byId(id)?.surface ?? SurfaceMaterial.byId(id, kFloorMaterials);
+
+  /// El material de la biblioteca de un suelo de recinto guardado.
+  static ArchMaterial floorOf(String? id) =>
+      byId(id) ??
+      byId(floorLegacy[SurfaceMaterial.byId(id, kFloorMaterials).id])!;
+
+  /// Lo que se guarda al elegir [m]: el `id` de siempre si es uno de
+  /// ellos (una versión anterior de IRIS lo sigue leyendo) o el suyo.
+  static String storedId(ArchMaterial m, Map<String, String> legacy) =>
+      legacy.entries.where((e) => e.value == m.id).firstOrNull?.key ?? m.id;
+
+  /// Materiales de una calle con perfil: calzada, aceras y fachadas.
+  static const roadKey = 'roadMat';
+  static const walkKey = 'walkMat';
+  static const facadeKey = 'facadeMat';
+  static const defaultRoad = 'asphalt';
+  static const defaultWalk = 'stone-paving';
+
+  static String streetMat(PlanElement street, String key) =>
+      (byId(street.props[key] as String?)?.id) ??
+      (key == roadKey ? defaultRoad : defaultWalk);
+
+  /// Suelo de una nave.
+  static const hallFloorKey = 'floorMat';
+  static const defaultHallFloor = 'concrete-floor';
+
+  /// Cubierta de una nave (salvo la de lona, que es su tela).
+  static const hallRoofKey = 'roofMat';
 
   /// Los que sirven para paredes, suelos, cubiertas y volúmenes: todos
   /// menos las telas de colgar.

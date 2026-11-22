@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import 'arch/arch_material.dart';
+import 'arch/arch_material_picker.dart';
 import 'camera_plan_element_model.dart';
 import 'light/street_lamp.dart';
 import 'plan_segment.dart';
@@ -140,6 +142,30 @@ class StreetControls extends StatelessWidget {
           style: hint,
         ),
         const Divider(),
+        // Materiales (AM.1): el 3D y Unreal los pintan con su textura.
+        for (final (label, key) in const [
+          ('Calzada', ArchMaterials.roadKey),
+          ('Aceras', ArchMaterials.walkKey),
+        ])
+          ArchMaterialField(
+            label: label,
+            value: ArchMaterials.byId(ArchMaterials.streetMat(el, key)),
+            onChanged: (m) {
+              el.props[key] = m.id;
+              onUpdate();
+            },
+          ),
+        ArchMaterialField(
+          label: 'Fachadas',
+          value: ArchMaterials.byId(
+            el.props[ArchMaterials.facadeKey] as String?,
+          ),
+          onChanged: (m) {
+            el.props[ArchMaterials.facadeKey] = m.id;
+            onUpdate();
+          },
+        ),
+        const Divider(),
         Text('Farolas', style: caption),
         SegmentedButton<String>(
           showSelectedIcon: false,
@@ -242,6 +268,10 @@ class StreetControls extends StatelessWidget {
       for (var i = 1; i < f.line.length; i++)
         PlanSegment.create(start: f.line[i - 1], end: f.line[i])
           ..props[PlanSegment.heightKey] = f.heightM
-          ..props[PlanSegment.thicknessKey] = StreetProfile.facadeThicknessM,
+          ..props[PlanSegment.thicknessKey] = StreetProfile.facadeThicknessM
+          ..props.addAll({
+            if (street.props[ArchMaterials.facadeKey] case final String m)
+              ArchMaterials.key: m,
+          }),
   ];
 }
