@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../core/utils/pdf_export_fonts.dart';
 import '../../features/camera_plan/camera_plan_constants.dart';
 import '../../features/camera_plan/camera_plan_element_model.dart';
+import '../../features/camera_plan/light/modifiers.dart';
 import '../../features/camera_plan/light/plan_grip.dart';
 import '../../features/camera_plan/light/plan_light.dart';
 import '../../features/camera_plan/light/wall_mount.dart';
@@ -79,10 +80,15 @@ class RigSheetOptions {
   final RigSheetPaper paper;
   final RigSheetNumbers numbers;
 
+  /// Añade la lista de focos: número, aparato, accesorios, montaje,
+  /// altura, circuito y vatios de cada uno.
+  final bool schedule;
+
   const RigSheetOptions({
     this.layout = RigSheetLayout.split,
     this.paper = RigSheetPaper.a3,
     this.numbers = RigSheetNumbers.auto,
+    this.schedule = true,
   });
 }
 
@@ -122,8 +128,8 @@ abstract final class RigSheetPdf {
     );
     final data = _Data(elements, metersPerUnit, info, options);
     final kinds = data.pageKinds();
-    for (final (i, kind) in kinds.indexed) {
-      final page = _Page(data, kind, i + 1, kinds.length);
+    for (final (i, (kind, from)) in kinds.indexed) {
+      final page = _Page(data, kind, i + 1, kinds.length, from: from);
       doc.addPage(
         pw.Page(
           pageFormat: options.paper == RigSheetPaper.a3
@@ -206,7 +212,7 @@ const _dim = PdfColor.fromInt(0xFFC8102E);
 
 typedef _Box = ({double x, double y, double w, double h});
 
-enum _Kind { compact, plan, elevations, legend }
+enum _Kind { compact, plan, elevations, legend, schedule }
 
 /// Lo que comparten todas las hojas.
 class _Data {
@@ -256,15 +262,27 @@ class _Data {
 
   bool get legendOverflows => legend.rows.length > legendRowsInColumn;
 
-  List<_Kind> pageKinds() => [
+  /// Filas de la lista de focos por hoja.
+  static const scheduleRows = 40;
+
+  /// Las hojas y, en las de la lista de focos, desde qué foco empiezan.
+  List<(_Kind, int)> pageKinds() => [
     if (options.layout == RigSheetLayout.compact)
-      _Kind.compact
+      (_Kind.compact, 0)
     else ...[
-      _Kind.plan,
-      _Kind.elevations,
+      (_Kind.plan, 0),
+      (_Kind.elevations, 0),
     ],
-    if (legendOverflows) _Kind.legend,
+    if (legendOverflows) (_Kind.legend, 0),
+    if (options.schedule)
+      for (var from = 0; from < units.length; from += scheduleRows)
+        (_Kind.schedule, from),
   ];
+
+  /// Los focos en orden de número, para la lista.
+  late final List<(int, PlanElement)> numbered = [
+    for (final MapEntry(key: el, value: n) in units.entries) (n, el),
+  ]..sort((a, b) => a.$1.compareTo(b.$1));
 
   String modelOf(PlanElement el) =>
       (el.props['name'] as String?) ?? el.lightType?.label ?? 'Luz';
@@ -389,7 +407,7 @@ class _Page {
   /// Dónde va cada par de dibujos de la leyenda: x, y y un foco del modelo.
   final _legendIcons = <(double, double, PlanElement)>[];
 
-  _Page(this.d, this.kind, this.index, this.count) {
+  _Page(this.d, this.kind, this.index, this.count, {this.from = 0}) {
     switch (kind) {
       case _Kind.compact:
         planBox = (x: 12.0, y: 24.0, w: 266.0, h: 148.0);
@@ -400,10 +418,13 @@ class _Page {
       case _Kind.elevations:
         frontBox = (x: 12.0, y: 24.0, w: 266.0, h: 118.0);
         sideBox = (x: 12.0, y: 160.0, w: 266.0, h: 118.0);
-      case _Kind.legend:
+      case _Kind.legend || _Kind.schedule:
         break;
     }
   }
+
+  /// En una hoja de la lista de focos, el primero que lleva.
+  final int from;
 
   _Box? planBox;
   _Box? frontBox;
@@ -437,6 +458,29 @@ class _Page {
             }
             for (final (x, y, el) in _legendIcons) {
               _drawIcons(g, x, y, el);
+            }
+            for (final (y, el) in _scheduleIcons) {
+              final (family, size) = d.shapeOf(el);
+              symbol(
+                g,
+                20,
+                y,
+                0,
+                RigSymbols.outline(family, size),
+                0,
+                d.colorOf(el),
+                minMm: 3.6,
+                maxMm: 3.6,
+              );
+              line(
+                g,
+                14,
+                y + 2.6,
+                278,
+                y + 2.6,
+                color: _structLight,
+                width: 0.1,
+              );
             }
             _titleFrame(g);
           },
@@ -642,7 +686,7 @@ class _Page {
       case _Kind.elevations:
         line(g, 284, 10, 284, 287);
         line(g, 10, 150, 284, 150);
-      case _Kind.plan:
+      case _Kind.plan || _Kind.schedule:
         line(g, 284, 10, 284, 287);
       case _Kind.legend:
         break;
@@ -1396,6 +1440,12 @@ class _Page {
       _titleBlock();
       return;
     }
+    if (kind == _Kind.schedule) {
+      _schedule();
+      _legend(16);
+      _titleBlock();
+      return;
+    }
     void title(double x, double y, String text, int scale) => labels
       ..add(_Label(x, y, text, size: 10, bold: true, width: 160))
       ..add(
@@ -1647,6 +1697,96 @@ class _Page {
       }
     }
   }
+
+  /// Accesorios de un foco: difusiones, gelatinas, rejillas…
+  static String accessoriesOf(PlanElement el) => [
+    for (final id in (el.props[PlanLight.modifiersKey] as List? ?? const []))
+      if (LightModifier.byId(id?.toString()) case final m?)
+        m.reference ?? m.name,
+  ].join(' · ');
+
+  /// Cómo va montado.
+  String _mountOf(PlanElement el) {
+    if (TrussMagnet.trussUidOf(el) != null) return 'Truss';
+    if (PlanLight.isOverhead(el)) return 'Techo';
+    if (LightWallMount.isOn(el)) return 'Pared';
+    return 'Pie';
+  }
+
+  /// La lista de focos: uno por fila, con lo que necesita el eléctrico para
+  /// montarlo.
+  void _schedule() {
+    labels.add(const _Label(14, 20, 'LISTA DE FOCOS', size: 12, bold: true));
+    const cols = <(double, String, double, bool)>[
+      (14, 'Nº', 8, true),
+      (24, 'APARATO', 70, false),
+      (96, 'ACCESORIOS', 84, false),
+      (182, 'MONTAJE', 24, false),
+      (220, 'ALTURA', 14, true),
+      (246, 'CIRC.', 14, true),
+      (274, 'W', 18, true),
+    ];
+    for (final (x, title, w, right) in cols) {
+      labels.add(
+        _Label(
+          x,
+          30,
+          title,
+          size: 5.5,
+          color: _muted,
+          width: w,
+          align: right ? pw.TextAlign.right : pw.TextAlign.left,
+        ),
+      );
+    }
+    final rows = d.numbered.skip(from).take(_Data.scheduleRows);
+    for (final (i, (n, el)) in rows.indexed) {
+      final y = 36 + i * 6.0;
+      _scheduleIcons.add((y - 1, el));
+      final circuit = (el.props['circuit'] as num?)?.toInt();
+      final f = d.fixtureOf[el];
+      final z = f == null ? null : ((f['pos'] as List)[2] as num).toDouble();
+      final watts = (el.props[PlanLight.wattsKey] as num?)?.toDouble();
+      final values = [
+        '$n',
+        d.modelOf(el),
+        accessoriesOf(el),
+        _mountOf(el),
+        z == null ? '' : '${_m(z)} m',
+        circuit == null ? '' : 'C$circuit',
+        watts == null ? '' : '${watts.round()}',
+      ];
+      for (final ((x, _, w, right), value) in [
+        for (var c = 0; c < cols.length; c++) (cols[c], values[c]),
+      ]) {
+        labels.add(
+          _Label(
+            x,
+            y,
+            value,
+            size: 6,
+            bold: x == 14,
+            width: w,
+            align: right ? pw.TextAlign.right : pw.TextAlign.left,
+          ),
+        );
+      }
+    }
+    final last = math.min(from + _Data.scheduleRows, d.numbered.length);
+    labels.add(
+      _Label(
+        14,
+        282,
+        'Focos ${from + 1}–$last de ${d.numbered.length}. '
+        'Los circuitos son los del reparto eléctrico de la planta.',
+        size: 5.5,
+        color: _muted,
+        width: 260,
+      ),
+    );
+  }
+
+  final _scheduleIcons = <(double, PlanElement)>[];
 
   /// La leyenda entera, en tres columnas, en su propia hoja.
   void _fullLegend() {

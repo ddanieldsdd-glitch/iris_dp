@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -133,12 +132,16 @@ void main() {
 
   test('planta en una hoja y alzados en otra; o todo en una', () async {
     final elements = caseta();
-    expect(RigSheetPdf.pageCount(elements, metersPerUnit: mpu), 2);
+    // Planta, alzados y la lista de focos.
+    expect(RigSheetPdf.pageCount(elements, metersPerUnit: mpu), 3);
     expect(
       RigSheetPdf.pageCount(
         elements,
         metersPerUnit: mpu,
-        options: const RigSheetOptions(layout: RigSheetLayout.compact),
+        options: const RigSheetOptions(
+          layout: RigSheetLayout.compact,
+          schedule: false,
+        ),
       ),
       1,
     );
@@ -184,6 +187,28 @@ void main() {
           props: {'name': 'Modelo $i', 'watts': 650, 'intensity': 100},
         ),
     ];
-    expect(RigSheetPdf.pageCount(elements, metersPerUnit: mpu), 3);
+    expect(
+      RigSheetPdf.pageCount(
+        elements,
+        metersPerUnit: mpu,
+        options: const RigSheetOptions(schedule: false),
+      ),
+      3,
+    );
+  });
+
+  test('la lista de focos sigue en otra hoja cada 40', () {
+    final elements = <PlanElement>[
+      for (var i = 0; i < 85; i++)
+        PlanElement(
+          id: i + 1,
+          type: ElementType.light,
+          position: Offset(i * 20.0, 0),
+          lightType: LightType.led1x1,
+          props: {'name': 'Panel', 'watts': 100, 'intensity': 100},
+        ),
+    ];
+    // Planta, alzados y tres hojas de lista (40 + 40 + 5).
+    expect(RigSheetPdf.pageCount(elements, metersPerUnit: mpu), 5);
   });
 }

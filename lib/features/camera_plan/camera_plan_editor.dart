@@ -4137,6 +4137,30 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
   }
 
+  /// Numera los focos 1, 2, 3… en el orden de la planta, sin huecos
+  /// (LZ.1). Los números se guardan y no cambian al borrar otros.
+  Future<void> _renumberLights() async {
+    final changed = renumberLightUnits(_elements);
+    if (changed.isEmpty) {
+      AppSnackBar.show(context, 'Los focos ya van seguidos.');
+      return;
+    }
+    setState(() {});
+    for (final layer in {for (final el in changed) el.layer}) {
+      if (layer == PlanLayer.shot) {
+        for (final el in changed.where((e) => e.layer == layer)) {
+          await _persistElement(el, commit: false);
+        }
+      } else {
+        await _saveLayer(layer);
+      }
+    }
+    _commitHistory();
+    if (!mounted) return;
+    final total = lightUnitNumbers(_elements).length;
+    AppSnackBar.show(context, 'Focos renumerados del 1 al $total.');
+  }
+
   /// La hoja de luz de lo que se ve: planta, alzado y perfil (LZ.1).
   Future<void> _exportLightSheet() async {
     final info = await _sheetInfo();
@@ -4233,6 +4257,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
             'Hoja de luz (PDF)',
             Icons.picture_as_pdf_outlined,
             _exportLightSheet,
+          ),
+          item(
+            'Renumerar focos',
+            Icons.format_list_numbered,
+            _renumberLights,
           ),
           if (_isShotMode && _shot != null)
             item(
@@ -4507,6 +4536,15 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                         leading: Icon(Icons.picture_as_pdf_outlined),
                         title: Text('Hoja de luz (PDF)'),
                         subtitle: Text('Planta, alzado y perfil a escala'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _renumberLights,
+                      child: const ListTile(
+                        dense: true,
+                        leading: Icon(Icons.format_list_numbered),
+                        title: Text('Renumerar focos'),
+                        subtitle: Text('1, 2, 3… en orden, sin huecos'),
                       ),
                     ),
                   ],

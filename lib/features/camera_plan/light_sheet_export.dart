@@ -70,6 +70,7 @@ class _LightSheetOptionsState extends State<_LightSheetOptions> {
   var _layout = RigSheetLayout.split;
   var _paper = RigSheetPaper.a3;
   var _numbers = RigSheetNumbers.auto;
+  var _schedule = true;
   late final _set = TextEditingController(text: widget.info.set);
   late final _scheme = TextEditingController(text: widget.info.scheme);
   late final _scenes = TextEditingController(text: widget.info.scenes);
@@ -127,7 +128,12 @@ class _LightSheetOptionsState extends State<_LightSheetOptions> {
     _remember();
     final i = widget.info;
     Navigator.of(context).pop((
-      RigSheetOptions(layout: _layout, paper: _paper, numbers: _numbers),
+      RigSheetOptions(
+        layout: _layout,
+        paper: _paper,
+        numbers: _numbers,
+        schedule: _schedule,
+      ),
       RigSheetInfo(
         project: i.project,
         location: i.location,
@@ -229,7 +235,18 @@ class _LightSheetOptionsState extends State<_LightSheetOptions> {
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                value: _schedule,
+                onChanged: (v) => setState(() => _schedule = v),
+                title: const Text('Lista de focos'),
+                subtitle: const Text(
+                  'Una hoja más con cada foco: accesorios, montaje, altura, '
+                  'circuito y vatios',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
               Text('Cajetín', style: AppTypography.label(palette)),
               const SizedBox(height: AppSpacing.xs),
               field(_set, 'Set o localización'),
