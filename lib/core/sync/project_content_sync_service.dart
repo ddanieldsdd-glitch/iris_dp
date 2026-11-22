@@ -28,6 +28,11 @@ class CloudContentChanged implements Exception {
 bool isMissingDeviceColumn(PostgrestException error) =>
     error.message.contains('updated_device');
 
+/// La nube rechaza la subida: su copia es de un formato más nuevo que el que
+/// manda este equipo (migración 018).
+bool isOlderSnapshotVersion(PostgrestException error) =>
+    error.message.contains('IRIS_SNAPSHOT_OLDER_VERSION');
+
 /// Se deja de enviar `updated_device` al ver que falta la columna.
 bool hasDeviceColumn = true;
 
@@ -133,6 +138,8 @@ class ProjectContentSyncService {
         throw const CloudContentChanged();
       }
     } on PostgrestException catch (e) {
+      // La nube tiene el proyecto en un formato más nuevo (migración 018).
+      if (isOlderSnapshotVersion(e)) throw const BundleTooNewException();
       // El aviso de columna que falta también nombra la tabla.
       if (isMissingDeviceColumn(e)) rethrow;
       if (isMissingSnapshotsTable(e)) throw const SnapshotsTableMissing();

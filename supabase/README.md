@@ -3,7 +3,7 @@
 ## Setup
 
 1. Crea un proyecto en [supabase.com](https://supabase.com)
-2. Ejecuta las migraciones en orden (SQL Editor): `001` … `016_access_admin.sql`. La `017` solo cuando quieras recortar el historial (ver abajo)
+2. Ejecuta las migraciones en orden (SQL Editor): `001` … `016_access_admin.sql` y `018_snapshot_version_guard.sql`. La `017` solo cuando quieras recortar el historial (ver abajo)
 3. Verifica el bucket Storage `project-media` (privado, RLS activo — la migración 008 crea políticas) y `avatars` (público, cada usuario escribe solo en su carpeta — migración 012)
 4. Copia URL y anon key a las variables de entorno de la app
 
@@ -44,6 +44,10 @@ El DP invita por email desde la app → fila en `project_invitations` → el dir
 - Una cuenta que no está activa (o un invitado durante el mantenimiento) no puede escribir en la nube: reglas restrictivas `*_active_ins/upd/del`. Esto también corta la nube a versiones antiguas de la app que no tienen la pantalla de cierre.
 - Cupo: si el espacio de trabajo de una cuenta pasa de `storage_limit_bytes`, el contenido de sus proyectos no puede crecer (`IRIS_QUOTA_EXCEEDED`). Las imágenes de Cloudinary cuentan en la medida pero no se pueden frenar desde el servidor.
 - Funciones del administrador: `iris_admin_accounts()`, `iris_admin_set_access(...)`, `iris_admin_set_state(...)`, `iris_admin_projects()`. Todo esto se maneja en la app desde Ajustes → «Invitados».
+
+## Guarda de versión (018)
+
+Impide que una versión antigua de IRIS sustituya en la nube un proyecto guardado con un formato más nuevo (`content->'version'`). La subida falla con `IRIS_SNAPSHOT_OLDER_VERSION` y la app pide actualizar. No borra nada; la consulta final debe devolver una fila.
 
 ## Historial más corto (017)
 
