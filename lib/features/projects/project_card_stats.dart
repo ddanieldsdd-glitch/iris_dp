@@ -111,8 +111,7 @@ enum ProjectCardMetric {
     try {
       final names = (jsonDecode(json) as List).map((e) => '$e').toList();
       final chosen = [
-        for (final name in names)
-          ...values.where((m) => m.name == name),
+        for (final name in names) ...values.where((m) => m.name == name),
       ];
       return chosen.isEmpty ? defaults : chosen.take(maxShown).toList();
     } catch (_) {
@@ -220,7 +219,8 @@ enum ProjectSyncState {
   imagesFailed('Imágenes fallidas'),
   imagesPending('Imágenes en cola'),
   upToDate('Al día'),
-  localOnly('Solo en este equipo');
+  localOnly('Solo en este equipo'),
+  guestCopy('Copia de invitado');
 
   final String label;
   const ProjectSyncState(this.label);
@@ -233,6 +233,7 @@ ProjectSyncState projectSyncState({
   required ProjectCardStats stats,
   SyncPlan? pendingPlan,
 }) {
+  if (project.mirrorCloudId != null) return ProjectSyncState.guestCopy;
   if (project.cloudId == null) return ProjectSyncState.localOnly;
   final items = [
     for (final item in pendingPlan?.items ?? const <SyncPlanItem>[])

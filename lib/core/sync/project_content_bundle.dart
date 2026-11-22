@@ -223,9 +223,7 @@ class ProjectContentBundle {
         ifAbsent: () => 1,
       );
       final label = '${s.number}${s.numberSuffix ?? ''}';
-      sceneKeyById[s.id] = times == 1
-          ? 'scene:$label'
-          : 'scene:$label#$times';
+      sceneKeyById[s.id] = times == 1 ? 'scene:$label' : 'scene:$label#$times';
     }
 
     final sceneById = {for (final s in scenes) s.id: s};
@@ -686,8 +684,7 @@ class ProjectContentBundle {
               'sortOrder': s.sortOrder,
               'kind': s.kind,
               'sceneKey': s.sceneId != null ? sceneKeyById[s.sceneId!] : null,
-              if (s.groupId != null)
-                'setGroupKey': setGroupKeyById[s.groupId!],
+              if (s.groupId != null) 'setGroupKey': setGroupKeyById[s.groupId!],
               if (s.envOverridesJson != null)
                 'envOverridesJson': s.envOverridesJson,
               if (s.shootOrder != null) 'shootOrder': s.shootOrder,
@@ -994,35 +991,35 @@ class ProjectContentBundle {
     required Map<int, String> lightSetupKeyById,
     required Map<int, String> lightingKeyById,
   }) {
-        final numericTargetId = int.tryParse(document.targetId);
-        final targetKey = switch (document.targetType) {
-          'camera_plan_site' =>
-            numericTargetId != null ? siteKeyById[numericTargetId] : null,
-          'camera_plan_set' =>
-            numericTargetId != null ? setKeyById[numericTargetId] : null,
-          'camera_plan_shot' =>
-            numericTargetId != null ? shotKeyById[numericTargetId] : null,
-          'moodboard_image' =>
-            numericTargetId != null ? moodboardKeyById[numericTargetId] : null,
-          'camera_plan_light_setup' =>
-            numericTargetId != null ? lightSetupKeyById[numericTargetId] : null,
-          'lighting_setup' =>
-            numericTargetId != null ? lightingKeyById[numericTargetId] : null,
-          _ => null,
-        };
-        if (_keyedAnnotationTargets.contains(document.targetType) &&
-            targetKey == null) {
-          return null;
-        }
-        return {
-          'targetType': document.targetType,
-          'targetId': document.targetId,
-          'targetKey': targetKey,
-          'documentJson': document.documentJson,
-          'documentSchemaVersion': document.documentSchemaVersion,
-          'createdAt': document.createdAt.toIso8601String(),
-          'updatedAt': document.updatedAt.toIso8601String(),
-        };
+    final numericTargetId = int.tryParse(document.targetId);
+    final targetKey = switch (document.targetType) {
+      'camera_plan_site' =>
+        numericTargetId != null ? siteKeyById[numericTargetId] : null,
+      'camera_plan_set' =>
+        numericTargetId != null ? setKeyById[numericTargetId] : null,
+      'camera_plan_shot' =>
+        numericTargetId != null ? shotKeyById[numericTargetId] : null,
+      'moodboard_image' =>
+        numericTargetId != null ? moodboardKeyById[numericTargetId] : null,
+      'camera_plan_light_setup' =>
+        numericTargetId != null ? lightSetupKeyById[numericTargetId] : null,
+      'lighting_setup' =>
+        numericTargetId != null ? lightingKeyById[numericTargetId] : null,
+      _ => null,
+    };
+    if (_keyedAnnotationTargets.contains(document.targetType) &&
+        targetKey == null) {
+      return null;
+    }
+    return {
+      'targetType': document.targetType,
+      'targetId': document.targetId,
+      'targetKey': targetKey,
+      'documentJson': document.documentJson,
+      'documentSchemaVersion': document.documentSchemaVersion,
+      'createdAt': document.createdAt.toIso8601String(),
+      'updatedAt': document.updatedAt.toIso8601String(),
+    };
   }
 
   static ContentSyncSummary summarizeFromCounts({
@@ -1089,12 +1086,9 @@ class ProjectContentBundle {
 
   /// La huella de antes, sin nada de las rutas: solo para reconocer huellas
   /// que se guardaron así.
-  static String _hashWithoutPathPresence(Map<String, dynamic> bundle) =>
-      sha256
-          .convert(
-            utf8.encode(_canonicalJson(bundle, pathPresence: false)),
-          )
-          .toString();
+  static String _hashWithoutPathPresence(Map<String, dynamic> bundle) => sha256
+      .convert(utf8.encode(_canonicalJson(bundle, pathPresence: false)))
+      .toString();
 
   /// Lo que cuenta de una ruta en la huella y en la mezcla: si hay archivo
   /// (o cuántos, en una lista), no dónde está.
@@ -1103,7 +1097,8 @@ class ProjectContentBundle {
     if (value is List) return value.length;
     if (value is String) {
       if (value.isEmpty) return null;
-      if (value.trimLeft().startsWith('[')) return decodeSlotPaths(value).length;
+      if (value.trimLeft().startsWith('['))
+        return decodeSlotPaths(value).length;
       return 1;
     }
     return 1;
@@ -1125,7 +1120,10 @@ class ProjectContentBundle {
 
   /// Si las filas de [local] tienen los mismos uid que las de [cloud], lista a
   /// lista. Solo cuenta lo que la nube trae con uid (bundles desde la v6).
-  static bool uidsMatch(Map<String, dynamic> local, Map<String, dynamic> cloud) {
+  static bool uidsMatch(
+    Map<String, dynamic> local,
+    Map<String, dynamic> cloud,
+  ) {
     for (final entry in cloud.entries) {
       final cloudRows = entry.value;
       final localRows = local[entry.key];
@@ -1147,11 +1145,11 @@ class ProjectContentBundle {
   /// Si [bundle] es el contenido de [hash], sea la huella nueva o la antigua.
   static bool bundleMatchesHash(Map<String, dynamic> bundle, String hash) =>
       isLegacyHash(hash)
-          ? legacyHashBundle(bundle) == hash
-          : hashBundle(bundle) == hash ||
-                _hashBeforeReferenceImages(bundle) == hash ||
-                _hashWithoutPathPresence(bundle) == hash ||
-                _hashWithPaths(bundle) == hash;
+      ? legacyHashBundle(bundle) == hash
+      : hashBundle(bundle) == hash ||
+            _hashBeforeReferenceImages(bundle) == hash ||
+            _hashWithoutPathPresence(bundle) == hash ||
+            _hashWithPaths(bundle) == hash;
 
   /// Claves que guardan rutas de archivos de este equipo: en la huella y en
   /// la mezcla solo cuenta si hay archivo. `referenceImages` (listas de los
@@ -1219,9 +1217,7 @@ class ProjectContentBundle {
                             else if (pathPresence &&
                                 e.key is String &&
                                 isPath.hasMatch(e.key as String))
-                              e.key: ProjectContentBundle.pathPresence(
-                                e.value,
-                              ),
+                              e.key: ProjectContentBundle.pathPresence(e.value),
                         }
                 : row,
         ];
@@ -1454,7 +1450,10 @@ class ProjectContentBundle {
         }
         await db.customUpdate(
           'UPDATE $table SET $column = ? WHERE id = ?',
-          variables: [Variable.withString(value), Variable.withInt(row.read<int>('id'))],
+          variables: [
+            Variable.withString(value),
+            Variable.withInt(row.read<int>('id')),
+          ],
           updates: {
             for (final t in db.allTables)
               if (t.actualTableName == table) t,
@@ -1530,7 +1529,10 @@ class ProjectContentBundle {
   static bool _looksLikeFilePath(String value) =>
       value.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(value);
 
-  static Future<void> _clearMissingSlotPaths(AppDatabase db, int projectId) async {
+  static Future<void> _clearMissingSlotPaths(
+    AppDatabase db,
+    int projectId,
+  ) async {
     for (final slot in kMediaSlots) {
       if (!slot.nullable) continue;
       final rows = await db
@@ -1598,8 +1600,9 @@ class ProjectContentBundle {
     ScenesCompanion row,
   ) async {
     if (existingId == null) return db.into(db.scenes).insert(row);
-    await (db.update(db.scenes)..where((s) => s.id.equals(existingId)))
-        .write(row);
+    await (db.update(
+      db.scenes,
+    )..where((s) => s.id.equals(existingId))).write(row);
     return existingId;
   }
 
@@ -1610,8 +1613,9 @@ class ProjectContentBundle {
     ShotsCompanion row,
   ) async {
     if (existingId == null) return db.into(db.shots).insert(row);
-    await (db.update(db.shots)..where((s) => s.id.equals(existingId)))
-        .write(row);
+    await (db.update(
+      db.shots,
+    )..where((s) => s.id.equals(existingId))).write(row);
     return existingId;
   }
 
@@ -1623,13 +1627,14 @@ class ProjectContentBundle {
     // Escenas y planos se actualizan en su sitio por uid: así no cambian de
     // id y lo que esté abierto (visor de storyboard, planta, deshacer) sigue
     // apuntando a ellos. Sin uid en todos, como antes: se borran y se crean.
-    final localScenes = await (db.select(db.scenes)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get();
-    final localShots = await (db.select(db.shots)
-          ..where((s) => s.projectId.equals(projectId)))
-        .get();
-    final inPlace = _uidsUsable(bundle['scenes']) &&
+    final localScenes = await (db.select(
+      db.scenes,
+    )..where((s) => s.projectId.equals(projectId))).get();
+    final localShots = await (db.select(
+      db.shots,
+    )..where((s) => s.projectId.equals(projectId))).get();
+    final inPlace =
+        _uidsUsable(bundle['scenes']) &&
         _uidsUsable(bundle['shots']) &&
         _uniqueUids(localScenes.map((s) => s.uid)) &&
         _uniqueUids(localShots.map((s) => s.uid));
@@ -1681,7 +1686,8 @@ class ProjectContentBundle {
           ),
           shootingEndDate: Value(projectFields['shootingEndDate'] as String?),
           scriptFileName: Value(projectFields['scriptFileName'] as String?),
-          moodboardCatalogJson: projectFields.containsKey('moodboardCatalogJson')
+          moodboardCatalogJson:
+              projectFields.containsKey('moodboardCatalogJson')
               ? Value(projectFields['moodboardCatalogJson'] as String?)
               : const Value.absent(),
           cardMetricsJson: projectFields.containsKey('cardMetricsJson')
@@ -1700,24 +1706,26 @@ class ProjectContentBundle {
     final siteKeyToId = <String, int>{};
     for (final row in bundle['locationSites'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
-      final id = await db.into(db.locationSites).insert(
-        LocationSitesCompanion.insert(
-          uid: bundleUid(m['uid']),
-          projectId: projectId,
-          name: m['name'] as String,
-          description: Value(m['description'] as String?),
-          notes: Value(m['notes'] as String?),
-          floorPlanJson: Value(m['floorPlanJson'] as String?),
-          scanPath: Value(m['scanPath'] as String?),
-          scanSource: Value(m['scanSource'] as String?),
-          scanMetadataJson: Value(m['scanMetadataJson'] as String?),
-          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-          latitude: Value((m['latitude'] as num?)?.toDouble()),
-          longitude: Value((m['longitude'] as num?)?.toDouble()),
-          placeLabel: Value(m['placeLabel'] as String?),
-          setOrderMode: Value(m['setOrderMode'] as String?),
-        ),
-      );
+      final id = await db
+          .into(db.locationSites)
+          .insert(
+            LocationSitesCompanion.insert(
+              uid: bundleUid(m['uid']),
+              projectId: projectId,
+              name: m['name'] as String,
+              description: Value(m['description'] as String?),
+              notes: Value(m['notes'] as String?),
+              floorPlanJson: Value(m['floorPlanJson'] as String?),
+              scanPath: Value(m['scanPath'] as String?),
+              scanSource: Value(m['scanSource'] as String?),
+              scanMetadataJson: Value(m['scanMetadataJson'] as String?),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+              latitude: Value((m['latitude'] as num?)?.toDouble()),
+              longitude: Value((m['longitude'] as num?)?.toDouble()),
+              placeLabel: Value(m['placeLabel'] as String?),
+              setOrderMode: Value(m['setOrderMode'] as String?),
+            ),
+          );
       siteKeyToId[m['siteKey'] as String] = id;
     }
 
@@ -1742,25 +1750,27 @@ class ProjectContentBundle {
     for (final row in bundle['locationBasePlans'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final siteKey = m['siteKey'] as String?;
-      final id = await db.into(db.locationBasePlans).insert(
-        LocationBasePlansCompanion.insert(
-          uid: bundleUid(m['uid']),
-          projectId: projectId,
-          siteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
-          locationName: m['locationName'] as String,
-          description: Value(m['description'] as String?),
-          imagePath: Value(m['imagePath'] as String?),
-          color: Value(m['color'] as String? ?? '#94A3B8'),
-          notes: Value(m['notes'] as String?),
-          model3dPath: Value(m['model3dPath'] as String?),
-          floorPlanJson: Value(m['floorPlanJson'] as String?),
-          sitePlacementJson: Value(m['sitePlacementJson'] as String?),
-          scanPath: Value(m['scanPath'] as String?),
-          scanSource: Value(m['scanSource'] as String?),
-          scanMetadataJson: Value(m['scanMetadataJson'] as String?),
-          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-        ),
-      );
+      final id = await db
+          .into(db.locationBasePlans)
+          .insert(
+            LocationBasePlansCompanion.insert(
+              uid: bundleUid(m['uid']),
+              projectId: projectId,
+              siteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
+              locationName: m['locationName'] as String,
+              description: Value(m['description'] as String?),
+              imagePath: Value(m['imagePath'] as String?),
+              color: Value(m['color'] as String? ?? '#94A3B8'),
+              notes: Value(m['notes'] as String?),
+              model3dPath: Value(m['model3dPath'] as String?),
+              floorPlanJson: Value(m['floorPlanJson'] as String?),
+              sitePlacementJson: Value(m['sitePlacementJson'] as String?),
+              scanPath: Value(m['scanPath'] as String?),
+              scanSource: Value(m['scanSource'] as String?),
+              scanMetadataJson: Value(m['scanMetadataJson'] as String?),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+            ),
+          );
       setKeyToId[m['setKey'] as String] = id;
     }
 
@@ -1769,16 +1779,20 @@ class ProjectContentBundle {
     for (final row in bundle['setGroups'] as List? ?? []) {
       final m = Map<String, dynamic>.from(row as Map);
       final siteKey = m['siteKey'] as String?;
-      final id = await db.into(db.setGroups).insert(
-        SetGroupsCompanion.insert(
-          uid: bundleUid(m['uid']),
-          projectId: projectId,
-          locationSiteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
-          name: m['name'] as String? ?? 'Grupo',
-          planJson: Value(m['planJson'] as String?),
-          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-        ),
-      );
+      final id = await db
+          .into(db.setGroups)
+          .insert(
+            SetGroupsCompanion.insert(
+              uid: bundleUid(m['uid']),
+              projectId: projectId,
+              locationSiteId: Value(
+                siteKey != null ? siteKeyToId[siteKey] : null,
+              ),
+              name: m['name'] as String? ?? 'Grupo',
+              planJson: Value(m['planJson'] as String?),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+            ),
+          );
       if (m['setGroupKey'] case final String key) setGroupKeyToId[key] = id;
     }
 
@@ -1790,28 +1804,32 @@ class ProjectContentBundle {
       final m = Map<String, dynamic>.from(row as Map);
       final siteKey = m['siteKey'] as String?;
       final setKey = m['setKey'] as String?;
-      final id = await db.into(db.lightSetups).insert(
-        LightSetupsCompanion.insert(
-          uid: bundleUid(m['uid']),
-          projectId: projectId,
-          locationSiteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
-          locationBasePlanId: Value(
-            setKey != null ? setKeyToId[setKey] : null,
-          ),
-          name: m['name'] as String,
-          status: Value(m['status'] as String? ?? 'boceto'),
-          origin: Value(m['origin'] as String? ?? 'planta'),
-          category: Value(m['category'] as String?),
-          planJson: Value(m['planJson'] as String?),
-          sketchJson: Value(m['sketchJson'] as String?),
-          sketchImagePath: Value(m['sketchImagePath'] as String?),
-          sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
-          kind: Value(m['kind'] as String? ?? 'planta'),
-          groupId: Value(setGroupKeyToId[m['setGroupKey']]),
-          envOverridesJson: Value(m['envOverridesJson'] as String?),
-          shootOrder: Value(bundleInt(m['shootOrder'])),
-        ),
-      );
+      final id = await db
+          .into(db.lightSetups)
+          .insert(
+            LightSetupsCompanion.insert(
+              uid: bundleUid(m['uid']),
+              projectId: projectId,
+              locationSiteId: Value(
+                siteKey != null ? siteKeyToId[siteKey] : null,
+              ),
+              locationBasePlanId: Value(
+                setKey != null ? setKeyToId[setKey] : null,
+              ),
+              name: m['name'] as String,
+              status: Value(m['status'] as String? ?? 'boceto'),
+              origin: Value(m['origin'] as String? ?? 'planta'),
+              category: Value(m['category'] as String?),
+              planJson: Value(m['planJson'] as String?),
+              sketchJson: Value(m['sketchJson'] as String?),
+              sketchImagePath: Value(m['sketchImagePath'] as String?),
+              sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
+              kind: Value(m['kind'] as String? ?? 'planta'),
+              groupId: Value(setGroupKeyToId[m['setGroupKey']]),
+              envOverridesJson: Value(m['envOverridesJson'] as String?),
+              shootOrder: Value(bundleInt(m['shootOrder'])),
+            ),
+          );
       lightSetupKeyToId[m['lightSetupKey'] as String] = id;
       if (m['uid'] case final String uid) lightSetupIdByUid[uid] = id;
       if (m['sceneKey'] case final String sceneKey) {
@@ -1862,9 +1880,7 @@ class ProjectContentBundle {
           sourceStartIndex: Value(bundleInt(m['sourceStartIndex'])),
           durationMinutes: Value(bundleIntOr(m['durationMinutes'], 0)),
           autoNumbering: Value(m['autoNumbering'] as bool? ?? true),
-          locationSiteId: Value(
-            siteKey != null ? siteKeyToId[siteKey] : null,
-          ),
+          locationSiteId: Value(siteKey != null ? siteKeyToId[siteKey] : null),
           locationId: Value(setKey != null ? setKeyToId[setKey] : null),
           sortOrder: Value(bundleIntOr(m['sortOrder'], 0)),
           scriptLinked: Value(m['scriptLinked'] as bool? ?? false),
@@ -1884,8 +1900,9 @@ class ProjectContentBundle {
           .write(LightSetupsCompanion(sceneId: Value(sceneId)));
     }
     if (inPlace) {
-      await (db.delete(db.scenes)
-            ..where((s) => s.projectId.equals(projectId) & s.id.isNotIn(keptScenes)))
+      await (db.delete(db.scenes)..where(
+            (s) => s.projectId.equals(projectId) & s.id.isNotIn(keptScenes),
+          ))
           .go();
     }
 
@@ -1928,9 +1945,7 @@ class ProjectContentBundle {
               lightSetupIdByUid,
             ),
           ),
-          storyboardImagePath: Value(
-            m['storyboardImagePath'] as String?,
-          ),
+          storyboardImagePath: Value(m['storyboardImagePath'] as String?),
           cellStylesJson: Value(m['cellStylesJson'] as String?),
           exportLayoutJson: Value(m['exportLayoutJson'] as String?),
           planViewJson: Value(m['planViewJson'] as String?),
@@ -1953,8 +1968,9 @@ class ProjectContentBundle {
       shotKeyToId[m['shotKey'] as String] = id;
     }
     if (inPlace) {
-      await (db.delete(db.shots)
-            ..where((s) => s.projectId.equals(projectId) & s.id.isNotIn(keptShots)))
+      await (db.delete(db.shots)..where(
+            (s) => s.projectId.equals(projectId) & s.id.isNotIn(keptShots),
+          ))
           .go();
     }
 
@@ -1979,10 +1995,11 @@ class ProjectContentBundle {
       final primaryUid = m['primaryReferenceUid'] as String?;
       final shotId = shotKeyToId[m['shotKey']];
       if (primaryUid == null || shotId == null) continue;
-      final reference = await (db.select(db.shotReferences)..where(
-            (r) => r.shotId.equals(shotId) & r.uid.equals(primaryUid),
-          ))
-          .getSingleOrNull();
+      final reference =
+          await (db.select(db.shotReferences)..where(
+                (r) => r.shotId.equals(shotId) & r.uid.equals(primaryUid),
+              ))
+              .getSingleOrNull();
       if (reference == null) continue;
       await (db.update(db.shots)..where((s) => s.id.equals(shotId))).write(
         ShotsCompanion(referenceImagePath: Value(reference.imagePath)),
@@ -2209,7 +2226,9 @@ class ProjectContentBundle {
       if (localId != null) moodboardIdMap[localId] = id;
       final bibleKey =
           m['bibleKey'] as String? ??
-          (bundleInt(m['bibleId']) != null ? 'vb:${bundleInt(m['bibleId'])}' : null);
+          (bundleInt(m['bibleId']) != null
+              ? 'vb:${bundleInt(m['bibleId'])}'
+              : null);
       if (bibleKey != null) moodboardBibleKeys[id] = bibleKey;
     }
 
@@ -2258,9 +2277,11 @@ class ProjectContentBundle {
 
     // Los stills se crean antes que la biblia: ahora se enlazan a la nueva.
     for (final entry in moodboardBibleKeys.entries) {
-      await (db.update(db.moodboardImages)
-            ..where((m) => m.id.equals(entry.key)))
-          .write(MoodboardImagesCompanion(bibleId: Value(vbKeyToId[entry.value])));
+      await (db.update(
+        db.moodboardImages,
+      )..where((m) => m.id.equals(entry.key))).write(
+        MoodboardImagesCompanion(bibleId: Value(vbKeyToId[entry.value])),
+      );
     }
 
     for (final row in bundle['visualBibleVersions'] as List? ?? []) {

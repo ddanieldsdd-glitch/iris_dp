@@ -5,8 +5,8 @@ import '../database/database_provider.dart';
 /// Número de operaciones de sync pendientes en cola local.
 final pendingSyncQueueCountProvider = FutureProvider<int>((ref) async {
   final db = ref.watch(databaseProvider);
-  final pending = await (db.select(db.cloudSyncQueue)
-        ..where((q) => q.processed.equals(false)))
-      .get();
+  final pending = await (db.select(
+    db.cloudSyncQueue,
+  )..where((q) => q.processed.equals(false))).get();
   return pending.length;
 });

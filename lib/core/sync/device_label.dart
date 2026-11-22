@@ -35,10 +35,10 @@ class CloudEdit {
     final when = ago.inMinutes < 1
         ? 'ahora'
         : ago.inHours < 1
-            ? 'hace ${ago.inMinutes} min'
-            : ago.inDays < 1
-                ? 'hace ${ago.inHours} h'
-                : 'hace ${ago.inDays} d';
+        ? 'hace ${ago.inMinutes} min'
+        : ago.inDays < 1
+        ? 'hace ${ago.inHours} h'
+        : 'hace ${ago.inDays} d';
     return device == null ? 'editado $when' : 'editado en $device $when';
   }
 }

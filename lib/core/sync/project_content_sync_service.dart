@@ -64,14 +64,13 @@ class ProjectContentSyncService {
     );
 
     final syncedAt = DateTime.now().toUtc();
-    await (_db.update(_db.projects)
-          ..where((p) => p.id.equals(localProjectId)))
-        .write(ProjectsCompanion(
-      contentSyncUpdatedAt: Value(syncedAt),
-    ));
+    await (_db.update(_db.projects)..where((p) => p.id.equals(localProjectId)))
+        .write(ProjectsCompanion(contentSyncUpdatedAt: Value(syncedAt)));
     // Este dispositivo y la nube quedan iguales: punto de partida para
     // saber quién cambia después.
-    await ContentSyncBaseStore.save(_db, localProjectId,
+    await ContentSyncBaseStore.save(
+      _db,
+      localProjectId,
       ContentSyncBase(localHash: hash, cloudHash: hash),
     );
     // Lo subido es la base para mezclar la próxima vez.
@@ -208,7 +207,9 @@ class ProjectContentSyncService {
 
     await ProjectContentBundle.importBundle(_db, localProjectId, bundle);
     final imported = await ProjectContentBundle.export(_db, localProjectId);
-    await ContentSyncBaseStore.save(_db, localProjectId,
+    await ContentSyncBaseStore.save(
+      _db,
+      localProjectId,
       ContentSyncBase(
         localHash: ProjectContentBundle.hashBundle(imported),
         cloudHash:
@@ -224,13 +225,9 @@ class ProjectContentSyncService {
     );
 
     final cloudUpdated =
-        DateTime.tryParse(row['updated_at'] as String? ?? '') ??
-            DateTime.now();
-    await (_db.update(_db.projects)
-          ..where((p) => p.id.equals(localProjectId)))
-        .write(ProjectsCompanion(
-      contentSyncUpdatedAt: Value(cloudUpdated),
-    ));
+        DateTime.tryParse(row['updated_at'] as String? ?? '') ?? DateTime.now();
+    await (_db.update(_db.projects)..where((p) => p.id.equals(localProjectId)))
+        .write(ProjectsCompanion(contentSyncUpdatedAt: Value(cloudUpdated)));
     return true;
   }
 
@@ -366,15 +363,19 @@ class CloudSyncQueueService {
   CloudSyncQueueService(this._db, [this._client]);
 
   Future<void> enqueueContentUpload(int localProjectId, String cloudId) async {
-    final pending = await (_db.select(_db.cloudSyncQueue)
-          ..where((q) =>
-              q.entityType.equals('project_content') &
-              q.localEntityId.equals('$localProjectId') &
-              q.processed.equals(false)))
-        .get();
+    final pending =
+        await (_db.select(_db.cloudSyncQueue)..where(
+              (q) =>
+                  q.entityType.equals('project_content') &
+                  q.localEntityId.equals('$localProjectId') &
+                  q.processed.equals(false),
+            ))
+            .get();
     if (pending.isNotEmpty) return;
 
-    await _db.into(_db.cloudSyncQueue).insert(
+    await _db
+        .into(_db.cloudSyncQueue)
+        .insert(
           CloudSyncQueueCompanion.insert(
             entityType: 'project_content',
             localEntityId: '$localProjectId',
@@ -389,10 +390,11 @@ class CloudSyncQueueService {
     if (supa == null) return 0;
 
     final sync = ProjectContentSyncService(_db, supa);
-    final pending = await (_db.select(_db.cloudSyncQueue)
-          ..where((q) => q.processed.equals(false))
-          ..orderBy([(q) => OrderingTerm.asc(q.createdAt)]))
-        .get();
+    final pending =
+        await (_db.select(_db.cloudSyncQueue)
+              ..where((q) => q.processed.equals(false))
+              ..orderBy([(q) => OrderingTerm.asc(q.createdAt)]))
+            .get();
 
     var processed = 0;
     for (final item in pending) {

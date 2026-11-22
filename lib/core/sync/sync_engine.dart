@@ -177,7 +177,9 @@ class SyncEngine {
       parts.add('↑${result.mediaUploaded} ↓${result.mediaDownloaded} img');
     }
     if (result.bytesSaved > 0) {
-      parts.add('${(result.bytesSaved / 1024 / 1024).toStringAsFixed(1)} MB ahorrados');
+      parts.add(
+        '${(result.bytesSaved / 1024 / 1024).toStringAsFixed(1)} MB ahorrados',
+      );
     }
     return parts.join(' · ');
   }
@@ -200,14 +202,13 @@ class SyncEngine {
 
   /// Lo que cambia filas aquí: se retiene mientras se escribe.
   static bool _bringsDown(SyncPlanItem item) => switch (item.action) {
-        SyncPlanAction.pullContentCloud ||
-        SyncPlanAction.importFromCloud ||
-        SyncPlanAction.updateLocalFromCloud ||
-        SyncPlanAction.contentConflict ||
-        SyncPlanAction.deleteLocal =>
-          true,
-        _ => false,
-      };
+    SyncPlanAction.pullContentCloud ||
+    SyncPlanAction.importFromCloud ||
+    SyncPlanAction.updateLocalFromCloud ||
+    SyncPlanAction.contentConflict ||
+    SyncPlanAction.deleteLocal => true,
+    _ => false,
+  };
 
   /// El aviso de imágenes desactivadas va al log una vez por sesión.
   static bool _warnedMediaOff = false;
@@ -246,11 +247,13 @@ class SyncEngine {
       _inFlight = null;
       if (!_again) return;
       _again = false;
-      unawaited(syncSilently(allMedia: false).then(
-        (_) {},
-        onError: (Object e, StackTrace st) =>
-            ErrorLog.record(e, st, context: 'Sincronización automática'),
-      ));
+      unawaited(
+        syncSilently(allMedia: false).then(
+          (_) {},
+          onError: (Object e, StackTrace st) =>
+              ErrorLog.record(e, st, context: 'Sincronización automática'),
+        ),
+      );
     }).ignore();
     return run;
   }
@@ -272,9 +275,11 @@ class SyncEngine {
       debugPrint('[sync] nada que subir ni bajar');
     }
     for (final item in plan.items) {
-      debugPrint('[sync ${DateTime.now().toIso8601String().substring(11, 19)}] '
-          '${item.action.name} · ${item.title}'
-          '${item.appliesSilently ? '' : ' · PENDIENTE DE REVISAR'}');
+      debugPrint(
+        '[sync ${DateTime.now().toIso8601String().substring(11, 19)}] '
+        '${item.action.name} · ${item.title}'
+        '${item.appliesSilently ? '' : ' · PENDIENTE DE REVISAR'}',
+      );
     }
 
     // Mientras se escribe aquí se sube lo guardado, pero no se baja ni se
@@ -301,8 +306,10 @@ class SyncEngine {
       final cloudId = item.cloudId;
       if (id == null || cloudId == null) continue;
       try {
-        final outcome =
-            await ContentMergeService(db, client).mergeAndSync(id, cloudId);
+        final outcome = await ContentMergeService(
+          db,
+          client,
+        ).mergeAndSync(id, cloudId);
         if (outcome == null) continue;
         merged.add(item);
         if (outcome.discarded > 0) {
@@ -479,20 +486,22 @@ class SyncEngine {
       _inFlight = null;
       if (_again) {
         _again = false;
-        unawaited(syncSilently(allMedia: false).then(
-          (_) {},
-          onError: (Object e, StackTrace st) =>
-              ErrorLog.record(e, st, context: 'Sincronización automática'),
-        ));
+        unawaited(
+          syncSilently(allMedia: false).then(
+            (_) {},
+            onError: (Object e, StackTrace st) =>
+                ErrorLog.record(e, st, context: 'Sincronización automática'),
+          ),
+        );
       }
     }
   }
 
   Future<void> _pushPendingEdits(SupabaseClient client) async {
     final db = _ref.read(databaseProvider);
-    final pending = await (db.select(db.cloudSyncQueue)
-          ..where((q) => q.processed.equals(false)))
-        .get();
+    final pending = await (db.select(
+      db.cloudSyncQueue,
+    )..where((q) => q.processed.equals(false))).get();
     if (pending.isEmpty) return;
     await CloudSyncQueueService(db, client).processPending();
 
@@ -575,13 +584,13 @@ class SyncEngine {
           mediaDownloaded += await hydrate.hydrateProject(
             p.id,
             p.cloudId!,
-            onProgress: (downloaded, checked, total) => progress.state =
-                MediaDownloadProgress(
-              projectName: p.name,
-              downloaded: downloaded,
-              checked: checked,
-              total: total,
-            ),
+            onProgress: (downloaded, checked, total) =>
+                progress.state = MediaDownloadProgress(
+                  projectName: p.name,
+                  downloaded: downloaded,
+                  checked: checked,
+                  total: total,
+                ),
           );
         } catch (e, st) {
           await ErrorLog.record(e, st, context: 'Bajar medios ${p.name}');
@@ -694,8 +703,7 @@ class SyncResult {
   /// Compatibilidad con código que usaba [mediaSynced].
   int get mediaSynced => mediaUploaded + mediaDownloaded;
 
-  factory SyncResult.skipped(String reason) =>
-      SyncResult(message: reason);
+  factory SyncResult.skipped(String reason) => SyncResult(message: reason);
 
   bool get ok => message == null || pendingReview;
 }
@@ -725,8 +733,11 @@ class MergeNotice {
         count == 1 ? '1 $one' : '$count $many';
     final what = mine > 0
         ? n(mine, 'cambio tuyo se descartó', 'cambios tuyos se descartaron')
-        : n(discarded, 'cambio del otro equipo se descartó',
-            'cambios del otro equipo se descartaron');
+        : n(
+            discarded,
+            'cambio del otro equipo se descartó',
+            'cambios del otro equipo se descartaron',
+          );
     return '$projectName se mezcló con el otro equipo · $what';
   }
 }
@@ -747,12 +758,14 @@ class MediaDownloadProgress {
     required this.total,
   });
 
-  String get message => 'Bajando imágenes de $projectName · '
+  String get message =>
+      'Bajando imágenes de $projectName · '
       '$downloaded nuevas ($checked de $total revisadas)';
 }
 
-final mediaDownloadProgressProvider =
-    StateProvider<MediaDownloadProgress?>((ref) => null);
+final mediaDownloadProgressProvider = StateProvider<MediaDownloadProgress?>(
+  (ref) => null,
+);
 
 /// La última subida a la nube que se ha visto (ver [CloudEdit]).
 final lastCloudEditProvider = StateProvider<CloudEdit?>((ref) => null);

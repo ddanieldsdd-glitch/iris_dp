@@ -794,6 +794,10 @@ class AppDatabase extends _$AppDatabase {
         await add(shootDocumentBlocks, shootDocumentBlocks.uid);
         await ShootUids.backfill(this);
       }
+      if (from < 65) {
+        // Copias de consulta de los proyectos de invitados (plan IN).
+        await add(projects, projects.mirrorCloudId);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -5515,7 +5519,7 @@ const kQueryIndexes = [
   ('project_annotation_documents', 'project_id'),
 ];
 
-const kSchemaVersion = 64;
+const kSchemaVersion = 65;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

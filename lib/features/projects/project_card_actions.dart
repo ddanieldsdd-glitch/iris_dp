@@ -100,9 +100,7 @@ class _CardDataDialogState extends State<_CardDataDialog> {
     await (widget.db.update(
       widget.db.projects,
     )..where((p) => p.id.equals(widget.project.id))).write(
-      ProjectsCompanion(
-        cardMetricsJson: Value(ProjectCardMetric.encode(next)),
-      ),
+      ProjectsCompanion(cardMetricsJson: Value(ProjectCardMetric.encode(next))),
     );
   }
 
@@ -172,9 +170,9 @@ Future<void> _writeProject(
   AppDatabase db,
   int projectId,
   ProjectsCompanion values,
-) => (db.update(db.projects)..where((p) => p.id.equals(projectId))).write(
-  values,
-);
+) => (db.update(
+  db.projects,
+)..where((p) => p.id.equals(projectId))).write(values);
 
 /// Elige el color de la tarjeta. Se aplica al tocarlo.
 Future<void> chooseProjectCardColor(
@@ -297,5 +295,8 @@ Future<void> setProjectCardSize(
   AppDatabase db,
   Project project,
   ProjectCardSize size,
-) => _writeProject(db, project.id, ProjectsCompanion(cardSize: Value(size.name)));
-
+) => _writeProject(
+  db,
+  project.id,
+  ProjectsCompanion(cardSize: Value(size.name)),
+);

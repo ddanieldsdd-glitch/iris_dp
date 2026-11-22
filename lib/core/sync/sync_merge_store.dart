@@ -153,8 +153,9 @@ abstract final class SyncConflictLog {
   /// puede ser grande; para recuperarla están las copias de la base).
   static const maxValueChars = 20000;
 
-  static String? _clip(String? v) =>
-      v == null || v.length <= maxValueChars ? v : v.substring(0, maxValueChars);
+  static String? _clip(String? v) => v == null || v.length <= maxValueChars
+      ? v
+      : v.substring(0, maxValueChars);
 
   static Future<void> addAll(
     AppDatabase db,
