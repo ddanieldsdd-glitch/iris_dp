@@ -19,6 +19,8 @@ import '../light/meter.dart';
 import '../light/plan_light.dart';
 import '../light/surfaces.dart';
 import '../light/wall_mount.dart';
+import '../arch/arch_material.dart';
+import '../plan_classes.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
 import '../plan_opening.dart';
@@ -145,6 +147,8 @@ class PlanScene3d {
           surfaces.add({
             'id': '$uid:${band.kind}${surfaces.length}',
             'kind': band.kind,
+            'cls': PlanClass.architecture.name,
+            'mat': band.kind == 'road' ? 'asphalt' : 'stone-paving',
             'outline': [for (final p in band.outline) xy(p)],
             'z0': level,
             'top': _r(band.topM),
@@ -340,7 +344,26 @@ class PlanScene3d {
         for (final (i, el) in elements.indexed)
           ?_asset(el, idOf(el, i), mpu),
       ];
+    out['materials'] = materialsOf(out);
     return out;
+  }
+
+  /// Los materiales de la biblioteca (AM.1) que usa la escena, por `id`:
+  /// el visor y el glTF de Unreal los construyen una vez.
+  static Map<String, dynamic> materialsOf(Map<String, dynamic> scene) {
+    final used = <String>{};
+    for (final k in const ['walls', 'surfaces', 'drapes', 'halls']) {
+      for (final item in (scene[k] as List?) ?? const []) {
+        if (item is! Map) continue;
+        for (final key in const ['mat', 'floorMat', 'roofMat']) {
+          if (item[key] case final String id) used.add(id);
+        }
+      }
+    }
+    return {
+      for (final id in used.toList()..sort())
+        if (ArchMaterials.byId(id) case final m?) id: m.toScene(),
+    };
   }
 
   /// Un negro, corte, rebote, marco o palio como panel a su tamaño (F6.22.2):
@@ -656,6 +679,8 @@ class PlanScene3d {
     List<double> m(Offset p) => [_r(origin.dx + p.dx), _r(-(origin.dy + p.dy))];
     return {
       'id': uid,
+      'cls': PlanClass.architecture.name,
+      'floorMat': 'concrete-floor',
       'z0': r.levelM,
       'eaveM': r.eaveM,
       'roof': r.roof.name,
@@ -759,6 +784,13 @@ class PlanScene3d {
       // Solo si se le ha elegido material: sin él, el color neutro de siempre.
       if (el.props[LightScene.materialKey] case final String material)
         'rgb': SurfaceMaterial.byId(material, kWallMaterials).albedoRgb,
+      // El de la biblioteca (AM.1): textura y PBR en `materials`.
+      if (ArchMaterials.ofWall(el) case final m?) ...{
+        'mat': m.id,
+        'rgb': m.albedoRgb,
+      },
+      // Para Unreal (AM.U1): cada pieza, un actor con su clase y su `id`.
+      'cls': PlanClass.of(el).name,
     };
   }
 
@@ -779,6 +811,8 @@ class PlanScene3d {
       'cat': PlanCategory.of(el).name,
       'z0': level,
       'material': mat.id,
+      'mat': 'drape-${mat.id}',
+      'cls': PlanClass.rigging.name,
       'color':
           '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}',
       'transmission': mat.transmission,

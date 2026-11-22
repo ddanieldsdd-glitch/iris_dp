@@ -738,9 +738,45 @@ def _apply_structure(s):
              if uid == STRUCTURE_ID or uid.startswith(STRUCTURE_ID + PART)])
     origin, flat = unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0)
     for i, path in enumerate(parts):
-        uid = STRUCTURE_ID if i == 0 else "%s%s%d" % (STRUCTURE_ID, PART, i)
-        _place_asset(uid, "IRIS_Estructura" if i == 0 else "IRIS_Estructura (%d)" % i,
-                     path, origin, flat)
+        piece = _structure_piece(path)
+        if piece is None:
+            uid = STRUCTURE_ID if i == 0 else "%s%s%d" % (STRUCTURE_ID, PART, i)
+            _place_asset(uid, "IRIS_Estructura" if i == 0 else "IRIS_Estructura (%d)" % i,
+                         path, origin, flat)
+            continue
+        # Plan AM.U1: cada pieza de IRIS llega como IRIS_<clase>_<uid>; es un
+        # actor propio, con su nombre, en la carpeta de su clase y con
+        # etiquetas para buscarla.
+        cls, piece_uid = piece
+        uid = "%s%s%s" % (STRUCTURE_ID, PART, piece_uid)
+        actor = _place_asset(uid, "IRIS_%s_%s" % (cls, piece_uid), path, origin, flat)
+        if actor is not None:
+            actor.set_folder_path("%s/Estructura/%s" % (FOLDER, STRUCTURE_CLASSES.get(cls, cls)))
+            tags = list(actor.tags)
+            for extra in ("IRIS_cls:" + cls, "IRIS_piece:" + piece_uid):
+                if unreal.Name(extra) not in tags:
+                    tags.append(unreal.Name(extra))
+            actor.tags = tags
+
+
+# Carpetas del outliner por clase de la planta (AR.1).
+STRUCTURE_CLASSES = {
+    "architecture": "Arquitectura",
+    "decor": "Decorado",
+    "rigging": "Rigging",
+    "grip": "Grip",
+    "fixtures": "Aparatos",
+}
+
+
+def _structure_piece(path):
+    """(clase, uid) de una malla de la estructura con nombre de pieza
+    (IRIS_<clase>_<uid>, plan AM.U1), o None si es de antes."""
+    name = path.rsplit(".", 1)[-1]
+    match = re.search(r"IRIS_([a-z]+)_([A-Za-z0-9_-]+)$", name)
+    if match is None:
+        return None
+    return match.group(1), match.group(2)
 
 
 GROUND_ROOT = WORLD_ROOT + "/Materiales"

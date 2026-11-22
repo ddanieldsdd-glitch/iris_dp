@@ -675,7 +675,11 @@
     root.add(roof);
     // Suelo de la nave, a su cota.
     const shape = new THREE.Shape(h.outline.map((p) => new THREE.Vector2(p[0], p[1])));
-    const floor = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshStandardMaterial({ color: 0xb9a98e, roughness: 0.9 }));
+    const floorArch = h.floorMat && archMaterial(h.floorMat, false);
+    let floorGeo = new THREE.ShapeGeometry(shape);
+    if (floorArch) floorGeo = boxUV(floorGeo, floorArch) || floorGeo;
+    const floor = new THREE.Mesh(floorGeo, floorArch || new THREE.MeshStandardMaterial({ color: 0xb9a98e, roughness: 0.9 }));
+    tagPiece(floor, { uid: h.id + ':suelo', cls: h.cls, mat: h.floorMat });
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = z0 + 0.005;
     root.add(floor);
@@ -688,6 +692,7 @@
   const surfaceMats = new Map();
   const solidOf = new WeakMap();
   function wallMaterial(w) {
+    if (w.mat && matDefs[w.mat]) return archMaterial(w.mat, !clearView);
     if (w.rgb == null) return clearView ? wallSolid : wallMat;
     let m = surfaceMats.get(w.rgb);
     if (!m) {
@@ -702,6 +707,99 @@
     return clearView ? m.solid : m.seen;
   }
   const edgeMat = new THREE.LineBasicMaterial({ color: 0x3c4249 });
+
+  // Biblioteca de materiales (plan AM.1): IRIS manda en `materials` los que
+  // usa la escena, con su PBR y su textura CC0 (en textures/, a la escala
+  // real que dice cada una). Cada uno se construye una vez; «seen» es la
+  // versión translúcida de las paredes fuera de «Maqueta».
+  let matDefs = {};
+  const archMats = new Map();
+  const texCache = new Map();
+  function texture(file, kind, srgb) {
+    const key = file + '_' + kind;
+    let t = texCache.get(key);
+    if (!t) {
+      t = new THREE.TextureLoader().load('textures/' + key + '.jpg');
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = 4;
+      if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+      texCache.set(key, t);
+    }
+    return t;
+  }
+  function archMaterial(id, seen) {
+    const d = matDefs[id];
+    if (!d) return null;
+    let m = archMats.get(id);
+    if (!m) {
+      // Sin mapa de entorno un metal se ve negro: aquí se rebaja; al glTF de
+      // Unreal va el de verdad (forExport).
+      const opts = { roughness: d.rough != null ? d.rough : 0.85, metalness: Math.min(d.metal || 0, 0.35), side: THREE.DoubleSide };
+      if (d.tex) {
+        opts.map = texture(d.tex.file, 'albedo', true);
+        opts.normalMap = texture(d.tex.file, 'normal', false);
+        opts.roughnessMap = texture(d.tex.file, 'rough', false);
+        if (d.tex.metalMap) opts.metalnessMap = texture(d.tex.file, 'metal', false);
+        const t = d.tex.tint || [1, 1, 1];
+        opts.color = new THREE.Color(t[0], t[1], t[2]);
+      } else {
+        opts.color = new THREE.Color().setHex(d.rgb, THREE.LinearSRGBColorSpace);
+      }
+      let solid;
+      if (d.trans > 0) {
+        solid = new THREE.MeshPhysicalMaterial(Object.assign(opts, { transmission: d.trans, ior: d.ior || 1.5, transparent: true, opacity: 1 - d.trans * 0.6, depthWrite: false }));
+      } else {
+        solid = new THREE.MeshStandardMaterial(opts);
+      }
+      solid.name = 'IRIS_' + id;
+      solid.userData.irisMat = id;
+      solid.userData.metal = d.metal || 0;
+      const see = solid.clone();
+      see.transparent = true;
+      see.opacity = Math.min(see.opacity, 0.6);
+      see.depthWrite = false;
+      solidOf.set(see, solid);
+      m = { solid, seen: see, def: JSON.stringify(d) };
+      archMats.set(id, m);
+    }
+    return seen ? m.seen : m.solid;
+  }
+  // Coordenadas de textura en metros (proyección por caras, como una caja):
+  // cada cara toma los dos ejes que no son su normal, así una pared, un
+  // suelo o una extrusión repiten la textura a su tamaño real.
+  function boxUV(geo, mat) {
+    if (!mat || !mat.map) return;
+    const d = matDefs[mat.userData.irisMat] || {};
+    const tw = (d.tex && d.tex.w) || 1, th = (d.tex && d.tex.h) || 1;
+    const g = geo.index ? geo.toNonIndexed() : geo;
+    const p = g.attributes.position, n = g.attributes.normal;
+    if (!n) g.computeVertexNormals();
+    const nn = g.attributes.normal;
+    const uv = new Float32Array(p.count * 2);
+    for (let i = 0; i < p.count; i += 3) {
+      // La normal de la cara manda en los tres vértices: sin costuras raras.
+      let ax = 0, ay = 0, az = 0;
+      for (let k = 0; k < 3 && i + k < p.count; k++) { ax += nn.getX(i + k); ay += nn.getY(i + k); az += nn.getZ(i + k); }
+      ax = Math.abs(ax); ay = Math.abs(ay); az = Math.abs(az);
+      for (let k = 0; k < 3 && i + k < p.count; k++) {
+        const x = p.getX(i + k), y = p.getY(i + k), z = p.getZ(i + k);
+        let u, v;
+        if (ay >= ax && ay >= az) { u = x; v = z; } else if (ax >= az) { u = z; v = y; } else { u = x; v = y; }
+        uv[(i + k) * 2] = u / tw;
+        uv[(i + k) * 2 + 1] = v / th;
+      }
+    }
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    return g;
+  }
+  // Nombre y datos de una pieza para Unreal (AM.U1): IRIS_<clase>_<uid>, y
+  // su uid, clase y material en los `extras` del glTF.
+  function tagPiece(mesh, item) {
+    const uid = item.uid || item.id;
+    if (!uid) return;
+    mesh.name = 'IRIS_' + (item.cls || 'architecture') + '_' + String(uid).replace(/[^A-Za-z0-9_-]/g, '_');
+    mesh.userData.iris = { uid: String(uid), cls: item.cls || 'architecture', mat: item.mat || null, name: item.name || null };
+  }
   const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fc7d6, roughness: 0.1, metalness: 0.1, side: THREE.DoubleSide, transparent: true, opacity: 0.25, depthWrite: false });
 
   // Un tramo de pared con grosor (CA.1): las dos caras, el canto de arriba,
@@ -834,8 +932,15 @@
     const geo = top > 0.01
       ? new THREE.ExtrudeGeometry(shape, { depth: top, bevelEnabled: false })
       : new THREE.ShapeGeometry(shape);
-    const m = new THREE.Mesh(geo, s.kind === 'road' ? roadMat : walkMat);
+    const arch = s.mat && archMaterial(s.mat, false);
+    const m = new THREE.Mesh(geo, arch || (s.kind === 'road' ? roadMat : walkMat));
     m.rotation.x = -Math.PI / 2;
+    if (arch) {
+      // En metros del suelo: la proyección sale antes del giro.
+      const g = boxUV(geo, arch);
+      if (g && g !== geo) m.geometry = g;
+    }
+    tagPiece(m, s);
     m.position.y = (s.z0 || 0) + (top > 0.01 ? 0 : 0.006);
     m.receiveShadow = true;
     L.walls.add(m);
@@ -891,6 +996,8 @@
       }
     }
     const wall = meshFrom(pos, wallMaterial(w), w.id);
+    if (wall.material && wall.material.map) boxUV(wall.geometry, wall.material);
+    tagPiece(wall, w);
     L.walls.add(wall);
     // En «Maqueta», las aristas marcadas: esquinas y huecos se leen aunque
     // dos caras queden del mismo tono.
@@ -934,8 +1041,11 @@
       }
     }
     const clear = (d.transmission || 0) > 0.3;
-    const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(d.color || '#26262c'), roughness: d.material === 'pvc' ? 0.15 : 0.92, side: THREE.DoubleSide, transparent: clear, opacity: clear ? 0.4 : 1 });
-    L.drapes.add(meshFrom(pos, mat, d.id));
+    const def = (d.mat && matDefs[d.mat]) || {};
+    const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(d.color || '#26262c'), roughness: def.rough != null ? def.rough : d.material === 'pvc' ? 0.15 : 0.92, side: THREE.DoubleSide, transparent: clear, opacity: clear ? 0.4 : 1 });
+    const cloth = meshFrom(pos, mat, d.id);
+    tagPiece(cloth, d);
+    L.drapes.add(cloth);
     const rope = s.map((q) => V(q.p[0], q.p[1], z0 + q.top + 0.01));
     L.drapes.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(rope), new THREE.LineBasicMaterial({ color: 0x222222 })));
   }
@@ -1249,6 +1359,11 @@
 
     lastScene = sc;
     palette = sc.palette || {};
+    matDefs = sc.materials || {};
+    // Un material cambiado en IRIS se reconstruye.
+    for (const [id, m] of archMats) {
+      if (JSON.stringify(matDefs[id] || null) !== m.def) archMats.delete(id);
+    }
     // Luz real (F6.21.4): con la exposición de la cámara de IRIS, los focos
     // en candelas, el sol en lux y todo multiplicado por la misma escala que
     // usa el fotómetro, así que un foco al 50 % se ve la mitad. Sin nada
@@ -2008,7 +2123,38 @@
     }));
   }
 
+  // Para el glTF: el tinte de una textura no puede pasar de 1 (baseColorFactor);
+  // si pasa, se baja entero y queda algo más oscuro.
+  const exportMats = new WeakMap();
+  function forExport(mat, textures) {
+    const key = textures ? 'tex' : 'flat';
+    let byKind = exportMats.get(mat);
+    if (!byKind) { byKind = {}; exportMats.set(mat, byKind); }
+    if (byKind[key]) return byKind[key];
+    let m = mat;
+    const c = mat.color;
+    const top = c ? Math.max(c.r, c.g, c.b) : 0;
+    const metal = (mat.userData && mat.userData.metal) || 0;
+    if (top > 1 || (!textures && mat.map) || metal > mat.metalness) {
+      m = mat.clone();
+      m.metalness = Math.max(metal, mat.metalness);
+      if (top > 1) m.color.multiplyScalar(1 / top);
+      if (!textures && mat.map) {
+        // Sin texturas: el color medio que da la luz.
+        const d = matDefs[mat.userData.irisMat];
+        if (d) m.color.setHex(d.rgb, THREE.LinearSRGBColorSpace);
+        m.map = m.normalMap = m.roughnessMap = m.metalnessMap = null;
+      }
+    }
+    byKind[key] = m;
+    return m;
+  }
+
   function structureGlb() {
+    return structureGlbWith(true).catch(() => structureGlbWith(false));
+  }
+
+  function structureGlbWith(textures) {
     const out = new THREE.Group();
     for (const g of [...roofs, L.walls, L.glass, L.drapes, L.pillars, L.rig].filter(Boolean)) {
       g.updateWorldMatrix(true, true);
@@ -2018,8 +2164,10 @@
         if (mat && mat.blending === THREE.AdditiveBlending) return;
         const geo = o.geometry.clone();
         geo.applyMatrix4(o.matrixWorld);
-        const m = new THREE.Mesh(geo, mat);
+        const m = new THREE.Mesh(geo, forExport(mat, textures));
         m.name = o.name || 'IRIS';
+        // Uid, clase y material de la pieza: van a los `extras` del glTF.
+        if (o.userData.iris) m.userData = { iris: o.userData.iris };
         out.add(m);
       });
     }

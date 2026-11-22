@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
 
+import '../arch/arch_material.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../plan_marks.dart';
@@ -1971,9 +1972,9 @@ class LightScene {
         final span = blocker.b - blocker.a;
         final length = span.distance;
         if (length < 20) continue;
-        final material = SurfaceMaterial.byId(
+        final material = ArchMaterials.wallSurface(
+          wall,
           wall.props[materialKey] as String?,
-          kWallMaterials,
         );
         // La pared se reparte en paños de alrededor de dos metros (hasta
         // tres); cada uno devuelve lo suyo. Un tramo corto, como los de una

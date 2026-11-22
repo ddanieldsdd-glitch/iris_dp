@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import 'arch/arch_material.dart';
+import 'arch/arch_material_picker.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/plan_grip.dart';
@@ -459,9 +461,9 @@ class PlanPieceControls extends StatelessWidget {
       );
     } else if (PlanSegment.isSegment(el) &&
         PlanSegment.kind(el) == PlanSegment.kindWall) {
-      final material = SurfaceMaterial.byId(
+      final material = ArchMaterials.wallSurface(
+        el,
         el.props[LightScene.materialKey] as String?,
-        kWallMaterials,
       );
       final wallH = PlanSegment.heightM(el) ?? PlanScene3d.defaultWallM;
       final thick = PlanSegment.thicknessM(el);
@@ -486,11 +488,24 @@ class PlanPieceControls extends StatelessWidget {
           onChanged: (v) =>
               el.props[PlanSegment.thicknessKey] = (v * 100).round() / 100,
         ),
-        choice<String>(
-          'Material de la pared',
-          material.id,
-          [for (final m in kWallMaterials) (m.id, m.name)],
-          (id) => el.props[LightScene.materialKey] = id,
+        // La biblioteca de materiales (AM.1): textura, PBR y luz.
+        ArchMaterialField(
+          label: 'Material de la pared',
+          value: ArchMaterials.ofWall(el),
+          onChanged: (m) {
+            el.props[ArchMaterials.key] = m.id;
+            // Una versión anterior de IRIS sigue leyendo el de siempre.
+            final legacy = ArchMaterials.wallLegacy.entries
+                .where((e) => e.value == m.id)
+                .map((e) => e.key)
+                .firstOrNull;
+            if (legacy != null) {
+              el.props[LightScene.materialKey] = legacy;
+            } else {
+              el.props.remove(LightScene.materialKey);
+            }
+            onUpdate();
+          },
         ),
         Text(
           'Devuelve el ${(material.reflectance * 100).round()} % de la luz'

@@ -215,6 +215,14 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - **Unreal:** el GLB lleva PBR y texturas. `iris_stage_link.py` crea material instances por `id`.
 - **Selector de material** con miniaturas, compartido por muros, suelos, cubiertas, volúmenes y telas.
 
+*Hecho en parte (2026-11-22, rama `plan/motor-arquitectonico`, sin publicar). Cómo quedó:*
+- `arch/arch_material.dart`: 35 materiales en 14 familias, 24 con textura de ambientCG (CC0). Los de pared y suelo de siempre son entradas de la biblioteca con sus mismos números (`wallLegacy`, `floorLegacy`); una prueba comprueba que la luz y el color no cambian. Los nuevos sacan la reflectancia y el tinte del color medio de su textura.
+- `kWallMaterials` y `kFloorMaterials` se quedan como estaban (sin mover nada de la luz). Las telas de colgar tienen su PBR en `drape-<id>`.
+- Las texturas van **a 512 px y no a 1K**: 4 MB en la app en lugar de unos 25 MB. La descarga al usarlo (a 1K o 2K, y Poly Haven) **queda pendiente**.
+- Escena 3D: `mat` en paredes (y en calzada, acera, suelo de nave y telas) y un registro `materials` con lo que usa la escena. La luz lee `mat` antes que `material`; al elegir uno de los de siempre se guardan los dos, para que una versión anterior lo siga leyendo.
+- Visor: registro por `id`, coordenadas de textura en metros proyectadas por caras. Los metales se rebajan en pantalla (sin mapa de entorno se ven negros); al glTF va el valor real.
+- Selector: en el panel de la pared, con miniaturas por familias. Falta en suelos de recinto, calle y nave.
+
 **AM.2 · Forjados y volúmenes: dibujar y estirar**
 - Herramienta polígono (o rectángulo) que crea:
   - un **forjado**: suelo o techo con grosor, cota y huecos (escalera, patio). Sirve para tarimas, aceras y andenes;
@@ -282,6 +290,8 @@ Todo lo que se construye con el motor tiene que leerse en Unreal con facilidad. 
 - `extras` de glTF por nodo: `uid`, clase de AR.1, receta, nivel, material, medidas y parámetros de la receta.
 - `iris_stage_link.py` crea un StaticMeshActor por pieza, en carpetas por clase y nivel, con etiquetas (`Tags`). Al reimportar sustituye por `uid`, sin duplicar.
 - Las piezas que se repiten (asientos, traviesas, farolas, ventanas de un módulo) van como **instancias**: `EXT_mesh_gpu_instancing` → Instanced Static Mesh. Es lo que hace SketchUp con los componentes y lo que Unreal necesita para que sea ligero.
+
+*Hecho en parte (2026-11-22, con AM.1):* el GLB de estructura lleva un nodo por pieza, `IRIS_<clase>_<id>`, con `uid`, clase, material y nombre en los `extras`, y materiales PBR con sus texturas (si el WebView no deja leerlas, sale sin texturas y con el color medio). `iris_stage_link.py` pone cada pieza como actor propio en `IRIS/Estructura/<Clase>` con etiquetas `IRIS_cls:` e `IRIS_piece:`. Faltan las instancias y comprobarlo en Unreal en el PC de Daniel.
 
 **AM.U2 · Vincular cualquier pieza o material con un asset de Unreal (Fab, Megascans, proyecto)**
 - Se amplía lo que ya existe: `UnrealAssetRef` en `props['unreal']` (`lib/features/unreal_link/unreal_asset_ref.dart`), hoy solo en muebles y algunos tramos.

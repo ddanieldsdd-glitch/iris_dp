@@ -103,6 +103,8 @@ flutter:
     - assets/luka/manifest.json
     - assets/viewer3d/
     - assets/viewer3d/vendor/
+    # Texturas CC0 de la biblioteca de materiales (AM.1).
+    - assets/viewer3d/textures/
     # IRIS Stage para Unreal: la app lo instala en el proyecto de Unreal.
     - tools/unreal/iris_stage/Content/Python/iris_stage_link.py
     - tools/unreal/iris_stage/Config/DefaultEngine.ini
