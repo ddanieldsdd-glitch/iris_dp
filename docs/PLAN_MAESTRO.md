@@ -200,7 +200,7 @@ Las pantallas de la biblia V2 congelada no se revisan: se decide si se borran.
 - [ ] **[Mac] Herramientas de jornada (RJ · R+):** fotos y adjuntos propios de cada jornada, planta vinculada a la jornada, hoja de citación en PDF (horarios, localización, tiempo y contactos) y contactos de equipo.
 - [ ] **[Mac] Reservas desde Excel y Word (RC · E2):** vínculo al catálogo con `_resolveEquipmentId` y añadir a `ProjectEquipment` con una acción expresa.
 - [ ] **[Mac] Planta del plano secuencia:** el recorrido entre zonas se sigue pintando encima de lo demás. [planta limpia]
-- [ ] **[Mac] Caché de las miniaturas de la tira de planos.** [plan JP, PL.6]
+- [x] **[Mac] Caché de las miniaturas de la tira de planos.** [plan JP, PL.6] Revisado el 2026-11-22: ya la cubre `PlanThumbnailCache` (R3), por contenido; las tarjetas de plano usan la portada con `cacheWidth`.
 
 ### iPhone [IP, IC, RC · M2]
 - [ ] Consulta en set: plan del día, storyboard y edición ligera (IP.2).
