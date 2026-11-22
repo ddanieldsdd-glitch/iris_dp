@@ -53,10 +53,10 @@ Sin coste. Que los datos de otros estén seguros y que varias personas puedan tr
 - [ ] **Subida de fotos firmada** (fuera el preset sin firmar de Cloudinary) y paso a Cloudflare R2, para que el cupo cuente también las imágenes. [Colaboración, fase 0; rama IN]
 
 ### Colaboración entre personas
-- [ ] Canal en vivo por proyecto compartido, no por espacio de trabajo propio. [Colaboración, fase 0]
-- [ ] Hora del servidor en los bloqueos (`LiveEditing.focusShot`). [Colaboración, fase 0]
-- [ ] Persona, nombre y rol en la presencia, en vez del dispositivo. [Colaboración, fase 0]
-- [ ] Planta: bloquear al editar, no al abrir, y soltar tras 2 minutos sin tocar. [Colaboración, fase 0]
+- [x] Canal en vivo por proyecto compartido, no por espacio de trabajo propio. [Colaboración, fase 0] **2026-11-22:** cada equipo entra también en `iris-proj-<cloudId>` de cada proyecto en la nube que tiene; el del espacio sigue para los equipos propios y las versiones anteriores. Lo de un proyecto (qué se edita, lo que se escribe, los dibujos, los avisos de subida) va a su canal y al del espacio, con marca para aplicarlo una vez; nunca a los canales de otros proyectos (`LiveKeyProjects`). Límite: los canales son públicos para quien conozca el `cloudId`; los canales privados con RLS quedan para la fase 1.
+- [x] Hora del servidor en los bloqueos (`LiveEditing.focusShot`). [Colaboración, fase 0] Con `ServerClock.nowUtc()`, la última medida de `iris_server_now` (013).
+- [x] Persona, nombre y rol en la presencia, en vez del dispositivo. [Colaboración, fase 0] Los avisos dicen «Ana (gaffer) · iPad»; el papel sale de `project_members` (sin fila, «propietario»).
+- [x] Planta: bloquear al editar, no al abrir, y soltar tras 2 minutos sin tocar. [Colaboración, fase 0] `LiveEditing.touch` desde `_commitHistory` y `_saveLayer`.
 
 ### Fiabilidad básica
 - [x] **Errores a `ErrorLog`** en las rutas de guardado y sincronización que aún los tragan. [FI.4] **2026-11-22:** revisados los 30 `catch (_)`. Se registran: borrar en la nube, base de la mezcla, ajustes del usuario, imagen sustituida, moodboard antiguo y copias viejas de la base. Un bloque de jornada con ajustes ilegibles se guarda aparte (`preserveDamaged`) antes de que «En set» escriba encima. Quedan 19, a propósito: lecturas de JSON con alternativa, limpiezas e indicadores.

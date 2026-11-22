@@ -19,6 +19,8 @@ extension _EditorSave on _CameraPlanEditorState {
   /// Guarda una capa entera en su sitio.
   Future<void> _saveLayer(PlanLayer layer) async {
     if (!_hasLayer(layer)) return;
+    // Los identificadores que se dan al abrir no son editar.
+    if (!_savingUids) _touchLive();
     if (_envScoped &&
         (layer == PlanLayer.environment || layer == PlanLayer.set)) {
       await _saveEnvironmentOfSet();

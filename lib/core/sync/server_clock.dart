@@ -44,6 +44,20 @@ abstract final class ServerClock {
     }
   }
 
+  /// La última medida, sin esperar (cero si aún no hay).
+  static Duration get known => _offset ?? Duration.zero;
+
+  /// La hora del servidor según la última medida, en UTC. La usan los
+  /// bloqueos de la edición compartida: gana quien tomó antes un plano, y
+  /// con relojes que no coinciden ganaría el que no debe (fase 0).
+  static DateTime nowUtc() => DateTime.now().toUtc().add(known);
+
+  @visibleForTesting
+  static void setKnown(Duration value) {
+    _offset = value;
+    _measuredAt = DateTime.now();
+  }
+
   @visibleForTesting
   static void reset() {
     _offset = null;

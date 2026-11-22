@@ -111,8 +111,9 @@ void main() {
       ),
     );
     await settle(tester);
-    // Aquí se anuncia que se edita el esquema.
-    expect(published.last, LiveKey.lightSetup(setup.uid!));
+    // Abrirla no la toma: solo se toma al cambiar algo (fase 0).
+    expect(published, isEmpty);
+    expect(live.myShotUid, isNull);
     expect(find.textContaining('Lo está editando'), findsNothing);
 
     live.setPeers([ipad(LiveKey.lightSetup(setup.uid!))]);
@@ -123,11 +124,10 @@ void main() {
     await tester.pump();
     expect(find.textContaining('Lo está editando'), findsNothing);
 
-    // Al salir de la planta se suelta al momento.
+    // Al salir de la planta no queda nada tomado.
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 100));
     expect(live.myShotUid, isNull);
-    expect(published.last, isNull);
   });
 
   testWidgets('desde un plano, el esquema que el iPad edita desde antes '

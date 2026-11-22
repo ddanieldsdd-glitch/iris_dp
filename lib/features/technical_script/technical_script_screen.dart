@@ -79,7 +79,7 @@ class _RowLock {
   static _RowLock? of(LiveEditing live, String? shotUid) {
     final holder = live.holderOf(shotUid);
     if (holder == null) return null;
-    return _RowLock(holder.device, {
+    return _RowLock(holder.label, {
       for (final column in const [
         'encuadre',
         'lens',

@@ -309,7 +309,7 @@ class _SceneFormSheetState extends ConsumerState<SceneFormSheet> {
     final palette = context.palette;
     // Otro equipo edita esta escena desde antes: se ve, pero no se guarda.
     final lockedBy = ref.watch(
-      liveEditingProvider.select((l) => l.holderOf(_liveKey)?.device),
+      liveEditingProvider.select((l) => l.holderOf(_liveKey)?.label),
     );
     final canSave =
         lockedBy == null &&

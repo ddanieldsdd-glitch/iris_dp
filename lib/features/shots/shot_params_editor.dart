@@ -95,7 +95,7 @@ class _ShotParamsEditorState extends ConsumerState<ShotParamsEditor> {
         final shot = snap.data;
         if (shot == null) return const SizedBox.shrink();
         final holder = ref.watch(
-          liveEditingProvider.select((l) => l.holderOf(shot.uid)?.device),
+          liveEditingProvider.select((l) => l.holderOf(shot.uid)?.label),
         );
         if (holder == null) _claim(shot);
         return _form(context, shot, holder);

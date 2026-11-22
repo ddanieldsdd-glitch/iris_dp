@@ -166,7 +166,7 @@ class _StoryboardViewerState extends ConsumerState<StoryboardViewer> {
     final db = ref.read(databaseProvider);
     // Otro equipo edita este plano: aquí no se toca hasta que termine.
     final lockedBy = ref.watch(
-      liveEditingProvider.select((l) => l.holderOf(shot.uid)?.device),
+      liveEditingProvider.select((l) => l.holderOf(shot.uid)?.label),
     );
 
     if (AppLayout.isCompact(context)) {

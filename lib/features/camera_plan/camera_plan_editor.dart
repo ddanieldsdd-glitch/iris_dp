@@ -660,7 +660,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// las empezó antes.
   LiveEditing? _live;
   String? _liveKey;
-  DateTime? _liveSince;
   List<String> _layerKeys = const [];
   Timer? _reloadAfterPeer;
 
@@ -2690,9 +2689,20 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// Para las extensiones del editor, que no pueden llamar a `setState`.
   void _rebuild(VoidCallback fn) => setState(fn);
 
+  /// Este equipo cambia la planta: la toma (o alarga el plazo) para que los
+  /// demás no la toquen a la vez.
+  void _touchLive() {
+    final key = _liveKey;
+    if (key == null) return;
+    final LiveEditing live = _live ?? ref.read(liveEditingProvider);
+    _live = live;
+    live.touch(key);
+  }
+
   void _commitHistory() {
     final current = _snapshot();
     if (_sameSnapshot(current, _lastSaved)) return;
+    _touchLive();
     _undoStack.add(_lastSaved);
     if (_undoStack.length > 60) _undoStack.removeAt(0);
     _redoStack.clear();

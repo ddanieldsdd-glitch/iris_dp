@@ -711,7 +711,7 @@ class _ReferenceImageMenuState extends ConsumerState<_ReferenceImageMenu> {
         };
     final hasOwn = own != null && File(own).existsSync();
     // Otro equipo dibuja este folio ahora: se puede mirar en vivo.
-    final drawer = ref.watch(liveEditingProvider).holderOf(_liveKey)?.device;
+    final drawer = ref.watch(liveEditingProvider).holderOf(_liveKey)?.label;
     final hasImage = path != null && File(path).existsSync();
 
     return CallbackShortcuts(

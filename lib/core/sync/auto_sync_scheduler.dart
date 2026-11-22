@@ -188,6 +188,7 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       debugPrint('Canal en vivo: $e');
       return;
     }
+    await _joinProjectChannels(hub);
     ProjectContentSyncService.onUploaded = (projectCloudId, hash) {
       debugPrint('[medios ${_now()}] contenido subido, aviso: $projectCloudId');
       return hub.announceSnapshot(projectCloudId, hash);
@@ -213,6 +214,49 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
   }
 
   StreamSubscription<String>? _mediaNotices;
+
+  /// Fase 0 de colaboración: un canal por proyecto en la nube, donde
+  /// coinciden las personas invitadas a él, con el papel de esta cuenta en
+  /// cada uno y su nombre.
+  Future<void> _joinProjectChannels(RealtimeHub hub) async {
+    final client = ref.read(supabaseClientProvider);
+    final user = client?.auth.currentUser;
+    if (client == null || user == null) return;
+    final db = ref.read(databaseProvider);
+    final cloudIds = [
+      for (final p in await db.select(db.projects).get())
+        if (p.cloudId case final id?) id,
+    ];
+    final roles = <String, String>{};
+    try {
+      final rows = await client
+          .from('project_members')
+          .select('project_id, role')
+          .eq('user_id', user.id);
+      for (final row in rows) {
+        if (row['project_id'] case final String id) {
+          roles[id] = memberRoleLabel(row['role'] as String?);
+        }
+      }
+    } catch (e, st) {
+      // Sin la lista, se entra igual: solo falta el papel en el aviso.
+      unawaited(
+        ErrorLog.recordUnlessOffline(e, st, context: 'Papeles en proyectos'),
+      );
+    }
+    final meta = user.userMetadata?['display_name'] as String?;
+    hub.person = meta?.trim().isNotEmpty == true
+        ? meta!.trim()
+        : user.email?.split('@').first;
+    try {
+      // Lo que no es de un invitado es de esta cuenta.
+      await hub.joinProjects({
+        for (final id in cloudIds) id: roles[id] ?? memberRoleLabel(null),
+      });
+    } catch (e) {
+      debugPrint('Canales de proyecto: $e');
+    }
+  }
 
   /// Otro equipo subió imágenes: se bajan ya, sin esperar a la pasada de
   /// cada minuto.
@@ -277,8 +321,13 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
     );
     if (!_canSync) return;
     // Cada pasada comprueba también que se sigue en el canal en vivo.
-    if (!(ref.read(realtimeHubProvider)?.isLive ?? true)) {
+    final hub = ref.read(realtimeHubProvider);
+    if (!(hub?.isLive ?? true)) {
       unawaited(_connectLive());
+    } else if (full && hub != null) {
+      // Proyectos nuevos o compartidos desde la última vez, y canales de
+      // proyecto que se cerraron.
+      unawaited(_joinProjectChannels(hub));
     }
     if (full) _lastFullPass = DateTime.now();
     try {
@@ -336,3 +385,13 @@ Future<bool> liveNoticeIsNew(AppDatabase db, SnapshotNotice notice) async {
   final base = await ContentSyncBaseStore.load(db, project.id);
   return base?.cloudHash != notice.hash;
 }
+
+/// Cómo se dice en los avisos el papel de una cuenta en un proyecto
+/// (`project_members.role`; sin fila, es suyo).
+String memberRoleLabel(String? role) => switch (role) {
+  null => 'propietario',
+  'dp' => 'dirección de fotografía',
+  'director' => 'dirección',
+  'viewer' => 'consulta',
+  final other => other,
+};

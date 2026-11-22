@@ -515,7 +515,9 @@ extension _EditorLoad on _CameraPlanEditorState {
 
   // ── Edición compartida ────────────────────────────────────────────────────
 
-  /// Anuncia a los demás equipos qué planta se edita aquí.
+  /// Qué planta es esta para los demás equipos. Abrirla no la toma: se toma
+  /// al cambiar algo ([_touchLive]) y se suelta tras 2 minutos sin tocarla
+  /// (fase 0 de colaboración). Así quien solo mira no bloquea a nadie.
   void _claimLive() {
     if (!mounted) return;
     final live = ref.read(liveEditingProvider);
@@ -533,20 +535,22 @@ extension _EditorLoad on _CameraPlanEditorState {
     _layerKeys = [for (final scope in FloorPlanScope.values) ?keyOf(scope)];
     final key = keyOf(widget.scope);
     if (key == null || key == _liveKey) return;
+    // Al pasar a otro plano (FL.6), el anterior se suelta ya.
+    final previous = _liveKey;
+    if (previous != null) live.leave(previous);
     _liveKey = key;
-    live.focusShot(key);
-    _liveSince = live.mySince;
   }
 
   /// Otro equipo que edita esta planta (o una capa que se ve en ella) desde
   /// antes: mientras tanto aquí no se toca.
   String? _peerBlocking(LiveEditing live) {
     final own = live.holderOf(_liveKey);
-    if (own != null) return own.device;
+    if (own != null) return own.label;
     for (final key in _layerKeys) {
       if (key == _liveKey) continue;
-      final holder = live.holderBefore(key, _liveSince);
-      if (holder != null) return holder.device;
+      final mine = live.myShotUid == _liveKey ? live.mySince : null;
+      final holder = live.holderBefore(key, mine);
+      if (holder != null) return holder.label;
     }
     return null;
   }

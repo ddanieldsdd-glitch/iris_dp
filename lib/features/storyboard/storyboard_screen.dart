@@ -1018,7 +1018,7 @@ class _StoryboardFrame extends ConsumerWidget {
     if (holder == null) return true;
     AppSnackBar.show(
       context,
-      'Lo está editando ${holder.device}. Podrás cambiarlo en cuanto termine.',
+      'Lo está editando ${holder.label}. Podrás cambiarlo en cuanto termine.',
     );
     return false;
   }
@@ -1575,7 +1575,7 @@ class _FrameDetailSheet extends ConsumerWidget {
                   messenger?.showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Lo está editando ${holder.device}. Podrás cambiarlo '
+                        'Lo está editando ${holder.label}. Podrás cambiarlo '
                         'en cuanto termine.',
                       ),
                     ),

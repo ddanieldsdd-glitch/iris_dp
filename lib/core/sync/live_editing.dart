@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'server_clock.dart';
+
 /// Qué se edita, como clave del canal en vivo. Un plano va con su uid tal
 /// cual (así lo entienden también las versiones anteriores); lo demás, con
 /// su tipo delante.
@@ -23,12 +25,28 @@ class PeerEditing {
   final String shotUid;
   final DateTime since;
 
+  /// Quién está en ese equipo y qué hace en el proyecto (fase 0 de
+  /// colaboración). Las versiones anteriores solo mandan el equipo.
+  final String? person;
+  final String? role;
+
   const PeerEditing({
     required this.installId,
     required this.device,
     required this.shotUid,
     required this.since,
+    this.person,
+    this.role,
   });
+
+  /// Cómo se nombra en los avisos: «Ana (gaffer) · iPad», o solo el equipo.
+  String get label {
+    final who = person?.trim();
+    if (who == null || who.isEmpty) return device;
+    final what = role?.trim();
+    final named = what == null || what.isEmpty ? who : '$who ($what)';
+    return '$named · $device';
+  }
 
   static PeerEditing? fromPayload(Map<String, dynamic> p) {
     final installId = p['installId'];
@@ -42,6 +60,8 @@ class PeerEditing {
       device: p['device'] as String? ?? 'otro equipo',
       shotUid: shotUid,
       since: since,
+      person: p['person'] as String?,
+      role: p['role'] as String?,
     );
   }
 }
@@ -129,6 +149,7 @@ class LiveEditing extends ChangeNotifier {
     required this.publishEditing,
     required this.publishTyping,
     this.releaseDelay = const Duration(seconds: 20),
+    this.idleRelease = const Duration(minutes: 2),
   });
 
   /// Id de esta instalación; se completa en cuanto se lee de preferencias.
@@ -146,6 +167,10 @@ class LiveEditing extends ChangeNotifier {
   /// rato sin volver; antes, si se pasa a otro plano, se sale de la
   /// pantalla ([leave]) o la app se va a segundo plano ([releaseAll]).
   final Duration releaseDelay;
+
+  /// Lo que se toma al editar ([touch]) se suelta tras este rato sin tocar.
+  final Duration idleRelease;
+  Timer? _idle;
 
   Map<String, PeerEditing> _peers = const {};
   final Map<String, Map<String, String>> _typing = {};
@@ -195,11 +220,27 @@ class LiveEditing extends ChangeNotifier {
   void focusShot(String? shotUid) {
     _release?.cancel();
     _release = null;
+    _idle?.cancel();
+    _idle = null;
     if (shotUid == null || shotUid == _myShot) return;
     _myShot = shotUid;
-    _mySince = DateTime.now().toUtc();
+    // Con la hora del servidor: los relojes de los equipos no coinciden.
+    _mySince = ServerClock.nowUtc();
     publishEditing(_myShot, _mySince);
     notifyListeners();
+  }
+
+  /// Este equipo cambia algo en [key]: lo toma si no lo tenía y lo suelta
+  /// solo tras [idleRelease] sin tocarlo. Es el bloqueo de la planta: abrirla
+  /// no la toma; editarla, sí (fase 0 de colaboración).
+  void touch(String? key) {
+    if (key == null) return;
+    if (key != _myShot) focusShot(key);
+    _idle?.cancel();
+    _idle = Timer(idleRelease, () {
+      _idle = null;
+      leave(key);
+    });
   }
 
   /// Este equipo sale de [shotUid] (se suelta tras [releaseDelay]).
@@ -222,6 +263,8 @@ class LiveEditing extends ChangeNotifier {
     if (shotUid == null || shotUid != _myShot) return;
     _release?.cancel();
     _release = null;
+    _idle?.cancel();
+    _idle = null;
     _myShot = null;
     _mySince = null;
     publishEditing(null, null);
@@ -280,6 +323,7 @@ class LiveEditing extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _release?.cancel();
+    _idle?.cancel();
     for (final t in _throttles.values) {
       t.cancel();
     }

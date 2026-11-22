@@ -140,7 +140,7 @@ class LiveDrawingSession implements LiveDrawingLink {
     // Llega otro a dibujar: se le pide el dibujo entero.
     if (holder != null && holder.installId != _holderId) _ask(force: true);
     _holderId = holder?.installId;
-    _other.value = holder?.device;
+    _other.value = holder?.label;
     if (mine && !_mine.value) _encoder.reset();
     _mine.value = mine;
   }
