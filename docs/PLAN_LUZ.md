@@ -45,7 +45,26 @@ Daniel suele trabajar como director de foto, y ahora tiene una película grande 
   - en el centro de exportación, «Hojas de luz» por sets, esquemas o jornada, en un solo PDF con una hoja por esquema.
 - **Hecho cuando:** con un esquema de KEBAB, cada foco se identifica en planta, alzado y perfil solo con la hoja.
 
-**Pendiente:** si aparecen las imágenes de *Dune II*, se ponen al lado para ajustar el aspecto.
+**Estilo de referencia: las hojas de *Dune II*** (American Cinematographer). Daniel las pasó el 2026-11-22. Lo que hace que se lean, y cómo está hoy nuestra hoja:
+
+| En *Dune II* | Hoy en `rig_sheet_pdf.dart` | Cambio |
+|---|---|---|
+| **Cada modelo tiene su símbolo y su color:** el ArriMax como tulipa rosa, el Vortex8 como rectángulo verde, el Vortex4 como cuadrado rosa, el Eclipse como placa naranja y el Aperture como recorte gris. El color dice qué aparato es, no qué luz da | Todos los focos son un círculo pintado con el color de su luz | **Símbolo por familia** (fresnel o HMI, panel, tubo, recorte, globo, par, *spacelight*), con medidas reales a escala y orientado hacia donde apunta. **Color fijo por modelo**, de una paleta de 10–12 colores que se distinguen en papel. La temperatura de color pasa a la leyenda |
+| **La leyenda lleva dos símbolos por modelo** (visto desde arriba y de lado), el modelo, cuántos hay y los vatios de cada uno | Un círculo, «U1–U6», el nombre, vatios y lúmenes, y como mucho 10 filas | Símbolo de planta y de alzado, modelo, cantidad y vatios por unidad. Al final, el total de unidades y de vatios. Si no cabe, sigue en otra hoja |
+| **La estructura de la localización va en gris claro y fino:** muros, cerchas, pilares y la rejilla de la cubierta | Muros y pilares en negro. La nave del constructor solo sale si hay truss | El edificio (muros, pilares, vigas de cubierta y huecos) en gris claro, de fondo. El rigging en negro por encima: truss con celosía, motores y torres |
+| **El decorado va en rosa pálido** debajo de todo, como un fantasma | No sale | La huella del set (mobiliario, elementos del decorado y telas) en un tono muy claro, para que se vea dónde está la luz respecto a lo que se rueda |
+| **Alzado y perfil con el mismo símbolo** colgado a su altura y girado hacia donde apunta. Pies de suelo dibujados, con sus patas | Un círculo con un cono | El símbolo de lado, girado según el *tilt*. Los pies o *stands* con mástil y patas hasta el suelo, y la pinza o yugo en el truss |
+| **Los haces en rosa muy claro**, que se ven atravesando el decorado | Cono al 15 % con el color de la luz | Cono con su apertura real en un tono neutro muy claro, que no compite con los símbolos. En planta, el haz recortado también |
+| **Cotas en rojo** con flechas: alturas de cada nivel de truss, distancias entre estructuras y luces de las cerchas | Solo una raya y «+3,50» por nivel | Cotas en rojo con flecha: altura de cada truss, de cada foco suelto y de la cubierta. Anchos principales del set y de la nave. En planta, distancias entre las estructuras de luz |
+| **Rótulos sobre la estructura** («20 × 20 lighting frames w/ ultra bounce») | No hay | Las telas, marcos y rebotes llevan su rótulo (medida y tela) junto a ellos |
+| Sin números de foco: con cientos de aparatos iguales, basta el modelo | Números U1… por posición | Lo dos: **el color y el símbolo dicen el modelo**, y el número estable se ve con pocos focos o al ampliar. Con muchos iguales se puede ocultar (opción «Números: sí, no o solo los sueltos») |
+
+**Composición:**
+- Por defecto, la planta en una hoja y el alzado y el perfil en otra, como en *Dune II*, con más tamaño cada vista.
+- La opción «Todo en una hoja» deja la A3 compacta que hay hoy.
+- Leyenda abajo a la derecha, en recuadro, en las dos hojas.
+
+**Para probarlo:** un esquema inventado tipo caseta, con truss a dos alturas, 4 modelos, pies de suelo y un marco 20 × 20, guardado como prueba de oro (PDF a PNG) para ver los cambios.
 
 ### LZ.2 · Proyectos por papel en la pantalla inicial
 
