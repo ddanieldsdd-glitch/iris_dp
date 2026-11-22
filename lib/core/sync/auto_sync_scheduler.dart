@@ -229,6 +229,7 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
         if (p.cloudId case final id?) id,
     ];
     final roles = <String, String>{};
+    final codes = <String, String>{};
     try {
       final rows = await client
           .from('project_members')
@@ -237,8 +238,10 @@ class _AutoSyncSchedulerState extends ConsumerState<AutoSyncScheduler>
       for (final row in rows) {
         if (row['project_id'] case final String id) {
           roles[id] = memberRoleLabel(row['role'] as String?);
+          if (row['role'] case final String code) codes[id] = code;
         }
       }
+      await fillMyRolesFromMembers(db, codes);
     } catch (e, st) {
       // Sin la lista, se entra igual: solo falta el papel en el aviso.
       unawaited(
@@ -385,6 +388,22 @@ Future<bool> liveNoticeIsNew(AppDatabase db, SnapshotNotice notice) async {
   if (project == null) return true;
   final base = await ContentSyncBaseStore.load(db, project.id);
   return base?.cloudHash != notice.hash;
+}
+
+/// Los proyectos a los que te invitaron caen en la página de tu papel
+/// (LZ.2): solo los que aún no tienen uno elegido en este aparato, y solo
+/// los papeles que tienen página.
+Future<void> fillMyRolesFromMembers(
+  AppDatabase db,
+  Map<String, String> roleByCloudId,
+) async {
+  const paged = {'dp', 'gaffer', 'first_ac'};
+  for (final p in await db.select(db.projects).get()) {
+    if (p.myRole != null) continue;
+    final code = roleByCloudId[p.cloudId];
+    if (code == null || !paged.contains(code)) continue;
+    await db.setProjectMyRole(p.id, code);
+  }
 }
 
 /// Cómo se dice en los avisos el papel de una cuenta en un proyecto

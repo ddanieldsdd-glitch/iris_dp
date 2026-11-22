@@ -86,6 +86,12 @@ Daniel suele trabajar como director de foto, y ahora tiene una película grande 
 - Cada proyecto guarda tu papel en él: director de foto, gaffer o 1.º ayudante de cámara. Es una columna local, con cambio de esquema en la app pero no en la nube. En los proyectos a los que te invitaron, sale de `project_members`.
 - **Pantalla de proyectos** con páginas por papel, que se pasan con el dedo o con pestañas. Recuerda la última página abierta.
 - El papel se elige al crear el proyecto y se puede cambiar después.
+- **Hecho (2026-11-22, rama `plan/autoria`):**
+  - columna local `myRole` en `projects` (esquema 66, no se sube; cambiarla no toca `updatedAt`);
+  - pestañas «Foto», «Gaffer» y «1.º AC» con el número de proyectos, que se pasan con el dedo y recuerdan la última;
+  - «Tu papel» en Nuevo y Editar proyecto; un proyecto nuevo toma el papel de la página abierta;
+  - los proyectos a los que te invitaron toman el papel de `project_members` si no tienen uno;
+  - duplicar conserva el papel; los grupos salen en las páginas donde tienen proyectos (y los vacíos, en todas).
 
 ### LZ.3 · Eléctricos
 

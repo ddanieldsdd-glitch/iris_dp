@@ -799,6 +799,10 @@ class AppDatabase extends _$AppDatabase {
         // Copias de consulta de los proyectos de invitados (plan IN).
         await add(projects, projects.mirrorCloudId);
       }
+      if (from < 66) {
+        // Tu papel en cada proyecto, para las páginas de inicio (LZ.2).
+        await add(projects, projects.myRole);
+      }
     },
     // Las tablas de la mezcla van en SQL directo y no las comprueba Drift:
     // hubo una base que llegó a 53 sin ellas (una build intermedia) y el
@@ -1218,6 +1222,13 @@ class AppDatabase extends _$AppDatabase {
   Future<Project?> getProject(int id) =>
       (select(projects)..where((p) => p.id.equals(id))).getSingleOrNull();
 
+  /// Tu papel en el proyecto (LZ.2). Es solo de este aparato: no toca
+  /// `updatedAt`, para no pedir una subida.
+  Future<void> setProjectMyRole(int id, String? role) =>
+      (update(projects)..where((p) => p.id.equals(id))).write(
+        ProjectsCompanion(myRole: Value(role)),
+      );
+
   // Duplicar proyecto: copia escenas, planos, localizaciones e imágenes.
   Future<int> duplicateProject(int sourceId) async {
     final source = await getProject(sourceId);
@@ -1233,6 +1244,7 @@ class AppDatabase extends _$AppDatabase {
         iconCode: Value(source.iconCode),
         groupId: Value(source.groupId),
         scriptFileName: Value(source.scriptFileName),
+        myRole: Value(source.myRole),
       ),
     );
 
@@ -5535,7 +5547,7 @@ const kQueryIndexes = [
   ('project_annotation_documents', 'project_id'),
 ];
 
-const kSchemaVersion = 65;
+const kSchemaVersion = 66;
 
 /// Copias `antes-de-esquema-…` que se conservan.
 const kSchemaBackupsKept = 3;

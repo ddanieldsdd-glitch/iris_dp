@@ -64,6 +64,11 @@ class Projects extends Table {
 
   /// Tamaño de la tarjeta: s, m, l o xl. Nulo: m.
   TextColumn get cardSize => text().nullable()();
+
+  /// Tu papel en el proyecto (`dp`, `gaffer` o `first_ac`), para ordenar
+  /// los proyectos en páginas (LZ.2). Solo de este aparato: no se sube.
+  /// Nulo: dirección de fotografía.
+  TextColumn get myRole => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }

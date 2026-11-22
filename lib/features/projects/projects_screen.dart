@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/sync/project_cloud_actions.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
@@ -17,6 +18,7 @@ import 'project_card_stats.dart';
 import 'projects_header.dart';
 import '../../core/theme/app_layout.dart';
 import 'project_poster_card.dart';
+import 'project_my_role.dart';
 import '../project_hub/project_hub_screen.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../core/widgets/sync/sync_conflict_resolution_sheet.dart';
@@ -30,11 +32,60 @@ import '../../core/cloud/connectivity_gate.dart';
 import '../../core/access/app_access_service.dart';
 import '../../core/access/guest_projects_screen.dart';
 
-class ProjectsScreen extends ConsumerWidget {
+class ProjectsScreen extends ConsumerStatefulWidget {
   const ProjectsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProjectsScreen> createState() => _ProjectsScreenState();
+}
+
+/// Última página abierta (LZ.2).
+const _pageKey = 'iris_projects_role_page';
+
+class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(
+    length: MyProjectRole.values.length,
+    vsync: this,
+  );
+
+  MyProjectRole get _role => MyProjectRole.values[_tabs.index];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs.addListener(_rememberPage);
+    _restorePage();
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  Future<void> _restorePage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final role = MyProjectRole.fromCode(prefs.getString(_pageKey));
+      if (role != null && mounted) _tabs.index = role.index;
+    } catch (_) {
+      // Sin preferencias, la primera página.
+    }
+  }
+
+  Future<void> _rememberPage() async {
+    if (_tabs.indexIsChanging) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_pageKey, _role.code);
+    } catch (_) {
+      // La próxima vez se abre la primera.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseProvider);
     final palette = context.palette;
     final pendingPlan = ref.watch(pendingSyncPlanProvider);
@@ -58,6 +109,17 @@ class ProjectsScreen extends ConsumerWidget {
             syncResult.message?.contains('quedan') == true,
       );
     }
+
+    Future<void> duplicate(Project p) async {
+      try {
+        await db.duplicateProject(p.id);
+        if (context.mounted) AppSnackBar.show(context, 'Proyecto duplicado.');
+      } catch (e) {
+        if (context.mounted) AppSnackBar.show(context, userFriendlyError(e));
+      }
+    }
+
+    final gutter = AppLayout.gutter(context, regular: AppSpacing.xl);
 
     return Scaffold(
       body: SafeArea(
@@ -87,7 +149,7 @@ class ProjectsScreen extends ConsumerWidget {
                 const SyncStatusIndicator(),
                 AccountMenuButton(onLoginAction: () => openAuthScreen(context)),
               ],
-              onNewProject: () => _showCreateProject(context, ref),
+              onNewProject: () => _showCreateProject(context, _role),
               onNewGroup: () => _createGroup(context, ref),
             ),
             Expanded(
@@ -107,9 +169,7 @@ class ProjectsScreen extends ConsumerWidget {
 
                       if (allProjects.isEmpty) {
                         return ListView(
-                          padding: EdgeInsets.all(
-                            AppLayout.gutter(context, regular: AppSpacing.xl),
-                          ),
+                          padding: EdgeInsets.all(gutter),
                           children: [
                             if (pendingPlan != null) ...[
                               PendingSyncBanner(
@@ -119,84 +179,89 @@ class ProjectsScreen extends ConsumerWidget {
                               const SizedBox(height: AppSpacing.lg),
                             ],
                             _EmptyState(
-                              onTap: () => _showCreateProject(context, ref),
+                              onTap: () => _showCreateProject(context, _role),
                             ),
                           ],
                         );
                       }
 
-                      final ungrouped = allProjects
-                          .where((p) => p.groupId == null)
-                          .toList();
-
-                      return ListView(
-                        padding: EdgeInsets.all(
-                          AppLayout.gutter(context, regular: AppSpacing.xl),
-                        ),
-                        children: [
-                          if (pendingPlan != null) ...[
-                            PendingSyncBanner(
-                              plan: pendingPlan,
-                              onReview: reviewSync,
-                            ),
-                            const SizedBox(height: AppSpacing.lg),
+                      Widget page(MyProjectRole role) {
+                        final projects = role.filter(allProjects);
+                        final ungrouped = projects
+                            .where((p) => p.groupId == null)
+                            .toList();
+                        // Un grupo sale en la página si tiene proyectos de
+                        // ese papel, o si aún está vacío.
+                        final shownGroups = [
+                          for (final g in groups)
+                            if (projects.any((p) => p.groupId == g.id) ||
+                                !allProjects.any((p) => p.groupId == g.id))
+                              g,
+                        ];
+                        return ListView(
+                          key: PageStorageKey('projects-${role.code}'),
+                          padding: EdgeInsets.all(gutter),
+                          children: [
+                            if (pendingPlan != null) ...[
+                              PendingSyncBanner(
+                                plan: pendingPlan,
+                                onReview: reviewSync,
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                            ],
+                            if (projects.isEmpty)
+                              _EmptyRolePage(
+                                role: role,
+                                onCreate: () =>
+                                    _showCreateProject(context, role),
+                              ),
+                            if (ungrouped.isNotEmpty)
+                              _ProjectGrid(
+                                projects: ungrouped,
+                                onTap: (p) => _openProject(context, p),
+                                onEdit: (p) => _showEditProject(context, p),
+                                onDuplicate: duplicate,
+                                onDelete: (p) =>
+                                    _confirmDelete(context, ref, p),
+                              ),
+                            for (final group in shownGroups)
+                              _GroupSection(
+                                group: group,
+                                projects: [
+                                  for (final p in projects)
+                                    if (p.groupId == group.id) p,
+                                ],
+                                onTap: (p) => _openProject(context, p),
+                                onEdit: (p) => _showEditProject(context, p),
+                                onDuplicate: duplicate,
+                                onDelete: (p) =>
+                                    _confirmDelete(context, ref, p),
+                                onDeleteGroup: () => db.deleteGroup(group.id),
+                              ),
                           ],
-                          if (ungrouped.isNotEmpty)
-                            _ProjectGrid(
-                              projects: ungrouped,
-                              onTap: (p) => _openProject(context, p),
-                              onEdit: (p) => _showEditProject(context, p),
-                              onDuplicate: (p) async {
-                                try {
-                                  await db.duplicateProject(p.id);
-                                  if (context.mounted) {
-                                    AppSnackBar.show(
-                                      context,
-                                      'Proyecto duplicado.',
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    AppSnackBar.show(
-                                      context,
-                                      userFriendlyError(e),
-                                    );
-                                  }
-                                }
-                              },
-                              onDelete: (p) => _confirmDelete(context, ref, p),
+                        );
+                      }
+
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: gutter),
+                            child: _RoleTabs(
+                              controller: _tabs,
+                              counts: [
+                                for (final r in MyProjectRole.values)
+                                  r.filter(allProjects).length,
+                              ],
                             ),
-                          ...groups.map((group) {
-                            final groupProjects = allProjects
-                                .where((p) => p.groupId == group.id)
-                                .toList();
-                            return _GroupSection(
-                              group: group,
-                              projects: groupProjects,
-                              onTap: (p) => _openProject(context, p),
-                              onEdit: (p) => _showEditProject(context, p),
-                              onDuplicate: (p) async {
-                                try {
-                                  await db.duplicateProject(p.id);
-                                  if (context.mounted) {
-                                    AppSnackBar.show(
-                                      context,
-                                      'Proyecto duplicado.',
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    AppSnackBar.show(
-                                      context,
-                                      userFriendlyError(e),
-                                    );
-                                  }
-                                }
-                              },
-                              onDelete: (p) => _confirmDelete(context, ref, p),
-                              onDeleteGroup: () => db.deleteGroup(group.id),
-                            );
-                          }),
+                          ),
+                          Expanded(
+                            child: TabBarView(
+                              controller: _tabs,
+                              children: [
+                                for (final r in MyProjectRole.values) page(r),
+                              ],
+                            ),
+                          ),
                         ],
                       );
                     },
@@ -217,12 +282,12 @@ class ProjectsScreen extends ConsumerWidget {
     );
   }
 
-  void _showCreateProject(BuildContext context, WidgetRef ref) {
+  void _showCreateProject(BuildContext context, MyProjectRole role) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const CreateProjectSheet(),
+      builder: (_) => CreateProjectSheet(initialRole: role),
     );
   }
 
@@ -550,6 +615,75 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 32),
           AppButton(label: 'Crear proyecto', icon: Icons.add, onTap: onTap),
+        ],
+      ),
+    );
+  }
+}
+
+/// Las páginas por papel (LZ.2): se pasan con el dedo o tocando la pestaña.
+class _RoleTabs extends StatelessWidget {
+  final TabController controller;
+  final List<int> counts;
+
+  const _RoleTabs({required this.controller, required this.counts});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return TabBar(
+      controller: controller,
+      isScrollable: true,
+      tabAlignment: TabAlignment.start,
+      labelColor: palette.accent,
+      unselectedLabelColor: palette.textSecondary,
+      indicatorColor: palette.accent,
+      dividerColor: palette.border,
+      labelStyle: AppTypography.label(palette),
+      tabs: [
+        for (final (i, r) in MyProjectRole.values.indexed)
+          Tab(
+            child: Tooltip(
+              message: r.label,
+              child: Text(counts[i] == 0 ? r.tab : '${r.tab} · ${counts[i]}'),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _EmptyRolePage extends StatelessWidget {
+  final MyProjectRole role;
+  final VoidCallback onCreate;
+
+  const _EmptyRolePage({required this.role, required this.onCreate});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+      child: Column(
+        children: [
+          Text(
+            'Ningún proyecto de '
+            '${role.label[0].toLowerCase()}${role.label.substring(1)}',
+            style: AppTypography.bodyLarge(palette),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Crea uno aquí, o cambia el papel de otro en «Editar».',
+            style: AppTypography.caption(palette),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppButton(
+            label: 'Nuevo proyecto',
+            icon: Icons.add,
+            onTap: onCreate,
+          ),
         ],
       ),
     );

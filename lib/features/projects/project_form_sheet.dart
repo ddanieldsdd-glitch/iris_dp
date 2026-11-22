@@ -18,13 +18,17 @@ import '../../core/theme/app_radius.dart';
 import '../../core/utils/media_storage.dart';
 import '../../core/widgets/app_button.dart';
 import 'project_icon_constants.dart';
+import 'project_my_role.dart';
 
 /// Formulario compartido para crear o editar un proyecto.
 /// Si [project] es null → creación; si tiene valor → edición.
 class ProjectFormSheet extends ConsumerStatefulWidget {
   final Project? project;
 
-  const ProjectFormSheet({super.key, this.project});
+  /// Tu papel en un proyecto nuevo: el de la página desde la que se crea.
+  final MyProjectRole? initialRole;
+
+  const ProjectFormSheet({super.key, this.project, this.initialRole});
 
   @override
   ConsumerState<ProjectFormSheet> createState() => _ProjectFormSheetState();
@@ -36,6 +40,7 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
   late int _selectedIcon;
   late String _status;
   late int? _groupId;
+  late MyProjectRole _role;
   String? _coverImagePath;
 
   bool get _isEditing => widget.project != null;
@@ -49,6 +54,9 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
     _selectedIcon = p?.iconCode ?? kProjectIcons.first.codePoint;
     _status = p?.status ?? 'preproduction';
     _groupId = p?.groupId;
+    _role = p != null
+        ? MyProjectRole.ofProject(p)
+        : widget.initialRole ?? MyProjectRole.dp;
     _coverImagePath = p?.coverImagePath;
   }
 
@@ -118,6 +126,9 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
           updatedAt: DateTime.now(),
         );
         await ProjectCloudActions.saveProject(ref, updated);
+        if (widget.project!.myRole != _role.code) {
+          await db.setProjectMyRole(updated.id, _role.code);
+        }
       } else {
         final newId = await ProjectCloudActions.createProject(
           ref,
@@ -127,6 +138,7 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
           iconCode: _selectedIcon,
           groupId: _groupId,
         );
+        await db.setProjectMyRole(newId, _role.code);
         if (_coverImagePath != null) {
           final stored = await _persistCoverForNewProject(newId);
           if (stored != null) {
@@ -237,6 +249,27 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
                     ),
                   );
                 }).toList(),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text('Tu papel', style: AppTypography.label(palette)),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  for (final r in MyProjectRole.values)
+                    _StatusOption(
+                      label: r.label,
+                      selected: _role == r,
+                      onTap: () => setState(() => _role = r),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Ordena tus proyectos en páginas. Todas tienen las mismas '
+                'funciones.',
+                style: AppTypography.caption(palette),
               ),
               const SizedBox(height: AppSpacing.lg),
               Text('Estado', style: AppTypography.label(palette)),

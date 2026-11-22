@@ -547,6 +547,15 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _myRoleMeta = const VerificationMeta('myRole');
+  @override
+  late final GeneratedColumn<String> myRole = GeneratedColumn<String>(
+    'my_role',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -599,6 +608,7 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     cardColor,
     mirrorCloudId,
     cardSize,
+    myRole,
     createdAt,
     updatedAt,
   ];
@@ -814,6 +824,12 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         cardSize.isAcceptableOrUnknown(data['card_size']!, _cardSizeMeta),
       );
     }
+    if (data.containsKey('my_role')) {
+      context.handle(
+        _myRoleMeta,
+        myRole.isAcceptableOrUnknown(data['my_role']!, _myRoleMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -939,6 +955,10 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         DriftSqlType.string,
         data['${effectivePrefix}card_size'],
       ),
+      myRole: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}my_role'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -1003,6 +1023,11 @@ class Project extends DataClass implements Insertable<Project> {
 
   /// Tamaño de la tarjeta: s, m, l o xl. Nulo: m.
   final String? cardSize;
+
+  /// Tu papel en el proyecto (`dp`, `gaffer` o `first_ac`), para ordenar
+  /// los proyectos en páginas (LZ.2). Solo de este aparato: no se sube.
+  /// Nulo: dirección de fotografía.
+  final String? myRole;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Project({
@@ -1032,6 +1057,7 @@ class Project extends DataClass implements Insertable<Project> {
     this.cardColor,
     this.mirrorCloudId,
     this.cardSize,
+    this.myRole,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -1105,6 +1131,9 @@ class Project extends DataClass implements Insertable<Project> {
     }
     if (!nullToAbsent || cardSize != null) {
       map['card_size'] = Variable<String>(cardSize);
+    }
+    if (!nullToAbsent || myRole != null) {
+      map['my_role'] = Variable<String>(myRole);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -1181,6 +1210,9 @@ class Project extends DataClass implements Insertable<Project> {
       cardSize: cardSize == null && nullToAbsent
           ? const Value.absent()
           : Value(cardSize),
+      myRole: myRole == null && nullToAbsent
+          ? const Value.absent()
+          : Value(myRole),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -1230,6 +1262,7 @@ class Project extends DataClass implements Insertable<Project> {
       cardColor: serializer.fromJson<int?>(json['cardColor']),
       mirrorCloudId: serializer.fromJson<String?>(json['mirrorCloudId']),
       cardSize: serializer.fromJson<String?>(json['cardSize']),
+      myRole: serializer.fromJson<String?>(json['myRole']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -1266,6 +1299,7 @@ class Project extends DataClass implements Insertable<Project> {
       'cardColor': serializer.toJson<int?>(cardColor),
       'mirrorCloudId': serializer.toJson<String?>(mirrorCloudId),
       'cardSize': serializer.toJson<String?>(cardSize),
+      'myRole': serializer.toJson<String?>(myRole),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -1298,6 +1332,7 @@ class Project extends DataClass implements Insertable<Project> {
     Value<int?> cardColor = const Value.absent(),
     Value<String?> mirrorCloudId = const Value.absent(),
     Value<String?> cardSize = const Value.absent(),
+    Value<String?> myRole = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Project(
@@ -1353,6 +1388,7 @@ class Project extends DataClass implements Insertable<Project> {
         ? mirrorCloudId.value
         : this.mirrorCloudId,
     cardSize: cardSize.present ? cardSize.value : this.cardSize,
+    myRole: myRole.present ? myRole.value : this.myRole,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1416,6 +1452,7 @@ class Project extends DataClass implements Insertable<Project> {
           ? data.mirrorCloudId.value
           : this.mirrorCloudId,
       cardSize: data.cardSize.present ? data.cardSize.value : this.cardSize,
+      myRole: data.myRole.present ? data.myRole.value : this.myRole,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1450,6 +1487,7 @@ class Project extends DataClass implements Insertable<Project> {
           ..write('cardColor: $cardColor, ')
           ..write('mirrorCloudId: $mirrorCloudId, ')
           ..write('cardSize: $cardSize, ')
+          ..write('myRole: $myRole, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1484,6 +1522,7 @@ class Project extends DataClass implements Insertable<Project> {
     cardColor,
     mirrorCloudId,
     cardSize,
+    myRole,
     createdAt,
     updatedAt,
   ]);
@@ -1517,6 +1556,7 @@ class Project extends DataClass implements Insertable<Project> {
           other.cardColor == this.cardColor &&
           other.mirrorCloudId == this.mirrorCloudId &&
           other.cardSize == this.cardSize &&
+          other.myRole == this.myRole &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1548,6 +1588,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
   final Value<int?> cardColor;
   final Value<String?> mirrorCloudId;
   final Value<String?> cardSize;
+  final Value<String?> myRole;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   const ProjectsCompanion({
@@ -1577,6 +1618,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.cardColor = const Value.absent(),
     this.mirrorCloudId = const Value.absent(),
     this.cardSize = const Value.absent(),
+    this.myRole = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -1607,6 +1649,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.cardColor = const Value.absent(),
     this.mirrorCloudId = const Value.absent(),
     this.cardSize = const Value.absent(),
+    this.myRole = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   }) : name = Value(name);
@@ -1637,6 +1680,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Expression<int>? cardColor,
     Expression<String>? mirrorCloudId,
     Expression<String>? cardSize,
+    Expression<String>? myRole,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -1672,6 +1716,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       if (cardColor != null) 'card_color': cardColor,
       if (mirrorCloudId != null) 'mirror_cloud_id': mirrorCloudId,
       if (cardSize != null) 'card_size': cardSize,
+      if (myRole != null) 'my_role': myRole,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -1704,6 +1749,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Value<int?>? cardColor,
     Value<String?>? mirrorCloudId,
     Value<String?>? cardSize,
+    Value<String?>? myRole,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
   }) {
@@ -1734,6 +1780,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       cardColor: cardColor ?? this.cardColor,
       mirrorCloudId: mirrorCloudId ?? this.mirrorCloudId,
       cardSize: cardSize ?? this.cardSize,
+      myRole: myRole ?? this.myRole,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -1830,6 +1877,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     if (cardSize.present) {
       map['card_size'] = Variable<String>(cardSize.value);
     }
+    if (myRole.present) {
+      map['my_role'] = Variable<String>(myRole.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1868,6 +1918,7 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
           ..write('cardColor: $cardColor, ')
           ..write('mirrorCloudId: $mirrorCloudId, ')
           ..write('cardSize: $cardSize, ')
+          ..write('myRole: $myRole, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -41884,6 +41935,7 @@ typedef $$ProjectsTableCreateCompanionBuilder =
       Value<int?> cardColor,
       Value<String?> mirrorCloudId,
       Value<String?> cardSize,
+      Value<String?> myRole,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -41915,6 +41967,7 @@ typedef $$ProjectsTableUpdateCompanionBuilder =
       Value<int?> cardColor,
       Value<String?> mirrorCloudId,
       Value<String?> cardSize,
+      Value<String?> myRole,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
     });
@@ -42569,6 +42622,11 @@ class $$ProjectsTableFilterComposer
 
   ColumnFilters<String> get cardSize => $composableBuilder(
     column: $table.cardSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get myRole => $composableBuilder(
+    column: $table.myRole,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -43317,6 +43375,11 @@ class $$ProjectsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get myRole => $composableBuilder(
+    column: $table.myRole,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -43466,6 +43529,9 @@ class $$ProjectsTableAnnotationComposer
 
   GeneratedColumn<String> get cardSize =>
       $composableBuilder(column: $table.cardSize, builder: (column) => column);
+
+  GeneratedColumn<String> get myRole =>
+      $composableBuilder(column: $table.myRole, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -44160,6 +44226,7 @@ class $$ProjectsTableTableManager
                 Value<int?> cardColor = const Value.absent(),
                 Value<String?> mirrorCloudId = const Value.absent(),
                 Value<String?> cardSize = const Value.absent(),
+                Value<String?> myRole = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion(
@@ -44189,6 +44256,7 @@ class $$ProjectsTableTableManager
                 cardColor: cardColor,
                 mirrorCloudId: mirrorCloudId,
                 cardSize: cardSize,
+                myRole: myRole,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),
@@ -44220,6 +44288,7 @@ class $$ProjectsTableTableManager
                 Value<int?> cardColor = const Value.absent(),
                 Value<String?> mirrorCloudId = const Value.absent(),
                 Value<String?> cardSize = const Value.absent(),
+                Value<String?> myRole = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => ProjectsCompanion.insert(
@@ -44249,6 +44318,7 @@ class $$ProjectsTableTableManager
                 cardColor: cardColor,
                 mirrorCloudId: mirrorCloudId,
                 cardSize: cardSize,
+                myRole: myRole,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),
