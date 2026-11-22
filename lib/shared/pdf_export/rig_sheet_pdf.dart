@@ -501,14 +501,14 @@ class _Page {
   _Page(this.d, this.kind, this.index, this.count, {this.from = 0}) {
     switch (kind) {
       case _Kind.compact:
-        planBox = (x: 12.0, y: 24.0, w: 266.0, h: 148.0);
-        frontBox = (x: 12.0, y: 190.0, w: 150.0, h: 90.0);
-        sideBox = (x: 170.0, y: 190.0, w: 108.0, h: 90.0);
+        planBox = (x: 12.0, y: 24.0, w: _drawW, h: 140.0);
+        frontBox = (x: 12.0, y: 194.0, w: 170.0, h: 86.0);
+        sideBox = (x: 190.0, y: 194.0, w: _drawW - 178, h: 86.0);
       case _Kind.plan:
-        planBox = (x: 12.0, y: 24.0, w: 266.0, h: 250.0);
+        planBox = (x: 12.0, y: 24.0, w: _drawW, h: 250.0);
       case _Kind.elevations:
-        frontBox = (x: 12.0, y: 24.0, w: 266.0, h: 118.0);
-        sideBox = (x: 12.0, y: 168.0, w: 266.0, h: 110.0);
+        frontBox = (x: 12.0, y: 24.0, w: _drawW, h: 118.0);
+        sideBox = (x: 12.0, y: 168.0, w: _drawW, h: 110.0);
       case _Kind.legend || _Kind.schedule:
         break;
     }
@@ -522,7 +522,12 @@ class _Page {
   _Box? sideBox;
   int planScale = 100, frontScale = 100, sideScale = 100;
 
-  static const column = (x: 288.0, w: 120.0);
+  /// Dónde se parte la hoja: a la izquierda los dibujos, a la derecha una
+  /// columna estrecha con la leyenda y el cajetín, para que la planta
+  /// tenga todo el ancho posible.
+  static const _split = 320.0;
+  static const _drawW = _split - 18;
+  static const column = (x: _split + 4, w: 84.0);
 
   double get k => PdfPageFormat.mm * d.paperScale;
 
@@ -775,14 +780,14 @@ class _Page {
     rect(g, 10, 10, 400, 277, width: 0.2);
     switch (kind) {
       case _Kind.compact:
-        line(g, 284, 10, 284, 287);
-        line(g, 10, 180, 284, 180);
-        line(g, 166, 180, 166, 287);
+        line(g, _split, 10, _split, 287);
+        line(g, 10, 180, _split, 180);
+        line(g, 186, 180, 186, 287);
       case _Kind.elevations:
-        line(g, 284, 10, 284, 287);
-        line(g, 10, 150, 284, 150);
+        line(g, _split, 10, _split, 287);
+        line(g, 10, 150, _split, 150);
       case _Kind.plan || _Kind.schedule:
-        line(g, 284, 10, 284, 287);
+        line(g, _split, 10, _split, 287);
       case _Kind.legend:
         break;
     }
@@ -1666,20 +1671,30 @@ class _Page {
         ),
       );
     }
-    // El nombre de cada posición de cuelgue, encima del truss.
+    // El nombre de cada posición de cuelgue, encima del truss. Los que se
+    // ven uno detrás de otro van en un solo rótulo: «TRUSS 1 · 3 · 5».
+    final rows = <(double, double), List<String>>{};
     for (final item in e.items) {
       if (item.kind != ElevationKind.truss) continue;
       final uid = LightOverrides.uidOf(item.element);
       final name = uid == null ? null : d.positions[uid];
       if (name == null) continue;
+      final at = rows.keys.firstWhere(
+        (k) => (k.$1 - item.from).abs() < 0.5 && (k.$2 - item.top).abs() < 0.2,
+        orElse: () => (item.from, item.top),
+      );
+      (rows[at] ??= []).add(name.toUpperCase());
+    }
+    for (final MapEntry(key: (from, top), value: names) in rows.entries) {
+      names.sort();
       labels.add(
         _Label(
-          x0 + (item.from - e.left) * s,
-          floor - item.top * s - 3.6,
-          name.toUpperCase(),
+          x0 + (from - e.left) * s,
+          floor - top * s - 3.6,
+          _joinPositions(names),
           size: 4.5,
           bold: true,
-          width: 40,
+          width: 60,
         ),
       );
     }
@@ -1795,13 +1810,13 @@ class _Page {
     if (d.legendOverflows) {
       labels.add(
         _Label(
-          x + 22,
+          x + 19,
           y,
           '… y ${rows.length - shown.length} modelos más: '
           'leyenda completa en la hoja $count',
           size: 5.5,
           color: _muted,
-          width: 98,
+          width: 65,
         ),
       );
       y += 5;
@@ -1811,10 +1826,10 @@ class _Page {
 
   void _legendHeader(double x, double y) {
     labels
-      ..add(_Label(x + 22, y, 'APARATO', size: 5.5, color: _muted, width: 60))
+      ..add(_Label(x + 19, y, 'APARATO', size: 5.5, color: _muted, width: 40))
       ..add(
         _Label(
-          x + 92,
+          x + 68,
           y,
           'UDS',
           size: 5.5,
@@ -1825,20 +1840,9 @@ class _Page {
       )
       ..add(
         _Label(
-          x + 108,
+          x + 84,
           y,
-          'W/UD',
-          size: 5.5,
-          color: _muted,
-          width: 14,
-          align: pw.TextAlign.right,
-        ),
-      )
-      ..add(
-        _Label(
-          x + 120,
-          y,
-          'W TOT.',
+          'W',
           size: 5.5,
           color: _muted,
           width: 14,
@@ -1851,20 +1855,23 @@ class _Page {
     final el = _elementOf(row);
     if (el != null) _legendIcons.add((x, y - 1.2, el));
     labels
-      ..add(_Label(x + 22, y, row.name, size: 6.5, bold: true, width: 66))
+      ..add(_Label(x + 19, y, row.name, size: 6.5, bold: true, width: 46))
       ..add(
         _Label(
-          x + 22,
+          x + 19,
           y + 3,
-          d.showNumbers ? row.unitsLabel : (row.symbol?.label ?? ''),
+          [
+            if (d.showNumbers) row.unitsLabel else ?row.symbol?.label,
+            '${row.watts.round()} W/ud',
+          ].where((t) => t.isNotEmpty).join(' · '),
           size: 5,
           color: _muted,
-          width: 66,
+          width: 46,
         ),
       )
       ..add(
         _Label(
-          x + 92,
+          x + 68,
           y,
           '${row.count}',
           size: 6.5,
@@ -1874,17 +1881,7 @@ class _Page {
       )
       ..add(
         _Label(
-          x + 108,
-          y,
-          '${row.watts.round()}',
-          size: 6.5,
-          width: 14,
-          align: pw.TextAlign.right,
-        ),
-      )
-      ..add(
-        _Label(
-          x + 120,
+          x + 84,
           y,
           '${(row.watts * row.count).round()}',
           size: 6.5,
@@ -1899,11 +1896,11 @@ class _Page {
     final count = d.legend.rows.fold<int>(0, (a, r) => a + r.count);
     labels
       ..add(
-        _Label(x + 22, y + 1, 'TOTAL · $count aparatos', size: 7, bold: true),
+        _Label(x + 19, y + 1, 'TOTAL · $count aparatos', size: 7, bold: true),
       )
       ..add(
         _Label(
-          x + 120,
+          x + 84,
           y + 1,
           formatWatts(watts),
           size: 7,
@@ -1914,16 +1911,16 @@ class _Page {
       )
       ..add(
         _Label(
-          x + 22,
+          x + 19,
           y + 5,
           'unos ${(watts / 230).toStringAsFixed(0)} A en monofásica · '
           '${(watts / 3 / 230).toStringAsFixed(0)} A por fase (trifásica 400 V)',
           size: 5.5,
           color: _muted,
-          width: 98,
+          width: 65,
         ),
       );
-    return y + 13;
+    return y + 16;
   }
 
   PlanElement? _elementOf(LightLegendRow row) {
@@ -1944,10 +1941,10 @@ class _Page {
       for (final lineItem in rigging) {
         if (y > 222) break;
         labels
-          ..add(_Label(x + 8, y, lineItem.label, size: 6, width: 96))
+          ..add(_Label(x + 4, y, lineItem.label, size: 6, width: 66))
           ..add(
             _Label(
-              x + 120,
+              x + 84,
               y,
               '${lineItem.count}',
               size: 6,
@@ -1972,7 +1969,7 @@ class _Page {
             '· ${w.text}',
             size: 5.5,
             color: w.serious ? _danger : _accent,
-            width: 116,
+            width: 82,
           ),
         );
         y += 5;
@@ -2117,12 +2114,16 @@ class _Page {
   /// El marco del cajetín.
   void _titleFrame(PdfGraphics g) {
     const top = 236.0;
-    rect(g, 284, top, 126, 51, width: 0.4);
+    rect(g, _split, top, 410 - _split, 51, width: 0.4);
     for (final y in [top + 13, top + 22, top + 31, top + 40]) {
-      line(g, 284, y, 410, y, width: 0.15);
+      line(g, _split, y, 410, y, width: 0.15);
     }
-    line(g, 347, top + 13, 347, 287, width: 0.15);
+    line(g, _titleCol - 3, top + 13, _titleCol - 3, 287, width: 0.15);
   }
+
+  /// Las dos columnas del cajetín.
+  static const _titleX = _split + 3;
+  static const _titleCol = _split + 47;
 
   void _titleBlock() {
     const top = 236.0;
@@ -2140,9 +2141,9 @@ class _Page {
             cx,
             cy + (big ? 6 : 4.6),
             value.isEmpty ? '—' : value,
-            size: big ? 11 : 7,
+            size: big ? 11 : 6.5,
             bold: big,
-            width: big ? 100 : 60,
+            width: big ? 70 : 40,
           ),
         );
     }
@@ -2153,27 +2154,27 @@ class _Page {
       if (frontBox != null) 'A ${scaleLabel(frontScale)}',
       if (sideBox != null) 'L ${scaleLabel(sideScale)}',
     ].join(' · ');
-    cell(287, top + 3, 'PROYECTO', info.project, big: true);
+    cell(_titleX, top + 3, 'PROYECTO', info.project, big: true);
     cell(
-      287,
+      _titleX,
       top + 16,
       'SET · LOCALIZACIÓN',
       [info.set, info.location].where((s) => s.isNotEmpty).join(' · '),
     );
-    cell(350, top + 16, 'ESQUEMA DE LUZ', info.scheme);
-    cell(287, top + 25, 'ESCENAS', info.scenes);
-    cell(350, top + 25, 'JORNADA', info.shootDay);
-    cell(287, top + 34, 'GAFFER', info.gaffer);
+    cell(_titleCol, top + 16, 'ESQUEMA DE LUZ', info.scheme);
+    cell(_titleX, top + 25, 'ESCENAS', info.scenes);
+    cell(_titleCol, top + 25, 'JORNADA', info.shootDay);
+    cell(_titleX, top + 34, 'GAFFER', info.gaffer);
     cell(
-      350,
+      _titleCol,
       top + 34,
       'FECHA',
       '${info.date.day.toString().padLeft(2, '0')}/'
           '${info.date.month.toString().padLeft(2, '0')}/${info.date.year}',
     );
-    cell(287, top + 42.5, 'ESCALAS', scales);
+    cell(_titleX, top + 42.5, 'ESCALAS', scales);
     cell(
-      350,
+      _titleCol,
       top + 42.5,
       'HOJA',
       '$index / $count · ${d.options.paper.label} · REV. ${info.revision}',
@@ -2189,6 +2190,20 @@ class _Page {
         align: pw.TextAlign.right,
       ),
     );
+  }
+
+  /// «TRUSS 1», «TRUSS 3» → «TRUSS 1 · 3»; nombres propios, enteros.
+  static String _joinPositions(List<String> names) {
+    final numbered = RegExp(r'^TRUSS (\d+)$');
+    final nums = [
+      for (final n in names)
+        if (numbered.firstMatch(n) case final m?) int.parse(m.group(1)!),
+    ]..sort();
+    final own = names.where((n) => !numbered.hasMatch(n));
+    return [
+      if (nums.isNotEmpty) 'TRUSS ${nums.join(' · ')}',
+      ...own,
+    ].join(' / ');
   }
 
   static String _m(double v) => v.toStringAsFixed(2).replaceAll('.', ',');
