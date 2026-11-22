@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -23,6 +24,7 @@ import 'plan_images.dart';
 import 'plan_gear_list.dart';
 import 'plan_light_map.dart';
 import 'plan_marks.dart';
+import 'plan_classes.dart';
 import 'plan_opening.dart';
 import 'plan_path_separation.dart';
 import 'plan_sun_painter.dart';
@@ -235,6 +237,10 @@ class CameraPlanPainter extends CustomPainter {
   /// los aparatos sobre la planta limpia.
   final bool showBeams;
 
+  /// Lo que no se dibuja en esta vista (AR.1). Sigue dando luz y
+  /// contando para el material.
+  final Set<PlanClass> hiddenClasses;
+
   /// En un documento, cada luz lleva solo su número de [documentLightLegend]
   /// y el texto va en la leyenda de al lado, fuera de la planta.
   final bool documentLightNumbers;
@@ -289,6 +295,7 @@ class CameraPlanPainter extends CustomPainter {
     this.documentMarks = false,
     this.documentBackdrop,
     this.showBeams = true,
+    this.hiddenClasses = const {},
     this.documentLightNumbers = false,
     this.documentDrawing,
     this.documentLightOnly = false,
@@ -311,6 +318,16 @@ class CameraPlanPainter extends CustomPainter {
 
   /// Todo lo que entra en la luz: las capas de fondo y las de la planta.
   late final List<PlanElement> _lit = [...inheritedElements, ...elements];
+
+  /// Lo que se dibuja: sin las clases ocultas.
+  late final List<PlanElement> _shown = PlanClass.shown(
+    elements,
+    hiddenClasses,
+  );
+  late final List<PlanElement> _shownInherited = PlanClass.shown(
+    inheritedElements,
+    hiddenClasses,
+  );
 
   /// Lo que entra en el cálculo de la luz: en la posición que se ve.
   late final List<PlanElement> _litScene = viewPosition == 0
@@ -388,7 +405,7 @@ class CameraPlanPainter extends CustomPainter {
         Paint()
           ..color = const Color(0xFFFFFFFF).withValues(alpha: inheritedOpacity),
       );
-      for (final el in _paintOrder(inheritedElements)) {
+      for (final el in _paintOrder(_shownInherited)) {
         _drawElement(canvas, el, body: !PlanTerrainPainter.isTerrain(el));
       }
       canvas.restore();
@@ -403,8 +420,8 @@ class CameraPlanPainter extends CustomPainter {
       return;
     }
     for (final el in [
-      if (documentMarks) ...inheritedElements,
-      ...elements,
+      if (documentMarks) ..._shownInherited,
+      ..._shown,
     ].where(
       (e) =>
           (PlanMarks.supports(e) && !documentLightOnly) ||
@@ -426,7 +443,7 @@ class CameraPlanPainter extends CustomPainter {
       }
     }
 
-    final ordered = _paintOrder(elements);
+    final ordered = _paintOrder(_shown);
     if (colorByType) {
       for (final el in ordered) {
         _drawCategoryTint(canvas, el);
@@ -470,7 +487,7 @@ class CameraPlanPainter extends CustomPainter {
   /// recorridos, actores y lo demás, y las cámaras encima de todo, que es
   /// lo primero que se busca.
   void _paintDocumentStage(Canvas canvas) {
-    final all = [...inheritedElements, ...elements];
+    final all = [..._shownInherited, ..._shown];
     final cameras = all.where((e) => e.type == ElementType.camera).toList();
     final moving = all.where(PlanMarks.supports).toList();
     for (final el in moving) {
@@ -479,7 +496,7 @@ class CameraPlanPainter extends CustomPainter {
     for (final el in moving) {
       if (el.type == ElementType.actor) _drawDocumentStopFigures(canvas, el);
     }
-    final ordered = _paintOrder(elements);
+    final ordered = _paintOrder(_shown);
     for (final el in ordered) {
       if (el.type == ElementType.camera) continue;
       _drawElement(canvas, el, body: !PlanTerrainPainter.isTerrain(el));
@@ -4564,6 +4581,7 @@ class CameraPlanPainter extends CustomPainter {
       old.inheritedElements != inheritedElements ||
       old.inheritedOpacity != inheritedOpacity ||
       old.showBeams != showBeams ||
+      !setEquals(old.hiddenClasses, hiddenClasses) ||
       old.interacting != interacting ||
       old.showGrid != showGrid ||
       old.zones != zones ||

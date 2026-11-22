@@ -9,19 +9,19 @@ extension _EditorGestures on _CameraPlanEditorState {
 
   PlanElement? _elementAt(Offset canvasPos) {
     final slack = 1 / math.min(1.0, _scale);
-    for (final el in _visibleElements.reversed) {
+    for (final el in _drawnElements.reversed) {
       if (PlanSegment.isSegment(el) || PlanTruss.isTruss(el)) continue;
       if ((el.position - canvasPos).distance < 28 * slack) return el;
     }
     // Un truss se coge por cualquier punto de su tramo.
-    for (final el in _visibleElements.reversed) {
+    for (final el in _drawnElements.reversed) {
       if (PlanTruss.isTruss(el) &&
           PlanTruss.distanceTo(el, canvasPos) < 12 * slack) {
         return el;
       }
     }
     // Los tramos, después: lo que está encima de una pared se coge antes.
-    for (final el in _visibleElements.reversed) {
+    for (final el in _drawnElements.reversed) {
       if (!PlanSegment.isSegment(el)) continue;
       final reach = PlanSegment.kind(el) == PlanSegment.kindStreet ? 30 : 10;
       if (PlanSegment.distanceTo(el, canvasPos) < reach * slack) return el;

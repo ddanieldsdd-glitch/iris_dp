@@ -44,6 +44,7 @@ import '../../shared/pdf_export/rig_sheet_pdf.dart';
 import 'light_sheet_export.dart';
 import 'plan_cast.dart';
 import 'plan_cast_sheet.dart';
+import 'plan_classes.dart';
 import 'plan_gear_list.dart';
 import 'plan_elevation_screen.dart';
 import 'plan_guide.dart';
@@ -436,6 +437,49 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   static const _assetViewKey = PrefKey<bool>('plan.assetView', false);
   static const _beamsKey = PrefKey<bool>('plan.showBeams', true);
   late bool _showBeams = AppPrefs.instance.get(_beamsKey);
+
+  // Qué se dibuja (AR.1): cada clase se enseña u oculta, por separado en la
+  // planta de cámara y en la de luz. En la de luz, de partida, sin personas
+  // ni cámaras, como en la hoja de luz.
+  static const _cameraClassesKey = PrefKey<String>('plan.hiddenClasses', '');
+  static const _lightClassesKey = PrefKey<String>(
+    'plan.hiddenClasses.light',
+    'people,cameras',
+  );
+  PrefKey<String> get _classesKey =>
+      widget.shotId == null ? _lightClassesKey : _cameraClassesKey;
+  late Set<PlanClass> _hiddenClasses = PlanClass.decode(
+    AppPrefs.instance.get(_classesKey),
+  );
+
+  void _toggleClass(PlanClass c) {
+    setState(() {
+      final hidden = {..._hiddenClasses};
+      if (!hidden.remove(c)) hidden.add(c);
+      _hiddenClasses = hidden;
+      final picked = _selected;
+      if (picked != null && hidden.contains(PlanClass.of(picked))) {
+        _selected = null;
+      }
+    });
+    unawaited(
+      AppPrefs.instance.setIn(
+        _classesKey,
+        const SettingsScope.global(),
+        PlanClass.encode(_hiddenClasses),
+      ),
+    );
+  }
+
+  /// Lo que se ve en la planta y se puede coger con el dedo.
+  List<PlanElement> get _drawnElements =>
+      PlanClass.shown(_visibleElements, _hiddenClasses);
+
+  /// En 3D, los aparatos siempre: sin ellos no habría luz.
+  List<PlanElement> get _elements3d => PlanClass.shown(
+    _visibleElements,
+    _hiddenClasses.difference({PlanClass.fixtures}),
+  );
   late bool _colorByType = AppPrefs.instance.get(_colorByTypeKey);
   late bool _showNames = AppPrefs.instance.get(_namesKey);
 
@@ -3463,7 +3507,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   void _open3dScreen() {
     Plan3dScreen.show(
       context,
-      elements: _visibleElements,
+      elements: _elements3d,
       metersPerUnit: _metersPerUnit,
       name: _planName,
       selected: _selected,
@@ -3485,7 +3529,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       onNavigate: (t) => _navigateFrom3d(t, fullScreen: true),
       lookThrough: _lookThrough,
       editing: () => _editing3d,
-      liveElements: () => _visibleElements,
+      liveElements: () => _elements3d,
       liveSelected: () => _selected,
       onCameraStill: widget.shotId == null ? null : _saveCameraStill,
       outliner: (changed) => PlanOutliner(
@@ -4567,7 +4611,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                   icon: Icon(
                     Icons.palette_outlined,
                     color:
-                        _colorByType || _showNames || _assetView || !_showBeams
+                        _colorByType ||
+                            _showNames ||
+                            _assetView ||
+                            !_showBeams ||
+                            _hiddenClasses.isNotEmpty
                         ? palette.accent
                         : palette.textSecondary,
                   ),
@@ -4592,6 +4640,23 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                       checked: _showBeams,
                       child: const Text('Haces de luz'),
                     ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem(
+                      enabled: false,
+                      height: 32,
+                      child: Text(
+                        widget.shotId == null
+                            ? 'Se ve en la planta de luz'
+                            : 'Se ve en la planta de cámara',
+                        style: AppTypography.caption(palette),
+                      ),
+                    ),
+                    for (final c in PlanClass.values)
+                      CheckedPopupMenuItem(
+                        value: 'class:${c.name}',
+                        checked: !_hiddenClasses.contains(c),
+                        child: Text(c.label),
+                      ),
                   ],
                   onSelected: (v) {
                     switch (v) {
@@ -4607,6 +4672,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                       case 'beams':
                         setState(() => _showBeams = !_showBeams);
                         _setViewPref(_beamsKey, _showBeams);
+                      default:
+                        final c = PlanClass.values.asNameMap()[v.substring(
+                          v.indexOf(':') + 1,
+                        )];
+                        if (c != null) _toggleClass(c);
                     }
                   },
                 ),
@@ -5161,6 +5231,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                                     _assetView,
                                                                 showBeams:
                                                                     _showBeams,
+                                                                hiddenClasses:
+                                                                    _hiddenClasses,
                                                                 thumbOf:
                                                                     _thumbOf,
                                                                 selectedElement:
@@ -5272,7 +5344,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                 SizedBox(
                                   width: _view3dWidth,
                                   child: Plan3dView(
-                                    elements: _visibleElements,
+                                    elements: _elements3d,
                                     metersPerUnit: _metersPerUnit,
                                     name: _planName,
                                     selected: _selected,

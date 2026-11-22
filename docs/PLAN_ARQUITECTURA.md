@@ -100,7 +100,7 @@ Este plan sigue a LZ.8 (`PLAN_LUZ.md`), que se ocupa de los formatos (MVR y GDTF
 
 | Id | Qué | Depende de |
 |----|-----|-----------|
-| AR.1 | Clases visibles por vista: los interruptores de la hoja de luz, en la planta y en el 3D | — |
+| AR.1 | Clases visibles por vista: los interruptores de la hoja de luz, en la planta y en el 3D | hecho (2026-11-22) |
 | AR.2 | Sala en un gesto: rectángulo o polígono → suelo, paredes y techo; recintos tipo | CA |
 | AR.3 | Pilares, vigas, tarimas y escalones como objetos con medidas; sección | AR.2 |
 | AR.4 | Posiciones de cuelgue con nombre y focos pegados | LZ.1 |
@@ -109,6 +109,12 @@ Este plan sigue a LZ.8 (`PLAN_LUZ.md`), que se ocupa de los formatos (MVR y GDTF
 | AR.7 | Calco e importación de DXF del arquitecto | LZ.8.3 |
 
 **Orden propuesto:** AR.1 → AR.4 → AR.5 (lo que más mejora la hoja de luz) → AR.2 → AR.3 → AR.6 → AR.7.
+
+**AR.1, cómo quedó:** `PlanClass` (`plan_classes.dart`) da a cada elemento su clase: arquitectura, decorado, aparatos de luz, grip, rigging, personas o cámaras.
+- En la planta, el menú de vista (paleta) enseña u oculta cada clase. Se guarda por separado para la planta de cámara y la de luz; la de luz parte sin personas ni cámaras.
+- Lo oculto no se dibuja ni se coge con el dedo, pero sigue dando luz y sombra, y cuenta para el material.
+- El 3D oculta las mismas clases, salvo los aparatos: sin ellos no habría luz.
+- Cotas y manchas quedan para cuando la planta las dibuje como hoja (AR.4).
 
 **Esquema:** AR.1, AR.4 y AR.5 caben en `props` de los elementos, sin columnas nuevas. AR.6 necesita decidir si el nivel va en el elemento o en el set.
 
