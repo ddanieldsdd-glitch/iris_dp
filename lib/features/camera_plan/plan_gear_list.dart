@@ -11,18 +11,84 @@ import 'light/plan_light.dart';
 import 'light_beam.dart';
 import 'light_overrides.dart';
 
+/// Dónde guarda cada foco su número de unidad (LZ.1).
+const kLightUnitKey = 'unitNo';
+
+bool _isNumberedLight(PlanElement el) =>
+    el.type == ElementType.light &&
+    LightBeam.emits(el.lightType) &&
+    !LightOverrides.isUnused(el);
+
 /// Número de unidad de cada aparato que emite, como en una hoja de luces:
-/// U1, U2… en el orden en que están en la planta.
+/// U1, U2…
+///
+/// Cada foco conserva el suyo (`props['unitNo']`) aunque se borren o se
+/// reordenen otros. Los que aún no tienen (plantas de antes de LZ.1)
+/// ocupan los huecos libres en el orden de la planta, así que una planta
+/// sin ninguno se numera igual que siempre.
 Map<PlanElement, int> lightUnitNumbers(Iterable<PlanElement> elements) {
+  final lights = [for (final el in elements) if (_isNumberedLight(el)) el];
   final numbers = <PlanElement, int>{};
-  for (final el in elements) {
-    if (el.type == ElementType.light &&
-        LightBeam.emits(el.lightType) &&
-        !LightOverrides.isUnused(el)) {
-      numbers[el] = numbers.length + 1;
+  final taken = <int>{};
+  final pending = <PlanElement>[];
+  for (final el in lights) {
+    final own = storedLightUnit(el);
+    if (own != null && taken.add(own)) {
+      numbers[el] = own;
+    } else {
+      pending.add(el);
     }
   }
-  return numbers;
+  var next = 1;
+  for (final el in pending) {
+    while (taken.contains(next)) {
+      next++;
+    }
+    taken.add(next);
+    numbers[el] = next;
+  }
+  // En el orden de la planta, como antes.
+  return {for (final el in lights) el: numbers[el]!};
+}
+
+/// El número guardado en el foco, si tiene uno válido.
+int? storedLightUnit(PlanElement el) {
+  final v = el.props[kLightUnitKey];
+  final n = v is num ? v.toInt() : (v is String ? int.tryParse(v) : null);
+  return n != null && n > 0 ? n : null;
+}
+
+/// El número que toca a un foco nuevo: el siguiente al más alto.
+int nextLightUnit(Iterable<PlanElement> elements) =>
+    lightUnitNumbers(elements).values.fold(0, (a, b) => a > b ? a : b) + 1;
+
+/// Guarda en cada foco el número que tiene ahora, para que no cambie
+/// cuando se borre otro. Devuelve los que han cambiado.
+List<PlanElement> freezeLightUnits(Iterable<PlanElement> elements) {
+  final changed = <PlanElement>[];
+  for (final MapEntry(key: el, value: n) in lightUnitNumbers(elements).entries) {
+    if (storedLightUnit(el) != n) {
+      el.props[kLightUnitKey] = n;
+      changed.add(el);
+    }
+  }
+  return changed;
+}
+
+/// Renumera 1, 2, 3… en el orden de la planta, sin huecos. Devuelve los
+/// que han cambiado.
+List<PlanElement> renumberLightUnits(Iterable<PlanElement> elements) {
+  final changed = <PlanElement>[];
+  var n = 0;
+  for (final el in elements) {
+    if (!_isNumberedLight(el)) continue;
+    n++;
+    if (storedLightUnit(el) != n) {
+      el.props[kLightUnitKey] = n;
+      changed.add(el);
+    }
+  }
+  return changed;
 }
 
 /// «1800 W», «7,6 kW».

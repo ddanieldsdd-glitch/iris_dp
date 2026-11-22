@@ -2928,7 +2928,19 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       PlanOpening.snapToWall(el, _visibleElements);
     }
     _hiddenLayers.remove(layer);
+    // Un foco nuevo toma el siguiente número, y los que ya hay se quedan
+    // con el suyo aunque luego se borre alguno (LZ.1).
+    final frozen = <PlanLayer>{};
+    if (el.type == ElementType.light && LightBeam.emits(el.lightType)) {
+      for (final other in freezeLightUnits(_elements)) {
+        frozen.add(other.layer);
+      }
+      el.props[kLightUnitKey] = nextLightUnit(_elements);
+    }
     setState(() => _elements.add(el));
+    for (final l in frozen) {
+      if (l != layer && l != PlanLayer.shot) await _saveLayer(l);
+    }
     await _persistElement(el);
     if (select && mounted) _select(el);
     // Un foco nuevo del set, desde un plano: ¿en qué planos aparece? (PL.1)
