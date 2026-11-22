@@ -35,6 +35,22 @@ Daniel suele trabajar como director de foto, y ahora tiene una película grande 
 
 ### LZ.1 · Hojas de luz: planta, alzado y perfil (lo primero)
 
+**Estado 2026-11-22, rama `plan/autoria`.**
+- **Hecho:**
+  - números de foco estables;
+  - hoja al estilo *Dune II* con dibujo y color por modelo, localización en gris, decorado pálido, haces, cotas rojas y rótulos de marcos;
+  - leyenda con dos dibujos por modelo, que sigue en una hoja propia si no cabe;
+  - planta y alzados en hojas aparte o todo en una;
+  - A3 o A4;
+  - cajetín con set, esquema, escenas, jornada, gaffer y hoja n/m;
+  - se saca desde Plantas (botón de alzado → «Hoja de luz (PDF)») y desde Alzado y perfil, con una ventana de opciones;
+  - prueba con una caseta inventada (`test/shared/rig_sheet_pdf_test.dart`; `IRIS_RIG_SHEET_OUT=carpeta` guarda los PDF).
+- **Falta:**
+  - «Hojas de luz» en el centro de exportación, por sets o por jornada en un solo PDF;
+  - accesorios y circuito en la leyenda;
+  - botón «Renumerar focos» (la función `renumberLightUnits` ya existe);
+  - probarlo con un esquema real de KEBAB.
+
 - **Números de foco estables.** Cada foco guarda su número en `props` y lo conserva aunque se borren otros. Los focos nuevos toman el siguiente libre, y se puede renumerar el esquema. Si un foco no tiene número, se le asigna el que tiene hoy.
 - **Nombre junto al foco** en la planta, el alzado y el perfil: «3 · SkyPanel S60», con línea guía al margen cuando no cabe, igual que en la planta limpia. Altura y ángulo en el alzado.
 - **Leyenda por foco**, no solo por modelo: número, aparato, accesorios (difusor, gelatina, rejilla), vatios, circuito y canal DMX si lo hay. Si no cabe, sigue en una segunda hoja.

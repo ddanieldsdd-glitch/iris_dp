@@ -11,6 +11,7 @@ import '../../core/widgets/app_snackbar.dart';
 import '../../shared/pdf_export/rig_sheet_pdf.dart';
 import 'camera_plan_element_model.dart';
 import 'light/light_scene.dart';
+import 'light_sheet_export.dart';
 import 'plan_cad_export.dart';
 import 'plan_elevation.dart';
 
@@ -22,6 +23,7 @@ Future<void> showPlanElevation(
   required double metersPerUnit,
   required String name,
   LightScene? scene,
+  RigSheetInfo? sheetInfo,
 }) => Navigator.of(context).push(
   MaterialPageRoute<void>(
     fullscreenDialog: true,
@@ -30,6 +32,7 @@ Future<void> showPlanElevation(
       scene: scene,
       metersPerUnit: metersPerUnit,
       name: name,
+      sheetInfo: sheetInfo,
     ),
   ),
 );
@@ -45,12 +48,16 @@ class PlanElevationScreen extends StatefulWidget {
   /// ella salen las alturas de las paredes.
   final LightScene? scene;
 
+  /// Lo que ya se sabe para el cajetín de la hoja de luz.
+  final RigSheetInfo? sheetInfo;
+
   const PlanElevationScreen({
     super.key,
     required this.elements,
     this.scene,
     required this.metersPerUnit,
     required this.name,
+    this.sheetInfo,
   });
 
   @override
@@ -95,18 +102,13 @@ class _PlanElevationScreenState extends State<PlanElevationScreen> {
   }
 
   /// La hoja A3 de luz y rigging, para imprimir o mandar al rigger.
-  Future<void> _saveSheet() async {
-    try {
-      final bytes = await RigSheetPdf.build(
-        widget.elements,
-        metersPerUnit: widget.metersPerUnit,
-        info: RigSheetInfo(project: _base, date: DateTime.now()),
-      );
-      await _save(bytes, 'hoja A3', 'pdf', 'Hoja A3');
-    } catch (e) {
-      if (mounted) AppSnackBar.showError(context, 'No se pudo hacer la hoja: $e');
-    }
-  }
+  Future<void> _saveSheet() => showLightSheetExport(
+    context,
+    elements: widget.elements,
+    metersPerUnit: widget.metersPerUnit,
+    info: widget.sheetInfo ??
+        RigSheetInfo(project: _base, set: _base, date: DateTime.now()),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -152,10 +154,10 @@ class _PlanElevationScreenState extends State<PlanElevationScreen> {
                 value: 'pdf-a3',
                 child: ListTile(
                   dense: true,
-                  title: Text('Hoja A3 en PDF'),
+                  title: Text('Hoja de luz en PDF'),
                   subtitle: Text(
-                    'Planta, alzado y perfil a escala, leyenda con vatios y '
-                    'amperios, rigging y cajetín',
+                    'Planta, alzado y perfil a escala, cada aparato con su '
+                    'dibujo y color, cotas, leyenda y cajetín. A3 o A4',
                   ),
                 ),
               ),

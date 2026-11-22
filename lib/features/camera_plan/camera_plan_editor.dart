@@ -40,6 +40,8 @@ import 'floor_plan_repository.dart';
 import 'floor_plan_json.dart';
 import 'floor_plan_scope.dart';
 import 'light_beam.dart';
+import '../../shared/pdf_export/rig_sheet_pdf.dart';
+import 'light_sheet_export.dart';
 import 'plan_cast.dart';
 import 'plan_cast_sheet.dart';
 import 'plan_gear_list.dart';
@@ -4106,13 +4108,46 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     ],
   );
 
-  void _showElevation() => showPlanElevation(
-    context,
-    elements: _visibleElements,
-    scene: _lightScene,
-    metersPerUnit: _metersPerUnit,
-    name: _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta',
-  );
+  Future<void> _showElevation() async {
+    final info = await _sheetInfo();
+    if (!mounted) return;
+    await showPlanElevation(
+      context,
+      elements: _visibleElements,
+      scene: _lightScene,
+      metersPerUnit: _metersPerUnit,
+      name: _linkedSet?.locationName ?? _linkedSite?.name ?? 'planta',
+      sheetInfo: info,
+    );
+  }
+
+  /// Lo que se sabe de esta planta para el cajetín de la hoja de luz.
+  Future<RigSheetInfo> _sheetInfo() async {
+    final project = await ref
+        .read(databaseProvider)
+        .getProject(widget.projectId);
+    final shot = _shot;
+    return RigSheetInfo(
+      project: project?.name ?? '',
+      set: _linkedSet?.locationName ?? '',
+      location: _linkedSite?.name ?? '',
+      scheme: _lightSetup?.name ?? '',
+      scenes: shot == null ? '' : 'Plano ${shot.number}',
+      date: DateTime.now(),
+    );
+  }
+
+  /// La hoja de luz de lo que se ve: planta, alzado y perfil (LZ.1).
+  Future<void> _exportLightSheet() async {
+    final info = await _sheetInfo();
+    if (!mounted) return;
+    await showLightSheetExport(
+      context,
+      elements: _visibleElements,
+      metersPerUnit: _metersPerUnit,
+      info: info,
+    );
+  }
 
   /// Barra de arriba en el iPhone: imagen, 3D, encajar y el resto en «Más».
   /// Guardar va en la barra de abajo. Vaciar la planta, atajos y ajustes se
@@ -4194,6 +4229,11 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           ),
           const PopupMenuDivider(),
           item('Alzado y perfil', Icons.view_in_ar_outlined, _showElevation),
+          item(
+            'Hoja de luz (PDF)',
+            Icons.picture_as_pdf_outlined,
+            _exportLightSheet,
+          ),
           if (_isShotMode && _shot != null)
             item(
               'Bocetos de planta del plano',
@@ -4441,13 +4481,35 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                   ),
                   onPressed: _toggle3d,
                 ),
-                IconButton(
-                  tooltip: 'Alzado y perfil · exportar DXF y MVR',
+                // Alzado y perfil, y la hoja de luz en PDF (LZ.1): un solo
+                // botón, que la barra no da para más.
+                PopupMenuButton<VoidCallback>(
+                  tooltip: 'Alzado y perfil · hoja de luz en PDF',
                   icon: Icon(
                     Icons.view_in_ar_outlined,
                     color: palette.textSecondary,
                   ),
-                  onPressed: _showElevation,
+                  onSelected: (action) => action(),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: _showElevation,
+                      child: const ListTile(
+                        dense: true,
+                        leading: Icon(Icons.view_in_ar_outlined),
+                        title: Text('Alzado y perfil'),
+                        subtitle: Text('Verlos y exportar DXF o MVR'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _exportLightSheet,
+                      child: const ListTile(
+                        dense: true,
+                        leading: Icon(Icons.picture_as_pdf_outlined),
+                        title: Text('Hoja de luz (PDF)'),
+                        subtitle: Text('Planta, alzado y perfil a escala'),
+                      ),
+                    ),
+                  ],
                 ),
                 IconButton(
                   tooltip: _gearLabels
