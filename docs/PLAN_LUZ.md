@@ -44,12 +44,11 @@ Daniel suele trabajar como director de foto, y ahora tiene una película grande 
   - A3 o A4;
   - cajetín con set, esquema, escenas, jornada, gaffer y hoja n/m;
   - se saca desde Plantas (botón de alzado → «Hoja de luz (PDF)») y desde Alzado y perfil, con una ventana de opciones;
-  - prueba con una caseta inventada (`test/shared/rig_sheet_pdf_test.dart`; `IRIS_RIG_SHEET_OUT=carpeta` guarda los PDF).
-- **Falta:**
-  - «Hojas de luz» en el centro de exportación, por sets o por jornada en un solo PDF;
-  - accesorios y circuito en la leyenda;
-  - botón «Renumerar focos» (la función `renumberLightUnits` ya existe);
-  - probarlo con un esquema real de KEBAB.
+  - «Renumerar focos» en el mismo menú;
+  - hoja «Lista de focos» (se puede quitar) con cada foco: aparato, accesorios, montaje, altura, circuito y vatios;
+  - «Hojas de luz» en el centro de exportación: una por esquema usado en las escenas o jornadas elegidas, en un solo PDF, con escenas y jornada en el cajetín;
+  - prueba con una caseta inventada (`test/shared/rig_sheet_pdf_test.dart`; `IRIS_RIG_SHEET_OUT=carpeta` guarda los PDF) y con tres esquemas reales de KEBAB (14, 16 y 30 focos) sobre una copia de la base, sin guardar nada en el repo.
+- **LZ.1 cerrado.** Pendiente para más adelante: canal DMX en la lista y nombre corto junto al foco en la planta (hoy va solo el número, con la leyenda al lado).
 
 - **Números de foco estables.** Cada foco guarda su número en `props` y lo conserva aunque se borren otros. Los focos nuevos toman el siguiente libre, y se puede renumerar el esquema. Si un foco no tiene número, se le asigna el que tiene hoy.
 - **Nombre junto al foco** en la planta, el alzado y el perfil: «3 · SkyPanel S60», con línea guía al margen cuando no cabe, igual que en la planta limpia. Altura y ángulo en el alzado.

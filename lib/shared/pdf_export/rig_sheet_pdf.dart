@@ -472,7 +472,7 @@ class _Page {
         planBox = (x: 12.0, y: 24.0, w: 266.0, h: 250.0);
       case _Kind.elevations:
         frontBox = (x: 12.0, y: 24.0, w: 266.0, h: 118.0);
-        sideBox = (x: 12.0, y: 160.0, w: 266.0, h: 118.0);
+        sideBox = (x: 12.0, y: 168.0, w: 266.0, h: 110.0);
       case _Kind.legend || _Kind.schedule:
         break;
     }
@@ -494,7 +494,10 @@ class _Page {
   String scaleLabel(int scale) => '1:${(scale / d.paperScale).round()}';
 
   /// Margen a la derecha de un alzado para las cotas de altura.
-  static const _dimsW = 26.0;
+  static const _dimsW = 34.0;
+
+  /// Separación entre cotas de altura, para que sus números no se pisen.
+  static const _dimStep = 4.8;
 
   pw.Widget build() {
     _layoutTexts();
@@ -1368,7 +1371,7 @@ class _Page {
     // Cotas de altura en rojo, a la derecha.
     final right = x0 + (e.right - e.left) * s;
     for (final (i, z) in _heights(e).indexed) {
-      final dx = right + 4 + i * 3.6;
+      final dx = right + 4 + i * _dimStep;
       final top = floor - z * s;
       dimension(g, dx, floor, dx, top);
     }
@@ -1444,7 +1447,7 @@ class _Page {
     final x0 = _elevationX0(e, box, scale);
     final right = x0 + (e.right - e.left) * s;
     for (final (i, z) in _heights(e).indexed) {
-      final dx = right + 4 + i * 3.6;
+      final dx = right + 4 + i * _dimStep;
       labels.add(
         _Label(
           dx + 0.6,
