@@ -26,6 +26,7 @@ class AccessBlockedScreen extends ConsumerStatefulWidget {
     required this.onRetry,
     required this.onSignIn,
     required this.onSignOut,
+    this.onRedeem,
   });
 
   final AccessVerdict verdict;
@@ -35,6 +36,10 @@ class AccessBlockedScreen extends ConsumerStatefulWidget {
   final Future<void> Function() onSignIn;
   final Future<void> Function() onSignOut;
 
+  /// Usa un código de invitación. Devuelve el error en palabras, o nulo si
+  /// ha ido bien.
+  final Future<String?> Function(String code)? onRedeem;
+
   @override
   ConsumerState<AccessBlockedScreen> createState() =>
       _AccessBlockedScreenState();
@@ -42,6 +47,27 @@ class AccessBlockedScreen extends ConsumerStatefulWidget {
 
 class _AccessBlockedScreenState extends ConsumerState<AccessBlockedScreen> {
   bool _busy = false;
+  final _codeCtrl = TextEditingController();
+  String? _codeError;
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _acceptsCode =>
+      widget.onRedeem != null &&
+      (widget.verdict == AccessVerdict.pending ||
+          widget.verdict == AccessVerdict.expired);
+
+  Future<void> _redeem() async {
+    final code = _codeCtrl.text.trim();
+    if (code.isEmpty) return;
+    String? error;
+    await _run(() async => error = await widget.onRedeem!(code));
+    if (mounted) setState(() => _codeError = error);
+  }
 
   @override
   void initState() {
@@ -78,8 +104,17 @@ class _AccessBlockedScreenState extends ConsumerState<AccessBlockedScreen> {
         title: 'Tu cuenta está pendiente',
         body:
             check?.message ??
-            'El administrador tiene que aprobarla. Cuando lo haga, pulsa '
-                'Reintentar.',
+            'Si te han invitado, escribe aquí el código de la invitación. '
+                'Si no, el administrador tiene que aprobar tu cuenta; cuando '
+                'lo haga, pulsa Reintentar.',
+      ),
+      AccessVerdict.expired => (
+        icon: Icons.event_busy,
+        title: 'Tu periodo de IRIS ha terminado',
+        body:
+            check?.message ??
+            'Tus proyectos siguen guardados en este equipo. Si tienes un '
+                'código nuevo, escríbelo aquí.',
       ),
       AccessVerdict.suspended => (
         icon: Icons.lock_outline,
@@ -146,6 +181,28 @@ class _AccessBlockedScreenState extends ConsumerState<AccessBlockedScreen> {
                   ).copyWith(color: palette.textSecondary),
                 ),
                 const SizedBox(height: AppSpacing.lg),
+                if (_acceptsCode) ...[
+                  TextField(
+                    controller: _codeCtrl,
+                    textCapitalization: TextCapitalization.characters,
+                    autocorrect: false,
+                    decoration: InputDecoration(
+                      labelText: 'Código de invitación',
+                      hintText: 'K7M2-QX9P-4C (o pega el enlace)',
+                      errorText: _codeError,
+                      errorMaxLines: 3,
+                    ),
+                    onSubmitted: (_) => _redeem(),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppButton(
+                    label: 'Usar el código',
+                    icon: Icons.key,
+                    loading: busy,
+                    onTap: _redeem,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 if (update != null) ...[
                   UpdateActionsRow(release: update, showDismissLater: false),
                   const SizedBox(height: AppSpacing.md),
@@ -169,7 +226,8 @@ class _AccessBlockedScreenState extends ConsumerState<AccessBlockedScreen> {
                         onTap: () => _run(widget.onRetry),
                       ),
                     if (widget.verdict == AccessVerdict.pending ||
-                        widget.verdict == AccessVerdict.suspended)
+                        widget.verdict == AccessVerdict.suspended ||
+                        widget.verdict == AccessVerdict.expired)
                       AppButton(
                         label: 'Cerrar sesión',
                         icon: Icons.logout,

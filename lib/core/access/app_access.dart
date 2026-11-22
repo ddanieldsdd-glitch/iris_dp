@@ -5,11 +5,15 @@ library;
 enum AccessStatus {
   pending,
   active,
-  suspended;
+  suspended,
+
+  /// El plan tenía fecha y ya pasó (020).
+  expired;
 
   static AccessStatus parse(Object? raw) => switch (raw) {
     'active' => AccessStatus.active,
     'suspended' => AccessStatus.suspended,
+    'expired' => AccessStatus.expired,
     _ => AccessStatus.pending,
   };
 }
@@ -27,6 +31,8 @@ class AccessCheck {
     this.minBuild = 0,
     this.storageLimitBytes,
     this.usedBytes,
+    this.plan,
+    this.planExpiresAt,
   });
 
   final String userId;
@@ -43,6 +49,12 @@ class AccessCheck {
   final int minBuild;
   final int? storageLimitBytes;
   final int? usedBytes;
+
+  /// tester, trial, pro o team (020). Nulo en una nube sin la 020.
+  final String? plan;
+
+  /// Hasta cuándo dura el plan. Nulo: no caduca.
+  final DateTime? planExpiresAt;
 
   bool get overQuota {
     final limit = storageLimitBytes;
@@ -77,6 +89,10 @@ class AccessCheck {
       minBuild: asInt(json['min_build']) ?? 0,
       storageLimitBytes: asInt(json['storage_limit_bytes']),
       usedBytes: asInt(json['used_bytes']),
+      plan: text(json['plan']),
+      planExpiresAt: DateTime.tryParse(
+        json['plan_expires_at'] as String? ?? '',
+      ),
     );
   }
 
@@ -91,6 +107,8 @@ class AccessCheck {
     'min_build': minBuild,
     'storage_limit_bytes': storageLimitBytes,
     'used_bytes': usedBytes,
+    'plan': plan,
+    'plan_expires_at': planExpiresAt?.toIso8601String(),
   };
 
   static AccessCheck? fromCache(Map<String, dynamic> json) {
@@ -114,6 +132,9 @@ enum AccessVerdict {
 
   /// El administrador cerró el acceso.
   suspended,
+
+  /// Terminó el periodo del plan.
+  expired,
 
   /// La app está en mantenimiento.
   maintenance,
@@ -143,6 +164,8 @@ AccessVerdict decideAccess({
       return AccessVerdict.pending;
     case AccessStatus.suspended:
       return AccessVerdict.suspended;
+    case AccessStatus.expired:
+      return AccessVerdict.expired;
     case AccessStatus.active:
       break;
   }

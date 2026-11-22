@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/access/app_invite.dart';
+import '../../core/access/app_invite_service.dart';
+import '../../core/access/invite_share_sheet.dart';
 import '../../core/cloud/cloud_providers.dart';
 import '../../core/cloud/project_role.dart';
 import '../../core/sync/project_sync_service.dart';
@@ -51,6 +54,7 @@ class _ProjectTeamSheetState extends ConsumerState<ProjectTeamSheet> {
   var _role = ProjectRole.director;
   var _busy = false;
   List<ProjectTeamEntry>? _team;
+  List<AppInvite> _links = const [];
   String? _loadError;
 
   ProjectInviteService? get _service {
@@ -75,14 +79,35 @@ class _ProjectTeamSheetState extends ConsumerState<ProjectTeamSheet> {
     if (service == null) return;
     try {
       final team = await service.team(widget.projectCloudId);
+      final links = await _openLinks();
       if (mounted) {
         setState(() {
           _team = team;
+          _links = links;
           _loadError = null;
         });
       }
     } catch (e) {
       if (mounted) setState(() => _loadError = 'No se pudo cargar el equipo');
+    }
+  }
+
+  AppInviteService? get _invites {
+    final client = ref.read(supabaseClientProvider);
+    return client == null ? null : AppInviteService(client);
+  }
+
+  /// Enlaces abiertos de este proyecto (sin la 020, ninguno).
+  Future<List<AppInvite>> _openLinks() async {
+    try {
+      final now = DateTime.now();
+      final all = await _invites?.list(projectCloudId: widget.projectCloudId);
+      return [
+        for (final i in all ?? const <AppInvite>[])
+          if (i.isOpen(now)) i,
+      ];
+    } on InviteLinksUnavailable {
+      return const [];
     }
   }
 
@@ -104,21 +129,78 @@ class _ProjectTeamSheetState extends ConsumerState<ProjectTeamSheet> {
     }
   }
 
+  /// Crea el enlace (con correo, solo para esa persona) y lo comparte. Sin
+  /// la 020 en la nube, solo por correo y como antes.
   Future<void> _invite() async {
     final email = _emailCtrl.text.trim();
-    if (!email.contains('@')) {
+    if (email.isNotEmpty && !email.contains('@')) {
       AppSnackBar.showError(context, 'Escribe un correo válido');
       return;
     }
-    await _run(
-      (s) => s.invite(
+    final invites = _invites;
+    if (invites == null) return;
+    setState(() => _busy = true);
+    AppInvite? created;
+    try {
+      created = await invites.create(
         projectCloudId: widget.projectCloudId,
-        email: email,
         role: _role,
-      ),
-      done: 'Invitación guardada: entrará al abrir IRIS con ese correo',
-    );
-    if (mounted) _emailCtrl.clear();
+        email: email.isEmpty ? null : email,
+      );
+    } on InviteLinksUnavailable {
+      if (email.isEmpty) {
+        if (mounted) {
+          AppSnackBar.showError(
+            context,
+            'Para crear enlaces falta la migración 020 en Supabase. '
+            'De momento, invita escribiendo el correo.',
+          );
+        }
+      } else {
+        try {
+          await _service?.invite(
+            projectCloudId: widget.projectCloudId,
+            email: email,
+            role: _role,
+          );
+          if (mounted) {
+            AppSnackBar.show(
+              context,
+              'Invitación guardada: entrará al abrir IRIS con ese correo',
+            );
+          }
+        } catch (e) {
+          if (mounted) AppSnackBar.showError(context, inviteErrorText(e));
+        }
+      }
+    } catch (e) {
+      if (mounted) AppSnackBar.showError(context, inviteErrorText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    await _load();
+    if (!mounted) return;
+    _emailCtrl.clear();
+    if (created != null) {
+      await InviteShareSheet.show(
+        context,
+        invite: created,
+        projectName: widget.projectName,
+      );
+    }
+  }
+
+  Future<void> _revokeLink(AppInvite link) =>
+      _run((_) async => _invites?.revoke(link.id));
+
+  /// Retirar a alguien invitado por correo retira también su enlace.
+  Future<void> _revokeLinksOf(String email) async {
+    final now = DateTime.now();
+    for (final link in _links) {
+      if (link.isOpen(now) && link.email == email.toLowerCase()) {
+        await _invites?.revoke(link.id);
+      }
+    }
   }
 
   Future<void> _remove(ProjectTeamEntry entry) async {
@@ -148,7 +230,12 @@ class _ProjectTeamSheetState extends ConsumerState<ProjectTeamSheet> {
       ),
     );
     if (ok != true) return;
-    await _run((s) => s.remove(widget.projectCloudId, entry));
+    await _run((s) async {
+      await s.remove(widget.projectCloudId, entry);
+      if (entry.pending && entry.email != null) {
+        await _revokeLinksOf(entry.email!);
+      }
+    });
   }
 
   @override
@@ -192,6 +279,18 @@ class _ProjectTeamSheetState extends ConsumerState<ProjectTeamSheet> {
                       _run((s) => s.setRole(widget.projectCloudId, entry, r)),
                   onRemove: () => _remove(entry),
                 ),
+            for (final link in _links.where((l) => l.email == null))
+              _LinkRow(
+                key: ValueKey(link.id),
+                link: link,
+                enabled: !_busy,
+                onShare: () => InviteShareSheet.show(
+                  context,
+                  invite: link,
+                  projectName: widget.projectName,
+                ),
+                onRevoke: () => _revokeLink(link),
+              ),
             const Divider(height: AppSpacing.xl),
             Text('Invitar', style: AppTypography.label(palette)),
             const SizedBox(height: AppSpacing.sm),
@@ -200,8 +299,12 @@ class _ProjectTeamSheetState extends ConsumerState<ProjectTeamSheet> {
               keyboardType: TextInputType.emailAddress,
               autocorrect: false,
               decoration: const InputDecoration(
-                labelText: 'Correo',
+                labelText: 'Correo (opcional)',
                 hintText: 'nombre@estudio.com',
+                helperText:
+                    'Con correo, solo esa persona puede usar la invitación. '
+                    'Sin correo, sirve para quien reciba el enlace.',
+                helperMaxLines: 2,
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -213,13 +316,13 @@ class _ProjectTeamSheetState extends ConsumerState<ProjectTeamSheet> {
             FilledButton.icon(
               onPressed: _busy ? null : _invite,
               icon: const Icon(Icons.person_add_outlined),
-              label: Text(_busy ? 'Guardando…' : 'Invitar'),
+              label: Text(_busy ? 'Creando…' : 'Crear invitación'),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Todos los papeles editan todo salvo «Solo consulta». '
-              'La persona entra en cuanto abre IRIS con ese correo y su cuenta '
-              'está aprobada.',
+              'Todos los papeles editan todo salvo «Solo consulta». Después '
+              'podrás mandarla por Correo, WhatsApp o Mensajes: el enlace lleva '
+              'a la descarga de IRIS para su ordenador.',
               style: AppTypography.caption(palette),
             ),
           ],
@@ -331,6 +434,61 @@ class _RolePicker extends StatelessWidget {
           : (r) {
               if (r != null && r != value) onChanged!(r);
             },
+    );
+  }
+}
+
+class _LinkRow extends StatelessWidget {
+  const _LinkRow({
+    super.key,
+    required this.link,
+    required this.enabled,
+    required this.onShare,
+    required this.onRevoke,
+  });
+
+  final AppInvite link;
+  final bool enabled;
+  final VoidCallback onShare;
+  final VoidCallback onRevoke;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        children: [
+          Icon(Icons.link, size: 20, color: palette.textSecondary),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Enlace · ${link.role?.label ?? ''}',
+                  style: AppTypography.bodyMedium(palette),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '${formatInviteCode(link.code)} · ${link.uses}/${link.maxUses} usos',
+                  style: AppTypography.caption(palette),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Compartir otra vez',
+            icon: const Icon(Icons.ios_share),
+            onPressed: enabled ? onShare : null,
+          ),
+          IconButton(
+            tooltip: 'Retirar enlace',
+            icon: const Icon(Icons.close),
+            onPressed: enabled ? onRevoke : null,
+          ),
+        ],
+      ),
     );
   }
 }

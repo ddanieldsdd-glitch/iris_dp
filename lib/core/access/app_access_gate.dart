@@ -12,6 +12,8 @@ import '../utils/error_log.dart';
 import 'access_blocked_screen.dart';
 import 'app_access.dart';
 import 'app_access_service.dart';
+import 'app_invite.dart';
+import 'app_invite_service.dart';
 
 /// Las compilaciones que traen la nube de IRIS (las que se reparten) piden
 /// sesión y permiso del administrador. Las de desarrollo, sin claves, no.
@@ -113,7 +115,11 @@ class _AppAccessGateState extends ConsumerState<AppAccessGate>
     }
 
     try {
-      final check = await AppAccessService(client).fetch();
+      var check = await AppAccessService(client).fetch();
+      if (check.status == AccessStatus.pending &&
+          await _redeemForEmail(client)) {
+        check = await AppAccessService(client).fetch();
+      }
       await AccessCheckCache.save(check);
       _set(_decide(check, fresh: true), check);
     } on AccessCheckUnavailable {
@@ -122,6 +128,44 @@ class _AppAccessGateState extends ConsumerState<AppAccessGate>
     } catch (e, st) {
       await ErrorLog.recordUnlessOffline(e, st, context: 'Comprobar el acceso');
       _set(_decide(cached, fresh: false), cached);
+    }
+  }
+
+  /// Una cuenta nueva a la que invitaron por correo entra sin código.
+  Future<bool> _redeemForEmail(SupabaseClient client) async {
+    try {
+      return (await AppInviteService(client).redeem()).access;
+    } on InviteLinksUnavailable {
+      return false;
+    } catch (e, st) {
+      await ErrorLog.recordUnlessOffline(
+        e,
+        st,
+        context: 'Invitación por correo',
+      );
+      return false;
+    }
+  }
+
+  Future<String?> _redeemCode(String input) async {
+    final code = normalizeInviteCode(input);
+    if (code == null) {
+      return 'El código tiene 10 letras y números, como K7M2-QX9P-4C.';
+    }
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) return inviteErrorText('IRIS_INVITE_SIGNIN');
+    try {
+      final result = await AppInviteService(client).redeem(code);
+      await _evaluate();
+      if (!result.access && _verdict != AccessVerdict.open) {
+        return 'El código es bueno, pero no da acceso a IRIS: el '
+            'administrador tiene que aprobar tu cuenta.';
+      }
+      return null;
+    } on InviteLinksUnavailable catch (e) {
+      return e.toString();
+    } catch (e) {
+      return inviteErrorText(e);
     }
   }
 
@@ -189,6 +233,7 @@ class _AppAccessGateState extends ConsumerState<AppAccessGate>
       onRetry: _evaluate,
       onSignIn: _signIn,
       onSignOut: _signOut,
+      onRedeem: _redeemCode,
     );
   }
 }

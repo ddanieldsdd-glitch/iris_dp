@@ -6,6 +6,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_snackbar.dart';
+import 'admin_invites_section.dart';
 import 'admin_service.dart';
 import 'app_access.dart';
 import 'guest_projects_screen.dart';
@@ -54,6 +55,8 @@ class AdminGuestsSection extends ConsumerWidget {
             children: [for (final a in list) _AccountCard(account: a)],
           ),
         ),
+        const SizedBox(height: AppSpacing.xl),
+        const AdminInvitesSection(),
         const SizedBox(height: AppSpacing.xl),
         const _MaintenanceCard(),
       ],
@@ -126,6 +129,7 @@ class _AccountCard extends ConsumerWidget {
       AccessStatus.active => ('Activa', palette.success),
       AccessStatus.pending => ('Pendiente', palette.warning),
       AccessStatus.suspended => ('Cerrada', palette.error),
+      AccessStatus.expired => ('Caducada', palette.warning),
     };
     final limit = a.storageLimitBytes;
     final usage =
