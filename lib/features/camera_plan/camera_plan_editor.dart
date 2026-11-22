@@ -98,6 +98,7 @@ import '../../core/settings/app_prefs.dart';
 import '../settings/settings_launcher.dart';
 import 'plan_prefs.dart';
 import 'rig/hall_builder_sheet.dart';
+import 'rig/hanging_positions.dart';
 import 'rig/plan_drape.dart';
 import 'rig/plan_rig.dart';
 import 'plan_outliner.dart';
@@ -3726,8 +3727,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     final extra = <PlanElement>{};
     final hasTruss = _elements.any(PlanTruss.isTruss);
     final trusses = <String>{};
+    final walls = <String>{};
     for (final el in changed) {
-      if (PlanTruss.isTruss(el)) {
+      if (PlanSegment.isSegment(el)) {
+        final uid = LightOverrides.uidOf(el);
+        if (uid != null) walls.add(uid);
+      } else if (PlanTruss.isTruss(el)) {
         final uid = LightOverrides.uidOf(el);
         if (uid != null) trusses.add(uid);
       } else if (el.type == ElementType.light &&
@@ -3743,7 +3748,40 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         if (trusses.contains(on)) extra.add(el);
       }
     }
+    // Las luces de pared siguen a su pared (AR.4).
+    extra.addAll(LightWallMount.follow(_elements, walls, mpu));
     return extra..removeAll(changed);
+  }
+
+  /// De dónde cuelga un foco, o qué posición de cuelgue es un truss
+  /// (AR.4), para el panel.
+  String? _mountLabel(PlanElement el) {
+    String m(double v) => v.toStringAsFixed(2).replaceAll('.', ',');
+    if (PlanTruss.isTruss(el)) {
+      final uid = LightOverrides.uidOf(el);
+      final name = uid == null ? null : HangingPositions.names(_elements)[uid];
+      if (name == null) return null;
+      final hung = _elements
+          .where((e) => TrussMagnet.trussUidOf(e) == uid)
+          .length;
+      return 'Posición de cuelgue «$name» a +${m(PlanTruss.lowM(el))} m · '
+          '${hung == 1 ? '1 foco' : '$hung focos'}. El nombre sale en la hoja '
+          'de luz.';
+    }
+    if (el.type != ElementType.light) return null;
+    final height = (el.props[PlanLight.heightKey] as num?)?.toDouble();
+    final at = height == null ? '' : ' · +${m(height)} m';
+    if (TrussMagnet.trussUidOf(el) != null) {
+      final names = HangingPositions.names(_elements);
+      return 'Cuelga de ${HangingPositions.mountOf(el, names)}$at';
+    }
+    if (LightWallMount.isOn(el)) {
+      return LightWallMount.wallUidOf(el) == null
+          ? 'En la pared$at'
+          : 'En la pared$at: si la pared se mueve, la sigue';
+    }
+    if (PlanLight.isOverhead(el)) return 'Colgado del techo$at';
+    return null;
   }
 
   // ── Nave ──────────────────────────────────────────────────────────────────
@@ -5453,6 +5491,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                       )] ??
                                       0,
                                   followLabels: _followLabels,
+                                  mountLabel: _mountLabel(_selected!),
                                   reading:
                                       _selected!.type == ElementType.actor ||
                                           _selected!.propType == PropType.meter

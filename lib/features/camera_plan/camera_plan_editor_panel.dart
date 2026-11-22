@@ -72,6 +72,9 @@ class _ElementPanel extends StatefulWidget {
   /// actor (PL.4).
   final Map<String, String> followLabels;
 
+  /// De dónde cuelga un foco o qué posición es un truss (AR.4).
+  final String? mountLabel;
+
   const _ElementPanel({
     required this.palette,
     required this.element,
@@ -106,6 +109,7 @@ class _ElementPanel extends StatefulWidget {
     this.onLinkShots,
     this.linkedShots = 0,
     this.followLabels = const {},
+    this.mountLabel,
   });
 
   @override
@@ -479,6 +483,29 @@ class _ElementPanelState extends State<_ElementPanel> {
                         onSubmitted: _commitName,
                         onTapOutside: (_) => _commitName(_nameCtrl.text),
                       ),
+                      if (widget.mountLabel case final mount?)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.vertical_align_top,
+                                size: 14,
+                                color: palette.textTertiary,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  mount,
+                                  key: const ValueKey('element-mount-label'),
+                                  style: AppTypography.caption(
+                                    palette,
+                                  ).copyWith(color: palette.textSecondary),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       const SizedBox(height: AppSpacing.sm),
                     ],
                     // Su asset de Unreal (F6.20 B2), para cualquier tipo.

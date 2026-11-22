@@ -103,7 +103,7 @@ Este plan sigue a LZ.8 (`PLAN_LUZ.md`), que se ocupa de los formatos (MVR y GDTF
 | AR.1 | Clases visibles por vista: los interruptores de la hoja de luz, en la planta y en el 3D | hecho (2026-11-22) |
 | AR.2 | Sala en un gesto: rectángulo o polígono → suelo, paredes y techo; recintos tipo | CA |
 | AR.3 | Pilares, vigas, tarimas y escalones como objetos con medidas; sección | AR.2 |
-| AR.4 | Posiciones de cuelgue con nombre y focos pegados | LZ.1 |
+| AR.4 | Posiciones de cuelgue con nombre y focos pegados | hecho (2026-11-22) |
 | AR.5 | Puntos de enfoque | AR.4 |
 | AR.6 | Niveles por localización | AR.2 |
 | AR.7 | Calco e importación de DXF del arquitecto | LZ.8.3 |
@@ -116,6 +116,15 @@ Este plan sigue a LZ.8 (`PLAN_LUZ.md`), que se ocupa de los formatos (MVR y GDTF
 - El 3D oculta las mismas clases, salvo los aparatos: sin ellos no habría luz.
 - Cotas y manchas quedan para cuando la planta las dibuje como hoja (AR.4).
 
+**AR.4, cómo quedó:** `HangingPositions` (`rig/hanging_positions.dart`) da a cada truss su nombre: el que tenga o «Truss 1», «Truss 2»… de arriba abajo y de izquierda a derecha.
+- En la hoja de luz:
+  - cada truss lleva su nombre y su altura («VARA FOH · +4,00») en la planta y en los alzados;
+  - la columna MONTAJE de la lista dice de qué truss cuelga cada foco, o si va en techo, pared o pie.
+- En el panel:
+  - el foco dice de dónde cuelga y a qué altura;
+  - el truss dice qué posición es y cuántos focos lleva.
+- Las luces de pared recuerdan su pared (`props['onWall']`) y la siguen si se mueve, como ya hacían las de truss.
+
 **Esquema:** AR.1, AR.4 y AR.5 caben en `props` de los elementos, sin columnas nuevas. AR.6 necesita decidir si el nivel va en el elemento o en el set.
 
 **Unreal:** cada objeto de arquitectura sale ya en el glTF del set (F6.21.3). Las posiciones de cuelgue salen como `Truss` en el MVR (LZ.8.1).
@@ -125,3 +134,215 @@ Este plan sigue a LZ.8 (`PLAN_LUZ.md`), que se ocupa de los formatos (MVR y GDTF
 - ¿Qué recintos tipo hacen falta primero? Propuesta: bar, calle, piso, nave y plató.
 - ¿Niveles ya, o cuando haya un rodaje con entreplanta?
 - En la planta de cámara, ¿también se ocultan conos y manchas por defecto, o solo en la hoja de luz?
+
+---
+
+# Plan AM · Motor arquitectónico (2026-11-22)
+
+Aprobado por Daniel el 2026-11-22, para hacerlo después de AR.4. La AM.0 de abajo es AR.4 y ya está hecha.
+
+### Contexto
+
+Daniel quiere poder crear, con cuidado y de forma realista, cualquier lugar de rodaje:
+- casas e interiores;
+- edificios, calles y puentes;
+- casetas de feria;
+- estaciones e interiores de vagón;
+- montañas y playas.
+
+Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D en metros, para las posiciones de luz, para el 3D y para Unreal. La idea es **un motor**: piezas básicas con las que se construye cualquier cosa, como en los programas de arquitectura. No una plantilla por lugar.
+
+**Decisiones de Daniel (2026-11-22):**
+- Los cuatro grupos de lugares a la vez, sobre la misma base: casa e interiores, edificios y calle, estación y vagón, naturaleza.
+- **Texturas CC0 ya** (ambientCG y Poly Haven). Con esto queda dado el visto bueno pendiente UN.6.
+- Antes, terminar AR.4, que está a medias.
+
+#### Lo que ya hay (revisado en el código el 2026-11-22)
+- **Muros** (`plan_segment.dart`): rectos o curvos, con grosor, altura, nivel y material. En 2D no se ve el grosor y las esquinas no se unen.
+- **Aberturas** (`plan_opening.dart`): puertas, ventanas, huecos y rejas, que cortan el muro en la luz y en el 3D.
+- **Nave paramétrica** (`rig/plan_hall.dart`, `HallRecipe`): contorno, lados y cubierta plana, a dos aguas o de lona. Se construye en piezas sueltas marcadas con `hallUid`; lo tocado a mano se respeta (`detached`). **Este es el patrón de las recetas.**
+- **Calle con perfil** (`plan_street.dart`): bandas, fachadas y farolas. Su extrusión (`addSurface`) es la única de polígonos que hay en el 3D.
+- **Terreno:** colinas y desniveles solo en 2D y en la luz. En 3D no existe (`plan_scene3d.dart:173`, `:479`).
+- **Recintos:** solo en la luz (`light/rooms.dart`, `SceneRoom`). Su techo y su suelo no tienen geometría.
+- **Materiales** (`light/surfaces.dart`): reflectancia y color. Sin rugosidad ni texturas. La clave `material` choca entre muros y telas.
+- **Niveles:** `PlanLevel` es solo una altura, sin forjado.
+- **3D:** three.js en un WebView (`assets/viewer3d/viewer.js`), alimentado por el JSON de `PlanScene3d`.
+- **Unreal:** recibe la estructura como GLB (`structureGlb`) solo con `baseColor`, y el plugin usa un material de color plano (`iris_stage_link.py:750`).
+
+#### Referentes y qué se toma de cada uno
+- **SketchUp:** dibujar una forma y estirarla en altura (empujar/tirar); componentes que se repiten.
+- **Revit y ArchiCAD:** muros, forjados, cubiertas y escaleras como objetos con medidas; familias paramétricas; plantas por niveles; sección y alzado del mismo modelo.
+- **Vectorworks:** clases por vista (hecho en AR.1), extrusión a lo largo de un camino y hojas.
+- **Sweet Home 3D:** interiores habitación a habitación, con biblioteca de muebles.
+- **Capture y WYSIWYG:** rapidez, recintos tipo y el 3D a la vista mientras se dibuja.
+- **Unreal y World Machine:** terreno por alturas con pinceles y capas de material; agua.
+
+### Principios (sin excepción; son los mismos que F6)
+
+1. **Un solo modelo:** `PlanElement` + `props` → `PlanScene3d`. Sin columnas nuevas: el esquema sigue en 66.
+2. **Cada pieza nueva cumple el contrato completo** antes de darse por hecha:
+   - 2D (painter);
+   - luz (`blockersOf`, recintos y rebote en `light_scene.dart`);
+   - 3D (lista en el JSON y constructor en `viewer.js`);
+   - Unreal (en el GLB de estructura, con su material);
+   - DXF (una capa);
+   - hoja de luz y alzado (`plan_elevation.dart`);
+   - clase de AR.1 (`PlanClass`).
+3. **Recetas como la nave:** un elemento receta guarda los parámetros y genera piezas normales marcadas con su `uid`. Se puede editar a mano y lo tocado se respeta.
+4. **Medidas reales en metros**, con valores por defecto de la vida real: puertas de 0,82 × 2,03 m, peldaño de 17,5 × 28 cm, andén de 0,76–1,10 m, vagón de unos 2,9 m de ancho.
+
+### Fases
+
+**AM.0 · Cerrar AR.4** (hecho el 2026-11-22)
+- Partir las líneas largas añadidas, sin formatear archivos enteros.
+- En el panel del foco, una línea «Cuelga de Truss 2 · +5,00 m» o «En la pared» (`HangingPositions`).
+- Pruebas: nombres automáticos y propios, `mountOf`, la luz de pared que sigue a su pared y la que se despega, y la hoja con un truss renombrado.
+- Commit y push a `plan/autoria`, y actualizar `PLAN_ARQUITECTURA.md`.
+
+**AM.1 · Biblioteca de materiales PBR con texturas CC0**
+- Archivo nuevo `lib/features/camera_plan/arch/arch_material.dart`. `ArchMaterial` lleva:
+  - `id`, nombre y familia (tela, madera, hormigón, ladrillo, piedra, yeso, metal, vidrio, agua, arena, hierba, tierra, asfalto, baldosa);
+  - `albedoRgb`, `roughness`, `metalness`, `transmission`, `ior`;
+  - el tamaño real de la textura en metros;
+  - un `textureId` CC0;
+  - la reflectancia y el desplazamiento de color para la luz, que salen del albedo y sustituyen a los números puestos a mano.
+- `kWallMaterials`, `kFloorMaterials` y `kDrapeMaterials` pasan a ser vistas de esta biblioteca, sin romper los `id` guardados.
+- Clave nueva `props['mat']` para el material de una cara. `material` se sigue leyendo como hasta ahora.
+- **Texturas:**
+  - Un juego de partida de unos 24 materiales a 1K (albedo, normal y rugosidad) va dentro de la app.
+  - El resto se descarga a la carpeta de la app al usarlo, desde las API de ambientCG y Poly Haven, con su licencia CC0 anotada en un manifiesto.
+- **Visor 3D:** registro de materiales por `id` (sustituye los fijos de `viewer.js:685-734`, `:829` y `:944`), con repetición de textura según los metros y coordenadas UV en muros, suelos y extrusiones.
+- **Unreal:** el GLB lleva PBR y texturas. `iris_stage_link.py` crea material instances por `id`.
+- **Selector de material** con miniaturas, compartido por muros, suelos, cubiertas, volúmenes y telas.
+
+**AM.2 · Forjados y volúmenes: dibujar y estirar**
+- Herramienta polígono (o rectángulo) que crea:
+  - un **forjado**: suelo o techo con grosor, cota y huecos (escalera, patio). Sirve para tarimas, aceras y andenes;
+  - un **volumen**: polígono estirado a una altura, con el lado superior inclinado o no. Sirve para barras, casetas, plintos, bancos y bloques de edificio.
+- **Empujar/tirar:** asa de altura en la planta y en el 3D (`plan_3d_edit.dart`).
+- **Luz:** el forjado da techo y suelo a los recintos que cubre. El volumen bloquea y rebota.
+- **3D:** `slabs` y `volumes` en el JSON, construidos con `ExtrudeGeometry` y material por cara.
+
+**AM.3 · Cubiertas para cualquier contorno**
+- Se sacan `HallRoof` y `roofGrid` de la nave a un `ArchRoof` común: plana, a un agua, a dos aguas, a cuatro aguas, en bóveda y de lona. Con alero, pendiente o altura de cumbrera, y material.
+- Se aplica a una nave, a un volumen o a un recinto cerrado.
+- La luz ya entiende las cubiertas a través de la altura de techo. Se amplía a cubiertas inclinadas con la altura en cada punto.
+
+**AM.4 · Muros de verdad**
+- Grosor visible en 2D y esquinas unidas, en 2D y en 3D.
+- Perfil vertical: hastial (muro con pico) y altura distinta en cada extremo.
+- Huecos en arco (medio punto, rebajado).
+- Muros compuestos de varias capas (enlucido + ladrillo), con un material en cada cara.
+- Se corrige el giro de los pilares cuadrados y se exportan a 3D las piezas de muro antiguas.
+
+**AM.5 · Barridos: un perfil a lo largo de un camino**
+- Un perfil 2D (biblioteca o dibujado) recorre una línea, recta o curva. Con esto salen:
+  - barandillas, bordillos, cornisas, molduras y zócalos;
+  - vías de tren (carril + traviesas, en repetición);
+  - catenaria, arcos y tableros de puente;
+  - el casco de un vagón.
+- Repetición a lo largo del camino para farolas, traviesas, columnas y asientos: el patrón que ya usa `lampEveryM`.
+
+**AM.6 · Escaleras, rampas y niveles** (absorbe AR.3 y AR.6)
+- Escalera paramétrica (recta, en L, en U, de caracol), con huella, contrahuella, barandilla y material. Rampa.
+- Niveles de una localización: planta baja, entreplanta, planta 1… Cada uno con su altura y un forjado. La planta enseña un nivel y los demás atenuados.
+- Las luces y las cámaras se miden desde su nivel; esto ya existe con `levelM`.
+- **Vista de sección** por una línea, en la planta y en la hoja (`plan_elevation.dart`).
+
+**AM.7 · Terreno y agua en 3D**
+- Terreno por alturas: una rejilla como la de `roofGrid`, con pinceles para subir, bajar, alisar y aplanar, y capas de material pintadas (arena, hierba, roca, tierra).
+- Las colinas y desniveles de hoy se convierten a este terreno.
+- **Agua:** nivel del mar u orilla, con material de agua (ya planificado como «mar y costa» en P2).
+- **Luz:** `groundAt` y los bloqueos salen del terreno.
+- **Unreal:** se exporta como malla.
+
+**AM.8 · Recetas por lugar** (generalizan `HallRecipe`; cada una construye con AM.1–AM.7)
+- **Casa e interiores:**
+  - casa por plantas, que reparte el contorno en habitaciones, con tabiques, puertas, forjados, tejado y escalera;
+  - habitaciones tipo (dormitorio, cocina, baño, salón, bar), con muebles de la biblioteca (`PropBox` y packs CC0).
+- **Edificio y calle:**
+  - edificio de n plantas con fachada modular (ventanas o balcones por módulo, bajo comercial) y cubierta;
+  - la calle existente se puebla con fachadas de edificio;
+  - puente, de tablero + pilas o de arco.
+- **Estación y vagón:**
+  - estación: andén a su altura, vías con barrido, marquesina (cubierta sobre pilares) y paso subterráneo con escalera;
+  - vagón: casco con barrido de perfil, ventanas en serie, filas de asientos por módulo, pasillo y puertas.
+- **Naturaleza:**
+  - montaña: terreno con pinceles y material por altura;
+  - playa: terreno, agua, arena y paseo con barandilla.
+- Las recetas aparecen en «Nuevo set» y en la paleta como **recintos tipo**, como ya hacen las plantillas de nave y de calle.
+
+### Unreal, Fab, Megascans y escaneos (pedido de Daniel, 2026-11-22)
+
+Todo lo que se construye con el motor tiene que leerse en Unreal con facilidad. También tiene que poder **sustituirse por meshes reales** y **nacer de un escaneo** del móvil (LiDAR o cámara). Esto no es una fase aparte: está en el contrato de cada pieza (principio 2) y en estos pasos.
+
+**AM.U1 · Cada pieza llega a Unreal como un actor propio, con nombre y datos**
+- El GLB de estructura deja de ser un bloque: un nodo por pieza.
+- Nombre del nodo: `IRIS_<clase>_<uid>`.
+- `extras` de glTF por nodo: `uid`, clase de AR.1, receta, nivel, material, medidas y parámetros de la receta.
+- `iris_stage_link.py` crea un StaticMeshActor por pieza, en carpetas por clase y nivel, con etiquetas (`Tags`). Al reimportar sustituye por `uid`, sin duplicar.
+- Las piezas que se repiten (asientos, traviesas, farolas, ventanas de un módulo) van como **instancias**: `EXT_mesh_gpu_instancing` → Instanced Static Mesh. Es lo que hace SketchUp con los componentes y lo que Unreal necesita para que sea ligero.
+
+**AM.U2 · Vincular cualquier pieza o material con un asset de Unreal (Fab, Megascans, proyecto)**
+- Se amplía lo que ya existe: `UnrealAssetRef` en `props['unreal']` (`lib/features/unreal_link/unreal_asset_ref.dart`), hoy solo en muebles y algunos tramos.
+- **Por pieza:** una puerta, una ventana, un asiento de vagón, un banco, una farola o un tramo de barandilla pueden decir «en Unreal, este mesh».
+  - En IRIS se sigue viendo la pieza paramétrica, con la miniatura del asset (`unreal_thumbs.dart`).
+  - En Unreal se coloca el asset ajustado a las medidas de la pieza.
+- **Por material:** cada `ArchMaterial` puede llevar su equivalente en Megascans o Fab (`surfaceRef`). En Unreal se usa ese material. En IRIS, la textura CC0 parecida o el color medio de la miniatura (F6.23.4).
+- **Por receta:** una receta puede proponer sus vínculos, por ejemplo vagón → «asiento de tren» de Fab. Se eligen una vez por proyecto, en la biblioteca de Unreal que ya existe (`unreal_library.dart`).
+- **Licencias:** el modelo de Fab o Megascans nunca sale de Unreal (como hoy). IRIS solo guarda la referencia y la miniatura.
+
+**AM.U3 · Del escaneo al motor** (une ES y F6.20 con AM)
+- Hoy el escaneo da muros, huecos, objetos y la altura de techo (`scan_structure.dart` → `scan_review.dart`). Con el motor dará piezas completas:
+  - suelo y techo del escaneo → **forjados** de AM.2, con su cota;
+  - varias alturas de suelo → **niveles** de AM.6; escalón o rampa detectados → escalera o rampa;
+  - objetos del escaneo → **volúmenes** de AM.2, o vínculo a un asset de Unreal por su tipo (ES.5): «sofá» → sofá de Fab;
+  - exterior (calle de noche, ES.1b/2b) → calle con perfil, fachadas y bordillos (lo que falta de ES.2b);
+  - escaneo con cámara, sin LiDAR (F6.20 E y RealityScan) → el mismo camino: se proponen piezas sobre la malla y se pegan a ella (ES.3).
+- **Material desde el escaneo:**
+  - Se mide el color medio de cada cara escaneada y se propone el `ArchMaterial` más parecido.
+  - Más adelante, la textura real proyectada en la pieza (ES.4) viaja como material propio a Unreal.
+- La malla del escaneo sigue siendo solo la piel, a elegir (decisión ES 2026-11-03). La pieza paramétrica es la que manda y la que se edita.
+
+**AM.U4 · Formatos de intercambio**
+- **glTF/GLB con `extras`:** el formato principal, para Unreal, Capture y Blender.
+- **USD/USDZ:** ya se lee para los escaneos (`scan_usdz.dart`). Exportar USD del set queda como opción para Unreal 5 y Omniverse, cuando AM.U1 esté estable.
+- **MVR:** la estructura va como `SceneObject` con su glTF (LZ.8.1).
+- **Importar de SketchUp, Blender o Revit:** por glTF o DXF. Lo importado entra como volumen o mesh de referencia (calco 3D) y se puede vincular igual que un asset (AR.7 lo amplía de DXF a glTF).
+
+**Comprobación de Unreal en cada fase:** un `.irisstage` de prueba con piezas nombradas, materiales y, desde AM.U2, al menos una pieza vinculada a un asset de Fab o Megascans. Daniel lo abre en su PC.
+
+### Orden
+
+AM.0 → AM.1 (con AM.U1, porque ya cambia el GLB) → AM.2 → AM.3 → AM.4 → AM.U2 → AM.6 → AM.5 → AM.U3 → AM.7 → AM.8. AM.U4 se va haciendo con cada formato.
+
+Las recetas salen por grupos según tengan ya sus piezas:
+- **Casa e interiores:** tras AM.6.
+- **Edificio y calle:** tras AM.4.
+- **Estación y vagón:** tras AM.5.
+- **Naturaleza:** tras AM.7.
+
+AR.5 (puntos de enfoque) y AR.7 (DXF del arquitecto) siguen en AR.
+
+### Dónde se toca (patrón por pieza)
+
+| Parte | Archivos |
+|---|---|
+| Modelo y recetas | nuevo `lib/features/camera_plan/arch/` (`arch_material`, `arch_slab`, `arch_volume`, `arch_roof`, `arch_sweep`, `arch_stair`, `arch_terrain`, `arch_recipes`), siguiendo `rig/plan_hall.dart` |
+| 2D | `camera_plan_painter.dart`, con el dibujo nuevo en archivos aparte, como `plan_terrain_painter.dart` |
+| Luz | `light/light_scene.dart` (`blockersOf` :946, recintos :563–590 y :814, rebote :1961) y `light/surfaces.dart` |
+| 3D | `rig/plan_scene3d.dart` (listas nuevas, `version` :44, `structureKey` :245) y `assets/viewer3d/viewer.js` (`load` ~:1342, `LAYERS` :96, `structureGlb` / `exportGlb` :2013 y :2040) |
+| Unreal | `tools/unreal/iris_stage/Content/Python/iris_stage_link.py` (`_apply_structure` :728, materiales :750) |
+| CAD y hojas | `plan_cad_export.dart` (capas DXF) y `plan_elevation.dart` + `rig_sheet_pdf.dart` |
+| Editor | herramientas y panel nuevos en archivos aparte (`camera_plan_editor.dart` ya pasa de 7.000 líneas) |
+| Documentación | `docs/PLAN_ARQUITECTURA.md` (el plan AM pasa a ser su segunda parte), `PLAN_F6_3D_PREVIS.md` (F6.1.2, F6.2, F6.14 y F6.23.4 remiten a AM) y `PLAN_MAESTRO.md` (añadir AR/AM) |
+
+### Comprobación
+
+- **En cada fase:**
+  - pruebas con datos inventados de la pieza nueva en su contrato completo: 2D, luz, JSON 3D, DXF y alzado;
+  - `flutter test` completo, `dart run tool/check_architecture.dart` y `flutter analyze` sin errores nuevos.
+- **A la vista:** capturas de la planta (`saveSnapshot`) y de la hoja en PDF → PNG (`scratchpad/pdf2png.swift`). En el 3D, la app en el Mac con una copia de la base en el scratchpad, solo en lectura. Se mandan las imágenes a Daniel.
+- **Unreal:** un `.irisstage` de prueba por fase con materiales, que Daniel abre en su PC.
+- **Al terminar cada grupo de recetas:** un set de ejemplo (casa, calle con edificios, estación con vagón y playa) construido solo con el motor.
+- **Sin publicar:** todo en `plan/autoria` o en una rama `plan/motor-arquitectonico` desde ella. Se publica por paquetes y solo con el visto bueno de Daniel.

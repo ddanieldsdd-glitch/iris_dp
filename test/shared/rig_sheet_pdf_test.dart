@@ -8,6 +8,8 @@ import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
 import 'package:iris_dp/features/camera_plan/light/street_lamp.dart';
+import 'package:iris_dp/features/camera_plan/light_overrides.dart';
+import 'package:iris_dp/features/camera_plan/rig/hanging_positions.dart';
 import 'package:iris_dp/features/camera_plan/light_sheet_prefs.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_hall.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_rig.dart';
@@ -276,5 +278,31 @@ void main() {
     expect(o.numbers, RigSheetNumbers.none);
     expect([o.schedule, o.beams, o.pools, o.people], [false, false, false, true]);
     expect(await LightSheetPrefs.gaffer(), 'Gaffer de prueba');
+  });
+
+  test('cada posición de cuelgue sale con su nombre', () async {
+    final elements = caseta();
+    final trusses = elements.where(PlanTruss.isTruss).toList();
+    trusses.first.customName = 'Vara FOH';
+    final names = HangingPositions.names(elements);
+    expect(names[LightOverrides.uidOf(trusses.first)], 'Vara FOH');
+    expect(names.values, contains('Truss 1'));
+    // Los focos colgados de la vara lo dicen.
+    final hung = elements.where(
+      (e) =>
+          TrussMagnet.trussUidOf(e) == LightOverrides.uidOf(trusses.first),
+    );
+    expect(hung, isNotEmpty);
+    for (final l in hung) {
+      expect(HangingPositions.mountOf(l, names), 'Vara FOH');
+    }
+    final bytes = await RigSheetPdf.build(
+      elements,
+      metersPerUnit: mpu,
+      info: RigSheetInfo(project: 'Prueba', date: DateTime(2026, 11, 22)),
+    );
+    expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+    final out = Platform.environment['IRIS_RIG_SHEET_OUT'];
+    if (out != null) File('$out/hoja_posiciones.pdf').writeAsBytesSync(bytes);
   });
 }

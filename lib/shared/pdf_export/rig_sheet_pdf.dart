@@ -12,8 +12,10 @@ import '../../features/camera_plan/light/plan_grip.dart';
 import '../../features/camera_plan/light/plan_light.dart';
 import '../../features/camera_plan/light/street_lamp.dart';
 import '../../features/camera_plan/light/wall_mount.dart';
+import '../../features/camera_plan/light_overrides.dart';
 import '../../features/camera_plan/plan_elevation.dart';
 import '../../features/camera_plan/plan_gear_list.dart';
+import '../../features/camera_plan/rig/hanging_positions.dart';
 import '../../features/camera_plan/rig/plan_rig.dart';
 import '../../features/camera_plan/rig/plan_scene3d.dart';
 import '../../features/camera_plan/rig/rig_report.dart';
@@ -310,6 +312,9 @@ class _Data {
   final Map<String, dynamic> scene;
   late final LightLegend legend = LightLegend.of(elements);
   late final Map<PlanElement, int> units = lightUnitNumbers(elements);
+
+  /// El nombre de cada posición de cuelgue (AR.4), por `uid` del truss.
+  late final Map<String, String> positions = HangingPositions.names(elements);
   late final Map<String, PlanElement> byId = {
     for (final (i, el) in elements.indexed) PlanScene3d.idOf(el, i): el,
   };
@@ -1320,6 +1325,47 @@ class _Page {
         );
       }
     }
+    // Cada posición de cuelgue, con su nombre y su altura: encima del
+    // extremo izquierdo si va a lo ancho, a su lado en medio si va a lo
+    // alto, y nunca encima de otro nombre.
+    final placed = <(double, double)>[];
+    for (final t in d.list('trusses')) {
+      final name = d.positions[t['id']];
+      if (name == null) continue;
+      final a = pm(t['from'] as List), b = pm(t['to'] as List);
+      final wide = (b.$1 - a.$1).abs() >= (b.$2 - a.$2).abs();
+      final left = a.$1 <= b.$1 ? a : b;
+      final top = a.$2 <= b.$2 ? a : b, low = identical(top, a) ? b : a;
+      // A lo alto: por fuera de la nave, a un cuarto del tramo, lejos de
+      // los cruces.
+      final outside = !wide && top.$1 < box.x + box.w / 2;
+      final x = wide
+          ? left.$1
+          : outside
+          ? top.$1 - 2
+          : top.$1 + 2;
+      var y = wide
+          ? left.$2 - 4.2
+          : top.$2 + (low.$2 - top.$2) * 0.25 - 1.5;
+      while (placed.any(
+        (p) => (p.$1 - x).abs() < 30 && (p.$2 - y).abs() < 3,
+      )) {
+        y += 3.2;
+      }
+      placed.add((x, y));
+      labels.add(
+        _Label(
+          x,
+          y,
+          '${name.toUpperCase()} · +${_m((t['z'] as num).toDouble())}',
+          size: 4.5,
+          bold: true,
+          color: _ink,
+          width: 50,
+          align: outside ? pw.TextAlign.right : pw.TextAlign.left,
+        ),
+      );
+    }
     // Rótulos de los marcos y rebotes.
     for (final gp in d.list('grip')) {
       final name = gp['name'] as String?;
@@ -1617,6 +1663,23 @@ class _Page {
           size: 4.5,
           color: _dim,
           width: 10,
+        ),
+      );
+    }
+    // El nombre de cada posición de cuelgue, encima del truss.
+    for (final item in e.items) {
+      if (item.kind != ElevationKind.truss) continue;
+      final uid = LightOverrides.uidOf(item.element);
+      final name = uid == null ? null : d.positions[uid];
+      if (name == null) continue;
+      labels.add(
+        _Label(
+          x0 + (item.from - e.left) * s,
+          floor - item.top * s - 3.6,
+          name.toUpperCase(),
+          size: 4.5,
+          bold: true,
+          width: 40,
         ),
       );
     }
@@ -1925,12 +1988,7 @@ class _Page {
   ].join(' · ');
 
   /// Cómo va montado.
-  String _mountOf(PlanElement el) {
-    if (TrussMagnet.trussUidOf(el) != null) return 'Truss';
-    if (PlanLight.isOverhead(el)) return 'Techo';
-    if (LightWallMount.isOn(el)) return 'Pared';
-    return 'Pie';
-  }
+  String _mountOf(PlanElement el) => HangingPositions.mountOf(el, d.positions);
 
   /// La lista de focos: uno por fila, con lo que necesita el eléctrico para
   /// montarlo.
@@ -1940,7 +1998,7 @@ class _Page {
       (14, 'Nº', 8, true),
       (24, 'APARATO', 70, false),
       (96, 'ACCESORIOS', 84, false),
-      (182, 'MONTAJE', 24, false),
+      (182, 'MONTAJE', 34, false),
       (220, 'ALTURA', 14, true),
       (246, 'CIRC.', 14, true),
       (274, 'W', 18, true),
