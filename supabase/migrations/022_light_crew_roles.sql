@@ -29,8 +29,12 @@ ALTER TABLE public.project_invitations
     'best_boy', 'electrician', 'viewer'
   ));
 
--- La restricción de app_invites (020) se creó sin nombre dentro de la
--- columna: se busca la que habla de project_role y se cambia.
+-- La restricción de app_invites (020) se creó dentro de la columna, sin
+-- nombre propio: Postgres la llama app_invites_project_role_check y la
+-- guarda como «= ANY (ARRAY[…])». Se quita por nombre y, por si acaso,
+-- cualquier otra que hable de project_role.
+ALTER TABLE public.app_invites
+  DROP CONSTRAINT IF EXISTS app_invites_project_role_check;
 DO $$
 DECLARE
   c record;
@@ -39,7 +43,8 @@ BEGIN
     SELECT conname FROM pg_constraint
     WHERE conrelid = 'public.app_invites'::regclass
       AND contype = 'c'
-      AND pg_get_constraintdef(oid) LIKE '%project_role%IN%'
+      AND pg_get_constraintdef(oid) LIKE '%project_role%'
+      AND pg_get_constraintdef(oid) NOT LIKE '%project_id IS NULL%'
   LOOP
     EXECUTE format('ALTER TABLE public.app_invites DROP CONSTRAINT %I',
                    c.conname);
