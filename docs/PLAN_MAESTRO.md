@@ -172,6 +172,7 @@ Las pantallas de la biblia V2 congelada no se revisan: se decide si se borran.
 ### Flujo guion ↔ planta [plan de mejora, FL]
 - [ ] Contexto compartido también en Storyboard (FL.3).
 - [x] Pasar de plano sin reconstruir el editor (FL.6). El editor sigue montado y solo lee el plano nuevo; el 3D no recarga su visor, y el zoom y las imágenes se quedan como estaban. Una lectura que llega tarde no pisa a la nueva. (paquete de optimización)
+  - Medido el 2026-11-22 con KEBAB (escena 10, 61 planos): leer el plano nuevo cuesta unos 30 ms de consultas en el hilo de la base (equipo y reparto, 23 ms; las cámaras de los demás planos, 1 ms). No compensa guardarlo en caché.
 - [ ] Vista partida guion | planta en Mac e iPad ancho (FL.8).
 - [ ] **[Mac] Ventanas aparte (RP fases 3 y 4):**
   - guion, planta o 3D en otra ventana, para trabajar a dos monitores, con `desktop_multi_window` y base compartida (`DriftIsolate`), tras una prueba técnica;
