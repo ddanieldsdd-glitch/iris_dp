@@ -9,6 +9,7 @@ import '../cloud/cloud_providers.dart';
 import '../cloud/cloud_runtime_config.dart';
 import '../cloud/cloud_session.dart';
 import '../cloud/connectivity_status_provider.dart';
+import '../cloud/project_role.dart';
 import '../database/app_database.dart';
 import '../database/database_health.dart';
 import '../database/database_provider.dart';
@@ -388,10 +389,4 @@ Future<bool> liveNoticeIsNew(AppDatabase db, SnapshotNotice notice) async {
 
 /// Cómo se dice en los avisos el papel de una cuenta en un proyecto
 /// (`project_members.role`; sin fila, es suyo).
-String memberRoleLabel(String? role) => switch (role) {
-  null => 'propietario',
-  'dp' => 'dirección de fotografía',
-  'director' => 'dirección',
-  'viewer' => 'consulta',
-  final other => other,
-};
+String memberRoleLabel(String? role) => ProjectRole.shortLabel(role);

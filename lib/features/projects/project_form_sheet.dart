@@ -9,7 +9,7 @@ import 'package:path/path.dart' as p;
 import '../../core/sync/project_cloud_actions.dart';
 import '../../core/cloud/cloud_runtime_config.dart';
 import '../../core/database/app_database.dart';
-import '../auth/invite_director_sheet.dart';
+import '../auth/project_team_sheet.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -300,13 +300,13 @@ class _ProjectFormSheetState extends ConsumerState<ProjectFormSheet> {
                   CloudRuntimeConfig.isActive &&
                   widget.project?.cloudId != null) ...[
                 OutlinedButton.icon(
-                  onPressed: () => InviteDirectorSheet.show(
+                  onPressed: () => ProjectTeamSheet.show(
                     context,
                     projectCloudId: widget.project!.cloudId!,
                     projectName: widget.project!.name,
                   ),
-                  icon: const Icon(Icons.person_add_outlined),
-                  label: const Text('Invitar director por email'),
+                  icon: const Icon(Icons.group_outlined),
+                  label: const Text('Equipo del proyecto'),
                 ),
                 const SizedBox(height: AppSpacing.md),
               ],

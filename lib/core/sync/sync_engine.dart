@@ -549,9 +549,20 @@ class SyncEngine {
     // Pasada ligera ([mediaProjects] dado): solo los proyectos que tocan; las
     // invitaciones y plantillas se miran en las completas.
     final light = mediaProjects != null;
-    final accepted = light
-        ? 0
-        : await ProjectInviteService(_client!).acceptPendingInvitations();
+    var accepted = 0;
+    if (!light) {
+      try {
+        accepted = await ProjectInviteService(
+          _client!,
+        ).acceptPendingInvitations();
+      } catch (e, st) {
+        // Una invitación que no entra no para la sincronización: se vuelve
+        // a intentar en la próxima pasada completa.
+        unawaited(
+          ErrorLog.recordUnlessOffline(e, st, context: 'Aceptar invitaciones'),
+        );
+      }
+    }
 
     var mediaUploaded = 0;
     var mediaDownloaded = 0;

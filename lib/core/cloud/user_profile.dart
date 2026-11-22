@@ -1,3 +1,4 @@
+import 'project_role.dart';
 /// Perfil de una persona del workspace (tabla `profiles` de Supabase).
 class UserProfile {
   const UserProfile({
@@ -96,7 +97,6 @@ String initialsFor(String name) {
 String roleLabel(String? role) => switch (role) {
   'owner' || 'dp' => 'DP',
   'director' => 'Director',
-  'viewer' => 'Solo lectura',
   'collaborator' => 'Colaborador',
-  _ => 'Sin rol',
+  _ => ProjectRole.fromCode(role)?.label ?? 'Sin rol',
 };

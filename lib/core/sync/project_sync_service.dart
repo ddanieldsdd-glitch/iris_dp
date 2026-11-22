@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../database/app_database.dart';
 import '../cloud/cloud_session.dart';
+import '../cloud/project_role.dart';
 import '../utils/error_log.dart';
 
 /// Push/pull de proyectos entre Drift (cache) y Supabase.
@@ -225,16 +226,37 @@ class ProjectSyncService {
   }
 }
 
-/// Invitación de director a un proyecto.
+/// Una persona del equipo de un proyecto, o una invitación que aún no ha
+/// aceptado ([userId] nulo).
+class ProjectTeamEntry {
+  const ProjectTeamEntry({
+    required this.role,
+    this.userId,
+    this.name,
+    this.email,
+    this.invitationId,
+  });
+
+  final String? userId;
+  final String? name;
+  final String? email;
+  final ProjectRole? role;
+  final String? invitationId;
+
+  bool get pending => userId == null;
+}
+
+/// Equipo de un proyecto compartido: invitar con un papel, aceptar las
+/// invitaciones propias, cambiar papeles y quitar a alguien (019).
 class ProjectInviteService {
   final SupabaseClient _client;
 
   ProjectInviteService(this._client);
 
-  Future<void> inviteDirector({
+  Future<void> invite({
     required String projectCloudId,
     required String email,
-    String role = 'director',
+    required ProjectRole role,
   }) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw StateError('No autenticado');
@@ -242,29 +264,45 @@ class ProjectInviteService {
     await _client.from('project_invitations').upsert({
       'project_id': projectCloudId,
       'email': email.trim().toLowerCase(),
-      'role': role,
+      'role': role.code,
       'invited_by': userId,
-    });
+    }, onConflict: 'project_id,email');
   }
 
-  /// Acepta invitaciones pendientes para el email del usuario actual.
+  /// Acepta las invitaciones pendientes para el correo de esta cuenta. Lo
+  /// hace el servidor (019): la cuenta invitada no puede añadirse sola al
+  /// proyecto. Sin la 019, el camino de antes (que solo funciona si las
+  /// reglas lo dejan).
   Future<int> acceptPendingInvitations() async {
     final user = _client.auth.currentUser;
     if (user?.email == null) return 0;
+    try {
+      final n = await _client.rpc('iris_accept_invitations');
+      return n is int ? n : 0;
+    } on PostgrestException catch (e) {
+      if (!_missingFunction(e)) rethrow;
+    }
+    return _acceptDirectly(user!);
+  }
 
+  static bool _missingFunction(PostgrestException e) =>
+      e.code == 'PGRST202' || e.message.contains('iris_accept_invitations');
+
+  Future<int> _acceptDirectly(User user) async {
     final invites = await _client
         .from('project_invitations')
         .select()
-        .eq('email', user!.email!.toLowerCase())
+        .eq('email', user.email!.toLowerCase())
         .isFilter('accepted_at', null);
 
     var count = 0;
     for (final inv in invites as List) {
+      final role = inv['role'] as String? ?? ProjectRole.director.code;
       await _client.from('project_members').upsert({
         'project_id': inv['project_id'],
         'user_id': user.id,
-        'role': inv['role'] ?? 'director',
-        'can_edit': inv['role'] != 'viewer',
+        'role': role,
+        'can_edit': ProjectRole.fromCode(role)?.canEdit ?? true,
       });
       await _client
           .from('project_invitations')
@@ -273,6 +311,69 @@ class ProjectInviteService {
       count++;
     }
     return count;
+  }
+
+  /// Quién está en el proyecto y a quién se ha invitado sin respuesta.
+  Future<List<ProjectTeamEntry>> team(String projectCloudId) async {
+    final members = await _client
+        .from('project_members')
+        .select('user_id, role, profiles(display_name)')
+        .eq('project_id', projectCloudId);
+    final invites = await _client
+        .from('project_invitations')
+        .select('id, email, role')
+        .eq('project_id', projectCloudId)
+        .isFilter('accepted_at', null);
+    return [
+      for (final m in members as List)
+        ProjectTeamEntry(
+          userId: m['user_id'] as String,
+          name: (m['profiles'] as Map?)?['display_name'] as String?,
+          role: ProjectRole.fromCode(m['role'] as String?),
+        ),
+      for (final i in invites as List)
+        ProjectTeamEntry(
+          invitationId: i['id'] as String,
+          email: i['email'] as String?,
+          role: ProjectRole.fromCode(i['role'] as String?),
+        ),
+    ];
+  }
+
+  Future<void> setRole(
+    String projectCloudId,
+    ProjectTeamEntry entry,
+    ProjectRole role,
+  ) async {
+    if (entry.pending) {
+      await _client
+          .from('project_invitations')
+          .update({'role': role.code})
+          .eq('id', entry.invitationId!);
+      return;
+    }
+    await _client
+        .from('project_members')
+        .update({'role': role.code, 'can_edit': role.canEdit})
+        .eq('project_id', projectCloudId)
+        .eq('user_id', entry.userId!);
+  }
+
+  /// Quita a alguien del proyecto o retira su invitación. Lo que ya tiene
+  /// en su equipo no se borra: deja de recibir cambios y de poder subirlos.
+  Future<void> remove(String projectCloudId, ProjectTeamEntry entry) async {
+    if (entry.pending) {
+      await _client
+          .from('project_invitations')
+          .delete()
+          .eq('id', entry.invitationId!);
+      return;
+    }
+    await _client
+        .from('project_members')
+        .delete()
+        .eq('project_id', projectCloudId)
+        .eq('user_id', entry.userId!);
   }
 }
 
