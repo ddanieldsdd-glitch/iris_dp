@@ -7,16 +7,28 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../core/utils/pdf_export_fonts.dart';
 import '../../features/camera_plan/camera_plan_constants.dart';
 import '../../features/camera_plan/camera_plan_element_model.dart';
-import '../../features/camera_plan/light_beam.dart';
+import '../../features/camera_plan/light/plan_grip.dart';
+import '../../features/camera_plan/light/plan_light.dart';
+import '../../features/camera_plan/light/wall_mount.dart';
 import '../../features/camera_plan/plan_elevation.dart';
 import '../../features/camera_plan/plan_gear_list.dart';
+import '../../features/camera_plan/rig/plan_rig.dart';
 import '../../features/camera_plan/rig/plan_scene3d.dart';
 import '../../features/camera_plan/rig/rig_report.dart';
+import 'rig_symbols.dart';
 
 /// Datos del cajetín de la hoja.
 class RigSheetInfo {
   final String project;
   final String location;
+
+  /// Set y esquema de luz que dibuja la hoja.
+  final String set;
+  final String scheme;
+
+  /// Escenas o planos que la usan («6, 7A») y jornada («Jornada 3 · 14/12»).
+  final String scenes;
+  final String shootDay;
   final String gaffer;
   final String department;
   final DateTime date;
@@ -25,6 +37,10 @@ class RigSheetInfo {
   const RigSheetInfo({
     required this.project,
     this.location = '',
+    this.set = '',
+    this.scheme = '',
+    this.scenes = '',
+    this.shootDay = '',
     this.gaffer = '',
     this.department = 'Eléctricos',
     required this.date,
@@ -32,13 +48,60 @@ class RigSheetInfo {
   });
 }
 
-/// Hoja A3 apaisada al estilo de las de WYSIWYG o Halfway: planta, alzado
-/// frontal y perfil a escala, leyenda de aparatos con vatios y amperios,
-/// estructura (truss, motores, torres, telas), avisos de rigging y
-/// cajetín. Sale de la misma escena que el 3D ([PlanScene3d]) y del mismo
-/// alzado que la pantalla de alzados ([PlanElevation]).
+/// Cómo se reparten las vistas.
+enum RigSheetLayout {
+  /// La planta en una hoja y el alzado y el perfil en otra, como las hojas
+  /// de *Dune II*: cada vista más grande.
+  split,
+
+  /// Todo en una hoja: planta arriba, alzado y perfil debajo.
+  compact,
+}
+
+enum RigSheetPaper {
+  a3('A3'),
+  a4('A4');
+
+  const RigSheetPaper(this.label);
+  final String label;
+}
+
+/// Cuándo lleva cada foco su número junto al dibujo.
+enum RigSheetNumbers {
+  /// Con 60 focos o menos; con más, el color y la forma ya dicen el modelo.
+  auto,
+  all,
+  none,
+}
+
+class RigSheetOptions {
+  final RigSheetLayout layout;
+  final RigSheetPaper paper;
+  final RigSheetNumbers numbers;
+
+  const RigSheetOptions({
+    this.layout = RigSheetLayout.split,
+    this.paper = RigSheetPaper.a3,
+    this.numbers = RigSheetNumbers.auto,
+  });
+}
+
+/// Hoja de luz al estilo de las de *Dune II* o de WYSIWYG: planta, alzado
+/// frontal y perfil a escala (LZ.1).
+///
+/// - Cada modelo de aparato tiene su dibujo (fresnel, recorte, panel,
+///   tubo…) a escala, girado hacia donde apunta, y su color.
+/// - La localización va de fondo en gris (muros, pilares, la nave y su
+///   cubierta) y el decorado en un tono muy pálido; el rigging, en negro.
+/// - Haces claros, cotas en rojo y rótulos en marcos y rebotes.
+/// - Leyenda con el dibujo de cada modelo desde arriba y de lado,
+///   cuántos hay y sus vatios; si no cabe, sigue en una hoja propia.
+///
+/// Sale de la misma escena que el 3D ([PlanScene3d]) y del mismo alzado que
+/// la pantalla de alzados ([PlanElevation]).
 abstract final class RigSheetPdf {
-  /// Medidas de la hoja, en milímetros.
+  /// Medidas de la hoja A3, en milímetros. En A4 se dibuja lo mismo
+  /// reducido.
   static const double pageW = 420;
   static const double pageH = 297;
 
@@ -49,6 +112,7 @@ abstract final class RigSheetPdf {
     List<PlanElement> elements, {
     required double metersPerUnit,
     required RigSheetInfo info,
+    RigSheetOptions options = const RigSheetOptions(),
   }) async {
     final fonts = await PdfExportFonts.load();
     final doc = pw.Document(
@@ -56,16 +120,34 @@ abstract final class RigSheetPdf {
       title: info.project,
       creator: 'IRIS',
     );
-    final sheet = _Sheet(elements, metersPerUnit, info);
-    doc.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a3.landscape,
-        margin: pw.EdgeInsets.zero,
-        build: (_) => sheet.page(),
-      ),
-    );
+    final data = _Data(elements, metersPerUnit, info, options);
+    final kinds = data.pageKinds();
+    for (final (i, kind) in kinds.indexed) {
+      final page = _Page(data, kind, i + 1, kinds.length);
+      doc.addPage(
+        pw.Page(
+          pageFormat: options.paper == RigSheetPaper.a3
+              ? PdfPageFormat.a3.landscape
+              : PdfPageFormat.a4.landscape,
+          margin: pw.EdgeInsets.zero,
+          build: (_) => page.build(),
+        ),
+      );
+    }
     return doc.save();
   }
+
+  /// Cuántas hojas salen.
+  static int pageCount(
+    List<PlanElement> elements, {
+    required double metersPerUnit,
+    RigSheetOptions options = const RigSheetOptions(),
+  }) => _Data(
+    elements,
+    metersPerUnit,
+    RigSheetInfo(project: '', date: DateTime(2000)),
+    options,
+  ).pageKinds().length;
 
   /// La escala más detallada a la que `spanM` cabe en `mm`.
   static int scaleFor(double spanXM, double spanYM, double wMm, double hMm) {
@@ -107,56 +189,262 @@ const _accent = PdfColor.fromInt(0xFFC56A12);
 const _danger = PdfColor.fromInt(0xFFB5401F);
 const _glass = PdfColor.fromInt(0xFF7FB6D6);
 
-class _Sheet {
+/// La localización, de fondo.
+const _struct = PdfColor.fromInt(0xFF9AA3AC);
+const _structLight = PdfColor.fromInt(0xFFD3D8DD);
+
+/// El decorado, como un fantasma.
+const _decor = PdfColor.fromInt(0xFFF8DFE6);
+const _decorLine = PdfColor.fromInt(0xFFE7B5C3);
+
+/// Los haces.
+const _beam = PdfColor.fromInt(0xFFF3C6D2);
+const _beamLine = PdfColor.fromInt(0xFFE59AAF);
+
+/// Cotas y rótulos de estructura.
+const _dim = PdfColor.fromInt(0xFFC8102E);
+
+typedef _Box = ({double x, double y, double w, double h});
+
+enum _Kind { compact, plan, elevations, legend }
+
+/// Lo que comparten todas las hojas.
+class _Data {
   final List<PlanElement> elements;
   final double mpu;
   final RigSheetInfo info;
+  final RigSheetOptions options;
   final Map<String, dynamic> scene;
-  final labels = <_Label>[];
   late final LightLegend legend = LightLegend.of(elements);
   late final Map<PlanElement, int> units = lightUnitNumbers(elements);
+  late final Map<String, PlanElement> byId = {
+    for (final (i, el) in elements.indexed) PlanScene3d.idOf(el, i): el,
+  };
+  late final PlanElevation front = PlanElevation.of(
+    elements,
+    metersPerUnit: mpu,
+    side: ElevationSide.front,
+  );
+  late final PlanElevation profile = PlanElevation.of(
+    elements,
+    metersPerUnit: mpu,
+    side: ElevationSide.side,
+  );
 
-  _Sheet(this.elements, this.mpu, this.info)
-    : scene = PlanScene3d.build(elements, metersPerUnit: mpu);
+  /// El color de cada modelo, en el orden de la leyenda.
+  late final Map<String, (PdfColor, PdfColor)> modelColors = {
+    for (final (i, row) in legend.rows.indexed) row.name: RigSymbols.colorAt(i),
+  };
 
-  static const k = PdfPageFormat.mm;
+  /// En A4 todo se dibuja reducido.
+  final double paperScale;
 
-  // Zonas de la hoja, en mm desde arriba a la izquierda.
-  static const plan = (x: 12.0, y: 24.0, w: 266.0, h: 148.0);
-  static const front = (x: 12.0, y: 190.0, w: 150.0, h: 90.0);
-  static const side = (x: 170.0, y: 190.0, w: 108.0, h: 90.0);
+  _Data(this.elements, this.mpu, this.info, this.options)
+    : scene = PlanScene3d.build(elements, metersPerUnit: mpu),
+      paperScale = options.paper == RigSheetPaper.a3
+          ? 1
+          : PdfPageFormat.a4.width / PdfPageFormat.a3.width;
+
+  bool get showNumbers => switch (options.numbers) {
+    RigSheetNumbers.all => true,
+    RigSheetNumbers.none => false,
+    RigSheetNumbers.auto => units.length <= 60,
+  };
+
+  /// Filas de leyenda que caben en la columna de la derecha.
+  static const legendRowsInColumn = 18;
+
+  bool get legendOverflows => legend.rows.length > legendRowsInColumn;
+
+  List<_Kind> pageKinds() => [
+    if (options.layout == RigSheetLayout.compact)
+      _Kind.compact
+    else ...[
+      _Kind.plan,
+      _Kind.elevations,
+    ],
+    if (legendOverflows) _Kind.legend,
+  ];
+
+  String modelOf(PlanElement el) =>
+      (el.props['name'] as String?) ?? el.lightType?.label ?? 'Luz';
+
+  (PdfColor, PdfColor) colorOf(PlanElement el) =>
+      modelColors[modelOf(el)] ?? RigSymbols.colorAt(0);
+
+  List<Map> list(String key) => (scene[key] as List? ?? const []).cast<Map>();
+
+  late final ({double minX, double maxX, double minY, double maxY}) bounds =
+      _bounds();
+
+  ({double minX, double maxX, double minY, double maxY}) _bounds() {
+    var minX = double.infinity, maxX = -double.infinity;
+    var minY = double.infinity, maxY = -double.infinity;
+    void take(List<dynamic> xy) {
+      final x = (xy[0] as num).toDouble(), y = (xy[1] as num).toDouble();
+      minX = math.min(minX, x);
+      maxX = math.max(maxX, x);
+      minY = math.min(minY, y);
+      maxY = math.max(maxY, y);
+    }
+
+    for (final w in list('walls')) {
+      for (final q in (w['points'] as List)) {
+        take(q as List);
+      }
+    }
+    for (final h in list('halls')) {
+      for (final q in (h['outline'] as List)) {
+        take(q as List);
+      }
+    }
+    for (final t in list('trusses')) {
+      take(t['from'] as List);
+      take(t['to'] as List);
+    }
+    for (final key in ['pillars', 'rigging', 'people', 'cameras', 'props']) {
+      for (final i in list(key)) {
+        take(i['at'] as List);
+      }
+    }
+    for (final f in list('fixtures')) {
+      take(f['pos'] as List);
+    }
+    for (final d in list('drapes')) {
+      for (final s in (d['samples'] as List).cast<Map>()) {
+        take(s['p'] as List);
+      }
+    }
+    if (minX > maxX) return (minX: -5, maxX: 5, minY: -5, maxY: 5);
+    return (minX: minX, maxX: maxX, minY: minY, maxY: maxY);
+  }
+
+  /// La familia y medidas con que se dibuja un foco.
+  (RigFamily, RigSize) shapeOf(PlanElement el, {Map? fixture}) {
+    final family = RigSymbols.familyOf(el.lightType);
+    var size = RigSymbols.sizeOf(
+      el.lightType,
+      tubeM: (fixture?['lengthM'] as num?)?.toDouble(),
+    );
+    if (family == RigFamily.tube) {
+      final axis = fixture?['axis'] as List?;
+      final upright = axis == null || (axis[2] as num).abs() > 0.5;
+      if (upright) {
+        size = (length: 0.05, width: 0.06, height: size.width);
+      }
+    }
+    return (family, size);
+  }
+
+  /// El foco de la escena 3D de cada elemento: su posición y hacia dónde
+  /// apunta de verdad, también si cuelga de un truss.
+  late final Map<PlanElement, Map> fixtureOf = {
+    for (final f in list('fixtures'))
+      if (byId[f['id']] case final el?) el: f,
+  };
+
+  /// Hacia dónde apunta un foco en un alzado (radianes desde la horizontal
+  /// hacia la derecha, positivo hacia arriba), con la misma dirección que
+  /// la planta y el 3D. `null` si mira hacia el que mira o al contrario.
+  double? aimIn(ElevationItem item, ElevationSide side) {
+    final f = fixtureOf[item.element];
+    if (f == null) return item.aim;
+    final pos = (f['pos'] as List).cast<num>();
+    final aim = (f['aim'] as List).cast<num>();
+    final dx = (aim[0] - pos[0]).toDouble();
+    final dy = (aim[1] - pos[1]).toDouble();
+    final dz = (aim[2] - pos[2]).toDouble();
+    final across = side == ElevationSide.front ? dx : dy;
+    final depth = side == ElevationSide.front ? dy : dx;
+    final inView = math.sqrt(across * across + dz * dz);
+    if (inView < 0.3 * math.sqrt(inView * inView + depth * depth)) {
+      return null;
+    }
+    return math.atan2(dz, across);
+  }
+
+  /// La altura de un foco en un alzado: la del 3D (que sabe si cuelga de un
+  /// truss), o la del alzado.
+  double heightOf(ElevationItem item) {
+    final f = fixtureOf[item.element];
+    if (f == null) return (item.bottom + item.top) / 2;
+    return ((f['pos'] as List)[2] as num).toDouble();
+  }
+
+  /// Un foco en pie: ni colgado, ni en pared, ni en un truss.
+  bool onStand(PlanElement el) =>
+      !PlanLight.isOverhead(el) &&
+      !LightWallMount.isOn(el) &&
+      TrussMagnet.trussUidOf(el) == null;
+}
+
+/// Una hoja.
+class _Page {
+  final _Data d;
+  final _Kind kind;
+  final int index;
+  final int count;
+  final labels = <_Label>[];
+
+  /// Dónde va cada par de dibujos de la leyenda: x, y y un foco del modelo.
+  final _legendIcons = <(double, double, PlanElement)>[];
+
+  _Page(this.d, this.kind, this.index, this.count) {
+    switch (kind) {
+      case _Kind.compact:
+        planBox = (x: 12.0, y: 24.0, w: 266.0, h: 148.0);
+        frontBox = (x: 12.0, y: 190.0, w: 150.0, h: 90.0);
+        sideBox = (x: 170.0, y: 190.0, w: 108.0, h: 90.0);
+      case _Kind.plan:
+        planBox = (x: 12.0, y: 24.0, w: 266.0, h: 250.0);
+      case _Kind.elevations:
+        frontBox = (x: 12.0, y: 24.0, w: 266.0, h: 118.0);
+        sideBox = (x: 12.0, y: 160.0, w: 266.0, h: 118.0);
+      case _Kind.legend:
+        break;
+    }
+  }
+
+  _Box? planBox;
+  _Box? frontBox;
+  _Box? sideBox;
+  int planScale = 100, frontScale = 100, sideScale = 100;
+
   static const column = (x: 288.0, w: 120.0);
 
-  late int planScale, frontScale, sideScale;
+  double get k => PdfPageFormat.mm * d.paperScale;
 
-  pw.Widget page() {
-    final front = PlanElevation.of(
-      elements,
-      metersPerUnit: mpu,
-      side: ElevationSide.front,
-    );
-    final profile = PlanElevation.of(
-      elements,
-      metersPerUnit: mpu,
-      side: ElevationSide.side,
-    );
-    _layoutTexts(front, profile);
+  /// La escala de verdad en el papel elegido (en A4, reducida).
+  String scaleLabel(int scale) => '1:${(scale / d.paperScale).round()}';
+
+  /// Margen a la derecha de un alzado para las cotas de altura.
+  static const _dimsW = 26.0;
+
+  pw.Widget build() {
+    _layoutTexts();
     return pw.Stack(
       children: [
         pw.CustomPaint(
-          size: const PdfPoint(RigSheetPdf.pageW * k, RigSheetPdf.pageH * k),
+          size: PdfPoint(RigSheetPdf.pageW * k, RigSheetPdf.pageH * k),
           painter: (g, size) {
             _frame(g);
-            _plan(g);
-            _elevation(g, front, _Sheet.front, frontScale);
-            _elevation(g, profile, _Sheet.side, sideScale);
-            _legendSymbols(g);
+            if (planBox != null) _plan(g);
+            if (frontBox case final box?) {
+              _elevation(g, d.front, box, frontScale);
+            }
+            if (sideBox case final box?) {
+              _elevation(g, d.profile, box, sideScale);
+            }
+            for (final (x, y, el) in _legendIcons) {
+              _drawIcons(g, x, y, el);
+            }
+            _titleFrame(g);
           },
         ),
         for (final l in labels)
           pw.Positioned(
             left: (l.align == pw.TextAlign.left ? l.x : l.x - l.width) * k,
-            top: l.y * k - l.size * 0.85,
+            top: l.y * k - l.size * d.paperScale * 0.85,
             child: pw.SizedBox(
               width: l.width * k,
               child: pw.Text(
@@ -164,7 +452,7 @@ class _Sheet {
                 textAlign: l.align,
                 maxLines: 2,
                 style: pw.TextStyle(
-                  fontSize: l.size,
+                  fontSize: l.size * d.paperScale,
                   color: l.color,
                   fontWeight: l.bold
                       ? pw.FontWeight.bold
@@ -286,81 +574,154 @@ class _Sheet {
     }
   }
 
+  /// Un símbolo de aparato en (`cx`, `cy`), con el haz hacia `angle`
+  /// (radianes en la hoja, `y` hacia abajo). Nunca más pequeño que
+  /// `minMm`, para que se lea a cualquier escala.
+  void symbol(
+    PdfGraphics g,
+    double cx,
+    double cy,
+    double angle,
+    List<RigOutline> outlines,
+    double mmPerM,
+    (PdfColor, PdfColor) color, {
+    double minMm = 2.4,
+    double? maxMm,
+  }) {
+    var extent = 0.0;
+    for (final o in outlines) {
+      for (final (x, y) in o.points) {
+        extent = math.max(extent, math.max(x.abs(), y.abs()) * 2);
+      }
+    }
+    if (extent == 0) return;
+    var f = math.max(mmPerM, minMm / extent);
+    if (maxMm != null) f = math.min(f, maxMm / extent);
+    final ca = math.cos(angle), sa = math.sin(angle);
+    for (final o in outlines) {
+      final pts = [
+        for (final (x, y) in o.points)
+          (cx + (x * ca - y * sa) * f, cy + (x * sa + y * ca) * f),
+      ];
+      if (o.fill) {
+        poly(
+          g,
+          pts,
+          stroke: color.$2,
+          fill: color.$1,
+          width: 0.18,
+          closed: true,
+        );
+      } else {
+        poly(g, pts, stroke: color.$2, width: 0.18);
+      }
+    }
+  }
+
+  /// Cota en rojo de (`x1`, `y1`) a (`x2`, `y2`), con sus marcas.
+  void dimension(PdfGraphics g, double x1, double y1, double x2, double y2) {
+    line(g, x1, y1, x2, y2, color: _dim, width: 0.15);
+    final len = math.sqrt(math.pow(x2 - x1, 2) + math.pow(y2 - y1, 2));
+    if (len < 0.5) return;
+    final ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+    for (final (x, y) in [(x1, y1), (x2, y2)]) {
+      // Marca a 45°, como en arquitectura.
+      final tx = (ux - uy) * 0.9, ty = (uy + ux) * 0.9;
+      line(g, x - tx, y - ty, x + tx, y + ty, color: _dim, width: 0.25);
+    }
+  }
+
   void _frame(PdfGraphics g) {
     rect(g, 8, 8, 404, 281, width: 0.5);
     rect(g, 10, 10, 400, 277, width: 0.2);
-    line(g, 284, 10, 284, 287);
-    line(g, 10, 180, 284, 180);
-    line(g, 166, 180, 166, 287);
+    switch (kind) {
+      case _Kind.compact:
+        line(g, 284, 10, 284, 287);
+        line(g, 10, 180, 284, 180);
+        line(g, 166, 180, 166, 287);
+      case _Kind.elevations:
+        line(g, 284, 10, 284, 287);
+        line(g, 10, 150, 284, 150);
+      case _Kind.plan:
+        line(g, 284, 10, 284, 287);
+      case _Kind.legend:
+        break;
+    }
   }
 
   // ── Planta ──────────────────────────────────────────────────────────────
 
-  late final ({double minX, double maxX, double minY, double maxY}) bounds =
-      _bounds();
-
-  ({double minX, double maxX, double minY, double maxY}) _bounds() {
-    var minX = double.infinity, maxX = -double.infinity;
-    var minY = double.infinity, maxY = -double.infinity;
-    void take(List<dynamic> xy) {
-      final x = (xy[0] as num).toDouble(), y = (xy[1] as num).toDouble();
-      minX = math.min(minX, x);
-      maxX = math.max(maxX, x);
-      minY = math.min(minY, y);
-      maxY = math.max(maxY, y);
-    }
-
-    for (final w in _list('walls')) {
-      for (final q in (w['points'] as List)) {
-        take(q as List);
-      }
-    }
-    for (final h in _list('halls')) {
-      for (final q in (h['outline'] as List)) {
-        take(q as List);
-      }
-    }
-    for (final t in _list('trusses')) {
-      take(t['from'] as List);
-      take(t['to'] as List);
-    }
-    for (final key in ['pillars', 'rigging', 'people', 'cameras']) {
-      for (final i in _list(key)) {
-        take(i['at'] as List);
-      }
-    }
-    for (final f in _list('fixtures')) {
-      take(f['pos'] as List);
-    }
-    for (final d in _list('drapes')) {
-      for (final s in (d['samples'] as List).cast<Map>()) {
-        take(s['p'] as List);
-      }
-    }
-    if (minX > maxX) return (minX: -5, maxX: 5, minY: -5, maxY: 5);
-    return (minX: minX, maxX: maxX, minY: minY, maxY: maxY);
-  }
-
-  List<Map> _list(String key) => (scene[key] as List? ?? const []).cast<Map>();
-
-  late final double _planMm = 1000 / planScale;
-  late final double _planOx =
-      plan.x + (plan.w - (bounds.maxX - bounds.minX) * _planMm) / 2;
-  late final double _planOy =
-      plan.y + (plan.h - (bounds.maxY - bounds.minY) * _planMm) / 2;
+  double get _planMm => 1000 / planScale;
+  double get _planOx =>
+      planBox!.x + (planBox!.w - (d.bounds.maxX - d.bounds.minX) * _planMm) / 2;
+  double get _planOy =>
+      planBox!.y + (planBox!.h - (d.bounds.maxY - d.bounds.minY) * _planMm) / 2;
 
   /// Un punto del modelo (metros, y arriba) en la hoja.
   (double, double) pm(List<dynamic> xy) => (
-    _planOx + ((xy[0] as num) - bounds.minX) * _planMm,
-    _planOy + (bounds.maxY - (xy[1] as num)) * _planMm,
+    _planOx + ((xy[0] as num) - d.bounds.minX) * _planMm,
+    _planOy + (d.bounds.maxY - (xy[1] as num)) * _planMm,
   );
+
+  /// Un rectángulo girado del modelo: centro, ancho, fondo y giro en grados
+  /// (como `rotation` de la planta: 0 mira hacia arriba).
+  List<(double, double)> _box(List at, double w, double dpt, double yawDeg) {
+    final rad = yawDeg * math.pi / 180;
+    final fx = math.sin(rad), fy = math.cos(rad);
+    final rx = math.cos(rad), ry = -math.sin(rad);
+    final cx = (at[0] as num).toDouble(), cy = (at[1] as num).toDouble();
+    return [
+      for (final (a, b) in [(-1, -1), (1, -1), (1, 1), (-1, 1)])
+        pm([
+          cx + rx * w / 2 * a + fx * dpt / 2 * b,
+          cy + ry * w / 2 * a + fy * dpt / 2 * b,
+        ]),
+    ];
+  }
 
   void _plan(PdfGraphics g) {
     final s = _planMm;
-    // Paredes y su vidrio.
-    for (final w in _list('walls')) {
+    // La nave: su planta y la rejilla de la cubierta, de fondo.
+    for (final h in d.list('halls')) {
+      final grid = h['roofGrid'] as Map?;
+      if (grid != null) {
+        final o = (grid['origin'] as List).cast<num>();
+        final sx = (grid['stepX'] as num).toDouble();
+        final sy = (grid['stepY'] as num).toDouble();
+        final nx = (grid['nx'] as num).toInt();
+        final ny = (grid['ny'] as num).toInt();
+        for (var i = 0; i <= nx; i++) {
+          final a = pm([o[0] + i * sx, o[1]]);
+          final b = pm([o[0] + i * sx, o[1] + ny * sy]);
+          line(g, a.$1, a.$2, b.$1, b.$2, color: _structLight, width: 0.15);
+        }
+        for (var j = 0; j <= ny; j++) {
+          final a = pm([o[0], o[1] + j * sy]);
+          final b = pm([o[0] + nx * sx, o[1] + j * sy]);
+          line(g, a.$1, a.$2, b.$1, b.$2, color: _structLight, width: 0.15);
+        }
+      }
+      final outline = [for (final q in (h['outline'] as List)) pm(q as List)];
+      poly(g, outline, stroke: _struct, width: 0.3, closed: true);
+    }
+    // El decorado: muebles y atrezo, muy pálidos.
+    for (final pr in d.list('props')) {
+      final w = (pr['widthM'] as num?)?.toDouble() ?? 0.5;
+      final dp = (pr['depthM'] as num?)?.toDouble() ?? 0.5;
+      poly(
+        g,
+        _box(pr['at'] as List, w, dp, (pr['yawDeg'] as num?)?.toDouble() ?? 0),
+        stroke: _decorLine,
+        fill: _decor,
+        width: 0.12,
+        closed: true,
+      );
+    }
+    // Paredes y su vidrio, en gris.
+    for (final w in d.list('walls')) {
       final pts = [for (final q in (w['points'] as List)) pm(q as List)];
-      poly(g, pts, width: 0.15 * s.clamp(2, 12));
+      final thick = 0.12 * s.clamp(2, 12);
+      poly(g, pts, stroke: _struct, width: thick);
       final cum = <double>[0];
       final raw = (w['points'] as List).cast<List>();
       for (var i = 1; i < raw.length; i++) {
@@ -398,7 +759,7 @@ class _Sheet {
           b.$1,
           b.$2,
           color: PdfColors.white,
-          width: 0.15 * s.clamp(2, 12) + 0.1,
+          width: thick + 0.1,
         );
         line(
           g,
@@ -406,16 +767,16 @@ class _Sheet {
           a.$2,
           b.$1,
           b.$2,
-          color: o['glass'] == true ? _glass : _muted,
+          color: o['glass'] == true ? _glass : _structLight,
           width: 0.3,
         );
       }
     }
     // Telas: la onda de cortina.
-    for (final d in _list('drapes')) {
-      final samples = (d['samples'] as List).cast<Map>();
+    for (final dr in d.list('drapes')) {
+      final samples = (dr['samples'] as List).cast<Map>();
       final pts = [for (final q in samples) pm(q['p'] as List)];
-      final color = PdfColor.fromHex(d['color'] as String);
+      final color = PdfColor.fromHex(dr['color'] as String);
       final wave = <(double, double)>[];
       for (var i = 0; i < pts.length - 1; i++) {
         final a = pts[i], b = pts[i + 1];
@@ -435,18 +796,30 @@ class _Sheet {
       }
       poly(g, wave, stroke: color, width: 0.4);
     }
-    // Pilares.
-    for (final pl in _list('pillars')) {
+    // Pilares, de la localización.
+    for (final pl in d.list('pillars')) {
       final c = pm(pl['at'] as List);
       final r = math.max((pl['sizeM'] as num) * s / 2, 0.5);
       if (pl['shape'] == 'round') {
-        circle(g, c.$1, c.$2, r, stroke: null, fill: _ink);
+        circle(g, c.$1, c.$2, r, stroke: null, fill: _struct);
       } else {
-        rect(g, c.$1 - r, c.$2 - r, r * 2, r * 2, stroke: null, fill: _ink);
+        rect(g, c.$1 - r, c.$2 - r, r * 2, r * 2, stroke: null, fill: _struct);
       }
     }
+    _planBeams(g, s);
+    // Marcos, rebotes, banderas y telas de grip: una barra fina.
+    for (final gp in d.list('grip')) {
+      final w = (gp['widthM'] as num?)?.toDouble() ?? 1;
+      final pts = _box(
+        gp['at'] as List,
+        w,
+        0.05,
+        (gp['yawDeg'] as num?)?.toDouble() ?? 0,
+      );
+      poly(g, pts, stroke: _ink, fill: _ink, width: 0.35, closed: true);
+    }
     // Truss: dos cordones, diagonales y juntas.
-    for (final t in _list('trusses')) {
+    for (final t in d.list('trusses')) {
       final a = pm(t['from'] as List), b = pm(t['to'] as List);
       final dx = b.$1 - a.$1, dy = b.$2 - a.$2;
       final len = math.sqrt(dx * dx + dy * dy);
@@ -474,7 +847,7 @@ class _Sheet {
       line(g, e0.$1, e0.$2, e1.$1, e1.$2, width: 0.2);
     }
     // Motores y torres, con el color de su carga.
-    for (final r in _list('rigging')) {
+    for (final r in d.list('rigging')) {
       final c = pm(r['at'] as List);
       final load = (r['loadKg'] as num?)?.toDouble();
       final wll = (r['wllKg'] as num?)?.toDouble() ?? 500;
@@ -509,34 +882,16 @@ class _Sheet {
         line(g, c.$1 + 1.4, c.$2 - 1.4, c.$1 - 1.4, c.$2 + 1.4, color: stroke);
       }
     }
-    // Focos: un círculo del color de su luz, con su eje.
-    for (final f in _list('fixtures')) {
-      final c = pm(f['pos'] as List), aim = pm(f['aim'] as List);
-      final color = _cct((f['cct'] as num).toDouble(), f['rgb'] as int?);
-      final dx = aim.$1 - c.$1, dy = aim.$2 - c.$2;
-      final len = math.sqrt(dx * dx + dy * dy);
-      if (len > 1) {
-        final reach = math.min(len, 9.0);
-        line(
-          g,
-          c.$1,
-          c.$2,
-          c.$1 + dx / len * reach,
-          c.$2 + dy / len * reach,
-          color: color,
-          width: 0.2,
-          dash: [0.8, 0.6],
-        );
-      }
-      circle(g, c.$1, c.$2, 1.3, stroke: _ink, fill: color, width: 0.2);
-    }
     // Personas.
-    for (final pe in _list('people')) {
+    for (final pe in d.list('people')) {
       final c = pm(pe['at'] as List);
       circle(g, c.$1, c.$2, 1.2, width: 0.25);
     }
+    _planFixtures(g, s);
+    _planDimensions(g);
     // Norte y barra de escala.
-    final nx = plan.x + plan.w - 8, ny = plan.y - 4;
+    final box = planBox!;
+    final nx = box.x + box.w - 8, ny = box.y - 4;
     circle(g, nx, ny, 3.5, width: 0.25);
     poly(
       g,
@@ -551,23 +906,224 @@ class _Sheet {
       closed: true,
     );
     final bar = 5 * s;
-    rect(g, plan.x + 4, plan.y + plan.h + 2, bar, 1, stroke: null, fill: _ink);
-    rect(g, plan.x + 4 + bar, plan.y + plan.h + 2, bar, 1, width: 0.2);
+    rect(g, box.x + 4, box.y + box.h + 2, bar, 1, stroke: null, fill: _ink);
+    rect(g, box.x + 4 + bar, box.y + box.h + 2, bar, 1, width: 0.2);
+  }
+
+  /// Los haces en planta, antes que los aparatos y el rigging: hacia donde
+  /// apuntan, o la huella en el suelo si miran abajo.
+  void _planBeams(PdfGraphics g, double s) {
+    for (final f in d.list('fixtures')) {
+      if (f['on'] == false) continue;
+      final pos = (f['pos'] as List).cast<num>();
+      final aim = (f['aim'] as List).cast<num>();
+      final dx = (aim[0] - pos[0]).toDouble();
+      final dy = (aim[1] - pos[1]).toDouble();
+      final dz = (aim[2] - pos[2]).toDouble();
+      final hd = math.sqrt(dx * dx + dy * dy);
+      final beamDeg = (f['beamDeg'] as num).toDouble();
+      final c = pm(pos);
+      if (hd < 0.3 && dz < 0) {
+        final half = math.min(beamDeg, 120) / 2 * math.pi / 180;
+        final r = math.min(-dz * math.tan(half), 2.5) * s;
+        if (r > 1) {
+          poly(
+            g,
+            [
+              for (var i = 0; i < 24; i++)
+                (
+                  c.$1 + r * math.cos(i * math.pi / 12),
+                  c.$2 + r * math.sin(i * math.pi / 12),
+                ),
+            ],
+            stroke: _beamLine,
+            fill: _beam,
+            fillOpacity: 0.14,
+            width: 0.1,
+            closed: true,
+          );
+        }
+        continue;
+      }
+      if (hd < 0.3 || beamDeg >= 179) continue;
+      final angle = math.atan2(-dy, dx);
+      final half = math.min(beamDeg, 100) / 2 * math.pi / 180;
+      final reach = math.min(hd, 10.0) * s;
+      poly(
+        g,
+        [
+          c,
+          (
+            c.$1 + math.cos(angle - half) * reach,
+            c.$2 + math.sin(angle - half) * reach,
+          ),
+          (
+            c.$1 + math.cos(angle + half) * reach,
+            c.$2 + math.sin(angle + half) * reach,
+          ),
+        ],
+        stroke: _beamLine,
+        fill: _beam,
+        fillOpacity: 0.14,
+        width: 0.1,
+        closed: true,
+      );
+    }
+  }
+
+  /// Los aparatos: su dibujo, girado hacia donde apuntan. Lo que cuelga
+  /// mirando al suelo se ve de frente.
+  void _planFixtures(PdfGraphics g, double s) {
+    for (final f in d.list('fixtures')) {
+      final el = d.byId[f['id']];
+      if (el == null) continue;
+      final pos = (f['pos'] as List).cast<num>();
+      final aim = (f['aim'] as List).cast<num>();
+      final dx = (aim[0] - pos[0]).toDouble();
+      final dy = (aim[1] - pos[1]).toDouble();
+      final dz = (aim[2] - pos[2]).toDouble();
+      final hd = math.sqrt(dx * dx + dy * dy);
+      final tilt = math.atan2(dz, hd) * 180 / math.pi;
+      final yaw = el.rotation * math.pi / 180;
+      // Sin dirección en planta, la de su giro.
+      final angle = hd > 0.01
+          ? math.atan2(-dy, dx)
+          : math.atan2(-math.cos(yaw), math.sin(yaw));
+      var (family, size) = d.shapeOf(el, fixture: f);
+      final flat = switch (family) {
+        RigFamily.panel ||
+        RigFamily.softbox ||
+        RigFamily.cyc ||
+        RigFamily.tube => tilt < -55,
+        _ => tilt < -70,
+      };
+      if (!flat && tilt.abs() > 20) {
+        // Inclinado: se ve más corto desde arriba.
+        final c = math.cos(tilt * math.pi / 180).abs();
+        size = (
+          length: size.length * math.max(c, 0.45),
+          width: size.width,
+          height: size.height,
+        );
+      }
+      final c = pm(pos);
+      symbol(
+        g,
+        c.$1,
+        c.$2,
+        angle,
+        RigSymbols.outline(
+          family,
+          size,
+          view: flat ? RigView.face : RigView.side,
+        ),
+        s,
+        d.colorOf(el),
+      );
+    }
+  }
+
+  /// Las medidas de la nave (o de todo lo dibujado): ancho abajo y fondo a
+  /// la izquierda.
+  ({double minX, double maxX, double minY, double maxY}) get _measured {
+    final halls = d.list('halls');
+    if (halls.isEmpty) return d.bounds;
+    var minX = double.infinity, maxX = -double.infinity;
+    var minY = double.infinity, maxY = -double.infinity;
+    for (final h in halls) {
+      for (final q in (h['outline'] as List).cast<List>()) {
+        final x = (q[0] as num).toDouble(), y = (q[1] as num).toDouble();
+        minX = math.min(minX, x);
+        maxX = math.max(maxX, x);
+        minY = math.min(minY, y);
+        maxY = math.max(maxY, y);
+      }
+    }
+    return (minX: minX, maxX: maxX, minY: minY, maxY: maxY);
+  }
+
+  void _planDimensions(PdfGraphics g) {
+    final m = _measured;
+    if (m.maxX - m.minX < 0.5 || m.maxY - m.minY < 0.5) return;
+    final a = pm([m.minX, m.minY]), b = pm([m.maxX, m.maxY]);
+    final (x, y) = _dimLines;
+    dimension(g, a.$1, y, b.$1, y);
+    line(g, a.$1, a.$2 + 0.5, a.$1, y + 1, color: _dim, width: 0.1);
+    line(g, b.$1, a.$2 + 0.5, b.$1, y + 1, color: _dim, width: 0.1);
+    dimension(g, x, b.$2, x, a.$2);
+    line(g, a.$1 - 0.5, b.$2, x - 1, b.$2, color: _dim, width: 0.1);
+    line(g, a.$1 - 0.5, a.$2, x - 1, a.$2, color: _dim, width: 0.1);
+  }
+
+  /// Dónde van las cotas: fuera de todo lo dibujado, para no pisar focos.
+  (double, double) get _dimLines {
+    final out = pm([d.bounds.minX, d.bounds.minY]);
+    final a = pm([_measured.minX, _measured.minY]);
+    return (math.min(a.$1, out.$1) - 4, math.max(a.$2, out.$2) + 4);
+  }
+
+  void _planDimensionLabels() {
+    final m = _measured;
+    if (m.maxX - m.minX < 0.5 || m.maxY - m.minY < 0.5) return;
+    final a = pm([m.minX, m.minY]), b = pm([m.maxX, m.maxY]);
+    final (x, y) = _dimLines;
+    labels
+      ..add(
+        _Label(
+          (a.$1 + b.$1) / 2 + 12,
+          y - 0.6,
+          '${_m(m.maxX - m.minX)} m',
+          size: 5.5,
+          color: _dim,
+          width: 24,
+          align: pw.TextAlign.right,
+        ),
+      )
+      ..add(
+        _Label(
+          x - 1,
+          (a.$2 + b.$2) / 2,
+          '${_m(m.maxY - m.minY)} m',
+          size: 5.5,
+          color: _dim,
+          width: 20,
+          align: pw.TextAlign.right,
+        ),
+      );
   }
 
   /// Los textos de la planta: van en la capa de texto, que se monta antes
   /// de dibujar.
   void _planLabels() {
-    final byId = <String, PlanElement>{
-      for (final (i, el) in elements.indexed) PlanScene3d.idOf(el, i): el,
-    };
-    for (final f in _list('fixtures')) {
-      final unit = units[byId[f['id']]];
-      if (unit == null) continue;
-      final c = pm(f['pos'] as List);
-      labels.add(_Label(c.$1 + 1.6, c.$2 - 1.2, 'U$unit', size: 5, width: 10));
+    final box = planBox!;
+    if (d.showNumbers) {
+      for (final f in d.list('fixtures')) {
+        final unit = d.units[d.byId[f['id']]];
+        if (unit == null) continue;
+        final c = pm(f['pos'] as List);
+        labels.add(
+          _Label(
+            c.$1 + 1.8,
+            c.$2 - 1.4,
+            '$unit',
+            size: 5,
+            bold: true,
+            width: 8,
+          ),
+        );
+      }
     }
-    final nx = plan.x + plan.w - 8, ny = plan.y - 4;
+    // Rótulos de los marcos y rebotes.
+    for (final gp in d.list('grip')) {
+      final name = gp['name'] as String?;
+      if (name == null || name.isEmpty) continue;
+      final c = pm(gp['at'] as List);
+      labels.add(
+        _Label(c.$1 + 1.5, c.$2 + 3, name, size: 4.5, color: _dim, width: 40),
+      );
+    }
+    _planDimensionLabels();
+    final nx = box.x + box.w - 8, ny = box.y - 4;
     labels.add(
       _Label(
         nx + 3,
@@ -581,11 +1137,11 @@ class _Sheet {
     );
     final bar = 5 * _planMm;
     labels
-      ..add(_Label(plan.x + 4, plan.y + plan.h + 6, '0', size: 6, width: 4))
+      ..add(_Label(box.x + 4, box.y + box.h + 6, '0', size: 6, width: 4))
       ..add(
         _Label(
-          plan.x + 4 + bar * 2 - 2,
-          plan.y + plan.h + 6,
+          box.x + 4 + bar * 2 - 2,
+          box.y + box.h + 6,
           '10 m',
           size: 6,
           width: 10,
@@ -595,14 +1151,14 @@ class _Sheet {
 
   // ── Alzados ─────────────────────────────────────────────────────────────
 
-  void _elevation(
-    PdfGraphics g,
-    PlanElevation e,
-    ({double x, double y, double w, double h}) box,
-    int scale,
-  ) {
+  double _elevationX0(PlanElevation e, _Box box, int scale) {
     final s = 1000 / scale;
-    final x0 = box.x + (box.w - (e.right - e.left) * s) / 2;
+    return box.x + (box.w - _dimsW - (e.right - e.left) * s) / 2;
+  }
+
+  void _elevation(PdfGraphics g, PlanElevation e, _Box box, int scale) {
+    final s = 1000 / scale;
+    final x0 = _elevationX0(e, box, scale);
     final floor = box.y + box.h - 6;
     (double, double) at(double across, double z) =>
         (x0 + (across - e.left) * s, floor - z * s);
@@ -618,11 +1174,21 @@ class _Sheet {
             y,
             w,
             h,
-            fill: const PdfColor.fromInt(0xFFEEF1F3),
+            stroke: _struct,
+            fill: const PdfColor.fromInt(0xFFF1F3F5),
             width: 0.2,
           );
         case ElevationKind.opening:
-          rect(g, x, y, w, h, fill: PdfColors.white, width: 0.15);
+          rect(
+            g,
+            x,
+            y,
+            w,
+            h,
+            stroke: _struct,
+            fill: PdfColors.white,
+            width: 0.15,
+          );
         case ElevationKind.drape:
           final pts = [
             for (final (across, top, _) in item.profile) at(across, top),
@@ -632,8 +1198,10 @@ class _Sheet {
           poly(
             g,
             pts,
-            fill: const PdfColor(0.55, 0.11, 0.17, 0.5),
-            width: 0.2,
+            stroke: const PdfColor(0.55, 0.11, 0.17),
+            fill: const PdfColor(0.55, 0.11, 0.17),
+            fillOpacity: 0.25,
+            width: 0.15,
             closed: true,
           );
         case ElevationKind.truss:
@@ -648,36 +1216,8 @@ class _Sheet {
         case ElevationKind.rigPoint:
           rect(g, x, y, w, h, fill: PdfColors.white, width: 0.25);
         case ElevationKind.light:
-          final c = at(item.centre, (item.bottom + item.top) / 2);
-          final color = _cct(item.cct, item.rgb);
-          final aim = item.aim;
-          if (aim != null && item.beamDeg < 179) {
-            final half = item.beamDeg / 2 * math.pi / 180;
-            // Cada borde del haz llega a su alcance o al suelo, lo que
-            // antes.
-            final z = (item.bottom + item.top) / 2;
-            (double, double) edge(double a) {
-              var reach = item.reachM;
-              if (math.sin(a) < -0.01) {
-                reach = math.min(reach, z / -math.sin(a));
-              }
-              return (
-                c.$1 + math.cos(a) * reach * s,
-                c.$2 - math.sin(a) * reach * s,
-              );
-            }
-
-            poly(
-              g,
-              [c, edge(aim - half), edge(aim + half)],
-              stroke: color,
-              fill: color,
-              fillOpacity: 0.15,
-              width: 0.15,
-              closed: true,
-            );
-          }
-          circle(g, c.$1, c.$2, 1, stroke: _ink, fill: color, width: 0.2);
+          // Encima de todo, después.
+          break;
         case ElevationKind.actor:
           final head = at(item.centre, item.top - 0.12);
           circle(g, head.$1, head.$2, 0.12 * s, width: 0.2);
@@ -691,100 +1231,258 @@ class _Sheet {
         case ElevationKind.camera:
           rect(g, x, y, w, h, fill: _ink, width: 0.2);
         case ElevationKind.prop:
-          rect(g, x, y, w, h, width: 0.2);
+          rect(g, x, y, w, h, stroke: _decorLine, fill: _decor, width: 0.12);
       }
     }
-    // Cotas de altura a la izquierda: las de los truss y la más alta.
-    for (final z in _heights(e)) {
-      final y = floor - z * s;
-      line(g, box.x + 1, y, box.x + 5, y, width: 0.2);
+    // Los haces, sobre paredes y telas (son claros) y bajo los aparatos.
+    for (final item in e.items) {
+      if (item.kind != ElevationKind.light) continue;
+      if (PlanGrip.isGrip(item.element)) continue;
+      final aim = d.aimIn(item, e.side);
+      if (aim == null || item.beamDeg >= 179) continue;
+      final z = d.heightOf(item);
+      final c = at(item.centre, z);
+      final half = item.beamDeg / 2 * math.pi / 180;
+      // Cada borde del haz llega a su alcance o al suelo, lo que antes.
+      (double, double) edge(double a) {
+        var reach = item.reachM;
+        if (math.sin(a) < -0.01) reach = math.min(reach, z / -math.sin(a));
+        return (c.$1 + math.cos(a) * reach * s, c.$2 - math.sin(a) * reach * s);
+      }
+
+      poly(
+        g,
+        [c, edge(aim - half), edge(aim + half)],
+        stroke: _beamLine,
+        fill: _beam,
+        fillOpacity: 0.14,
+        width: 0.1,
+        closed: true,
+      );
+    }
+    // Los aparatos, por encima de telas y paredes para que se vean.
+    for (final item in e.items) {
+      if (item.kind == ElevationKind.light) {
+        _elevationLight(g, item, at, s, e.side);
+      }
+    }
+    // Cotas de altura en rojo, a la derecha.
+    final right = x0 + (e.right - e.left) * s;
+    for (final (i, z) in _heights(e).indexed) {
+      final dx = right + 4 + i * 3.6;
+      final top = floor - z * s;
+      dimension(g, dx, floor, dx, top);
     }
   }
 
-  static Set<double> _heights(PlanElevation e) => {
-    for (final i in e.items)
-      if (i.kind == ElevationKind.truss) i.bottom,
-    if (e.items.isNotEmpty) e.items.map((i) => i.top).reduce(math.max),
-  };
-
-  void _elevationLabels(
-    PlanElevation e,
-    ({double x, double y, double w, double h}) box,
-    int scale,
+  void _elevationLight(
+    PdfGraphics g,
+    ElevationItem item,
+    (double, double) Function(double, double) at,
+    double s,
+    ElevationSide side,
   ) {
+    final el = item.element;
+    if (PlanGrip.isGrip(el)) {
+      // Un marco, rebote o bandera: su tela de canto, a su altura.
+      final span = PlanGrip.span(el, d.mpu);
+      final a = at(item.centre, span.bottom), b = at(item.centre, span.top);
+      rect(g, a.$1 - 0.5, b.$2, 1, a.$2 - b.$2, fill: _ink, width: 0.1);
+      return;
+    }
+    final z = d.heightOf(item);
+    final c = at(item.centre, z);
+    // En pie: el mástil y las patas hasta el suelo.
+    if (d.onStand(el) && z > 0.3) {
+      final foot = at(item.centre, 0);
+      final knee = at(item.centre, math.min(0.6, z * 0.4));
+      line(g, c.$1, c.$2, knee.$1, knee.$2, color: _muted, width: 0.2);
+      for (final dx in [-0.45, 0.45]) {
+        final f = at(item.centre + dx, 0);
+        line(g, knee.$1, knee.$2, f.$1, foot.$2, color: _muted, width: 0.2);
+      }
+      line(g, knee.$1, knee.$2, foot.$1, foot.$2, color: _muted, width: 0.2);
+    }
+    final (family, size) = d.shapeOf(el, fixture: d.fixtureOf[el]);
+    final aim = d.aimIn(item, side);
+    symbol(
+      g,
+      c.$1,
+      c.$2,
+      aim == null ? 0 : -aim,
+      RigSymbols.outline(
+        family,
+        size,
+        view: aim == null ? RigView.face : RigView.side,
+        elevation: true,
+      ),
+      s,
+      d.colorOf(el),
+    );
+  }
+
+  /// Las alturas que se acotan: cada nivel de truss y cada foco, sin
+  /// repetir las que están a menos de 25 cm. Como mucho 6, las más altas.
+  List<double> _heights(PlanElevation e) {
+    final raw = <double>[
+      for (final i in e.items)
+        if (i.kind == ElevationKind.truss)
+          i.bottom
+        else if (i.kind == ElevationKind.light && !PlanGrip.isGrip(i.element))
+          d.heightOf(i),
+    ]..sort();
+    final out = <double>[];
+    for (final z in raw) {
+      if (z < 0.3) continue;
+      if (out.isEmpty || z - out.last > 0.25) out.add(z);
+    }
+    return out.length <= 6 ? out : out.sublist(out.length - 6);
+  }
+
+  void _elevationLabels(PlanElevation e, _Box box, int scale) {
+    final s = 1000 / scale;
     final floor = box.y + box.h - 6;
-    for (final z in _heights(e)) {
+    final x0 = _elevationX0(e, box, scale);
+    final right = x0 + (e.right - e.left) * s;
+    for (final (i, z) in _heights(e).indexed) {
+      final dx = right + 4 + i * 3.6;
       labels.add(
         _Label(
-          box.x + 1,
-          floor - z * 1000 / scale - 0.8,
-          '+${_m(z)}',
-          size: 5,
-          width: 14,
+          dx + 0.6,
+          floor - z * s - 0.6,
+          _m(z),
+          size: 4.5,
+          color: _dim,
+          width: 10,
         ),
       );
     }
-  }
-
-  // ── Leyenda, estructura, avisos y cajetín ───────────────────────────────
-
-  final _legendRows = <(double, PdfColor)>[];
-
-  void _legendSymbols(PdfGraphics g) {
-    for (final (y, color) in _legendRows) {
-      circle(g, column.x + 3, y, 1.5, stroke: _ink, fill: color, width: 0.2);
-    }
-    // Cajetín.
-    const top = 236.0;
-    rect(g, 284, top, 126, 51, width: 0.4);
-    for (final y in [top + 13, top + 22, top + 31, top + 40]) {
-      line(g, 284, y, 410, y, width: 0.15);
-    }
-    line(g, 347, top + 13, 347, top + 40, width: 0.15);
-  }
-
-  void _layoutTexts(PlanElevation front, PlanElevation profile) {
-    final b = bounds;
-    planScale = RigSheetPdf.scaleFor(
-      b.maxX - b.minX + 2,
-      b.maxY - b.minY + 2,
-      plan.w,
-      plan.h,
-    );
-    frontScale = RigSheetPdf.scaleFor(
-      front.right - front.left + 1,
-      front.height,
-      _Sheet.front.w - 8,
-      _Sheet.front.h - 10,
-    );
-    sideScale = RigSheetPdf.scaleFor(
-      profile.right - profile.left + 1,
-      profile.height,
-      side.w - 8,
-      side.h - 10,
-    );
-    void title(double x, double y, String text, int scale) => labels
-      ..add(_Label(x, y, text, size: 10, bold: true, width: 120))
-      ..add(
-        _Label(x, y + 4, 'ESCALA 1:$scale', size: 6, color: _muted, width: 60),
+    // Rótulos de marcos y rebotes, sobre su tela.
+    for (final item in e.items) {
+      if (item.kind != ElevationKind.light) continue;
+      if (!PlanGrip.isGrip(item.element)) continue;
+      final name = item.element.customName;
+      if (name == null) continue;
+      final top = PlanGrip.span(item.element, d.mpu).top;
+      labels.add(
+        _Label(
+          x0 + (item.centre - e.left) * s + 1,
+          floor - top * s - 1,
+          name,
+          size: 4.5,
+          color: _dim,
+          width: 40,
+        ),
       );
-    title(plan.x, 16, 'PLANTA DE LUZ Y RIGGING', planScale);
-    _planLabels();
-    title(_Sheet.front.x, 184, 'ALZADO FRONTAL', frontScale);
-    title(side.x, 184, 'PERFIL LATERAL', sideScale);
-    _elevationLabels(front, _Sheet.front, frontScale);
-    _elevationLabels(profile, side, sideScale);
+    }
+    if (!d.showNumbers) return;
+    for (final item in e.items) {
+      if (item.kind != ElevationKind.light) continue;
+      final unit = d.units[item.element];
+      if (unit == null) continue;
+      final cx = x0 + (item.centre - e.left) * s;
+      final cy = floor - d.heightOf(item) * s;
+      labels.add(
+        _Label(cx + 1.8, cy - 1.6, '$unit', size: 4.5, bold: true, width: 8),
+      );
+    }
+  }
 
-    // Leyenda.
-    var y = 16.0;
+  // ── Textos, leyenda y cajetín ───────────────────────────────────────────
+
+  void _layoutTexts() {
+    if (kind == _Kind.legend) {
+      _fullLegend();
+      _titleBlock();
+      return;
+    }
+    void title(double x, double y, String text, int scale) => labels
+      ..add(_Label(x, y, text, size: 10, bold: true, width: 160))
+      ..add(
+        _Label(
+          x,
+          y + 4,
+          'ESCALA ${scaleLabel(scale)}',
+          size: 6,
+          color: _muted,
+          width: 60,
+        ),
+      );
+    if (planBox case final box?) {
+      final b = d.bounds;
+      planScale = RigSheetPdf.scaleFor(
+        b.maxX - b.minX + 2,
+        b.maxY - b.minY + 2,
+        box.w - 12,
+        box.h - 10,
+      );
+      title(box.x, 16, 'PLANTA DE LUZ Y RIGGING', planScale);
+      _planLabels();
+    }
+    for (final (box, e, name, isFront) in [
+      (frontBox, d.front, 'ALZADO FRONTAL', true),
+      (sideBox, d.profile, 'PERFIL LATERAL', false),
+    ]) {
+      if (box == null) continue;
+      final scale = RigSheetPdf.scaleFor(
+        e.right - e.left + 1,
+        e.height,
+        box.w - 8 - _dimsW,
+        box.h - 10,
+      );
+      if (isFront) {
+        frontScale = scale;
+      } else {
+        sideScale = scale;
+      }
+      title(box.x, box.y - 8, name, scale);
+      _elevationLabels(e, box, scale);
+    }
+
+    final y = _legend(16);
+    if (kind != _Kind.elevations) _structure(y);
+    _titleBlock();
+  }
+
+  /// La leyenda de la columna derecha. Devuelve dónde acaba.
+  double _legend(double top) {
+    var y = top;
     final x = column.x;
     labels.add(_Label(x, y, 'LEYENDA', size: 10, bold: true));
     y += 6;
+    _legendHeader(x, y);
+    y += 5;
+    final rows = d.legend.rows;
+    final shown = d.legendOverflows
+        ? rows.take(_Data.legendRowsInColumn - 1).toList()
+        : rows;
+    for (final row in shown) {
+      _legendRow(x, y, row);
+      y += 8;
+    }
+    if (d.legendOverflows) {
+      labels.add(
+        _Label(
+          x + 22,
+          y,
+          '… y ${rows.length - shown.length} modelos más: '
+          'leyenda completa en la hoja $count',
+          size: 5.5,
+          color: _muted,
+          width: 98,
+        ),
+      );
+      y += 5;
+    }
+    return _legendTotal(x, y);
+  }
+
+  void _legendHeader(double x, double y) {
     labels
-      ..add(_Label(x + 8, y, 'APARATO', size: 5.5, color: _muted, width: 60))
+      ..add(_Label(x + 22, y, 'APARATO', size: 5.5, color: _muted, width: 60))
       ..add(
         _Label(
-          x + 88,
+          x + 92,
           y,
           'UDS',
           size: 5.5,
@@ -795,7 +1493,7 @@ class _Sheet {
       )
       ..add(
         _Label(
-          x + 104,
+          x + 108,
           y,
           'W/UD',
           size: 5.5,
@@ -811,72 +1509,66 @@ class _Sheet {
           'W TOT.',
           size: 5.5,
           color: _muted,
-          width: 16,
+          width: 14,
           align: pw.TextAlign.right,
         ),
       );
-    y += 5;
-    for (final row in legend.rows.take(10)) {
-      _legendRows.add((y - 1, _colorOf(row)));
-      labels
-        ..add(_Label(x + 8, y, row.name, size: 6.5, width: 74))
-        ..add(
-          _Label(
-            x + 8,
-            y + 3,
-            row.unitsLabel,
-            size: 5,
-            color: _muted,
-            width: 74,
-          ),
-        )
-        ..add(
-          _Label(
-            x + 88,
-            y,
-            '${row.count}',
-            size: 6.5,
-            width: 10,
-            align: pw.TextAlign.right,
-          ),
-        )
-        ..add(
-          _Label(
-            x + 104,
-            y,
-            '${row.watts.round()}',
-            size: 6.5,
-            width: 14,
-            align: pw.TextAlign.right,
-          ),
-        )
-        ..add(
-          _Label(
-            x + 120,
-            y,
-            '${(row.watts * row.count).round()}',
-            size: 6.5,
-            width: 16,
-            align: pw.TextAlign.right,
-          ),
-        );
-      y += 7.5;
-    }
-    if (legend.rows.length > 10) {
-      labels.add(
+  }
+
+  void _legendRow(double x, double y, LightLegendRow row) {
+    final el = _elementOf(row);
+    if (el != null) _legendIcons.add((x, y - 1.2, el));
+    labels
+      ..add(_Label(x + 22, y, row.name, size: 6.5, bold: true, width: 66))
+      ..add(
         _Label(
-          x + 8,
-          y,
-          '… y ${legend.rows.length - 10} modelos más',
-          size: 5.5,
+          x + 22,
+          y + 3,
+          d.showNumbers ? row.unitsLabel : (row.symbol?.label ?? ''),
+          size: 5,
           color: _muted,
+          width: 66,
+        ),
+      )
+      ..add(
+        _Label(
+          x + 92,
+          y,
+          '${row.count}',
+          size: 6.5,
+          width: 10,
+          align: pw.TextAlign.right,
+        ),
+      )
+      ..add(
+        _Label(
+          x + 108,
+          y,
+          '${row.watts.round()}',
+          size: 6.5,
+          width: 14,
+          align: pw.TextAlign.right,
+        ),
+      )
+      ..add(
+        _Label(
+          x + 120,
+          y,
+          '${(row.watts * row.count).round()}',
+          size: 6.5,
+          width: 14,
+          align: pw.TextAlign.right,
         ),
       );
-      y += 5;
-    }
-    final watts = legend.watts;
+  }
+
+  double _legendTotal(double x, double y) {
+    final watts = d.legend.watts;
+    final count = d.legend.rows.fold<int>(0, (a, r) => a + r.count);
     labels
-      ..add(_Label(x + 8, y + 1, 'TOTAL', size: 7, bold: true))
+      ..add(
+        _Label(x + 22, y + 1, 'TOTAL · $count aparatos', size: 7, bold: true),
+      )
       ..add(
         _Label(
           x + 120,
@@ -890,23 +1582,35 @@ class _Sheet {
       )
       ..add(
         _Label(
-          x + 8,
+          x + 22,
           y + 5,
           'unos ${(watts / 230).toStringAsFixed(0)} A en monofásica · '
           '${(watts / 3 / 230).toStringAsFixed(0)} A por fase (trifásica 400 V)',
           size: 5.5,
           color: _muted,
-          width: 112,
+          width: 98,
         ),
       );
-    y += 13;
+    return y + 13;
+  }
 
-    // Estructura.
-    final rigging = RigReport.rigging(elements, mpu);
-    if (rigging.isNotEmpty) {
+  PlanElement? _elementOf(LightLegendRow row) {
+    for (final el in d.units.keys) {
+      if (d.modelOf(el) == row.name) return el;
+    }
+    return null;
+  }
+
+  /// Estructura y avisos, si caben sobre el cajetín.
+  void _structure(double top) {
+    var y = top;
+    final x = column.x;
+    final rigging = RigReport.rigging(d.elements, d.mpu);
+    if (rigging.isNotEmpty && y < 200) {
       labels.add(_Label(x, y, 'ESTRUCTURA', size: 8.5, bold: true));
       y += 5;
-      for (final lineItem in rigging.take(14)) {
+      for (final lineItem in rigging) {
+        if (y > 222) break;
         labels
           ..add(_Label(x + 8, y, lineItem.label, size: 6, width: 96))
           ..add(
@@ -923,9 +1627,7 @@ class _Sheet {
       }
       y += 3;
     }
-
-    // Avisos.
-    final warnings = RigReport.warnings(elements, mpu);
+    final warnings = RigReport.warnings(d.elements, d.mpu);
     if (warnings.isNotEmpty && y < 220) {
       labels.add(_Label(x, y, 'AVISOS', size: 8.5, bold: true, color: _danger));
       y += 5;
@@ -944,8 +1646,68 @@ class _Sheet {
         y += 5;
       }
     }
+  }
 
-    // Cajetín.
+  /// La leyenda entera, en tres columnas, en su propia hoja.
+  void _fullLegend() {
+    labels.add(
+      const _Label(14, 20, 'LEYENDA DE APARATOS', size: 12, bold: true),
+    );
+    const colW = 130.0;
+    const perColumn = 26;
+    for (final (i, row) in d.legend.rows.indexed) {
+      final col = i ~/ perColumn;
+      if (col > 2) break;
+      final x = 12 + col * colW;
+      if (i % perColumn == 0) _legendHeader(x, 30);
+      _legendRow(x, 36 + (i % perColumn) * 7.6, row);
+    }
+    _legendTotal(12, 240);
+  }
+
+  /// Los dos dibujos de un modelo: desde arriba y de lado.
+  void _drawIcons(PdfGraphics g, double x, double y, PlanElement el) {
+    final (family, size) = d.shapeOf(el);
+    final color = d.colorOf(el);
+    final top = switch (family) {
+      RigFamily.panel || RigFamily.softbox || RigFamily.cyc => RigView.face,
+      _ => RigView.side,
+    };
+    symbol(
+      g,
+      x + 6,
+      y,
+      top == RigView.face ? math.pi / 2 : 0,
+      RigSymbols.outline(family, size, view: top),
+      0,
+      color,
+      minMm: 5.4,
+      maxMm: 5.4,
+    );
+    symbol(
+      g,
+      x + 15,
+      y,
+      math.pi / 2,
+      RigSymbols.outline(family, size, elevation: true),
+      0,
+      color,
+      minMm: 5.4,
+      maxMm: 5.4,
+    );
+  }
+
+  /// El marco del cajetín.
+  void _titleFrame(PdfGraphics g) {
+    const top = 236.0;
+    rect(g, 284, top, 126, 51, width: 0.4);
+    for (final y in [top + 13, top + 22, top + 31, top + 40]) {
+      line(g, 284, y, 410, y, width: 0.15);
+    }
+    line(g, 347, top + 13, 347, 287, width: 0.15);
+  }
+
+  void _titleBlock() {
     const top = 236.0;
     void cell(
       double cx,
@@ -960,75 +1722,55 @@ class _Sheet {
           _Label(
             cx,
             cy + (big ? 6 : 4.6),
-            value,
+            value.isEmpty ? '—' : value,
             size: big ? 11 : 7,
             bold: big,
-            width: big ? 120 : 60,
+            width: big ? 100 : 60,
           ),
         );
     }
 
+    final info = d.info;
+    final scales = <String>[
+      if (planBox != null) 'P ${scaleLabel(planScale)}',
+      if (frontBox != null) 'A ${scaleLabel(frontScale)}',
+      if (sideBox != null) 'L ${scaleLabel(sideScale)}',
+    ].join(' · ');
     cell(287, top + 3, 'PROYECTO', info.project, big: true);
-    cell(287, top + 16, 'LOCALIZACIÓN', info.location);
-    cell(350, top + 16, 'DEPARTAMENTO', info.department);
-    cell(287, top + 25, 'GAFFER', info.gaffer);
+    cell(
+      287,
+      top + 16,
+      'SET · LOCALIZACIÓN',
+      [info.set, info.location].where((s) => s.isNotEmpty).join(' · '),
+    );
+    cell(350, top + 16, 'ESQUEMA DE LUZ', info.scheme);
+    cell(287, top + 25, 'ESCENAS', info.scenes);
+    cell(350, top + 25, 'JORNADA', info.shootDay);
+    cell(287, top + 34, 'GAFFER', info.gaffer);
     cell(
       350,
-      top + 25,
+      top + 34,
       'FECHA',
       '${info.date.day.toString().padLeft(2, '0')}/'
           '${info.date.month.toString().padLeft(2, '0')}/${info.date.year}',
     );
+    cell(287, top + 42.5, 'ESCALAS', scales);
     cell(
-      287,
-      top + 34,
-      'ESCALAS',
-      '1:$planScale · 1:$frontScale · 1:$sideScale',
+      350,
+      top + 42.5,
+      'HOJA',
+      '$index / $count · ${d.options.paper.label} · REV. ${info.revision}',
     );
-    cell(350, top + 34, 'HOJA', '1 / 1 · REV. ${info.revision}');
-    labels
-      ..add(
-        _Label(
-          287,
-          top + 46,
-          '${legend.rows.fold<int>(0, (a, r) => a + r.count)} aparatos · '
-          '${formatWatts(watts)} · '
-          '${_list('trusses').length} truss · ${_list('rigging').length} puntos',
-          size: 6,
-          width: 90,
-        ),
-      )
-      ..add(
-        _Label(
-          408,
-          top + 46,
-          'IRIS',
-          size: 11,
-          bold: true,
-          width: 20,
-          align: pw.TextAlign.right,
-        ),
-      );
-  }
-
-  PdfColor _colorOf(LightLegendRow row) {
-    for (final (el, _) in units.entries.map((e) => (e.key, e.value))) {
-      final name = (el.props['name'] as String?) ?? el.lightType?.label;
-      if (name == row.name) {
-        final beam = LightBeam.of(el);
-        return _cct(beam?.cct ?? 3200, beam?.rgb);
-      }
-    }
-    return _cct(3200);
-  }
-
-  static PdfColor _cct(double kelvin, [int? rgb]) {
-    final c = LightBeam.colorOf(kelvin, rgb);
-    // Un poco más saturado que la luz real, para que se lea en papel.
-    return PdfColor(
-      (c.r * 0.85).clamp(0, 1),
-      (c.g * 0.75).clamp(0, 1),
-      (c.b * 0.6).clamp(0, 1),
+    labels.add(
+      const _Label(
+        408,
+        top + 3,
+        'IRIS',
+        size: 11,
+        bold: true,
+        width: 20,
+        align: pw.TextAlign.right,
+      ),
     );
   }
 
