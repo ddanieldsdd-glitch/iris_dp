@@ -248,6 +248,15 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - Se aplica a una nave, a un volumen o a un recinto cerrado.
 - La luz ya entiende las cubiertas a través de la altura de techo. Se amplía a cubiertas inclinadas con la altura en cada punto.
 
+*Hecho en parte (2026-11-22, rama `plan/motor-arquitectonico`, sin publicar). Cómo quedó:*
+- `arch/arch_roof.dart`: `ArchRoof` común (plana, un agua, dos aguas, cuatro aguas y bóveda) sobre cualquier contorno, con subida, dirección de la cumbrera y material. Da la altura sobre el alero en cada punto, la cumbrera (acortada en cuatro aguas) y la malla de cubierta y hastiales.
+- La nave gana un agua, cuatro aguas y bóveda (elegidas con fichas en su hoja); la de lona sigue como estaba.
+- Un volumen puede llevar cubierta: fichas de forma, subida, «Girar la cumbrera» (o la caída) y material propio. El alto pasa a ser «Alto al alero».
+- Planta: cumbrera a trazos y limatesas en cuatro aguas. Alzado y DXF: la silueta real (el hastial en pico visto de lado). Hoja de luz: la misma silueta.
+- Luz: cada lado tapa hasta la altura de la cubierta en su punto medio (los hastiales más que los aleros).
+- 3D y Unreal: el volumen se extruye hasta el alero y encima van la cubierta y los hastiales, cada uno con su material; viaja al GLB con la pieza.
+- Falta: cubierta sobre un recinto cerrado de paredes; el vuelo del alero (se guarda pero no se dibuja); la flecha de caída de la cubierta a un agua en la planta; y la lona en volúmenes.
+
 **AM.4 · Muros de verdad**
 - Grosor visible en 2D y esquinas unidas, en 2D y en 3D.
 - Perfil vertical: hastial (muro con pico) y altura distinta en cada extremo.

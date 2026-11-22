@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../arch/arch_roof.dart';
 import '../arch/arch_solid.dart';
 import '../camera_plan_element_model.dart';
 import '../plan_segment.dart';
@@ -386,11 +387,33 @@ class RigPainter {
     } else {
       canvas.drawPath(path, stroke);
     }
+    // La cumbrera de su cubierta (AM.3), a trazos largos.
+    final roof = ArchSolid.roof(el);
+    if (roof != null) {
+      final ridge = roof.ridge(ArchSolid.outlineM(el));
+      final linePaint = Paint()
+        ..color = ink.withValues(alpha: 0.6)
+        ..strokeWidth = 1;
+      if (ridge != null) {
+        final a = ArchSolid.toCanvas(el, ridge.$1, mpu);
+        final b = ArchSolid.toCanvas(el, ridge.$2, mpu);
+        _dashed(canvas, a, b, linePaint, dash: 12, gap: 4);
+        // A cuatro aguas, las limatesas: de cada esquina a la cumbrera.
+        if (roof.kind == ArchRoofKind.hip) {
+          for (final p in pts) {
+            final near = (p - a).distance < (p - b).distance ? a : b;
+            canvas.drawLine(p, near, linePaint);
+          }
+        }
+      }
+    }
     // La altura en el centro: «+0,40» la cota de un forjado, «1,10 m» el
-    // alto de un volumen.
+    // alto de un volumen y, con cubierta, «2,60 · 4,10» alero y cumbrera.
     String m(double v) => v.toStringAsFixed(2).replaceAll('.', ',');
     final text = ArchSolid.isSlab(el)
         ? '+${m(ArchSolid.topM(el))}'
+        : roof != null
+        ? '${m(ArchSolid.heightM(el))} · ${m(ArchSolid.topM(el))} m'
         : '${m(ArchSolid.topM(el))} m';
     var c = Offset.zero;
     for (final p in pts) {

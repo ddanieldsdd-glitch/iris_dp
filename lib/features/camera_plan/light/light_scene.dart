@@ -874,11 +874,16 @@ class LightScene {
     final base = ArchSolid.bottomM(el), top = ArchSolid.topM(el);
     if (top - base < 0.01) return;
     for (var i = 0; i < pts.length; i++) {
+      final a = pts[i], b = pts[(i + 1) % pts.length];
       blockers.add(
         LightBlocker(
-          pts[i],
-          pts[(i + 1) % pts.length],
-          heightM: top,
+          a,
+          b,
+          // Con cubierta (AM.3), cada lado hasta donde llega en su centro:
+          // los hastiales tapan más que los aleros.
+          heightM: ArchSolid.isVolume(el)
+              ? ArchSolid.topAt(el, (a + b) / 2, metersPerUnit)
+              : top,
           baseM: base,
           element: el,
         ),

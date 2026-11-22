@@ -304,6 +304,7 @@ class PlanCadExport {
       layerTruss,
       layerRigging,
       layerDrapes,
+      layerSolids,
     });
     dxf.line(
       layerWalls,
@@ -370,6 +371,12 @@ class PlanCadExport {
             Offset(item.centre, 0),
           );
           dxf.text(layerText, Offset(item.to + 0.1, item.top), item.label);
+        case ElevationKind.prop when item.profile.isNotEmpty:
+          dxf.polyline(layerSolids, [
+            for (final (x, top, _) in item.profile) Offset(x, top),
+            for (final (x, _, bottom) in item.profile.reversed)
+              Offset(x, bottom),
+          ], closed: true);
         case ElevationKind.prop:
           dxf.polyline(layerProps, box(), closed: true);
         case ElevationKind.truss:

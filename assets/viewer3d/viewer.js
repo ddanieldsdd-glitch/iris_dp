@@ -954,10 +954,11 @@
 
   // Forjado o volumen (AM.2): su contorno estirado de z0 a z1, con el
   // material de la biblioteca en todas sus caras.
-  const solidFallback = new THREE.MeshStandardMaterial({ color: 0xcfcac2, roughness: 0.85 });
+  const solidFallback = new THREE.MeshStandardMaterial({ color: 0xcfcac2, roughness: 0.85, side: THREE.DoubleSide });
   function addSolid(s) {
     if (!s.outline || s.outline.length < 3) return;
-    const h = (s.z1 || 0) - (s.z0 || 0);
+    // Con cubierta (AM.3), las paredes llegan al alero y encima va ella.
+    const h = (s.eave != null ? s.eave : (s.z1 || 0)) - (s.z0 || 0);
     if (h < 0.005) return;
     const shape = new THREE.Shape(s.outline.map((p) => new THREE.Vector2(p[0], p[1])));
     let geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false });
@@ -978,6 +979,24 @@
       edges.userData.edges = true;
       L.walls.add(edges);
     }
+    // La cubierta y los hastiales, en triángulos que ya manda IRIS.
+    const tris = (flat, material, tag) => {
+      if (!flat || flat.length < 9) return;
+      const pos = [];
+      for (let i = 0; i + 2 < flat.length; i += 3) {
+        const v = V(flat[i], flat[i + 1], flat[i + 2]);
+        pos.push(v.x, v.y, v.z);
+      }
+      const piece = meshFrom(pos, material, null);
+      if (material.map) boxUV(piece.geometry, material);
+      piece.castShadow = piece.receiveShadow = true;
+      piece.userData.id = s.id;
+      picks.push(piece);
+      tagPiece(piece, { uid: s.id + ':' + tag, cls: s.cls, mat: tag === 'cubierta' ? s.roofMat : s.mat, name: s.name });
+      L.walls.add(piece);
+    };
+    tris(s.gableTris, mat, 'hastiales');
+    tris(s.roofTris, (s.roofMat && archMaterial(s.roofMat, false)) || mat, 'cubierta');
   }
 
   function addLeaves(o, z0, top) {

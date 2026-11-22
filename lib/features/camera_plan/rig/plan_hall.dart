@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import '../arch/arch_roof.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light_overrides.dart';
@@ -16,6 +17,11 @@ enum HallRoof {
 
   /// Lona: no carga, y cae entre cerchas.
   tensile,
+
+  /// Las de la cubierta común (AM.3, `ArchRoof`).
+  shed,
+  hip,
+  vault,
 }
 
 extension HallRoofLabel on HallRoof {
@@ -23,6 +29,19 @@ extension HallRoofLabel on HallRoof {
     HallRoof.flat => 'Plana',
     HallRoof.gable => 'Dos aguas',
     HallRoof.tensile => 'Lona',
+    HallRoof.shed => 'Un agua',
+    HallRoof.hip => 'Cuatro aguas',
+    HallRoof.vault => 'Bóveda',
+  };
+
+  /// La forma común de la cubierta, si la tiene (la lona va aparte).
+  ArchRoofKind? get archKind => switch (this) {
+    HallRoof.flat => ArchRoofKind.flat,
+    HallRoof.gable => ArchRoofKind.gable,
+    HallRoof.shed => ArchRoofKind.shed,
+    HallRoof.hip => ArchRoofKind.hip,
+    HallRoof.vault => ArchRoofKind.vault,
+    HallRoof.tensile => null,
   };
 }
 
@@ -426,6 +445,17 @@ class HallRecipe {
   /// Altura de la cubierta en un punto, sobre el suelo de la nave.
   double roofAt(Offset p) {
     if (roof == HallRoof.flat) return eaveM;
+    // Un agua, cuatro aguas y bóveda: la cubierta común (AM.3).
+    if (roof == HallRoof.shed ||
+        roof == HallRoof.hip ||
+        roof == HallRoof.vault) {
+      return eaveM +
+          ArchRoof(
+            kind: roof.archKind!,
+            riseM: riseM,
+            ridgeDeg: ridgeDeg,
+          ).riseAt(_geo.poly, p);
+    }
     final g = _geo, dir = _ridgeDir, n = Offset(-dir.dy, dir.dx);
     final v = p - g.centroid;
     final across = ((v.dx * n.dx + v.dy * n.dy).abs() / g.halfSpan).clamp(
@@ -1031,6 +1061,9 @@ class _Frame {
 
 class _RoofGeometry {
   final Offset centroid;
+
+  /// El perímetro troceado, para la cubierta común.
+  final List<Offset> poly;
   final double halfSpan;
 
   /// Dónde cae la primera cercha, a lo largo de la cumbrera.
@@ -1056,8 +1089,13 @@ class _RoofGeometry {
       half = math.max(half, (v.dx * n.dx + v.dy * n.dy).abs());
       lo = math.min(lo, v.dx * dir.dx + v.dy * dir.dy);
     }
-    return _RoofGeometry._(c, half, lo);
+    return _RoofGeometry._(c, half, lo, poly);
   }
 
-  const _RoofGeometry._(this.centroid, this.halfSpan, this.frameOrigin);
+  const _RoofGeometry._(
+    this.centroid,
+    this.halfSpan,
+    this.frameOrigin,
+    this.poly,
+  );
 }

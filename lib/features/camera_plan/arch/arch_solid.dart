@@ -5,6 +5,7 @@ import '../camera_plan_element_model.dart';
 import '../light_overrides.dart';
 import '../rig/plan_rig.dart';
 import 'arch_material.dart';
+import 'arch_roof.dart';
 
 /// Forjados y volúmenes (plan AM.2): un contorno en planta estirado en
 /// altura, como el empujar/tirar de SketchUp.
@@ -30,6 +31,9 @@ abstract final class ArchSolid {
   static const double defaultVolumeM = 1.1;
   static const double defaultSlabTopM = 0.4;
   static const double defaultSlabThickM = 0.2;
+
+  /// Volumen: su cubierta (AM.3), `ArchRoof` en JSON. Sin ella, plano.
+  static const roofKey = 'roof';
 
   static const defaultSlabMat = 'wood-floor-oak';
   static const defaultVolumeMat = 'paint-white';
@@ -149,9 +153,51 @@ abstract final class ArchSolid {
   static double slabThickM(PlanElement el) =>
       (el.props[thickKey] as num?)?.toDouble() ?? defaultSlabThickM;
 
-  /// Cota de arriba sobre el suelo de su nivel, en metros.
-  static double topM(PlanElement el) =>
-      isSlab(el) ? slabTopM(el) : heightM(el);
+  /// La cubierta de un volumen, si no es plana.
+  static ArchRoof? roof(PlanElement el) {
+    if (!isVolume(el)) return null;
+    final r = ArchRoof.fromJson(el.props[roofKey]);
+    return r == null || r.kind == ArchRoofKind.flat || r.riseM <= 0 ? null : r;
+  }
+
+  static void setRoof(PlanElement el, ArchRoof? roof) {
+    if (roof == null || roof.kind == ArchRoofKind.flat) {
+      el.props.remove(roofKey);
+    } else {
+      el.props[roofKey] = roof.toJson();
+    }
+  }
+
+  /// Cota de arriba sobre el suelo de su nivel, en metros: con cubierta,
+  /// la de la cumbrera.
+  static double topM(PlanElement el) => isSlab(el)
+      ? slabTopM(el)
+      : heightM(el) + (roof(el)?.peakM ?? 0);
+
+  /// Un punto del lienzo en metros del contorno (sin girar).
+  static Offset toLocalM(PlanElement el, Offset p, double metersPerUnit) {
+    final rad = -el.rotation * math.pi / 180;
+    final c = math.cos(rad), s = math.sin(rad);
+    final v = (p - el.position) * metersPerUnit;
+    return Offset(v.dx * c - v.dy * s, v.dx * s + v.dy * c);
+  }
+
+  /// Un punto del contorno (metros, sin girar) en el lienzo.
+  static Offset toCanvas(PlanElement el, Offset m, double metersPerUnit) {
+    final rad = el.rotation * math.pi / 180;
+    final c = math.cos(rad), s = math.sin(rad);
+    return el.position +
+        Offset(m.dx * c - m.dy * s, m.dx * s + m.dy * c) / metersPerUnit;
+  }
+
+  /// Altura de lo de arriba en un punto del lienzo: el alero más lo que
+  /// sube la cubierta ahí.
+  static double topAt(PlanElement el, Offset p, double metersPerUnit) {
+    final r = roof(el);
+    if (r == null) return topM(el);
+    return heightM(el) +
+        r.riseAt(outlineM(el), toLocalM(el, p, metersPerUnit));
+  }
 
   /// Cota de abajo: un volumen arranca del suelo; un forjado, de su
   /// cara de arriba menos su grosor (nunca por debajo del suelo).

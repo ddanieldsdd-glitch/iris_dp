@@ -270,23 +270,28 @@ class _HallBuilderSheetState extends State<HallBuilderSheet> {
           text: m(r.eaveM),
           onChanged: (v) => _set(r.copyWith(eaveM: v)),
         ),
-        SegmentedButton<HallRoof>(
-          showSelectedIcon: false,
-          style: const ButtonStyle(visualDensity: VisualDensity.compact),
-          segments: [
+        // Seis cubiertas (AM.3): en fichas, que caben en un iPhone.
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
             for (final roof in HallRoof.values)
-              ButtonSegment(value: roof, label: Text(roof.label)),
+              ChoiceChip(
+                key: ValueKey('hall-roof-${roof.name}'),
+                label: Text(roof.label),
+                selected: r.roof == roof,
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => _set(
+                  r.copyWith(
+                    roof: roof,
+                    pillarShape: roof == HallRoof.tensile
+                        ? PlanPillar.round
+                        : PlanPillar.square,
+                    pillarSizeM: roof == HallRoof.tensile ? 0.12 : 0.2,
+                  ),
+                ),
+              ),
           ],
-          selected: {r.roof},
-          onSelectionChanged: (v) => _set(
-            r.copyWith(
-              roof: v.first,
-              pillarShape: v.first == HallRoof.tensile
-                  ? PlanPillar.round
-                  : PlanPillar.square,
-              pillarSizeM: v.first == HallRoof.tensile ? 0.12 : 0.2,
-            ),
-          ),
         ),
         if (r.roof != HallRoof.flat) ...[
           _SliderRow(

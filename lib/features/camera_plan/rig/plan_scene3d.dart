@@ -253,6 +253,7 @@ class PlanScene3d {
             'z0': _r(level + ArchSolid.bottomM(el)),
             'z1': _r(level + ArchSolid.topM(el)),
             'mat': ArchSolid.material(el).id,
+            ...?_solidRoof(el, mpu, level, xy),
           });
         case RigType.hall || null:
           break;
@@ -372,6 +373,40 @@ class PlanScene3d {
       ];
     out['materials'] = materialsOf(out);
     return out;
+  }
+
+  /// La cubierta de un volumen (AM.3): el alero, su material y la malla
+  /// ya en metros del mundo (cubierta y hastiales), en triángulos.
+  static Map<String, dynamic>? _solidRoof(
+    PlanElement el,
+    double mpu,
+    double level,
+    List<double> Function(Offset) xy,
+  ) {
+    final roof = ArchSolid.roof(el);
+    if (roof == null) return null;
+    final eave = level + ArchSolid.heightM(el);
+    final mesh = roof.mesh(ArchSolid.outlineM(el));
+    List<double> world(List<double> local) {
+      final out = <double>[];
+      for (var i = 0; i + 2 < local.length; i += 3) {
+        out
+          ..addAll(
+            xy(ArchSolid.toCanvas(el, Offset(local[i], local[i + 1]), mpu)),
+          )
+          ..add(_r(eave + local[i + 2]));
+      }
+      return out;
+    }
+
+    return {
+      'eave': _r(eave),
+      'roof': roof.kind.name,
+      'roofMat':
+          (ArchMaterials.byId(roof.mat) ?? ArchSolid.material(el)).id,
+      'roofTris': world(mesh.roof),
+      'gableTris': world(mesh.gables),
+    };
   }
 
   /// Los materiales de la biblioteca (AM.1) que usa la escena, por `id`:

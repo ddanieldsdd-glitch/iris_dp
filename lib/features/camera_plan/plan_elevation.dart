@@ -156,6 +156,51 @@ class PlanElevation {
     ElevationSide.side => -dir.dy,
   };
 
+  /// Lo más alto de un volumen con cubierta a lo ancho de la vista: la
+  /// malla de su cubierta proyectada y, en cada franja, lo más alto.
+  static List<(double, double, double)> _roofSilhouette(
+    PlanElement el,
+    double mpu,
+    ({double across, double depth}) Function(Offset) at,
+    double from,
+    double to,
+    double level,
+    double bottom,
+  ) {
+    final roof = ArchSolid.roof(el);
+    if (roof == null || to - from < 0.01) return const [];
+    const bins = 32;
+    final eave = level + ArchSolid.heightM(el);
+    final top = List<double?>.filled(bins + 1, null);
+    final mesh = roof.mesh(ArchSolid.outlineM(el), stepM: 0.2).roof;
+    for (var i = 0; i + 2 < mesh.length; i += 3) {
+      final p = at(
+        ArchSolid.toCanvas(el, Offset(mesh[i], mesh[i + 1]), mpu),
+      );
+      final k = ((p.across - from) / (to - from) * bins).round().clamp(0, bins);
+      top[k] = math.max(top[k] ?? eave, eave + mesh[i + 2]);
+    }
+    // Las casillas sin ningún punto de la malla, entre sus vecinas.
+    for (var k = 0; k <= bins; k++) {
+      if (top[k] != null) continue;
+      var a = k - 1, b = k + 1;
+      while (a >= 0 && top[a] == null) {
+        a--;
+      }
+      while (b <= bins && top[b] == null) {
+        b++;
+      }
+      final ya = a >= 0 ? top[a] : null, yb = b <= bins ? top[b] : null;
+      top[k] = ya != null && yb != null
+          ? ya + (yb - ya) * (k - a) / (b - a)
+          : ya ?? yb ?? eave;
+    }
+    return [
+      for (var k = 0; k <= bins; k++)
+        (from + (to - from) * k / bins, top[k]!, bottom),
+    ];
+  }
+
   factory PlanElevation.of(
     List<PlanElement> elements, {
     required double metersPerUnit,
@@ -262,15 +307,20 @@ class PlanElevation {
           ];
           if (pts.isEmpty) continue;
           final level = PlanLevel.of(el);
+          final from = pts.map((p) => p.across).reduce(math.min);
+          final to = pts.map((p) => p.across).reduce(math.max);
+          final bottom = level + ArchSolid.bottomM(el);
           items.add(
             ElevationItem(
               kind: ElevationKind.prop,
               element: el,
-              from: pts.map((p) => p.across).reduce(math.min),
-              to: pts.map((p) => p.across).reduce(math.max),
-              bottom: level + ArchSolid.bottomM(el),
+              from: from,
+              to: to,
+              bottom: bottom,
               top: level + ArchSolid.topM(el),
               depth: pts.map((p) => p.depth).reduce(math.min),
+              // Con cubierta (AM.3), su silueta vista desde este lado.
+              profile: _roofSilhouette(el, mpu, at, from, to, level, bottom),
             ),
           );
           continue;
@@ -598,6 +648,24 @@ class PlanElevationPainter extends CustomPainter {
             rect.topRight + const Offset(4, -12),
             color,
             10,
+          );
+        case ElevationKind.prop when item.profile.isNotEmpty:
+          // Un volumen con cubierta: su silueta.
+          final body = Path();
+          for (final (i, (x, top, _)) in item.profile.indexed) {
+            final p = to(x, top);
+            i == 0 ? body.moveTo(p.dx, p.dy) : body.lineTo(p.dx, p.dy);
+          }
+          for (final (x, _, bottom) in item.profile.reversed) {
+            final p = to(x, bottom);
+            body.lineTo(p.dx, p.dy);
+          }
+          canvas.drawPath(
+            body..close(),
+            Paint()
+              ..color = color
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 0.8,
           );
         case ElevationKind.prop:
           canvas.drawRect(

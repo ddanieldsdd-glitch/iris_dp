@@ -1490,6 +1490,20 @@ class _Page {
           }
         case ElevationKind.camera:
           if (d.options.people) rect(g, x, y, w, h, fill: _ink, width: 0.2);
+        case ElevationKind.prop when item.profile.isNotEmpty:
+          // Un volumen con cubierta: su silueta.
+          poly(
+            g,
+            [
+              for (final (across, top, _) in item.profile) at(across, top),
+              for (final (across, _, bottom) in item.profile.reversed)
+                at(across, bottom),
+            ],
+            stroke: _decorLine,
+            fill: _decor,
+            width: 0.12,
+            closed: true,
+          );
         case ElevationKind.prop:
           rect(g, x, y, w, h, stroke: _decorLine, fill: _decor, width: 0.12);
       }

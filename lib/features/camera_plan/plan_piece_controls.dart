@@ -5,6 +5,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import 'arch/arch_material.dart';
 import 'arch/arch_material_picker.dart';
+import 'arch/arch_roof_controls.dart';
 import 'arch/arch_solid.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
@@ -464,7 +465,7 @@ class PlanPieceControls extends StatelessWidget {
         ),
         if (ArchSolid.isVolume(el))
           slider(
-            'Alto',
+            ArchSolid.roof(el) == null ? 'Alto' : 'Alto al alero',
             m(ArchSolid.heightM(el)),
             current: ArchSolid.heightM(el),
             min: 0.05,
@@ -490,6 +491,13 @@ class PlanPieceControls extends StatelessWidget {
             max: 1.5,
             onChanged: (v) =>
                 el.props[ArchSolid.thickKey] = (v * 100).round() / 100,
+          ),
+        ],
+        if (ArchSolid.isVolume(el)) ...[
+          ArchRoofControls(
+            element: el,
+            onPreview: onPreview,
+            onUpdate: onUpdate,
           ),
         ],
         ArchMaterialField(
