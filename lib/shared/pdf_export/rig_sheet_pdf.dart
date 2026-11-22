@@ -10,6 +10,7 @@ import '../../features/camera_plan/camera_plan_element_model.dart';
 import '../../features/camera_plan/light/modifiers.dart';
 import '../../features/camera_plan/light/plan_grip.dart';
 import '../../features/camera_plan/light/plan_light.dart';
+import '../../features/camera_plan/light/street_lamp.dart';
 import '../../features/camera_plan/light/wall_mount.dart';
 import '../../features/camera_plan/plan_elevation.dart';
 import '../../features/camera_plan/plan_gear_list.dart';
@@ -93,12 +94,43 @@ class RigSheetOptions {
   /// altura, circuito y vatios de cada uno.
   final bool schedule;
 
+  /// Los conos de luz: hacia dónde va el haz en la planta y en los alzados.
+  final bool beams;
+
+  /// La mancha de luz en el suelo de lo que cuelga mirando abajo.
+  final bool pools;
+
+  /// Personas y cámaras. En una hoja de luz suelen sobrar: lo que importa
+  /// es la arquitectura y los aparatos.
+  final bool people;
+
   const RigSheetOptions({
     this.layout = RigSheetLayout.split,
     this.paper = RigSheetPaper.a3,
     this.numbers = RigSheetNumbers.auto,
     this.schedule = true,
+    this.beams = true,
+    this.pools = true,
+    this.people = false,
   });
+
+  RigSheetOptions copyWith({
+    RigSheetLayout? layout,
+    RigSheetPaper? paper,
+    RigSheetNumbers? numbers,
+    bool? schedule,
+    bool? beams,
+    bool? pools,
+    bool? people,
+  }) => RigSheetOptions(
+    layout: layout ?? this.layout,
+    paper: paper ?? this.paper,
+    numbers: numbers ?? this.numbers,
+    schedule: schedule ?? this.schedule,
+    beams: beams ?? this.beams,
+    pools: pools ?? this.pools,
+    people: people ?? this.people,
+  );
 }
 
 /// Hoja de luz al estilo de las de *Dune II* o de WYSIWYG: planta, alzado
@@ -339,8 +371,7 @@ class _Data {
     for (final MapEntry(key: el, value: n) in units.entries) (n, el),
   ]..sort((a, b) => a.$1.compareTo(b.$1));
 
-  String modelOf(PlanElement el) =>
-      (el.props['name'] as String?) ?? el.lightType?.label ?? 'Luz';
+  String modelOf(PlanElement el) => LightLegend.modelName(el);
 
   (PdfColor, PdfColor) colorOf(PlanElement el) =>
       modelColors[modelOf(el)] ?? RigSymbols.colorAt(0);
@@ -679,7 +710,7 @@ class _Page {
   /// Un símbolo de aparato en (`cx`, `cy`), con el haz hacia `angle`
   /// (radianes en la hoja, `y` hacia abajo). Nunca más pequeño que
   /// `minMm`, para que se lea a cualquier escala.
-  void symbol(
+  double symbol(
     PdfGraphics g,
     double cx,
     double cy,
@@ -696,7 +727,7 @@ class _Page {
         extent = math.max(extent, math.max(x.abs(), y.abs()) * 2);
       }
     }
-    if (extent == 0) return;
+    if (extent == 0) return 0;
     var f = math.max(mmPerM, minMm / extent);
     if (maxMm != null) f = math.min(f, maxMm / extent);
     final ca = math.cos(angle), sa = math.sin(angle);
@@ -718,6 +749,7 @@ class _Page {
         poly(g, pts, stroke: color.$2, width: 0.18);
       }
     }
+    return extent * f;
   }
 
   /// Cota en rojo de (`x1`, `y1`) a (`x2`, `y2`), con sus marcas.
@@ -984,11 +1016,14 @@ class _Page {
         line(g, c.$1 + 1.4, c.$2 - 1.4, c.$1 - 1.4, c.$2 + 1.4, color: stroke);
       }
     }
-    // Personas.
-    for (final pe in d.list('people')) {
-      final c = pm(pe['at'] as List);
-      circle(g, c.$1, c.$2, 1.2, width: 0.25);
+    // Personas, si se piden.
+    if (d.options.people) {
+      for (final pe in d.list('people')) {
+        final c = pm(pe['at'] as List);
+        circle(g, c.$1, c.$2, 1.2, width: 0.25);
+      }
     }
+    _planStreetLamps(g, s);
     _planFixtures(g, s);
     _planDimensions(g);
     // Norte y barra de escala.
@@ -1026,6 +1061,7 @@ class _Page {
       final beamDeg = (f['beamDeg'] as num).toDouble();
       final c = pm(pos);
       if (hd < 0.3 && dz < 0) {
+        if (!d.options.pools) continue;
         final half = math.min(beamDeg, 120) / 2 * math.pi / 180;
         final r = math.min(-dz * math.tan(half), 2.5) * s;
         if (r > 1) {
@@ -1047,7 +1083,7 @@ class _Page {
         }
         continue;
       }
-      if (hd < 0.3 || beamDeg >= 179) continue;
+      if (hd < 0.3 || beamDeg >= 179 || !d.options.beams) continue;
       final angle = math.atan2(-dy, dx);
       final half = math.min(beamDeg, 100) / 2 * math.pi / 180;
       final reach = math.min(hd, 10.0) * s;
@@ -1109,7 +1145,7 @@ class _Page {
         );
       }
       final c = pm(pos);
-      symbol(
+      final extent = symbol(
         g,
         c.$1,
         c.$2,
@@ -1121,7 +1157,76 @@ class _Page {
         ),
         s,
         d.colorOf(el),
+        minMm: _minSymbolMm(s),
       );
+      // Hacia dónde apunta, con una flecha que se lee sin el cono. Lo que
+      // mira al suelo ya se ve de frente; una práctica alumbra alrededor.
+      if (!flat && family != RigFamily.practical && hd > 0.01) {
+        aimArrow(g, c.$1, c.$2, angle, extent / 2, d.colorOf(el).$2);
+      }
+    }
+  }
+
+  /// Lo mínimo que mide un aparato en la hoja: en un set grande (a 1:250 o
+  /// más) los focos se dibujan más grandes que su escala para que se vean.
+  static double _minSymbolMm(double mmPerM) => mmPerM < 4.5 ? 3.6 : 2.6;
+
+  /// Flecha de dirección: sale del borde del aparato hacia donde apunta.
+  void aimArrow(
+    PdfGraphics g,
+    double cx,
+    double cy,
+    double angle,
+    double from,
+    PdfColor color,
+  ) {
+    const length = 3.6, head = 1.1;
+    final ca = math.cos(angle), sa = math.sin(angle);
+    final a = (cx + ca * (from + 0.4), cy + sa * (from + 0.4));
+    final b = (cx + ca * (from + length), cy + sa * (from + length));
+    line(g, a.$1, a.$2, b.$1, b.$2, color: color, width: 0.3);
+    poly(
+      g,
+      [
+        (b.$1 + ca * head, b.$2 + sa * head),
+        (b.$1 - sa * head * 0.55, b.$2 + ca * head * 0.55),
+        (b.$1 + sa * head * 0.55, b.$2 - ca * head * 0.55),
+      ],
+      stroke: color,
+      fill: color,
+      width: 0.1,
+      closed: true,
+    );
+  }
+
+  /// Las farolas en planta: el brazo desde la fachada (o el báculo) hasta
+  /// la luminaria, para que se vea de dónde salen y hacia dónde dan.
+  void _planStreetLamps(PdfGraphics g, double s) {
+    for (final f in d.list('fixtures')) {
+      final el = d.byId[f['id']];
+      if (el == null || !StreetLamp.isOn(el)) continue;
+      final c = pm(f['pos'] as List);
+      final r = el.rotation * math.pi / 180;
+      // Hacia fuera de la fachada, en la hoja (y hacia abajo).
+      final ux = math.sin(r), uy = -math.cos(r);
+      final arm = math.max(0.8 * s, 2.4);
+      final base = (c.$1 - ux * arm, c.$2 - uy * arm);
+      final color = d.colorOf(el).$2;
+      line(g, base.$1, base.$2, c.$1, c.$2, color: color, width: 0.35);
+      if (StreetLamp.isPole(el)) {
+        circle(g, base.$1, base.$2, 0.7, stroke: color, fill: color);
+      } else {
+        // La placa en la pared.
+        line(
+          g,
+          base.$1 - uy * 0.9,
+          base.$2 + ux * 0.9,
+          base.$1 + uy * 0.9,
+          base.$2 - ux * 0.9,
+          color: color,
+          width: 0.5,
+        );
+      }
     }
   }
 
@@ -1320,6 +1425,8 @@ class _Page {
         case ElevationKind.light:
           // Encima de todo, después.
           break;
+        case ElevationKind.actor when !d.options.people:
+          break;
         case ElevationKind.actor:
           final head = at(item.centre, item.top - 0.12);
           circle(g, head.$1, head.$2, 0.12 * s, width: 0.2);
@@ -1331,13 +1438,14 @@ class _Page {
             line(g, hip.$1, hip.$2, foot.$1, foot.$2, width: 0.2);
           }
         case ElevationKind.camera:
-          rect(g, x, y, w, h, fill: _ink, width: 0.2);
+          if (d.options.people) rect(g, x, y, w, h, fill: _ink, width: 0.2);
         case ElevationKind.prop:
           rect(g, x, y, w, h, stroke: _decorLine, fill: _decor, width: 0.12);
       }
     }
     // Los haces, sobre paredes y telas (son claros) y bajo los aparatos.
     for (final item in e.items) {
+      if (!d.options.beams) break;
       if (item.kind != ElevationKind.light) continue;
       if (PlanGrip.isGrip(item.element)) continue;
       final aim = d.aimIn(item, e.side);
@@ -1394,6 +1502,10 @@ class _Page {
     }
     final z = d.heightOf(item);
     final c = at(item.centre, z);
+    if (StreetLamp.isOn(el)) {
+      _elevationStreetLamp(g, item, at, s, side, z);
+      return;
+    }
     // En pie: el mástil y las patas hasta el suelo.
     if (d.onStand(el) && z > 0.3) {
       final foot = at(item.centre, 0);
@@ -1407,7 +1519,7 @@ class _Page {
     }
     final (family, size) = d.shapeOf(el, fixture: d.fixtureOf[el]);
     final aim = d.aimIn(item, side);
-    symbol(
+    final extent = symbol(
       g,
       c.$1,
       c.$2,
@@ -1420,6 +1532,55 @@ class _Page {
       ),
       s,
       d.colorOf(el),
+      minMm: _minSymbolMm(s),
+    );
+    if (aim != null && family != RigFamily.practical) {
+      aimArrow(g, c.$1, c.$2, -aim, extent / 2, d.colorOf(el).$2);
+    }
+  }
+
+  /// Una farola de lado: el báculo desde el suelo o el brazo desde la
+  /// fachada, y la luminaria mirando al suelo.
+  void _elevationStreetLamp(
+    PdfGraphics g,
+    ElevationItem item,
+    (double, double) Function(double, double) at,
+    double s,
+    ElevationSide side,
+    double z,
+  ) {
+    final el = item.element;
+    final color = d.colorOf(el);
+    final r = el.rotation * math.pi / 180;
+    // Hacia fuera de la fachada, en lo que se ve de este lado.
+    final out = side == ElevationSide.front ? math.sin(r) : math.cos(r);
+    const armM = 0.8;
+    final head = at(item.centre, z);
+    final elbow = at(item.centre - out * armM, z + 0.25);
+    if (StreetLamp.isPole(el)) {
+      final foot = at(item.centre - out * armM, 0);
+      line(g, foot.$1, foot.$2, elbow.$1, elbow.$2, color: _ink, width: 0.45);
+    } else {
+      // La placa de la pared.
+      final plate = at(item.centre - out * armM, z + 0.45);
+      final low = at(item.centre - out * armM, z + 0.05);
+      line(g, plate.$1, plate.$2, low.$1, low.$2, color: _ink, width: 0.6);
+    }
+    line(g, elbow.$1, elbow.$2, head.$1, head.$2, color: _ink, width: 0.35);
+    // La luminaria: una campana que abre hacia abajo.
+    final w = math.max(0.35 * s, 1.6), h = math.max(0.18 * s, 0.9);
+    poly(
+      g,
+      [
+        (head.$1 - w * 0.25, head.$2 - h * 0.5),
+        (head.$1 + w * 0.25, head.$2 - h * 0.5),
+        (head.$1 + w * 0.5, head.$2 + h * 0.5),
+        (head.$1 - w * 0.5, head.$2 + h * 0.5),
+      ],
+      stroke: color.$2,
+      fill: color.$1,
+      width: 0.18,
+      closed: true,
     );
   }
 

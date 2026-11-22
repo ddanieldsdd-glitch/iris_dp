@@ -176,6 +176,12 @@ Páginas leídas el 2026-11-22: vectorworks.net (Spotlight y Vision), cast-soft.
 
 **Cuándo:** después de LZ.4 y de P0. LZ.8.1 y LZ.8.2 van primero, porque son la base de todo lo demás y de Unreal. LZ.8.3, cuando haya una planta real de otro programa con la que probar.
 
+### LZ.9 · Arquitectura y flujo de dibujo
+
+Cómo levantan el sitio y cuelgan las luces Vectorworks, WYSIWYG y Capture, y qué se lleva a IRIS: está en `docs/PLAN_ARQUITECTURA.md` (plan AR).
+
+Hecho el 2026-11-22: la pantalla «Alzado y perfil» enseña la hoja de luz tal como sale, con conos, manchas, personas y números a elegir. Además, cada foco lleva su flecha de dirección y las farolas se dibujan como farolas.
+
 ## Orden y forma de trabajo
 
 LZ.1 → LZ.2 → LZ.3 → LZ.4 → LZ.5 → LZ.6 → LZ.7 → LZ.8 (LZ.8.1 y LZ.8.2 pueden adelantarse si hace falta llevar algo a Unreal o a otro programa).

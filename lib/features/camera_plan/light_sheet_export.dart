@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -8,6 +7,7 @@ import '../../core/utils/export_file_saver.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../shared/pdf_export/rig_sheet_pdf.dart';
 import 'camera_plan_element_model.dart';
+import 'light_sheet_prefs.dart';
 
 /// Pide cómo se quiere la hoja de luz (reparto, papel, números y cajetín),
 /// la hace y la guarda (LZ.1).
@@ -53,10 +53,6 @@ Future<void> showLightSheetExport(
   }
 }
 
-const _gafferKey = 'iris_light_sheet_gaffer';
-const _layoutKey = 'iris_light_sheet_layout';
-const _paperKey = 'iris_light_sheet_paper';
-
 class _LightSheetOptions extends StatefulWidget {
   final RigSheetInfo info;
 
@@ -67,10 +63,7 @@ class _LightSheetOptions extends StatefulWidget {
 }
 
 class _LightSheetOptionsState extends State<_LightSheetOptions> {
-  var _layout = RigSheetLayout.split;
-  var _paper = RigSheetPaper.a3;
-  var _numbers = RigSheetNumbers.auto;
-  var _schedule = true;
+  var _o = const RigSheetOptions();
   late final _set = TextEditingController(text: widget.info.set);
   late final _scheme = TextEditingController(text: widget.info.scheme);
   late final _scenes = TextEditingController(text: widget.info.scenes);
@@ -86,34 +79,18 @@ class _LightSheetOptionsState extends State<_LightSheetOptions> {
 
   /// Lo último que se eligió, para no repetirlo cada vez.
   Future<void> _restore() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (!mounted) return;
-      setState(() {
-        if (_gaffer.text.isEmpty) {
-          _gaffer.text = prefs.getString(_gafferKey) ?? '';
-        }
-        _layout =
-            RigSheetLayout.values.asNameMap()[prefs.getString(_layoutKey)] ??
-            _layout;
-        _paper =
-            RigSheetPaper.values.asNameMap()[prefs.getString(_paperKey)] ??
-            _paper;
-      });
-    } catch (_) {
-      // Sin preferencias, con lo de siempre.
-    }
+    final o = await LightSheetPrefs.load();
+    final gaffer = await LightSheetPrefs.gaffer();
+    if (!mounted) return;
+    setState(() {
+      _o = o;
+      if (_gaffer.text.isEmpty) _gaffer.text = gaffer;
+    });
   }
 
   Future<void> _remember() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_gafferKey, _gaffer.text.trim());
-      await prefs.setString(_layoutKey, _layout.name);
-      await prefs.setString(_paperKey, _paper.name);
-    } catch (_) {
-      // No pasa nada: la próxima vez saldrá lo de siempre.
-    }
+    await LightSheetPrefs.save(_o);
+    await LightSheetPrefs.saveGaffer(_gaffer.text.trim());
   }
 
   @override
@@ -128,12 +105,7 @@ class _LightSheetOptionsState extends State<_LightSheetOptions> {
     _remember();
     final i = widget.info;
     Navigator.of(context).pop((
-      RigSheetOptions(
-        layout: _layout,
-        paper: _paper,
-        numbers: _numbers,
-        schedule: _schedule,
-      ),
+      _o,
       RigSheetInfo(
         project: i.project,
         location: i.location,
@@ -192,8 +164,9 @@ class _LightSheetOptionsState extends State<_LightSheetOptions> {
                     label: Text('Todo en una hoja'),
                   ),
                 ],
-                selected: {_layout},
-                onSelectionChanged: (s) => setState(() => _layout = s.first),
+                selected: {_o.layout},
+                onSelectionChanged: (s) =>
+                    setState(() => _o = _o.copyWith(layout: s.first)),
               ),
               const SizedBox(height: AppSpacing.sm),
               Row(
@@ -203,13 +176,14 @@ class _LightSheetOptionsState extends State<_LightSheetOptions> {
                       for (final p in RigSheetPaper.values)
                         ButtonSegment(value: p, label: Text(p.label)),
                     ],
-                    selected: {_paper},
-                    onSelectionChanged: (s) => setState(() => _paper = s.first),
+                    selected: {_o.paper},
+                    onSelectionChanged: (s) =>
+                        setState(() => _o = _o.copyWith(paper: s.first)),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: DropdownButtonFormField<RigSheetNumbers>(
-                      initialValue: _numbers,
+                      initialValue: _o.numbers,
                       isDense: true,
                       decoration: const InputDecoration(
                         labelText: 'Número de cada foco',
@@ -230,7 +204,7 @@ class _LightSheetOptionsState extends State<_LightSheetOptions> {
                         ),
                       ],
                       onChanged: (v) =>
-                          setState(() => _numbers = v ?? _numbers),
+                          setState(() => _o = _o.copyWith(numbers: v)),
                     ),
                   ),
                 ],
@@ -238,13 +212,36 @@ class _LightSheetOptionsState extends State<_LightSheetOptions> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
-                value: _schedule,
-                onChanged: (v) => setState(() => _schedule = v),
+                value: _o.schedule,
+                onChanged: (v) => setState(() => _o = _o.copyWith(schedule: v)),
                 title: const Text('Lista de focos'),
                 subtitle: const Text(
                   'Una hoja más con cada foco: accesorios, montaje, altura, '
                   'circuito y vatios',
                 ),
+              ),
+              Wrap(
+                spacing: AppSpacing.sm,
+                children: [
+                  FilterChip(
+                    label: const Text('Conos de luz'),
+                    selected: _o.beams,
+                    onSelected: (v) =>
+                        setState(() => _o = _o.copyWith(beams: v)),
+                  ),
+                  FilterChip(
+                    label: const Text('Manchas en el suelo'),
+                    selected: _o.pools,
+                    onSelected: (v) =>
+                        setState(() => _o = _o.copyWith(pools: v)),
+                  ),
+                  FilterChip(
+                    label: const Text('Personas y cámaras'),
+                    selected: _o.people,
+                    onSelected: (v) =>
+                        setState(() => _o = _o.copyWith(people: v)),
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.sm),
               Text('Cajetín', style: AppTypography.label(palette)),

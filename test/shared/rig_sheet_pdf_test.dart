@@ -2,10 +2,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/light/plan_light.dart';
+import 'package:iris_dp/features/camera_plan/light/street_lamp.dart';
+import 'package:iris_dp/features/camera_plan/light_sheet_prefs.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_hall.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_rig.dart';
 import 'package:iris_dp/shared/pdf_export/rig_sheet_pdf.dart';
@@ -210,5 +213,68 @@ void main() {
     ];
     // Planta, alzados y tres hojas de lista (40 + 40 + 5).
     expect(RigSheetPdf.pageCount(elements, metersPerUnit: mpu), 5);
+  });
+
+  test('conos, manchas y personas entran solo si se piden', () async {
+    final elements = caseta();
+    var id = 5000;
+    elements.addAll([
+      for (final dx in [0.0, 120.0])
+        PlanElement(
+          id: ++id,
+          type: ElementType.actor,
+          position: Offset(dx, 100),
+          label: 'Actor $id',
+        ),
+      PlanElement(id: ++id, type: ElementType.camera, position: Offset.zero),
+      PlanElement(
+        id: ++id,
+        type: ElementType.light,
+        position: const Offset(300, 300),
+      ),
+    ]);
+    StreetLamp.apply(elements.last, style: StreetLamp.stylePole);
+    final info = RigSheetInfo(project: 'Prueba', date: DateTime(2026, 11, 22));
+    Future<int> size(RigSheetOptions o) async => (await RigSheetPdf.build(
+      elements,
+      metersPerUnit: mpu,
+      info: info,
+      options: o.copyWith(schedule: false),
+    )).length;
+
+    const all = RigSheetOptions(people: true);
+    final full = await size(all);
+    // Por defecto, sin personas ni cámaras.
+    expect(const RigSheetOptions().people, isFalse);
+    expect(await size(all.copyWith(people: false)), lessThan(full));
+    expect(await size(all.copyWith(beams: false)), lessThan(full));
+    expect(await size(all.copyWith(pools: false)), lessThan(full));
+    expect(
+      await size(const RigSheetOptions(beams: false, pools: false)),
+      lessThan(await size(const RigSheetOptions())),
+    );
+  });
+
+  test('lo elegido para la hoja se recuerda', () async {
+    SharedPreferences.setMockInitialValues({});
+    expect((await LightSheetPrefs.load()).beams, isTrue);
+    await LightSheetPrefs.save(
+      const RigSheetOptions(
+        layout: RigSheetLayout.compact,
+        paper: RigSheetPaper.a4,
+        numbers: RigSheetNumbers.none,
+        schedule: false,
+        beams: false,
+        pools: false,
+        people: true,
+      ),
+    );
+    await LightSheetPrefs.saveGaffer('Gaffer de prueba');
+    final o = await LightSheetPrefs.load();
+    expect(o.layout, RigSheetLayout.compact);
+    expect(o.paper, RigSheetPaper.a4);
+    expect(o.numbers, RigSheetNumbers.none);
+    expect([o.schedule, o.beams, o.pools, o.people], [false, false, false, true]);
+    expect(await LightSheetPrefs.gaffer(), 'Gaffer de prueba');
   });
 }

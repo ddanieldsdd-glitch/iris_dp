@@ -8,6 +8,7 @@ import '../../core/widgets/app_snackbar.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/plan_light.dart';
+import 'light/street_lamp.dart';
 import 'light_beam.dart';
 import 'light_overrides.dart';
 
@@ -146,6 +147,17 @@ class LightLegend {
 
   bool get isEmpty => rows.isEmpty;
 
+  /// El nombre del modelo en la leyenda y en las listas: el propio del
+  /// foco o el de su tipo. Una farola sin nombre propio se llama farola.
+  static String modelName(PlanElement el) {
+    final name = el.props['name'] as String?;
+    if (StreetLamp.isOn(el) &&
+        (name == null || name == el.lightType?.label)) {
+      return StreetLamp.isPole(el) ? StreetLamp.poleName : StreetLamp.armName;
+    }
+    return name ?? el.lightType?.label ?? 'Luz';
+  }
+
   factory LightLegend.of(Iterable<PlanElement> elements) {
     final units = lightUnitNumbers(elements);
     final rows = <String, LightLegendRow>{};
@@ -155,7 +167,7 @@ class LightLegend {
       if (light == null) continue;
       if (LightBeam.of(el)?.off != true) total += light.watts;
       final name =
-          (el.props['name'] as String?) ?? el.lightType?.label ?? 'Luz';
+          LightLegend.modelName(el);
       final row = rows[name];
       rows[name] = LightLegendRow(
         name: name,
@@ -246,7 +258,7 @@ class GearList {
       switch (el.type) {
         case ElementType.light:
           final name =
-              (el.props['name'] as String?) ?? el.lightType?.label ?? 'Luz';
+              LightLegend.modelName(el);
           add(LightBeam.emits(el.lightType) ? lights : grip, name);
           final light = PlanLight.of(el);
           if (light != null && LightBeam.of(el)?.off != true) {
