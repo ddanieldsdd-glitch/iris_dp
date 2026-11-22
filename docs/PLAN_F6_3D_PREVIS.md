@@ -68,7 +68,7 @@ Y, cuando haga falta la excelencia de un motor, llevarlo todo a Unreal (con ARRI
 | Cámara virtual con tableta | VCam en el iPad | — | F6.8.4 |
 | Atmósfera y aspecto | Niebla, volumétricas, LUT | Humo, hora del día | F6.9 |
 | Render y salida | Movie Render Queue | Capturas, storyboard | F6.10 |
-| DMX, MVR y GDTF | Plugin DMX | — | F6.11.4 |
+| DMX, MVR y GDTF | Plugin DMX | — | F6.11.4; MVR completo, GDTF por modelo e importar MVR en LZ.8 (`PLAN_LUZ.md`), con Vectorworks Spotlight, WYSIWYG y Capture como referencia |
 | Escaneos | Splats, Reality Capture | — | F6.12 |
 | Edificios, vías, ciudad | Modeling, PCG | Set Builder | F6.14.1–14.3 |
 | Terreno | Landscape | Terreno | F6.14.4 |

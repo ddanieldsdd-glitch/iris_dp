@@ -125,9 +125,46 @@ Daniel suele trabajar como director de foto, y ahora tiene una película grande 
 - **Consumo real** de cada aparato (hoy el catálogo solo trae `powerW`).
 - **DMX:** universo, dirección, modo y hoja de patch.
 
+### LZ.8 · Referencias: Vectorworks Spotlight, WYSIWYG y Capture
+
+Daniel quiere tener estos tres programas como referencia para la luz, el dibujo de la localización, la planta 2D y 3D y la forma de representar la luz en IRIS. También quiere que, más adelante, Unreal pueda leer todo lo que hagamos en IRIS. No se copian: **IRIS lee y escribe lo que ellos leen y escriben.** Así una planta de IRIS se abre en cualquiera de los tres, y también en Unreal.
+
+Páginas leídas el 2026-11-22: vectorworks.net (Spotlight y Vision), cast-soft.com (WYSIWYG) y capture.se. No se han comprobado los precios.
+
+| | Vectorworks Spotlight (+ Vision) | WYSIWYG (CAST) | Capture |
+|---|---|---|---|
+| **Para qué es** | CAD de diseño de luz: planta, dibujos constructivos e inventario que se actualizan solos. Vision, gratis, para previsualizar y programar | CAD, planta y simulación 3D en tiempo real conectada a la consola. Versiones Core, Design y Perform | Del boceto a la planta 3D y al render. Rápido, para Mac y Windows |
+| **Aparatos y estructura** | Biblioteca de aparatos y truss; cada aparato es un símbolo con sus datos | Más de 8.000 aparatos, truss y accesorios | Biblioteca AtlaBase; accesorios; pantallas LED con su paso de píxel real; efectos de llama, agua y CO2 |
+| **Papeles** | Planta de luz, inventario y listas de equipo | Planta, leyenda, hoja de enfoque y patch. Informes de peso, largo, cantidades, consumo y posición | Planta e informes que se actualizan solos; patch con la consola por CITP |
+| **Formatos** | MVR y GDTF | MVR | Importa glTF, DWG/DXF, MVR, SketchUp, C4D, OBJ y 3DS. Exporta DWG/DXF, glTF, MVR y CSV |
+| **Unreal** | No lo mencionan | No lo mencionan | No lo mencionan |
+
+**Lo que dicen para IRIS:**
+- **El idioma común es MVR + GDTF.** Los tres lo hablan, y el plugin DMX de Unreal importa GDTF y librerías MVR. Esto último está por confirmar con la versión de Unreal que use Daniel: la página de Epic no se pudo leer. glTF es el formato común para la geometría: lo leen Capture y Unreal (Interchange).
+- **2D:** cada aparato es un símbolo inteligente con rótulo pegado (número, canal, circuito, color y accesorios), y los papeles salen del mismo dibujo y se actualizan solos. LZ.1 ya va por ahí.
+- **3D y luz:** fotometría real en lugar de conos planos (perfiles IES), haz visible con humo, gobos y pantallas LED con su resolución. Es lo que piden F6.3 y F6.9.
+- **Informes que aún faltan en IRIS:** hoja de enfoque por foco (WYSIWYG), peso por punto de cuelgue y largo de cable (WYSIWYG) y patch DMX (los tres).
+
+**Pasos:**
+- **LZ.8.1 MVR completo** (`plan_cad_export.dart`).
+  - Hoy: cada luz con posición, giro, unidad y «Marca@Modelo».
+  - Falta:
+    - truss y puntos de cuelgue como `Truss`, y la localización y el decorado como `SceneObject` con su geometría (glTF dentro del MVR);
+    - cámaras, como objetos con nombre;
+    - color y accesorios en cada aparato;
+    - dirección DMX cuando exista (LZ.7).
+  - Hecho cuando: un MVR de una planta de KEBAB se abre en Vision (gratis) y en Capture con los aparatos en su sitio, la localización y los truss.
+- **LZ.8.2 GDTF por modelo** en el catálogo de material: el archivo GDTF del fabricante (GDTF Share) o, si no hay, el que más se parezca. Viaja dentro del MVR y del paquete `.irisstage`, para que Unreal, Vision y la consola reconozcan el aparato sin buscarlo.
+- **LZ.8.3 Importar MVR.** Abrir en IRIS una planta hecha en Vectorworks, WYSIWYG o Capture: aparatos a luces del catálogo (por GDTF o por nombre), truss a `plan_rig` y geometría como decorado. Así el gaffer de otra película o la compañía de iluminación pueden pasar su planta a IRIS.
+- **LZ.8.4 Papeles que faltan:** hoja de enfoque (a dónde apunta cada foco, con su apertura y su accesorio), peso por punto de cuelgue y truss, y largo de cable por circuito. Salen de los datos de LZ.1 y LZ.4.
+- **LZ.8.5 Luz en 3D como en Capture:** va en F6.3 (perfiles IES y fotometría), F6.9 (humo con haz visible) y F6.16.4 (la misma luz en Unreal). LZ.8 solo añade la prueba: el mismo esquema en IRIS, en Capture o Vision y en Unreal tiene que leerse igual.
+- **Hacia Unreal:** no hace falta un camino nuevo. El paquete `.irisstage` (F6.16) lleva el glTF de cada set, los IES y un manifiesto. Le añadimos el MVR con sus GDTF (LZ.8.1 y LZ.8.2), para que el plugin DMX de Unreal monte los aparatos de verdad, con su dirección.
+
+**Cuándo:** después de LZ.4 y de P0. LZ.8.1 y LZ.8.2 van primero, porque son la base de todo lo demás y de Unreal. LZ.8.3, cuando haya una planta real de otro programa con la que probar.
+
 ## Orden y forma de trabajo
 
-LZ.1 → LZ.2 → LZ.3 → LZ.4 → LZ.5 → LZ.6 → LZ.7.
+LZ.1 → LZ.2 → LZ.3 → LZ.4 → LZ.5 → LZ.6 → LZ.7 → LZ.8 (LZ.8.1 y LZ.8.2 pueden adelantarse si hace falta llevar algo a Unreal o a otro programa).
 
 - Va en la rama `plan/autoria`, junto con la autoría, para publicarlo como un solo paquete.
 - Tests con datos inventados.
