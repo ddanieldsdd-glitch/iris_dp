@@ -385,6 +385,10 @@ class _Plan3dViewState extends State<Plan3dView> {
   @override
   void didUpdateWidget(Plan3dView old) {
     super.didUpdateWidget(old);
+    // Otro plano con el visor ya abierto (FL.6): se mira por su cámara.
+    if (widget.lookThrough && widget.navTarget != old.navTarget) {
+      _lookedThrough = false;
+    }
     _schedule();
     if (old.selected != widget.selected) {
       _selected = widget.selected;

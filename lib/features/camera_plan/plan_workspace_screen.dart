@@ -142,7 +142,10 @@ class _PlanWorkspaceScreenState extends ConsumerState<PlanWorkspaceScreen> {
   }
 
   Widget _editor() {
-    final key = ValueKey('${_target.scope.name}:${_target.id}:${_target.leg}');
+    // De un plano a otro, el mismo editor: solo lee el nuevo (FL.6).
+    final key = _target.scope == FloorPlanScope.shot
+        ? const ValueKey('shot')
+        : ValueKey('${_target.scope.name}:${_target.id}:${_target.leg}');
     return switch (_target.scope) {
       FloorPlanScope.site => CameraPlanEditor.site(
         key: key,

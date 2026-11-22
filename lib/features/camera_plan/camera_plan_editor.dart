@@ -123,6 +123,8 @@ part 'camera_plan_editor_toolbar.dart';
 part 'camera_plan_editor_add_sheet.dart';
 part 'camera_plan_editor_panel.dart';
 part 'camera_plan_editor_light_use.dart';
+part 'camera_plan_editor_load.dart';
+part 'camera_plan_editor_save.dart';
 
 class CameraPlanEditor extends ConsumerStatefulWidget {
   final int projectId;
@@ -675,6 +677,50 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     _load();
   }
 
+  /// La planta abierta: su ámbito, su id y, en una secuencia, su tramo.
+  static Object _targetOf(CameraPlanEditor w) =>
+      (w.scope, w.siteId, w.setId, w.lightSetupId, w.shotId, w.leg);
+
+  /// Pasar de un plano a otro (FL.6): el editor sigue montado y solo se
+  /// leen los datos del nuevo. El 3D no recarga su visor, y el zoom, las
+  /// imágenes ya leídas y los paneles abiertos se quedan como estaban.
+  @override
+  void didUpdateWidget(CameraPlanEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_targetOf(oldWidget) == _targetOf(widget)) return;
+    // La opacidad que estaba por guardarse es de la imagen de antes.
+    final pendingOpacity = _opacityDebounce;
+    if (pendingOpacity != null && pendingOpacity.isActive) {
+      pendingOpacity.cancel();
+      _flushOpacity?.call();
+    }
+    _opacityDebounce = null;
+    _flushOpacity = null;
+    _reloadAfterPeer?.cancel();
+    _dragging = null;
+    _dragDirty = false;
+    _marqueeStart = null;
+    _marquee = null;
+    _placeAt = null;
+    _zoneStart = null;
+    _zoneDraft = null;
+    _imageDraft = null;
+    _calibrating = null;
+    _calibrationPoints.clear();
+    _setupPicked = false;
+    _fitOnLoad = true;
+    _loadedOnce = false;
+    _lookThrough = _takeLookThrough();
+    _load();
+  }
+
+  /// Cada lectura lleva su número: si mientras tanto se pasó a otra planta,
+  /// lo que llega tarde no pisa a la nueva.
+  int _loadGeneration = 0;
+
+  /// La próxima lectura encuadra la zona del set si es otra.
+  bool _fitOnLoad = true;
+
   /// Un cambio en Ajustes se ve al momento: solo se toca lo que cambió, para
   /// no deshacer lo que se haya activado a mano en la barra.
   void _onPrefsChanged() {
@@ -690,6 +736,17 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       _planPrefs = next;
     });
   }
+
+  /// Lo que un plano puede ajustar solo para él: la luz del set, la del
+  /// grupo y las luces del entorno (EN).
+  static bool _canShotOverride(PlanElement el) => switch (el.layer) {
+    PlanLayer.light || PlanLayer.groupLight => true,
+    PlanLayer.environment || PlanLayer.set => el.type == ElementType.light,
+    PlanLayer.shot => false,
+  };
+
+  /// Para las partes del editor en otros archivos (RD.4).
+  void _update(VoidCallback fn) => setState(fn);
 
   void _onImageLoaded() {
     if (mounted) setState(() {});
@@ -718,622 +775,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    final db = ref.read(databaseProvider);
-    LightSetup? lightSetup;
-    final annotationRow = await db.getProjectAnnotationDocument(
-      projectId: widget.projectId,
-      targetType: _annotationTargetType,
-      targetId: _annotationTargetId,
-    );
-
-    Shot? shot;
-    Scene? scene;
-    LocationBasePlan? linkedSet;
-    LocationSite? linkedSite;
-    Color sceneColor = sceneDisplayColor(null);
-
-    final sites = await (db.select(
-      db.locationSites,
-    )..where((s) => s.projectId.equals(widget.projectId))).get();
-    final allSets = await (db.select(
-      db.locationBasePlans,
-    )..where((s) => s.projectId.equals(widget.projectId))).get();
-    final allScenes = await (db.select(
-      db.scenes,
-    )..where((s) => s.projectId.equals(widget.projectId))).get();
-    final colors = ProjectColorScheme.resolve(
-      sites: sites,
-      sets: allSets,
-      scenes: allScenes,
-    );
-
-    if (_isShotMode && widget.shotId != null) {
-      shot = await (db.select(
-        db.shots,
-      )..where((s) => s.id.equals(widget.shotId!))).getSingleOrNull();
-      if (shot != null) {
-        scene = await (db.select(
-          db.scenes,
-        )..where((s) => s.id.equals(shot!.sceneId))).getSingleOrNull();
-        // El set es el del tramo (plano secuencia), el propio del plano
-        // o, si no, el de su escena.
-        final ownLeg = _legOf(shot);
-        final shotSetId =
-            ownLeg?.setId ?? shot.locationBasePlanId ?? scene?.locationId;
-        if (shotSetId != null) {
-          linkedSet = await db.getLocationById(shotSetId);
-        }
-        final shotSiteId =
-            ownLeg?.siteId ?? linkedSet?.siteId ?? scene?.locationSiteId;
-        if (shotSiteId != null) {
-          linkedSite = await db.getSiteById(shotSiteId);
-        }
-        if (scene != null) sceneColor = colors.sceneColor(scene);
-      }
-    } else if (widget.scope == FloorPlanScope.set && widget.setId != null) {
-      linkedSet = await db.getLocationById(widget.setId!);
-      if (linkedSet?.siteId != null) {
-        linkedSite = await db.getSiteById(linkedSet!.siteId!);
-      }
-      sceneColor = colors.setColor(linkedSet!);
-    } else if (widget.scope == FloorPlanScope.lightSetup &&
-        widget.lightSetupId != null) {
-      lightSetup = await db.getLightSetupById(widget.lightSetupId!);
-      if (lightSetup?.locationBasePlanId != null) {
-        linkedSet = await db.getLocationById(lightSetup!.locationBasePlanId!);
-      }
-      final setupSiteId = lightSetup?.locationSiteId ?? linkedSet?.siteId;
-      if (setupSiteId != null) {
-        linkedSite = await db.getSiteById(setupSiteId);
-      }
-      sceneColor = linkedSet != null
-          ? colors.setColor(linkedSet)
-          : colors.siteColor(linkedSite?.id);
-    } else if (widget.scope == FloorPlanScope.site && widget.siteId != null) {
-      linkedSite = await db.getSiteById(widget.siteId!);
-      sceneColor = colors.siteColor(widget.siteId);
-    }
-
-    final navTargets = await _loadNavTargets(db);
-    final gear = await ProjectGear.load(db, widget.projectId);
-    final cast = await PlanCast.load(db, widget.projectId);
-    final roster = await PlanCast.roster(db, widget.projectId);
-
-    // Esquema de luz que se enseña: el del plano, el elegido a mano o, si
-    // no, el primero del set o de la localización.
-    final projectSetups = await db.getLightSetupsForProject(widget.projectId);
-    LightSetup? setupById(int? id) {
-      for (final s in projectSetups) {
-        if (s.id == id) return s;
-      }
-      return null;
-    }
-
-    if (shot != null) {
-      final ownLeg = _legOf(shot);
-      lightSetup = setupById(
-        ownLeg != null ? ownLeg.lightSetupId : shot.lightSetupId,
-      );
-    } else if (_setupPicked) {
-      lightSetup = setupById(_pickedSetupId);
-    }
-    // La localización y la zona enseñan su entorno, sin la luz de ningún
-    // set: lo que se pone ahí lo heredan todos sus sets (EN).
-
-    // Un solo lienzo: las cuatro capas, todas editables.
-    final elements = <PlanElement>[];
-    void addLayer(PlanLayer layer, List<PlanElement> list) {
-      for (final el in list) {
-        el.layer = layer;
-        if (layer != PlanLayer.shot) el.id = --_tempId;
-        elements.add(el);
-      }
-    }
-
-    var siteElements = FloorPlanJson.decode(linkedSite?.floorPlanJson);
-    var zoneElements = FloorPlanJson.decode(linkedSet?.floorPlanJson);
-    final envScoped =
-        lightSetup != null &&
-        linkedSite != null &&
-        (widget.scope == FloorPlanScope.lightSetup ||
-            widget.scope == FloorPlanScope.shot);
-    if (envScoped) {
-      // Los cambios del set van por identificador: el entorno los necesita
-      // fijos antes de aplicarlos (SG.3).
-      if (LightOverrides.ensureUids(siteElements).isNotEmpty) {
-        await _repo.saveElements(
-          scope: FloorPlanScope.site,
-          elements: siteElements,
-          siteId: linkedSite.id,
-        );
-      }
-      if (linkedSet != null &&
-          LightOverrides.ensureUids(zoneElements).isNotEmpty) {
-        await _repo.saveElements(
-          scope: FloorPlanScope.set,
-          elements: zoneElements,
-          setId: linkedSet.id,
-        );
-      }
-      final resolved = EnvOverrides.apply(
-        environment: siteElements,
-        set: zoneElements,
-        json: lightSetup.envOverridesJson,
-      );
-      siteElements = resolved.environment;
-      zoneElements = resolved.set;
-      if (linkedSet == null) {
-        // Sin zona, lo que añade el set va con el entorno.
-        siteElements = [...siteElements, ...zoneElements];
-        zoneElements = const [];
-      }
-    }
-    final originals = <String, PlanElement>{};
-    final overrides = LightOverrides.decode(shot?.lightOverridesJson);
-    // Las luces del entorno, también con los ajustes propios del plano
-    // (apagar una solo en este plano, EN).
-    List<PlanElement> withShotOverrides(List<PlanElement> list) => [
-      for (final el in list)
-        if (el.type == ElementType.light &&
-            overrides[LightOverrides.uidOf(el)] != null)
-          () {
-            final uid = LightOverrides.uidOf(el)!;
-            originals[uid] = el;
-            return overrides[uid]!
-              ..props[LightOverrides.uidKey] = uid
-              ..shotOverride = true;
-          }()
-        else
-          el,
-    ];
-    addLayer(PlanLayer.environment, withShotOverrides(siteElements));
-    addLayer(PlanLayer.set, withShotOverrides(zoneElements));
-    // La luz del esquema. Si el plano tiene ajustes propios, se ve con
-    // ellos y se recuerda cómo es en el esquema.
-    final setupLights = FloorPlanJson.decode(lightSetup?.planJson);
-    // La luz del grupo, como la ve este set, y con los ajustes del plano.
-    final group = lightSetup?.groupId != null
-        ? await db.getSetGroupById(lightSetup!.groupId!)
-        : null;
-    addLayer(PlanLayer.groupLight, [
-      for (final el in GroupLight.visible(
-        group?.planJson,
-        lightSetup?.planJson,
-      ))
-        if (overrides[LightOverrides.uidOf(el)] case final own?)
-          () {
-            final uid = LightOverrides.uidOf(el)!;
-            originals[uid] = el;
-            return own
-              ..props[LightOverrides.uidKey] = uid
-              ..shotOverride = true;
-          }()
-        else
-          el,
-    ]);
-    final siteSets = [
-      for (final s in projectSetups)
-        if (s.kind == LightSetupKind.plan &&
-            linkedSite != null &&
-            (s.locationSiteId ??
-                    allSets
-                        .where((z) => z.id == s.locationBasePlanId)
-                        .firstOrNull
-                        ?.siteId) ==
-                linkedSite.id)
-          s,
-    ];
-    final shownLights = [
-      for (final el in setupLights)
-        if (overrides[LightOverrides.uidOf(el)] case final own?)
-          () {
-            final uid = LightOverrides.uidOf(el)!;
-            originals[uid] = el;
-            return own
-              ..props[LightOverrides.uidKey] = uid
-              ..shotOverride = true;
-          }()
-        else
-          el,
-    ];
-    addLayer(PlanLayer.light, shownLights);
-    if (shot != null) {
-      // En una secuencia, cada tramo ve solo lo que se colocó en él.
-      final inSequence = ShotRoute.decode(shot.routeJson).isNotEmpty;
-      addLayer(PlanLayer.shot, [
-        for (final el in await _repo.loadElements(
-          scope: FloorPlanScope.shot,
-          shotId: shot.id,
-        ))
-          if (!inSequence || FloorPlanRepository.legOf(el) == (widget.leg ?? 0))
-            el,
-      ]);
-    }
-
-    // Todo elemento lleva identificador estable: con él se reconoce en el
-    // 3D, en Unreal y en la lista de elementos. Lo que aún no lo tenía (una
-    // planta de antes) se guarda una vez al terminar de cargar.
-    final unsaved = {
-      for (final el in LightOverrides.ensureUids(elements)) el.layer,
-    };
-    // El entorno como es en el set, sin los ajustes propios del plano.
-    final envBaseline = _baselineOf([
-      for (final e in elements)
-        if (e.layer == PlanLayer.environment || e.layer == PlanLayer.set)
-          e.shotOverride ? originals[LightOverrides.uidOf(e)] ?? e : e,
-    ]);
-    final groupBaseline = _baselineOf(
-      elements.where((e) => e.layer == PlanLayer.groupLight),
-    );
-
-    // Zonas de los sets sobre el plano maestro.
-    final zones = <PlanZone>[];
-    Rect? setZone;
-    for (final set in allSets) {
-      if (linkedSite == null || set.siteId != linkedSite.id) continue;
-      final rect = SetZone.decode(set.sitePlacementJson);
-      if (rect == null) continue;
-      final active = set.id == linkedSet?.id;
-      if (active) setZone = rect;
-      zones.add(
-        PlanZone(
-          rect: rect,
-          color: colors.setColor(set),
-          label: set.locationName,
-          active: active,
-        ),
-      );
-    }
-
-    // Color del esquema: su orden entre los de su mismo set.
-    var setupColor = kLightSetupColors.first;
-    if (lightSetup != null) {
-      final siblings = projectSetups
-          .where(
-            (s) =>
-                s.locationBasePlanId == lightSetup!.locationBasePlanId &&
-                s.locationSiteId == lightSetup.locationSiteId,
-          )
-          .toList();
-      final index = siblings.indexWhere((s) => s.id == lightSetup!.id);
-      setupColor =
-          kLightSetupColors[(index < 0 ? 0 : index) % kLightSetupColors.length];
-    }
-
-    final allShots = await (db.select(
-      db.shots,
-    )..where((s) => s.projectId.equals(widget.projectId))).get();
-    // Las cámaras de los otros planos que comparten este esquema de luz.
-    final otherCameras = <PlanElement>[];
-    final otherCameraShot = <PlanElement, PlanTarget>{};
-    final unlitShots = <int>{};
-    final cameraLinks = <String, int>{};
-    final followLabels = scene == null
-        ? const <String, String>{}
-        : await PlanFollow.sceneLabels(db, scene);
-    final setupCameraUids = {
-      for (final el in setupLights)
-        if (el.type == ElementType.camera) ?LightOverrides.uidOf(el),
-    };
-    if (lightSetup != null) {
-      for (final other in allShots) {
-        if (other.id == shot?.id) continue;
-        // Los planos del set que aún no tienen luz también enseñan su
-        // cámara: tocarla ofrece usar este esquema.
-        final otherScene = allScenes
-            .where((s) => s.id == other.sceneId)
-            .firstOrNull;
-        final unlit =
-            other.lightSetupId == null &&
-            lightSetup.locationBasePlanId != null &&
-            (other.locationBasePlanId ?? otherScene?.locationId) ==
-                lightSetup.locationBasePlanId;
-        if (other.lightSetupId != lightSetup.id && !unlit) continue;
-        if (unlit) unlitShots.add(other.id);
-        final sceneNumber = allScenes
-            .where((s) => s.id == other.sceneId)
-            .map((s) => s.label)
-            .firstOrNull;
-        final tag = sceneNumber == null
-            ? 'P${other.number}'
-            : '$sceneNumber·${other.number}';
-        for (final row in await db.getCameraPlanElementsForShot(other.id)) {
-          if (row.type != 'camera') continue;
-          final linkedTo = CameraLinks.setupCameraOf(PlanElement.fromDb(row));
-          if (linkedTo != null && setupCameraUids.contains(linkedTo)) {
-            // Copia de una cámara de este esquema: ya se ve la cámara.
-            cameraLinks[linkedTo] = (cameraLinks[linkedTo] ?? 0) + 1;
-            continue;
-          }
-          final ghost = PlanElement.fromDb(row)
-            ..id = --_tempId
-            ..props['shotTag'] = unlit ? '$tag · sin luz' : tag
-            // Una cámara que no está en este plano no le hace sombra.
-            ..props[LightScene.noShadowKey] = true;
-          otherCameras.add(ghost);
-          otherCameraShot[ghost] = PlanTarget.shot(
-            other.id,
-            sceneNumber == null
-                ? 'Plano ${other.number}'
-                : 'Esc $sceneNumber · Plano ${other.number}',
-          );
-        }
-      }
-    }
-
-    final setSceneIds = {
-      for (final s in allScenes)
-        if (linkedSet != null && s.locationId == linkedSet.id) s.id,
-    };
-    final setShotCount = allShots
-        .where((s) => setSceneIds.contains(s.sceneId))
-        .length;
-    final setupShotCount = allShots
-        .where((s) => lightSetup != null && s.lightSetupId == lightSetup.id)
-        .length;
-
-    ui.Image? bgImage;
-    Rect? bgRect;
-    var bgOpacity = 0.85;
-    final scanService = LocationScanService(db);
-    final scopeKind = switch (widget.scope) {
-      FloorPlanScope.site => FloorPlanScopeKind.site,
-      FloorPlanScope.set => FloorPlanScopeKind.set,
-      FloorPlanScope.lightSetup ||
-      FloorPlanScope.shot => FloorPlanScopeKind.shot,
-    };
-    final bgMeta = await scanService.resolveFloorPlanBackground(
-      scope: scopeKind,
-      siteId: widget.siteId ?? linkedSite?.id,
-      setId: widget.setId ?? linkedSet?.id,
-    );
-    if (bgMeta != null && bgMeta.topDownImagePath != null) {
-      final file = File(bgMeta.topDownImagePath!);
-      if (await file.exists()) {
-        final bytes = await file.readAsBytes();
-        final codec = await ui.instantiateImageCodec(bytes);
-        final frame = await codec.getNextFrame();
-        bgImage = frame.image;
-        bgRect = Rect.fromLTWH(
-          0,
-          0,
-          bgMeta.topDownWidthPx,
-          bgMeta.topDownHeightPx,
-        );
-        bgOpacity = bgMeta.topDownOpacity;
-      }
-    }
-
-    if (!mounted) return;
-    _annotationController.replaceDocument(
-      AnnotationDocument.decode(annotationRow?.documentJson),
-    );
-    final guide = await _loadGuide(db, linkedSite, allSets);
-    final planImages = await _imageStore.forLayers(
-      projectId: widget.projectId,
-      siteId: linkedSite?.id ?? widget.siteId,
-      setId: linkedSet?.id ?? widget.setId,
-      lightSetupId: lightSetup?.id ?? widget.lightSetupId,
-      shotId: shot?.id,
-    );
-    _imageCache.ensure(planImages);
-    if (!mounted) return;
-    setState(() {
-      _images = planImages;
-      if (!planImages.any((i) => i.id == _selectedImageId)) {
-        _selectedImageId = null;
-      }
-      if (guide != null) {
-        _guideSets = guide.sets;
-        _guideZoned = guide.zoned;
-        _guideSetsWithShots = guide.withShots;
-        _guideShotReady = guide.shotReady;
-      }
-      _elements
-        ..clear()
-        ..addAll(elements);
-      _hiddenElements
-        ..clear()
-        // En un plano, la cámara del esquema de la que lleva copia no se
-        // pinta dos veces.
-        ..addAll(_linkedSetupCameras(elements));
-      _uidsToSave = unsaved;
-      _selected = null;
-      _selectedPathIndex = null;
-      _multi.clear();
-      _segmentStart = null;
-      _segmentHover = null;
-      _zoneEditRect = null;
-      _undoStack.clear();
-      _redoStack.clear();
-      _metersPerUnit =
-          FloorPlanJson.decodeDocument(
-            linkedSite?.floorPlanJson,
-          ).metersPerUnit ??
-          FloorPlanJson.decodeDocument(
-            linkedSet?.floorPlanJson,
-          ).metersPerUnit ??
-          FloorPlanJson.decodeDocument(lightSetup?.planJson).metersPerUnit ??
-          defaultMetersPerUnit;
-      _lightSetup = lightSetup;
-      _zones = zones;
-      if (_setZone == null && setZone != null) _pendingFit = setZone;
-      _setZone = setZone;
-      _setShotCount = setShotCount;
-      _setupShotCount = setupShotCount;
-      _setupColor = setupColor;
-      _gear = gear;
-      _cast = cast;
-      _roster = roster;
-      _ambient = FloorPlanRepository.ambientOf(lightSetup);
-      _setupOriginals
-        ..clear()
-        ..addAll(originals);
-      _group = group;
-      _siteSets = siteSets;
-      _envBaseline = envBaseline;
-      _groupBaseline = groupBaseline;
-      _hiddenGroupLights = FloorPlanJson.decodeDocument(
-        lightSetup?.planJson,
-      ).hiddenGroupLights;
-      if (_scopesForSetup != lightSetup?.id) {
-        _scopesForSetup = lightSetup?.id;
-        _envScope = null;
-        _groupLightScope = null;
-      }
-      _otherCameras = otherCameras;
-      _otherCameraShot
-        ..clear()
-        ..addAll(otherCameraShot);
-      _unlitShots = unlitShots;
-      _cameraLinks = cameraLinks;
-      _followLabels = followLabels;
-      _shot = shot;
-      _scene = scene;
-      _linkedSet = linkedSet;
-      _linkedSite = linkedSite;
-      _environment = FloorPlanRepository.environmentOfSet(
-        linkedSet?.floorPlanJson,
-        linkedSite?.floorPlanJson,
-      );
-      _sceneColor = sceneColor;
-      _navTargets = navTargets;
-      _backgroundImage = bgImage;
-      _backgroundRect = bgRect;
-      _backgroundOpacity = bgOpacity;
-      _loading = false;
-    });
-    _lastSaved = _snapshot();
-    if (!_loadedOnce) {
-      _loadedOnce = true;
-      if (_reopen3dScreen) {
-        _reopen3dScreen = false;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _open3dScreen();
-        });
-      }
-    }
-    _claimLive();
-    // Si otro equipo la está editando, no se toca: se guardará al soltarla.
-    if (_uidsToSave.isNotEmpty &&
-        _peerBlocking(ref.read(liveEditingProvider)) == null) {
-      unawaited(_saveNewUids());
-    }
-  }
-
-  // ── Edición compartida ────────────────────────────────────────────────────
-
-  /// Anuncia a los demás equipos qué planta se edita aquí.
-  void _claimLive() {
-    if (!mounted) return;
-    final live = ref.read(liveEditingProvider);
-    _live = live;
-    String? keyOf(FloorPlanScope scope) => switch (scope) {
-      FloorPlanScope.site =>
-        _linkedSite?.uid == null ? null : LiveKey.site(_linkedSite!.uid!),
-      FloorPlanScope.set =>
-        _linkedSet?.uid == null ? null : LiveKey.set(_linkedSet!.uid!),
-      FloorPlanScope.lightSetup =>
-        _lightSetup?.uid == null ? null : LiveKey.lightSetup(_lightSetup!.uid!),
-      FloorPlanScope.shot =>
-        _shot?.uid == null ? null : LiveKey.shot(_shot!.uid!),
-    };
-    _layerKeys = [for (final scope in FloorPlanScope.values) ?keyOf(scope)];
-    final key = keyOf(widget.scope);
-    if (key == null || key == _liveKey) return;
-    _liveKey = key;
-    live.focusShot(key);
-    _liveSince = live.mySince;
-  }
-
-  /// Otro equipo que edita esta planta (o una capa que se ve en ella) desde
-  /// antes: mientras tanto aquí no se toca.
-  String? _peerBlocking(LiveEditing live) {
-    final own = live.holderOf(_liveKey);
-    if (own != null) return own.device;
-    for (final key in _layerKeys) {
-      if (key == _liveKey) continue;
-      final holder = live.holderBefore(key, _liveSince);
-      if (holder != null) return holder.device;
-    }
-    return null;
-  }
-
-  Future<void> _saveAnnotations(AnnotationDocument document) => ref
-      .read(databaseProvider)
-      .saveProjectAnnotationDocument(
-        projectId: widget.projectId,
-        targetType: _annotationTargetType,
-        targetId: _annotationTargetId,
-        documentJson: document.encode(),
-        documentSchemaVersion: document.schemaVersion,
-      );
-
-  Future<List<CameraPlanNavTarget>> _loadNavTargets(AppDatabase db) async {
-    final scenes =
-        await (db.select(db.scenes)
-              ..where((s) => s.projectId.equals(widget.projectId))
-              ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
-            .get();
-    final sets = await db.getLocationsMapForProject(widget.projectId);
-    final sites = await (db.select(
-      db.locationSites,
-    )..where((s) => s.projectId.equals(widget.projectId))).get();
-    final allSets = sets.values.toList();
-    final colors = ProjectColorScheme.resolve(
-      sites: sites,
-      sets: allSets,
-      scenes: scenes,
-    );
-    final sitesById = {for (final s in sites) s.id: s};
-    final targets = <CameraPlanNavTarget>[];
-    final shotsByScene = <int, List<Shot>>{};
-    for (final shot in await db.getShotsForProject(widget.projectId)) {
-      (shotsByScene[shot.sceneId] ??= []).add(shot);
-    }
-    for (final shots in shotsByScene.values) {
-      shots.sort((a, b) {
-        final byOrder = a.sortOrder.compareTo(b.sortOrder);
-        return byOrder != 0 ? byOrder : a.number.compareTo(b.number);
-      });
-    }
-
-    for (final scene in scenes) {
-      final color = colors.sceneColor(scene);
-      final site = scene.locationSiteId != null
-          ? sitesById[scene.locationSiteId]
-          : null;
-      final siteName =
-          site?.name ??
-          (scene.locationPureName.trim().isNotEmpty
-              ? scene.locationPureName.trim()
-              : 'Sin localización');
-      for (final shot in shotsByScene[scene.id] ?? const <Shot>[]) {
-        targets.add(
-          CameraPlanNavTarget(
-            shotId: shot.id,
-            sceneId: scene.id,
-            sceneNumber: scene.label,
-            shotNumber: shot.number,
-            sceneName: scene.name,
-            sceneColor: color,
-            siteName: siteName,
-          ),
-        );
-      }
-    }
-    return targets;
-  }
-
-  /// Tramo de secuencia que se está viendo, si el plano lo es.
-  ShotLeg? _legOf(Shot shot) {
-    final route = ShotRoute.decode(shot.routeJson);
-    final index = widget.leg;
-    return index != null && index >= 0 && index < route.length
-        ? route[index]
-        : null;
-  }
 
   /// Pone un esquema de luz al plano o, en una secuencia, a su tramo.
   Future<void> _assignSetup(Shot shot, int? setupId) async {
@@ -1655,344 +1096,6 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   /// identificador al cargarla: se guardan una vez ([_saveNewUids]).
   Set<PlanLayer> _uidsToSave = const {};
 
-  Future<void> _saveNewUids() async {
-    final layers = _uidsToSave;
-    _uidsToSave = const {};
-    _savingUids = true;
-    try {
-      for (final layer in layers) {
-        await _saveLayer(layer);
-      }
-    } finally {
-      _savingUids = false;
-    }
-  }
-
-  /// Guarda una capa entera en su sitio.
-  Future<void> _saveLayer(PlanLayer layer) async {
-    if (!_hasLayer(layer)) return;
-    if (_envScoped &&
-        (layer == PlanLayer.environment || layer == PlanLayer.set)) {
-      await _saveEnvironmentOfSet();
-      return;
-    }
-    final list = _layerElements(layer);
-    LightOverrides.ensureUids(list);
-    switch (layer) {
-      case PlanLayer.environment:
-        await _repo.saveElements(
-          scope: FloorPlanScope.site,
-          elements: _sharedVersions(list),
-          siteId: _linkedSite!.id,
-        );
-        await _saveShotOverrides();
-      case PlanLayer.set:
-        await _repo.saveElements(
-          scope: FloorPlanScope.set,
-          elements: _sharedVersions(list),
-          setId: _linkedSet!.id,
-        );
-        await _saveShotOverrides();
-      case PlanLayer.groupLight:
-        await _saveGroupLight(list);
-      case PlanLayer.light:
-        // Con el identificador estable, un plano ajusta un elemento del
-        // esquema sin tocar el de los demás.
-        await _repo.saveElements(
-          scope: FloorPlanScope.lightSetup,
-          elements: _sharedVersions(list),
-          lightSetupId: _lightSetup!.id,
-        );
-        await _saveShotOverrides();
-      case PlanLayer.shot:
-        await _repo.saveElements(
-          scope: FloorPlanScope.shot,
-          elements: list,
-          shotId: _shot!.id,
-        );
-    }
-  }
-
-  /// Cada elemento como es en su esquema (o en el grupo): lo ajustado solo
-  /// en este plano conserva el suyo.
-  List<PlanElement> _sharedVersions(List<PlanElement> list) => [
-    for (final el in list)
-      if (el.shotOverride &&
-          _shot != null &&
-          _setupOriginals[LightOverrides.uidOf(el)] != null)
-        _setupOriginals[LightOverrides.uidOf(el)]!
-      else
-        el,
-  ];
-
-  /// Lo que un plano puede ajustar solo para él: la luz del set, la del
-  /// grupo y las luces del entorno (EN).
-  static bool _canShotOverride(PlanElement el) => switch (el.layer) {
-    PlanLayer.light || PlanLayer.groupLight => true,
-    PlanLayer.environment || PlanLayer.set => el.type == ElementType.light,
-    PlanLayer.shot => false,
-  };
-
-  /// Los ajustes propios del plano: de la luz del set, de la del grupo y de
-  /// la del entorno.
-  Future<void> _saveShotOverrides() async {
-    final shot = _shot;
-    if (shot == null) return;
-    final own = <String, PlanElement>{
-      for (final el in _elements)
-        if (_canShotOverride(el) &&
-            el.shotOverride &&
-            _setupOriginals[LightOverrides.uidOf(el)] != null)
-          LightOverrides.uidOf(el)!: el,
-    };
-    await _repo.saveLightOverrides(shot.id, own);
-    final db = ref.read(databaseProvider);
-    _shot = await (db.select(
-      db.shots,
-    )..where((s) => s.id.equals(shot.id))).getSingleOrNull();
-  }
-
-  /// Lo que ha cambiado en [list] respecto a [baseline]: lo cambiado o
-  /// nuevo, por identificador, y lo quitado.
-  static ({Map<String, PlanElement> changed, List<String> removed}) _diff(
-    Map<String, String> baseline,
-    List<PlanElement> list,
-  ) {
-    final now = _baselineOf(list);
-    return (
-      changed: {
-        for (final el in list)
-          if (LightOverrides.uidOf(el) case final uid?
-              when baseline[uid] != now[uid])
-            uid: el,
-      },
-      removed: [
-        for (final uid in baseline.keys)
-          if (!now.containsKey(uid)) uid,
-      ],
-    );
-  }
-
-  /// Guarda la luz del grupo (SG.3): para todo el grupo o, si se elige,
-  /// solo para este set (una copia propia, o sin esa luz).
-  Future<void> _saveGroupLight(List<PlanElement> list) async {
-    final group = _group;
-    final setup = _lightSetup;
-    if (group == null || setup == null) return;
-    final shared = _sharedVersions(list);
-    final diff = _diff(_groupBaseline, shared);
-    if (diff.changed.isEmpty && diff.removed.isEmpty) {
-      await _saveShotOverrides();
-      return;
-    }
-    var scope = _savingUids ? GroupLightScope.group : _groupLightScope;
-    if (scope == null) {
-      final answer = await askGroupLightScope(
-        context,
-        group: group,
-        setup: setup,
-        setCount: _siteSets.where((s) => s.groupId == group.id).length,
-      );
-      if (answer == null) {
-        await _load();
-        return;
-      }
-      scope = answer.scope;
-      if (answer.remember) _groupLightScope = scope;
-    }
-    final db = ref.read(databaseProvider);
-    if (scope == GroupLightScope.group) {
-      // Sobre lo guardado: el grupo tiene luces que este set no ve.
-      final stored = [
-        ...FloorPlanJson.decode((await db.getSetGroupById(group.id))?.planJson),
-      ];
-      stored.removeWhere((e) => diff.removed.contains(LightOverrides.uidOf(e)));
-      for (final entry in diff.changed.entries) {
-        final at = stored.indexWhere(
-          (e) => LightOverrides.uidOf(e) == entry.key,
-        );
-        if (at >= 0) {
-          stored[at] = entry.value;
-        } else {
-          stored.add(entry.value);
-        }
-      }
-      await _repo.saveGroupElements(group.id, stored);
-      _group = await db.getSetGroupById(group.id);
-    } else {
-      // Este set se queda con su versión: pasa a su luz, con el mismo uid.
-      setState(() {
-        for (final el in diff.changed.values) {
-          el
-            ..layer = PlanLayer.light
-            ..shotOverride = false;
-          _setupOriginals.remove(LightOverrides.uidOf(el));
-        }
-      });
-      if (diff.removed.isNotEmpty) {
-        _hiddenGroupLights = {..._hiddenGroupLights, ...diff.removed}.toList();
-        await _repo.saveHiddenGroupLights(setup.id, _hiddenGroupLights);
-      }
-      if (diff.changed.isNotEmpty) await _saveLayer(PlanLayer.light);
-    }
-    _groupBaseline = _baselineOf(
-      _sharedVersions(_layerElements(PlanLayer.groupLight)),
-    );
-    await _saveShotOverrides();
-  }
-
-  /// Guarda un cambio de entorno hecho desde un set (SG.3): pregunta a
-  /// quién afecta (este set, otros, el grupo o la localización) y lo
-  /// guarda donde toca.
-  Future<void> _saveEnvironmentOfSet() async {
-    final setup = _lightSetup!;
-    final site = _linkedSite!;
-    // Lo ajustado solo en este plano no cambia el entorno del set.
-    final list = _sharedVersions([
-      ..._layerElements(PlanLayer.environment),
-      ..._layerElements(PlanLayer.set),
-    ]);
-    LightOverrides.ensureUids(list);
-    await _saveShotOverrides();
-    final diff = _diff(_envBaseline, list);
-    if (diff.changed.isEmpty && diff.removed.isEmpty) return;
-    final others = [
-      for (final s in _siteSets)
-        if (s.id != setup.id) s,
-    ];
-    var answer = _envScope;
-    if (answer == null && others.isEmpty) {
-      // Un solo set: el entorno es el suyo.
-      answer = (scope: EnvScope.site, sets: const <int>[], remember: true);
-    }
-    if (answer == null) {
-      final group = _group;
-      final asked = await askEnvScope(
-        context,
-        setup: setup,
-        siteName: site.name,
-        otherSets: others,
-        group: group,
-        groupSets: [
-          for (final s in _siteSets)
-            if (group != null && s.groupId == group.id) s,
-        ],
-      );
-      if (asked == null) {
-        await _load();
-        return;
-      }
-      answer = asked;
-      if (asked.remember) _envScope = asked;
-    }
-    final db = ref.read(databaseProvider);
-    final siteBase = [
-      ...FloorPlanJson.decode((await db.getSiteById(site.id))?.floorPlanJson),
-    ];
-    final zone = _linkedSet;
-    final zoneBase = zone == null
-        ? <PlanElement>[]
-        : [
-            ...FloorPlanJson.decode(
-              (await db.getLocationById(zone.id))?.floorPlanJson,
-            ),
-          ];
-    final baseUids = {
-      for (final el in [...siteBase, ...zoneBase]) LightOverrides.uidOf(el),
-    };
-    if (answer.scope == EnvScope.site) {
-      // El entorno definitivo cambia; este set deja de cambiarlo.
-      siteBase.removeWhere(
-        (e) => diff.removed.contains(LightOverrides.uidOf(e)),
-      );
-      zoneBase.removeWhere(
-        (e) => diff.removed.contains(LightOverrides.uidOf(e)),
-      );
-      for (final entry in diff.changed.entries) {
-        final copy = LightOverrides.clone(entry.value);
-        int at(List<PlanElement> l) =>
-            l.indexWhere((e) => LightOverrides.uidOf(e) == entry.key);
-        if (at(siteBase) >= 0) {
-          siteBase[at(siteBase)] = copy;
-        } else if (at(zoneBase) >= 0) {
-          zoneBase[at(zoneBase)] = copy;
-        } else if (zone != null && entry.value.layer == PlanLayer.set) {
-          zoneBase.add(copy);
-        } else {
-          siteBase.add(copy);
-        }
-      }
-      await _repo.saveElements(
-        scope: FloorPlanScope.site,
-        elements: siteBase,
-        siteId: site.id,
-      );
-      if (zone != null) {
-        await _repo.saveElements(
-          scope: FloorPlanScope.set,
-          elements: zoneBase,
-          setId: zone.id,
-        );
-      }
-      final own = EnvOverrides.decode(
-        (await db.getLightSetupById(setup.id))?.envOverridesJson,
-      );
-      final touched = [...diff.changed.keys, ...diff.removed];
-      if (touched.any(own.containsKey)) {
-        own.removeWhere((uid, _) => touched.contains(uid));
-        await db.setLightSetupEnvOverrides(setup.id, EnvOverrides.encode(own));
-      }
-    } else {
-      for (final id in {setup.id, ...answer.sets}) {
-        final target = await db.getLightSetupById(id);
-        if (target == null) continue;
-        final own = EnvOverrides.decode(target.envOverridesJson);
-        for (final entry in diff.changed.entries) {
-          own[entry.key] = LightOverrides.clone(entry.value);
-        }
-        for (final uid in diff.removed) {
-          if (baseUids.contains(uid)) {
-            own[uid] = null;
-          } else {
-            own.remove(uid);
-          }
-        }
-        await db.setLightSetupEnvOverrides(id, EnvOverrides.encode(own));
-      }
-    }
-    _envBaseline = _baselineOf(list);
-    _lightSetup = await db.getLightSetupById(setup.id);
-  }
-
-  /// Hace que una luz del esquema se ajuste solo en este plano, o la
-  /// devuelve a como está en el esquema.
-  Future<void> _setShotOverride(PlanElement el, bool own) async {
-    if (_shot == null || !_canShotOverride(el)) return;
-    LightOverrides.ensureUids([el]);
-    final uid = LightOverrides.uidOf(el)!;
-    if (own) {
-      _setupOriginals[uid] = LightOverrides.clone(el);
-      setState(() => el.shotOverride = true);
-    } else {
-      final original = _setupOriginals.remove(uid);
-      if (original != null) {
-        final index = _elements.indexOf(el);
-        original
-          ..layer = el.layer
-          ..id = --_tempId
-          ..shotOverride = false;
-        setState(() {
-          if (index >= 0) _elements[index] = original;
-          _selected = original;
-          _multi.clear();
-        });
-      } else {
-        setState(() => el.shotOverride = false);
-      }
-    }
-    await _saveLayer(el.layer);
-    _commitHistory();
-  }
 
   /// Planos del set sin esquema de luz cuyas cámaras se ven aquí.
   Set<int> _unlitShots = const {};
@@ -2749,10 +1852,9 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
         ];
       });
       _opacityDebounce?.cancel();
-      _opacityDebounce = Timer(
-        const Duration(milliseconds: 400),
-        () => _imageStore.save(image.copyWith(opacity: v)),
-      );
+      void save() => _imageStore.save(image.copyWith(opacity: v));
+      _flushOpacity = save;
+      _opacityDebounce = Timer(const Duration(milliseconds: 400), save);
     },
     onLocked: (v) => _saveImage(image.copyWith(locked: v)),
     onLink: (shotId) => _saveImage(image.copyWith(linkedShotId: Value(shotId))),
@@ -2773,6 +1875,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   );
 
   Timer? _opacityDebounce;
+  VoidCallback? _flushOpacity;
 
   Future<void> _deleteImage(PlanImage image) async {
     await _imageStore.delete(image);
@@ -4184,7 +3287,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   static bool _lookThroughNext = false;
   static bool _reopen3dScreen = false;
   // Se toma al crear el editor, para que no le quede a otra planta.
-  final bool _lookThrough = _takeLookThrough();
+  bool _lookThrough = _takeLookThrough();
   static bool _takeLookThrough() {
     final v = _lookThroughNext;
     _lookThroughNext = false;

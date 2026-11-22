@@ -171,7 +171,7 @@ Las pantallas de la biblia V2 congelada no se revisan: se decide si se borran.
 
 ### Flujo guion ↔ planta [plan de mejora, FL]
 - [ ] Contexto compartido también en Storyboard (FL.3).
-- [ ] Pasar de plano sin reconstruir el editor (FL.6, va con RD.4).
+- [x] Pasar de plano sin reconstruir el editor (FL.6). El editor sigue montado y solo lee el plano nuevo; el 3D no recarga su visor, y el zoom y las imágenes se quedan como estaban. Una lectura que llega tarde no pisa a la nueva. (paquete de optimización)
 - [ ] Vista partida guion | planta en Mac e iPad ancho (FL.8).
 - [ ] **[Mac] Ventanas aparte (RP fases 3 y 4):**
   - guion, planta o 3D en otra ventana, para trabajar a dos monitores, con `desktop_multi_window` y base compartida (`DriftIsolate`), tras una prueba técnica;
@@ -211,6 +211,7 @@ Las pantallas de la biblia V2 congelada no se revisan: se decide si se borran.
 ### Rendimiento y código [RD, Fase R]
 - [ ] Terminar de partir `camera_plan_editor.dart` (RD.4).
   - **[Mac]** El plan JP sacó su código nuevo a `camera_plan_editor_light_use.dart` y paneles propios, pero el `State` sigue entero.
+  - **2026-11-22:** la carga y la edición compartida pasan a `camera_plan_editor_load.dart`, y el guardado por capas a `camera_plan_editor_save.dart`. El editor baja de 7.223 a unas 6.300 líneas. Lo siguiente sería el gesto de arrastrar y los atajos.
 - [ ] Medir en perfil en Windows y en iPad (R7). WAL (R6) sube a P0. **R8 medido el 2026-11-22:** al soltar, la interfaz paga 15–50 ms; los 1,5 s eran el rasterizado por CPU del test.
 - [ ] Sacar los textos a archivos de traducción; el inglés, al final de la beta.
 
