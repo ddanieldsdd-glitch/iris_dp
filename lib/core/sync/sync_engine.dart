@@ -627,8 +627,13 @@ class SyncEngine {
           db: _ref.read(databaseProvider),
           client: client,
         );
-      } catch (_) {
+      } catch (e, st) {
         // Plantillas locales siguen disponibles sin nube.
+        ErrorLog.recordUnlessOffline(
+          e,
+          st,
+          context: 'Sincronizar los ajustes del usuario',
+        );
       }
     }
 

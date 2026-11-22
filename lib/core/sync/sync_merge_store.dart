@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 
 import '../database/app_database.dart';
+import '../utils/error_log.dart';
 import 'project_content_bundle.dart';
 
 /// Tablas de la mezcla, en SQL directo (sin generar código): la base de cada
@@ -93,7 +94,9 @@ abstract final class ContentBaseBundleStore {
         return null;
       }
       return ContentBaseBundles(local: local, cloud: cloud);
-    } catch (_) {
+    } catch (e, st) {
+      // Sin base, la mezcla no sabe qué cambió cada lado y lo pregunta.
+      ErrorLog.record(e, st, context: 'Leer la base de la mezcla');
       return null;
     }
   }

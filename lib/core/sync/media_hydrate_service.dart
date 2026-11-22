@@ -853,7 +853,9 @@ class MediaHydrateService {
       final strokes = File(sketchStrokesPathOf(old));
       if (strokes.existsSync()) strokes.deleteSync();
       File(old).deleteSync();
-    } catch (_) {}
+    } catch (e, st) {
+      ErrorLog.record(e, st, context: 'Borrar la imagen sustituida');
+    }
   }
 }
 

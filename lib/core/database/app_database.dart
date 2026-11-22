@@ -5339,7 +5339,13 @@ class AppDatabase extends _$AppDatabase {
               ),
             );
           }
-        } catch (_) {}
+        } catch (e, st) {
+          ErrorLog.record(
+            e,
+            st,
+            context: 'Pasar el moodboard antiguo de la biblia',
+          );
+        }
       }
     }
   }
@@ -5597,7 +5603,9 @@ void _pruneSchemaBackups(String databasePath) {
     for (final f in copies[old]!) {
       try {
         f.deleteSync();
-      } catch (_) {}
+      } catch (e, st) {
+        ErrorLog.record(e, st, context: 'Borrar una copia antigua de la base');
+      }
     }
   }
 }

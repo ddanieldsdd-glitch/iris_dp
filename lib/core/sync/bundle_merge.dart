@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../database/shoot_block_overrides.dart';
 import 'project_content_bundle.dart';
 
 /// De qué lado venía una edición.
@@ -560,15 +561,8 @@ abstract final class BundleMerge {
       if (r['uid'] case final String uid) uid,
   };
 
-  static Map<String, dynamic> _decodeOverrides(String? raw) {
-    if (raw == null || raw.isEmpty) return {};
-    try {
-      final m = jsonDecode(raw);
-      return m is Map ? Map<String, dynamic>.from(m) : {};
-    } catch (_) {
-      return {};
-    }
-  }
+  static Map<String, dynamic> _decodeOverrides(String? raw) =>
+      decodeBlockOverrides(raw);
 
   /// Mezcla a tres bandas del `contentOverridesJson` de un bloque, clave a
   /// clave. Si los dos cambiaron la misma clave gana [newer], salvo la marca
@@ -639,24 +633,13 @@ abstract final class BundleMerge {
     if (block == null) return null;
     final raw = block['contentOverridesJson'];
     if (raw is! String || raw.isEmpty) return null;
-    try {
-      final m = jsonDecode(raw);
-      final mark = m is Map ? m['onSet'] : null;
-      return mark is Map ? Map<String, dynamic>.from(mark) : null;
-    } catch (_) {
-      return null;
-    }
+    final mark = decodeBlockOverrides(raw)['onSet'];
+    return mark is Map ? Map<String, dynamic>.from(mark) : null;
   }
 
   static void _setMark(Map<String, dynamic> block, Map<String, dynamic>? mark) {
-    Map<String, dynamic> all = {};
     final raw = block['contentOverridesJson'];
-    if (raw is String && raw.isNotEmpty) {
-      try {
-        final m = jsonDecode(raw);
-        if (m is Map) all = Map<String, dynamic>.from(m);
-      } catch (_) {}
-    }
+    final all = decodeBlockOverrides(raw is String ? raw : null);
     if (mark == null) {
       all.remove('onSet');
     } else {

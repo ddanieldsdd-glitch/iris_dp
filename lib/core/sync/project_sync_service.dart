@@ -50,7 +50,12 @@ class ProjectSyncService {
         try {
           await _client.from('cloud_projects').delete().eq('id', cloudId);
           await CloudSessionStore.clearTombstone(cloudId);
-        } catch (_) {
+        } catch (e, st) {
+          ErrorLog.recordUnlessOffline(
+            e,
+            st,
+            context: 'Borrar en la nube un proyecto ya borrado aquí',
+          );
           continue;
         }
       }
@@ -206,7 +211,13 @@ class ProjectSyncService {
             .delete()
             .eq('id', project.cloudId!);
         await CloudSessionStore.clearTombstone(project.cloudId!);
-      } catch (_) {
+      } catch (e, st) {
+        // Se vuelve a intentar en la próxima sincronización.
+        ErrorLog.recordUnlessOffline(
+          e,
+          st,
+          context: 'Borrar el proyecto en la nube',
+        );
         await CloudSessionStore.tombstoneCloudProject(project.cloudId!);
       }
     }

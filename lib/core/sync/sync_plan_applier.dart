@@ -254,7 +254,13 @@ class SyncPlanApplier {
       await _client.from('cloud_projects').delete().eq('id', cloudId);
       await ProjectContentSyncService(_db, _client).deleteSnapshot(cloudId);
       await CloudSessionStore.clearTombstone(cloudId);
-    } catch (_) {
+    } catch (e, st) {
+      // Se vuelve a intentar en la próxima sincronización.
+      ErrorLog.recordUnlessOffline(
+        e,
+        st,
+        context: 'Borrar el proyecto en la nube',
+      );
       await CloudSessionStore.tombstoneCloudProject(cloudId);
     }
     if (localProjectId != null) {

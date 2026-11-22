@@ -59,7 +59,7 @@ Sin coste. Que los datos de otros estén seguros y que varias personas puedan tr
 - [ ] Planta: bloquear al editar, no al abrir, y soltar tras 2 minutos sin tocar. [Colaboración, fase 0]
 
 ### Fiabilidad básica
-- [ ] **Errores a `ErrorLog`** en las rutas de guardado y sincronización que aún los tragan: quedan 28 `catch (_)` en `lib/core/sync` y `lib/core/database`. [FI.4]
+- [x] **Errores a `ErrorLog`** en las rutas de guardado y sincronización que aún los tragan. [FI.4] **2026-11-22:** revisados los 30 `catch (_)`. Se registran: borrar en la nube, base de la mezcla, ajustes del usuario, imagen sustituida, moodboard antiguo y copias viejas de la base. Un bloque de jornada con ajustes ilegibles se guarda aparte (`preserveDamaged`) antes de que «En set» escriba encima. Quedan 19, a propósito: lecturas de JSON con alternativa, limpiezas e indicadores.
 - [x] **Exportación local de la sincronización** fuera del hilo de la interfaz. [RD.1] **Medido el 2026-11-22: no hace falta.** Con la base real, KEBAB se exporta en ~60 ms y la interfaz no se bloquea más de 4–12 ms, porque la base ya trabaja en su propio hilo; la huella ya iba aparte.
 - [x] Rechazo de paquetes de una versión más nueva (`assertReadable`, FI.1).
 - [x] **[Mac]** Jornadas con uid y mezcla por elemento (DR.6, v1.13.0).
