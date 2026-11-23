@@ -7,6 +7,8 @@ import 'arch/arch_material.dart';
 import 'arch/arch_material_picker.dart';
 import 'arch/arch_roof_controls.dart';
 import 'arch/arch_solid.dart';
+import 'arch/arch_stair.dart';
+import 'arch/stair_controls.dart';
 import 'arch/wall_controls.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
@@ -76,6 +78,7 @@ class PlanPieceControls extends StatelessWidget {
       RigControls.appliesTo(el) ||
       PlanHall.isHall(el) ||
       ArchSolid.isSolid(el) ||
+      ArchStair.isStair(el) ||
       _isTerrain(el) ||
       _isGrip(el) ||
       el.type == ElementType.actor ||
@@ -522,6 +525,11 @@ class PlanPieceControls extends StatelessWidget {
           ).copyWith(color: palette.textTertiary),
         ),
       ]);
+    } else if (ArchStair.isStair(el)) {
+      // Escalera o rampa (AM.6).
+      children.add(
+        StairControls(element: el, onPreview: onPreview, onUpdate: onUpdate),
+      );
     } else if (PlanHall.isHall(el)) {
       // Suelo y cubierta de la nave (AM.1).
       children.addAll([

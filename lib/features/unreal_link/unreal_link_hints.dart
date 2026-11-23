@@ -1,4 +1,5 @@
 import '../camera_plan/arch/arch_solid.dart';
+import '../camera_plan/arch/arch_stair.dart';
 import '../camera_plan/camera_plan_constants.dart';
 import '../camera_plan/camera_plan_element_model.dart';
 import '../camera_plan/light/street_lamp.dart';
@@ -29,6 +30,7 @@ abstract final class UnrealLinkHints {
     if (StreetLamp.isOn(el)) return 'street lamp';
     if (PlanPillar.isPillar(el)) return 'column';
     if (ArchSolid.isSlab(el)) return 'floor';
+    if (ArchStair.isStair(el)) return 'stairs';
     if (PlanSegment.isSegment(el)) {
       return switch (PlanSegment.kind(el)) {
         PlanSegment.kindWall => 'wall',

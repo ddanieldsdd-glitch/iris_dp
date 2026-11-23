@@ -1006,6 +1006,27 @@
     tris(s.roofTris, (s.roofMat && archMaterial(s.roofMat, false)) || mat, 'cubierta');
   }
 
+  // Escalera o rampa (AM.6): los peldaños en triángulos que ya manda IRIS.
+  function addStair(s) {
+    if (!s.tris || s.tris.length < 9) return;
+    const pos = [];
+    for (let i = 0; i + 2 < s.tris.length; i += 3) {
+      const v = V(s.tris[i], s.tris[i + 1], s.tris[i + 2]);
+      pos.push(v.x, v.y, v.z);
+    }
+    const mat = (s.mat && archMaterial(s.mat, false)) || solidFallback;
+    const m = meshFrom(pos, mat, s.id);
+    if (mat.map) boxUV(m.geometry, mat);
+    m.castShadow = m.receiveShadow = true;
+    tagPiece(m, s);
+    L.walls.add(m);
+    if (clearView) {
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 30), edgeMat);
+      edges.userData.edges = true;
+      L.walls.add(edges);
+    }
+  }
+
   function addLeaves(o, z0, top) {
     if (!o.span) return;
     const a = [o.span[0], o.span[1]], b = [o.span[2], o.span[3]];
@@ -1521,6 +1542,7 @@
     (sc.halls || []).forEach((h) => h.outline.forEach((p) => grow(p[0], p[1], 0)));
     (sc.surfaces || []).forEach((s) => s.outline.forEach((p) => grow(p[0], p[1], 0)));
     (sc.solids || []).forEach((s) => s.outline.forEach((p) => grow(p[0], p[1], s.z1 || 0)));
+    (sc.stairs || []).forEach((s) => { for (let i = 0; i + 2 < s.tris.length; i += 9) grow(s.tris[i], s.tris[i + 1], s.tris[i + 2]); });
     (sc.walls || []).forEach((w) => w.points.forEach((p, i) => grow(p[0], p[1], (w.z0 || 0) + w.tops[i])));
     (sc.trusses || []).forEach((t) => { grow(t.from[0], t.from[1], t.z); grow(t.to[0], t.to[1], t.z); });
     (sc.fixtures || []).forEach((f) => grow(f.pos[0], f.pos[1], f.pos[2]));
@@ -1557,6 +1579,7 @@
     (sc.walls || []).forEach(addWall);
     (sc.surfaces || []).forEach(addSurface);
     (sc.solids || []).forEach(addSolid);
+    (sc.stairs || []).forEach(addStair);
     (sc.drapes || []).forEach(addDrape);
 
     for (const p of sc.pillars || []) {

@@ -38,7 +38,8 @@ enum PlanClass {
         if (rig == RigType.hall ||
             rig == RigType.pillar ||
             rig == RigType.slab ||
-            rig == RigType.volume) {
+            rig == RigType.volume ||
+            rig == RigType.stair) {
           return PlanClass.architecture;
         }
         if (rig != null) return PlanClass.rigging;

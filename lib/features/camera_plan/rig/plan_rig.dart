@@ -23,6 +23,9 @@ enum RigType {
   /// Forjado y volumen del motor arquitectónico (AM.2, `ArchSolid`).
   slab,
   volume,
+
+  /// Escalera o rampa (AM.6, `ArchStair`).
+  stair,
 }
 
 extension RigTypeCodec on RigType {
@@ -37,6 +40,7 @@ extension RigTypeCodec on RigType {
     RigType.scan => 'Escaneo',
     RigType.slab => 'Forjado',
     RigType.volume => 'Volumen',
+    RigType.stair => 'Escalera',
   };
 
   /// El tipo de estructura de un elemento, o `null` si no lo es.

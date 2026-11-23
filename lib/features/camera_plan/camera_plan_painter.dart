@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import 'arch/arch_solid.dart';
+import 'arch/arch_stair.dart';
 import 'arch/wall_faces.dart';
 import 'arch/wall_joints.dart';
 import 'camera_plan_constants.dart';
@@ -1079,7 +1080,8 @@ class CameraPlanPainter extends CustomPainter {
     // Forjados y volúmenes (AM.2), debajo de todo: son el suelo de lo
     // demás. Una entreplanta, a trazos, va con la estructura.
     bool isGround(PlanElement e) =>
-        ArchSolid.isSolid(e) && !ArchSolid.isOverhead(e);
+        (ArchSolid.isSolid(e) && !ArchSolid.isOverhead(e)) ||
+        ArchStair.isStair(e);
     bool isRig(PlanElement e) => RigTypeCodec.of(e) != null && !isGround(e);
     return [
       ...elements.where(isGround),
@@ -1865,7 +1867,7 @@ class CameraPlanPainter extends CustomPainter {
       return;
     }
     // Un forjado o un volumen se marca con su contorno.
-    if (ArchSolid.isSolid(el)) return;
+    if (ArchSolid.isSolid(el) || ArchStair.isStair(el)) return;
     canvas.drawCircle(
       el.position,
       24,

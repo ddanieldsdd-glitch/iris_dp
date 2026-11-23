@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import '../arch/arch_material.dart';
 import '../arch/arch_solid.dart';
+import '../arch/arch_stair.dart';
 import '../arch/wall_faces.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
@@ -892,6 +893,34 @@ class LightScene {
     }
   }
 
+  /// Una escalera o una rampa (AM.6): cada peldaño tapa por sus lados,
+  /// de donde arranca a su huella.
+  static void _addStair(
+    List<LightBlocker> blockers,
+    PlanElement el,
+    double metersPerUnit,
+  ) {
+    for (final step in ArchStair.steps(el)) {
+      final pts = [
+        for (final p in step.poly) ArchStair.toCanvas(el, p, metersPerUnit),
+      ];
+      for (var i = 0; i < pts.length; i++) {
+        final j = (i + 1) % pts.length;
+        final top = math.max(step.tops[i], step.tops[j]);
+        if (top - step.bottom < 0.01) continue;
+        blockers.add(
+          LightBlocker(
+            pts[i],
+            pts[j],
+            heightM: top,
+            baseM: step.bottom,
+            element: el,
+          ),
+        );
+      }
+    }
+  }
+
   /// Una tela: tapa de su bajo a su borde de arriba, que sigue la
   /// catenaria, y deja pasar lo que deja su tejido.
   static void _addDrape(
@@ -1169,6 +1198,10 @@ class LightScene {
           }
           if (ArchSolid.isSolid(el)) {
             _addSolid(blockers, el, metersPerUnit);
+            continue;
+          }
+          if (ArchStair.isStair(el)) {
+            _addStair(blockers, el, metersPerUnit);
             continue;
           }
           final radius = propSizeM(el) / metersPerUnit;

@@ -17,6 +17,7 @@ import 'package:iris_dp/features/camera_plan/camera_plan_editor.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_painter.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_json.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_screen.dart';
+import 'package:iris_dp/features/camera_plan/plan_palette.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_element_model.dart';
 import 'package:iris_dp/features/camera_plan/floor_plan_repository.dart';
 import 'package:iris_dp/features/camera_plan/light_overrides.dart';
@@ -144,6 +145,18 @@ void main() {
     await settle(tester);
     expect(find.text('Panel'), findsOneWidget);
     expect(find.text('Tubo'), findsOneWidget);
+    // La paleta se desplaza: con las herramientas del motor (AM.6), el
+    // grip queda más abajo.
+    await tester.scrollUntilVisible(
+      find.text('GRIP · CORTA'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(PlanPalette),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     expect(find.text('GRIP · CORTA'), findsOneWidget);
     expect(find.text('Lista de material'), findsOneWidget);
 

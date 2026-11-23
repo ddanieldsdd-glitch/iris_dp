@@ -33,6 +33,11 @@ extension _EditorGestures on _CameraPlanEditorState {
           ArchSolid.contains(el, canvasPos, _metersPerUnit)) {
         return el;
       }
+      // Una escalera (AM.6), tocando un peldaño.
+      if (ArchStair.isStair(el) &&
+          ArchStair.contains(el, canvasPos, _metersPerUnit)) {
+        return el;
+      }
     }
     return null;
   }

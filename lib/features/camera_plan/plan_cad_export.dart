@@ -8,6 +8,7 @@ import 'package:flutter/painting.dart';
 import 'package:xml/xml.dart';
 
 import 'arch/arch_solid.dart';
+import 'arch/arch_stair.dart';
 import 'arch/wall_joints.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
@@ -206,6 +207,19 @@ class PlanCadExport {
           dxf.polyline(layerSolids, [
             for (final p in ArchSolid.outline(el, metersPerUnit)) m(p),
           ], closed: true);
+          continue;
+        case RigType.stair:
+          // Escalera (AM.6): cada peldaño y la línea por la que se sube.
+          for (final step in ArchStair.steps(el)) {
+            dxf.polyline(layerSolids, [
+              for (final p in step.poly)
+                m(ArchStair.toCanvas(el, p, metersPerUnit)),
+            ], closed: true);
+          }
+          dxf.polyline(layerSolids, [
+            for (final p in ArchStair.walkLine(el))
+              m(ArchStair.toCanvas(el, p, metersPerUnit)),
+          ]);
           continue;
         case RigType.hall || RigType.scan:
           continue;

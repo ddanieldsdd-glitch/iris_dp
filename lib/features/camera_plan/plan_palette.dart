@@ -27,6 +27,9 @@ enum PlanTool {
   /// Forjado y volumen (AM.2): un rectángulo de esquina a esquina.
   slab,
   volume,
+
+  /// Escalera (AM.6): del arranque hacia donde sube.
+  stair,
   measure,
 }
 
@@ -40,6 +43,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.truss => 'Truss',
     PlanTool.slab => 'Forjado',
     PlanTool.volume => 'Volumen',
+    PlanTool.stair => 'Escalera',
     PlanTool.measure => 'Medir',
   };
 
@@ -52,6 +56,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.truss => Icons.view_week_outlined,
     PlanTool.slab => Icons.layers_outlined,
     PlanTool.volume => Icons.view_in_ar_outlined,
+    PlanTool.stair => Icons.stairs_outlined,
     PlanTool.measure => Icons.straighten,
   };
 
@@ -63,7 +68,8 @@ extension PlanToolInfo on PlanTool {
       this == PlanTool.drape ||
       this == PlanTool.truss ||
       this == PlanTool.slab ||
-      this == PlanTool.volume;
+      this == PlanTool.volume ||
+      this == PlanTool.stair;
 }
 
 /// Paleta fija de la planta: lo que se puede añadir, siempre a la vista.

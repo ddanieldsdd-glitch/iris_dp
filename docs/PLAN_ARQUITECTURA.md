@@ -289,6 +289,12 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - Las luces y las cámaras se miden desde su nivel; esto ya existe con `levelM`.
 - **Vista de sección** por una línea, en la planta y en la hoja (`plan_elevation.dart`).
 
+*Hecho en parte (2026-11-23, rama `plan/motor-arquitectonico`, sin publicar). Cómo quedó:*
+- `arch/arch_stair.dart` (`RigType.stair`): herramienta «Escalera» en la paleta; se dibuja del arranque hacia donde sube (de caracol, del centro al borde). Formas: recta, en L, en U (con ojo de 10 cm), de caracol (con núcleo y lo que gira) y rampa. Gira a la izquierda o a la derecha.
+- Los peldaños salen de la altura que salva, a cerca de 17,5 cm cada uno; la huella, del largo del tramo. Avisa si es incómoda (huella de menos de 22 cm, 2C + H de más de 70 cm, contrahuella de más de 18,5 cm) o si una rampa pasa del 12 %. Al pasar a rampa una de un piso, se deja al 8 %.
+- Contrato completo: planta (peldaños, línea de subida con círculo y flecha, «16 × 17,5» o «Rampa 8 %»), luz (cada peldaño tapa por sus lados), 3D y GLB de Unreal (una malla por escalera, con su material y nombre de pieza), DXF (peldaños y línea de subida), alzado (silueta escalonada), clase Arquitectura y panel con material.
+- Falta: barandilla (con los barridos de AM.5); niveles de la localización con su forjado y la planta por niveles; la vista de sección; que la escalera conecte dos niveles por su altura.
+
 **AM.7 · Terreno y agua en 3D**
 - Terreno por alturas: una rejilla como la de `roofGrid`, con pinceles para subir, bajar, alisar y aplanar, y capas de material pintadas (arena, hierba, roca, tierra).
 - Las colinas y desniveles de hoy se convierten a este terreno.

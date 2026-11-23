@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../arch/arch_roof.dart';
 import '../arch/arch_solid.dart';
+import '../arch/arch_stair.dart';
 import '../camera_plan_element_model.dart';
 import '../plan_segment.dart';
 import 'plan_drape.dart';
@@ -48,6 +49,8 @@ class RigPainter {
         drawScan(canvas, el.position, metersPerUnit, color: color);
       case RigType.slab || RigType.volume:
         drawSolid(canvas, el, metersPerUnit, selected: selected, ink: color);
+      case RigType.stair:
+        drawStair(canvas, el, metersPerUnit, selected: selected, ink: color);
       case null:
         return false;
     }
@@ -439,6 +442,92 @@ class RigPainter {
       textDirection: TextDirection.ltr,
     )..layout();
     tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  /// Una escalera o una rampa (AM.6), como en los planos: cada peldaño,
+  /// la línea por la que se sube con un círculo en el arranque y la flecha
+  /// en la llegada, y cuántos peldaños y de cuánto.
+  static void drawStair(
+    Canvas canvas,
+    PlanElement el,
+    double mpu, {
+    bool selected = false,
+    Color ink = RigPainter.ink,
+  }) {
+    Offset c(Offset m) => ArchStair.toCanvas(el, m, mpu);
+    final rgb = ArchStair.material(el).albedoRgb;
+    int srgb(int v) {
+      final x = v / 255;
+      final s = x <= 0.0031308 ? x * 12.92 : 1.055 * math.pow(x, 1 / 2.4) - 0.055;
+      return (s.clamp(0.0, 1.0) * 255).round();
+    }
+
+    final fill = Paint()
+      ..color = Color.fromARGB(
+        140,
+        srgb(rgb >> 16 & 255),
+        srgb(rgb >> 8 & 255),
+        srgb(rgb & 255),
+      );
+    final stroke = Paint()
+      ..color = selected ? rigColor : ink.withValues(alpha: 0.85)
+      ..strokeWidth = selected ? 2 : 1
+      ..style = PaintingStyle.stroke;
+    for (final step in ArchStair.steps(el)) {
+      final path = Path()..addPolygon([for (final p in step.poly) c(p)], true);
+      canvas
+        ..drawPath(path, fill)
+        ..drawPath(path, stroke);
+    }
+    if (ArchStair.post(el) case (final poly, _)) {
+      canvas.drawPath(
+        Path()..addPolygon([for (final p in poly) c(p)], true),
+        Paint()..color = ink,
+      );
+    }
+    // Por dónde se sube.
+    final walk = [for (final p in ArchStair.walkLine(el)) c(p)];
+    if (walk.length >= 2) {
+      final line = Paint()
+        ..color = ink
+        ..strokeWidth = 1.2
+        ..style = PaintingStyle.stroke;
+      canvas.drawPath(Path()..addPolygon(walk, false), line);
+      canvas.drawCircle(walk.first, 3.5, line);
+      final end = walk.last, d = end - walk[walk.length - 2];
+      if (d.distance > 0) {
+        final u = d / d.distance, n = Offset(-u.dy, u.dx);
+        canvas.drawPath(
+          Path()
+            ..moveTo(end.dx, end.dy)
+            ..lineTo((end - u * 9 + n * 4.5).dx, (end - u * 9 + n * 4.5).dy)
+            ..lineTo((end - u * 9 - n * 4.5).dx, (end - u * 9 - n * 4.5).dy)
+            ..close(),
+          Paint()..color = ink,
+        );
+      }
+    }
+    // «16 × 17,5» o «Rampa 8 %», junto al arranque.
+    String cm(double m) =>
+        (m * 100).toStringAsFixed(1).replaceAll('.', ',').replaceAll(',0', '');
+    final text = ArchStair.shape(el) == StairShape.ramp
+        ? 'Rampa ${ArchStair.slopePct(el).round()} %'
+        : '${ArchStair.risers(el)} × ${cm(ArchStair.riserM(el))}';
+    final warn = ArchStair.warning(el) != null;
+    final tp = TextPainter(
+      text: TextSpan(
+        text: warn ? '$text !' : text,
+        style: TextStyle(
+          color: warn ? const Color(0xFFE0A030) : ink,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          backgroundColor: _fillFor(ink).withValues(alpha: 0.7),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final at = walk.isEmpty ? el.position : walk.first;
+    tp.paint(canvas, at + const Offset(6, 4));
   }
 
   /// Relleno de un símbolo: claro sobre papel, oscuro sobre la planta

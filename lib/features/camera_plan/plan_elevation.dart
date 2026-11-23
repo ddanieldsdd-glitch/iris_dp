@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'arch/arch_solid.dart';
+import 'arch/arch_stair.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/light_scene.dart';
@@ -321,6 +322,77 @@ class PlanElevation {
               depth: pts.map((p) => p.depth).reduce(math.min),
               // Con cubierta (AM.3), su silueta vista desde este lado.
               profile: _roofSilhouette(el, mpu, at, from, to, level, bottom),
+            ),
+          );
+          continue;
+        case RigType.stair:
+          // Escalera o rampa (AM.6): su silueta de peldaños vista desde
+          // este lado.
+          final level = PlanLevel.of(el);
+          final spans = <(double, double, double Function(double), double)>[];
+          for (final step in ArchStair.steps(el)) {
+            final pts = [
+              for (final p in step.poly)
+                at(ArchStair.toCanvas(el, p, mpu)),
+            ];
+            final lo = pts.map((p) => p.across).reduce(math.min);
+            final hi = pts.map((p) => p.across).reduce(math.max);
+            final tMin = step.tops.reduce(math.min);
+            final tMax = step.tops.reduce(math.max);
+            double avgAcross(double t) {
+              final xs = [
+                for (var i = 0; i < pts.length; i++)
+                  if ((step.tops[i] - t).abs() < 1e-6) pts[i].across,
+              ];
+              return xs.reduce((a, b) => a + b) / xs.length;
+            }
+
+            final a0 = avgAcross(tMin), a1 = avgAcross(tMax);
+            spans.add((
+              lo,
+              hi,
+              (double x) => tMax - tMin < 1e-6 || (a1 - a0).abs() < 1e-6
+                  ? tMax
+                  : (tMin + (tMax - tMin) * ((x - a0) / (a1 - a0)))
+                        .clamp(tMin, tMax),
+              step.bottom,
+            ));
+          }
+          if (spans.isEmpty) continue;
+          final from = spans.map((s) => s.$1).reduce(math.min);
+          final to = spans.map((s) => s.$2).reduce(math.max);
+          final profile = <(double, double, double)>[];
+          // Las aristas de cada peldaño, a un pelo a cada lado, para que
+          // se vea escalonada y no en rampa.
+          final xs = <double>{
+            for (var k = 0; k <= 48; k++) from + (to - from) * k / 48,
+            for (final (lo, hi, _, _) in spans) ...[
+              lo + 1e-4,
+              hi - 1e-4,
+              if (lo - 1e-4 > from) lo - 1e-4,
+              if (hi + 1e-4 < to) hi + 1e-4,
+            ],
+          }.toList()..sort();
+          for (final x in xs) {
+            var top = 0.0, bottom = double.infinity;
+            for (final (lo, hi, h, b) in spans) {
+              if (x < lo - 1e-6 || x > hi + 1e-6) continue;
+              top = math.max(top, h(x));
+              bottom = math.min(bottom, b);
+            }
+            if (bottom.isInfinite) bottom = 0;
+            profile.add((x, level + top, level + bottom));
+          }
+          items.add(
+            ElevationItem(
+              kind: ElevationKind.prop,
+              element: el,
+              from: from,
+              to: to,
+              bottom: level,
+              top: level + profile.map((p) => p.$2 - level).reduce(math.max),
+              depth: spans.isEmpty ? 0 : at(el.position).depth,
+              profile: profile,
             ),
           );
           continue;

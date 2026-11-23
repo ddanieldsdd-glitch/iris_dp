@@ -22,6 +22,7 @@ import '../light/surfaces.dart';
 import '../light/wall_mount.dart';
 import '../arch/arch_material.dart';
 import '../arch/arch_solid.dart';
+import '../arch/arch_stair.dart';
 import '../arch/wall_faces.dart';
 import '../arch/wall_joints.dart';
 import '../plan_classes.dart';
@@ -128,6 +129,7 @@ class PlanScene3d {
     final cameras = <Map<String, dynamic>>[];
     final props = <Map<String, dynamic>>[];
     final solids = <Map<String, dynamic>>[];
+    final stairs = <Map<String, dynamic>>[];
 
     // Techos de los recintos, solo si alguna luz cuelga sin altura propia.
     List<SceneRoom>? rooms;
@@ -281,6 +283,30 @@ class PlanScene3d {
             ...?_solidRoof(el, mpu, level, xy),
             ...?_linked(el),
           });
+        case RigType.stair:
+          // Escalera o rampa (AM.6): la malla de sus peldaños, ya en
+          // metros del mundo.
+          final local = ArchStair.mesh(el);
+          final tris = <double>[];
+          for (var k = 0; k + 2 < local.length; k += 3) {
+            tris
+              ..addAll(
+                xy(
+                  ArchStair.toCanvas(el, Offset(local[k], local[k + 1]), mpu),
+                ),
+              )
+              ..add(_r(level + local[k + 2]));
+          }
+          stairs.add({
+            'id': uid,
+            'name': el.displayLabel,
+            'cat': PlanCategory.of(el).name,
+            'cls': PlanClass.of(el).name,
+            'shape': ArchStair.shape(el).name,
+            'mat': ArchStair.material(el).id,
+            'tris': tris,
+            ...?_linked(el),
+          });
         case RigType.hall || null:
           break;
       }
@@ -379,6 +405,7 @@ class PlanScene3d {
       ..['walls'] = walls
       ..['surfaces'] = surfaces
       ..['solids'] = solids
+      ..['stairs'] = stairs
       ..['drapes'] = drapes
       ..['pillars'] = pillars
       ..['trusses'] = trusses
@@ -439,7 +466,14 @@ class PlanScene3d {
   /// el visor y el glTF de Unreal los construyen una vez.
   static Map<String, dynamic> materialsOf(Map<String, dynamic> scene) {
     final used = <String>{};
-    for (final k in const ['walls', 'surfaces', 'drapes', 'halls', 'solids']) {
+    for (final k in const [
+      'walls',
+      'surfaces',
+      'drapes',
+      'halls',
+      'solids',
+      'stairs',
+    ]) {
       for (final item in (scene[k] as List?) ?? const []) {
         if (item is! Map) continue;
         for (final key in const ['mat', 'matB', 'floorMat', 'roofMat']) {
@@ -747,6 +781,7 @@ class PlanScene3d {
       'rigging',
       'halls',
       'solids',
+      'stairs',
     ];
     final parts = {
       for (final k in kinds)

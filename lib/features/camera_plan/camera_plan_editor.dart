@@ -28,6 +28,7 @@ import '../../shared/equipment/light_optics.dart';
 import '../../shared/annotations/annotation_document.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
 import 'arch/arch_solid.dart';
+import 'arch/arch_stair.dart';
 import 'camera_plan_grouping.dart';
 import '../equipment/widgets/light_quick_add_sheet.dart';
 import 'camera_links.dart';
@@ -2913,6 +2914,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     PlanTool.drape => PlanDrape.kind,
     PlanTool.slab => 'arch-slab',
     PlanTool.volume => 'arch-volume',
+    PlanTool.stair => 'arch-stair',
     _ => PlanSegment.kindWall,
   };
 
@@ -2934,6 +2936,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           to,
           _metersPerUnit,
         ),
+        PlanTool.stair => ArchStair.create(from, to, _metersPerUnit),
         _ => PlanSegment.create(start: from, end: to, kind: _segmentKind),
       },
       keepPosition: true,
