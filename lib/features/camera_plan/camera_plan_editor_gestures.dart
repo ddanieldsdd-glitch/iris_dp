@@ -627,8 +627,11 @@ extension _EditorGestures on _CameraPlanEditorState {
       // Una luz soltada junto a un truss se cuelga de él; lo colgado de
       // un truss movido lo sigue.
       final hung = _settleRig(group);
-      if (hung.isNotEmpty) _update(() {});
-      await _persistMany([...group, ...hung]);
+      // Un actor soltado en un asiento se sienta; lo sentado sigue a su
+      // asiento; quien pisa un forjado o una tarima sube a él.
+      final seated = _settleSeats(group);
+      if (hung.isNotEmpty || seated.isNotEmpty) _update(() {});
+      await _persistMany([...group, ...hung, ...seated]);
       // Mover la nave (su asa) la rehace en su sitio.
       if (group.length == 1 && PlanHall.isHall(dragged)) {
         await _regenerateHall(dragged);
@@ -643,10 +646,13 @@ extension _EditorGestures on _CameraPlanEditorState {
     } else {
       final el = _selected!;
       ArchRecipe.markTouched(el);
-      // Lo colgado de un truss estirado lo sigue.
+      // Lo colgado de un truss estirado lo sigue; lo sentado, su asiento.
       final hung = _settleRig([el]);
+      final seated = _settleSeats([el]);
       await _persistElement(el);
-      if (hung.isNotEmpty) await _persistMany(hung);
+      if (hung.isNotEmpty || seated.isNotEmpty) {
+        await _persistMany([...hung, ...seated]);
+      }
       // Una pared de la nave estirada o curvada a mano mueve su perímetro.
       final hall = _hallOf(el);
       if (wasHandle &&

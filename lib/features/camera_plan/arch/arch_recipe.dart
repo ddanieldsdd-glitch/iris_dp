@@ -6,6 +6,7 @@ import '../camera_plan_element_model.dart';
 import '../light/light_scene.dart';
 import '../light_overrides.dart';
 import '../plan_opening.dart';
+import '../plan_seats.dart';
 import '../plan_segment.dart';
 import '../rig/plan_hall.dart';
 import '../rig/plan_rig.dart';
@@ -52,7 +53,12 @@ enum RecipeKind {
     RecipeGroup.rail,
     'Andén a su altura, vías, catenaria, marquesina y escalera',
   ),
-  carriage('Vagón', RecipeGroup.rail, 'Casco, suelo y asientos en filas'),
+  carriage(
+    'Vagón',
+    RecipeGroup.rail,
+    'Por dentro: suelo, ventanas, puertas, bancos y mesas para sentar a '
+        'los personajes',
+  ),
   mountain(
     'Montaña',
     RecipeGroup.nature,
@@ -229,6 +235,11 @@ abstract final class ArchRecipe {
       RecipeKnob.toggle('catenary', 'Catenaria', true),
     ],
     RecipeKind.carriage => const [
+      RecipeKnob.choice('layout', 'Asientos', 'tables', [
+        ('tables', 'Enfrentados con mesa'),
+        ('rows', 'En filas'),
+        ('metro', 'Bancos a los lados'),
+      ]),
       RecipeKnob.number('lengthM', 'Largo', 20, min: 8, max: 27, step: 0.5),
       RecipeKnob.number('widthM', 'Ancho', 2.9, min: 2.4, max: 3.4, step: 0.05),
       RecipeKnob.number(
@@ -247,6 +258,7 @@ abstract final class ArchRecipe {
         max: 2.4,
         step: 0.05,
       ),
+      RecipeKnob.toggle('doors', 'Puertas a los lados', true),
     ],
     RecipeKind.mountain => const [
       RecipeKnob.number('sizeM', 'Tamaño', 120, min: 40, max: 400, step: 5),
@@ -924,27 +936,178 @@ abstract final class ArchRecipe {
     );
   }
 
+  /// El vagón por dentro: bastidor, suelo, paredes con ventanas en serie,
+  /// puertas, testeros con su paso, techo en bóveda y los asientos y las
+  /// mesas como muebles sueltos (para sentar a los personajes).
   static void _carriage(_Builder b) {
     final len = b.n('lengthM'), w = b.n('widthM'), floor = b.n('floorM');
-    final hull = b.sweep(
-      'hull',
-      Offset(-len / 2, 0),
-      Offset(len / 2, 0),
-      SweepKind.hull,
+    final pitch = b.n('pitchM');
+    final layout = b.s('layout');
+    final doors = b.flag('doors');
+    final hl = len / 2, hw = w / 2;
+    const wallT = 0.08, inner = 2.15, vestibule = 2.0;
+    // Bajo el piso, el bastidor; encima, el suelo.
+    b.volume(
+      'chassis',
+      Rect.fromLTRB(-hl + 0.6, -hw + 0.25, hl - 0.6, hw - 0.25),
+      height: math.max(0.05, floor - 0.35),
+      mat: 'metal-brushed',
+      level: 0.35,
     );
-    hull.props
-      ..[ArchSweep.widthKey] = w
-      ..[ArchSweep.baseKey] = floor;
-    // Dos filas de asientos, con el pasillo en medio.
-    for (final (i, y) in [-(w / 2 - 0.55), w / 2 - 0.55].indexed) {
-      final seats = b.sweep(
-        'seats$i',
-        Offset(-len / 2 + 2.2, y),
-        Offset(len / 2 - 2.2, y),
-        SweepKind.seats,
+    b.slab(
+      'floor',
+      Rect.fromLTRB(-hl, -hw, hl, hw),
+      top: floor,
+      thick: 0.12,
+      mat: 'carpet-dark',
+    );
+    // Paredes y testeros.
+    for (final (i, (a, c)) in [
+      (Offset(-hl, -hw), Offset(hl, -hw)),
+      (Offset(hl, -hw), Offset(hl, hw)),
+      (Offset(hl, hw), Offset(-hl, hw)),
+      (Offset(-hl, hw), Offset(-hl, -hw)),
+    ].indexed) {
+      b.wall(
+        'w$i',
+        a,
+        c,
+        level: floor,
+        height: inner,
+        thick: wallT,
+        mat: 'paint-white',
+      );
+    }
+    // El paso entre vagones, en cada testero.
+    for (final (i, x) in [-hl, hl].indexed) {
+      b.opening(
+        'gang$i',
+        ArchitectureType.doorClosed,
+        Offset(x, 0),
+        90,
+        0.9,
+        head: 1.95,
         level: floor,
       );
-      seats.props[ArchSweep.everyKey] = b.n('pitchM');
+    }
+    // Puertas a los lados, junto a cada extremo.
+    final seatFrom = -hl + vestibule, seatTo = hl - vestibule;
+    if (doors) {
+      for (final (i, x) in [-hl + vestibule / 2, hl - vestibule / 2].indexed) {
+        for (final (j, y) in [-hw, hw].indexed) {
+          b.opening(
+            'door$i$j',
+            ArchitectureType.doubleDoor,
+            Offset(x, y),
+            0,
+            1.3,
+            head: 1.95,
+            level: floor,
+          );
+        }
+      }
+    }
+    // Ventanas en serie entre las puertas.
+    final windows = math.max(1, ((seatTo - seatFrom) / 1.9).floor());
+    final step = (seatTo - seatFrom) / windows;
+    for (var k = 0; k < windows; k++) {
+      final x = seatFrom + (k + 0.5) * step;
+      for (final (j, y) in [-hw, hw].indexed) {
+        b.window(
+          'win$k$j',
+          Offset(x, y),
+          0,
+          math.min(1.4, step - 0.35),
+          level: floor,
+          sill: 0.75,
+          head: 1.75,
+        );
+      }
+    }
+    // El techo en bóveda.
+    final roof = b.volume(
+      'roof',
+      Rect.fromLTRB(-hl, -hw, hl, hw),
+      height: 0.06,
+      mat: 'metal-brushed',
+      level: floor + inner,
+    );
+    roof.props[ArchSolid.roofKey] = ArchRoof(
+      kind: ArchRoofKind.vault,
+      riseM: 0.35,
+      ridgeDeg: 0,
+      overhangM: 0.05,
+      mat: 'metal-brushed',
+    ).toJson();
+    // Asientos a cada lado del pasillo: de dos plazas, contra la pared.
+    final seatD = 0.55, seatW = math.min(1.05, (w - 2 * wallT - 0.6) / 2);
+    final sideY = [-(hw - wallT - seatW / 2), hw - wallT - seatW / 2];
+    void bench(String tag, Offset c, double deg, double width, double depth) {
+      final el = b.prop(
+        tag,
+        PropType.sofa,
+        c,
+        width,
+        depth,
+        1.05,
+        level: floor,
+        deg: deg,
+      );
+      el.props[PlanSeats.seatHeightKey] = 0.45;
+      el.customName = 'Asiento';
+    }
+
+    switch (layout) {
+      case 'metro':
+        // Bancos corridos contra las paredes, de cara al pasillo.
+        const benchW = 0.5;
+        for (final (j, y) in [
+          -(hw - wallT - benchW / 2),
+          hw - wallT - benchW / 2,
+        ].indexed) {
+          for (var k = 0; k < windows; k++) {
+            final x = seatFrom + (k + 0.5) * step;
+            bench(
+              'seat$k-$j',
+              Offset(x, y),
+              j == 0 ? 180 : 0,
+              step - 0.3,
+              benchW,
+            );
+          }
+        }
+      case 'rows':
+        // Todos mirando hacia delante (a la derecha del lienzo).
+        final n = math.max(1, ((seatTo - seatFrom) / pitch).floor());
+        for (var k = 0; k < n; k++) {
+          final x = seatFrom + (k + 0.5) * (seatTo - seatFrom) / n;
+          for (final (j, y) in sideY.indexed) {
+            bench('seat$k-$j', Offset(x, y), 90, seatW, seatD);
+          }
+        }
+      default:
+        // Enfrentados de dos en dos, con una mesa entre los dos.
+        final bay = pitch + seatD + 0.25;
+        final n = math.max(1, ((seatTo - seatFrom) / bay).floor());
+        final pad = (seatTo - seatFrom - n * bay) / 2;
+        for (var k = 0; k < n; k++) {
+          final x0 = seatFrom + pad + k * bay + seatD / 2 + 0.12;
+          final x1 = x0 + pitch;
+          for (final (j, y) in sideY.indexed) {
+            bench('seat$k-$j-a', Offset(x0, y), 90, seatW, seatD);
+            bench('seat$k-$j-b', Offset(x1, y), 270, seatW, seatD);
+            final table = b.prop(
+              'table$k-$j',
+              PropType.table,
+              Offset((x0 + x1) / 2, y + (j == 0 ? -0.05 : 0.05)),
+              math.max(0.4, pitch - seatD - 0.2),
+              seatW - 0.15,
+              0.74,
+              level: floor,
+            );
+            table.customName = 'Mesa';
+          }
+        }
     }
   }
 
@@ -1196,7 +1359,7 @@ class _Builder {
     double level = 0,
   }) => add(ArchSweep.create(at(from), at(to), kind: kind), tag, level: level);
 
-  void prop(
+  PlanElement prop(
     String tag,
     PropType type,
     Offset c,
@@ -1204,11 +1367,13 @@ class _Builder {
     double d,
     double h, {
     double level = 0,
+    double deg = 0,
   }) => add(
     PlanElement(
       id: 0,
       type: ElementType.prop,
       position: at(c),
+      rotation: deg,
       label: type.dbValue,
       props: {
         if (type == PropType.tree) ...{

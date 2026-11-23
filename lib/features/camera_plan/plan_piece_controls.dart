@@ -29,6 +29,7 @@ import 'light/plan_light.dart';
 import 'light/surfaces.dart';
 import 'light_overrides.dart';
 import 'plan_marks.dart';
+import 'plan_seats.dart';
 import 'plan_opening.dart';
 import 'plan_segment.dart';
 import 'plan_street.dart';
@@ -1121,7 +1122,11 @@ class PlanPieceControls extends StatelessWidget {
               (PlanMarks.poseSit, 'Sentado'),
               (PlanMarks.poseLie, 'Tumbado'),
             ],
-            (pose) => el.props[PlanMarks.poseKey] = pose,
+            (pose) {
+              el.props[PlanMarks.poseKey] = pose;
+              // De pie, deja su asiento (F6.1.9b).
+              if (pose == PlanMarks.poseStand) el.props.remove(PlanSeats.seatKey);
+            },
           ),
         );
       }

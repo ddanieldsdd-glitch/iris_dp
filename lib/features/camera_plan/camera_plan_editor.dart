@@ -32,6 +32,7 @@ import 'arch/arch_stair.dart';
 import 'arch/arch_sweep.dart';
 import 'arch/arch_terrain.dart';
 import 'arch/arch_recipe.dart';
+import 'plan_seats.dart';
 import 'arch/recipe_controls.dart';
 import 'arch/plan_section.dart';
 import 'arch/plan_levels.dart';
@@ -3835,9 +3836,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   Future<void> _changedFrom3d(PlanElement el) async {
     if (!mounted) return;
     final hung = _settleRig([el]);
+    final seated = _settleSeats([el]);
     setState(() {});
     await _persistElement(el);
-    if (hung.isNotEmpty) await _persistMany(hung);
+    if (hung.isNotEmpty || seated.isNotEmpty) {
+      await _persistMany([...hung, ...seated]);
+    }
   }
 
   /// Lo tocado en el 3D se selecciona en la planta.
@@ -3992,11 +3996,33 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (mounted) _select(recipe);
   }
 
-  /// Rehace lo que genera un lugar tipo tras cambiarlo o moverlo.
+  /// Rehace lo que genera un lugar tipo tras cambiarlo o moverlo. Quien
+  /// está sentado en sus asientos los sigue.
   Future<void> _regenerateRecipe(PlanElement recipe) async {
     final next = [..._elements];
     ArchRecipe.regenerate(next, recipe, _metersPerUnit);
+    final seated = PlanSeats.follow(next, _metersPerUnit);
     await _replaceElements(next, layer: recipe.layer);
+    if (seated.isNotEmpty) await _persistMany(seated);
+  }
+
+  /// Tras soltar [moved]: un actor sobre un asiento se sienta (o se
+  /// levanta si se le aparta), quien pisa un forjado o una tarima sube a
+  /// él, y lo sentado en un asiento movido lo sigue (F6.1.9b). Devuelve lo
+  /// demás que ha cambiado.
+  List<PlanElement> _settleSeats(List<PlanElement> moved) {
+    final mpu = _metersPerUnit;
+    for (final el in moved) {
+      if (!PlanSeats.settle(_elements, el, mpu)) {
+        PlanFloors.settle(_elements, el, mpu);
+      }
+    }
+    if (!moved.any(PlanSeats.isSeat)) return const [];
+    final set = moved.toSet();
+    return [
+      for (final a in PlanSeats.follow(_elements, mpu))
+        if (!set.contains(a)) a,
+    ];
   }
 
   /// Rehace lo que genera la nave tras cambiar su receta o moverla.

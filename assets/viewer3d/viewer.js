@@ -1742,13 +1742,59 @@
     });
 
     const skin = new THREE.MeshStandardMaterial({ color: 0xdedad3, roughness: 0.8 });
-    for (const q of sc.people || []) {
+    // Un maniquí con su postura (de pie, sentado o tumbado), mirando hacia
+    // +Z de su grupo; luego se gira hacia donde mira el actor (F6.1.9b).
+    function limb(len, r, from, dirV) {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.85, len, 8), skin);
+      const d = dirV.clone().normalize();
+      m.position.copy(from).addScaledVector(d, len / 2);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d);
+      return m;
+    }
+    function figure(pose, seatM) {
       const g = new THREE.Group();
-      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.14, 1.42, 10), skin);
-      b.position.y = 0.71;
+      const up = new THREE.Vector3(0, 1, 0), down = new THREE.Vector3(0, -1, 0);
+      const fwd = new THREE.Vector3(0, 0, 1);
+      const P = (x, y, z) => new THREE.Vector3(x, y, z);
+      if (pose === 'lie') {
+        const y = (seatM || 0) + 0.12;
+        // La cabeza hacia el cabecero (detrás), los pies hacia delante.
+        g.add(limb(0.62, 0.17, P(0, y, -0.62), fwd));
+        const hd = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 10), skin);
+        hd.position.set(0, y, -0.76);
+        g.add(hd);
+        for (const x of [-0.09, 0.09]) g.add(limb(0.85, 0.065, P(x, y, 0), fwd));
+        for (const x of [-0.24, 0.24]) g.add(limb(0.6, 0.045, P(x, y, -0.55), fwd));
+        return g;
+      }
+      if (pose === 'sit') {
+        const s = seatM || 0.45;
+        const hip = s + 0.08;
+        // Muslos hacia delante, piernas abajo, tronco y cabeza.
+        for (const x of [-0.1, 0.1]) {
+          g.add(limb(0.44, 0.075, P(x, hip, -0.05), fwd));
+          g.add(limb(hip, 0.06, P(x, hip, 0.39), down));
+        }
+        g.add(limb(0.6, 0.17, P(0, hip, -0.08), up));
+        const hd = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 10), skin);
+        hd.position.set(0, hip + 0.74, -0.06);
+        g.add(hd);
+        for (const x of [-0.23, 0.23]) g.add(limb(0.55, 0.045, P(x, hip + 0.55, -0.06), P(0, -0.7, 0.6)));
+        return g;
+      }
+      for (const x of [-0.1, 0.1]) g.add(limb(0.86, 0.07, P(x, 0, 0), up));
+      g.add(limb(0.6, 0.17, P(0, 0.86, 0), up));
       const hd = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 10), skin);
       hd.position.y = 1.6;
-      g.add(b, hd);
+      g.add(hd);
+      for (const x of [-0.23, 0.23]) g.add(limb(0.62, 0.045, P(x, 0.84, 0), up));
+      return g;
+    }
+    for (const q of sc.people || []) {
+      const g = new THREE.Group();
+      const f = figure(q.pose, q.seatM);
+      if (q.dir) f.rotation.y = Math.atan2(q.dir[0], -q.dir[1]);
+      g.add(f);
       g.position.copy(V(q.at[0], q.at[1], q.z0 || 0));
       g.userData.id = q.id; g.userData.movable = true; g.userData.dragY = q.z0 || 0; g.userData.liftable = true; picks.push(g);
       L.people.add(g);

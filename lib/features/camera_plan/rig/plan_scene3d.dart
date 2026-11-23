@@ -31,6 +31,7 @@ import '../plan_classes.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
 import '../plan_opening.dart';
+import '../plan_seats.dart';
 import '../plan_segment.dart';
 import '../plan_street.dart';
 import '../prop_box.dart';
@@ -145,6 +146,14 @@ class PlanScene3d {
       ).rooms;
       return LightScene.ceilingAt(rooms!, p);
     }
+
+    // El alto de cada asiento, para sentar a quien está en él (F6.1.9b).
+    final seatH = <String, double>{
+      for (final el in elements)
+        if (PlanSeats.isSeat(el))
+          if (LightOverrides.uidOf(el) case final u?)
+            u: PlanSeats.seatHeightM(el),
+    };
 
     for (final (i, el) in elements.indexed) {
       final level = PlanLevel.of(el);
@@ -417,6 +426,13 @@ class PlanScene3d {
             'yawDeg': _r(el.rotation),
             'pose': PlanMarks.pose(el),
             'heightM': _r(PlanMarks.heightM(el)),
+            // Hacia dónde mira (como la cámara) y el alto de su asiento.
+            'dir': [
+              _r(math.sin(el.rotation * math.pi / 180)),
+              _r(math.cos(el.rotation * math.pi / 180)),
+            ],
+            if (PlanSeats.of(el) case final s?)
+              if (seatH[s.uid] case final h?) 'seatM': h,
           });
         case ElementType.camera:
           final rad = el.rotation * math.pi / 180;
