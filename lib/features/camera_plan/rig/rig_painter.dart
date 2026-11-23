@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../arch/arch_recipe.dart';
 import '../arch/arch_roof.dart';
 import '../arch/arch_solid.dart';
 import '../arch/arch_material.dart';
@@ -72,6 +73,8 @@ class RigPainter {
         drawSweep(canvas, el, metersPerUnit, selected: selected, ink: color);
       case RigType.terrain:
         drawTerrain(canvas, el, metersPerUnit, selected: selected, ink: color);
+      case RigType.recipe:
+        drawRecipe(canvas, el, metersPerUnit, selected: selected);
       case null:
         return false;
     }
@@ -660,6 +663,47 @@ class RigPainter {
 
   /// Una línea de sección (AM.6): trazo y punto, y en cada punta una
   /// flecha hacia donde se mira con su letra, como en un plano.
+  /// La receta de un lugar (AM.8): un rombo con su nombre en su centro,
+  /// del que se coge para moverla entera o cambiarla.
+  static void drawRecipe(
+    Canvas canvas,
+    PlanElement el,
+    double mpu, {
+    bool selected = false,
+  }) {
+    const color = Color(0xFF8FA3B5);
+    final size = math.max(9.0, 0.6 / mpu);
+    final c = el.position;
+    final diamond = Path()
+      ..moveTo(c.dx, c.dy - size)
+      ..lineTo(c.dx + size, c.dy)
+      ..lineTo(c.dx, c.dy + size)
+      ..lineTo(c.dx - size, c.dy)
+      ..close();
+    canvas
+      ..drawPath(diamond, Paint()..color = const Color(0xCC1E2228))
+      ..drawPath(
+        diamond,
+        Paint()
+          ..color = selected ? rigColor : color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = selected ? 2.2 : 1.4,
+      );
+    final tp = TextPainter(
+      text: TextSpan(
+        text: ArchRecipe.kind(el).label,
+        style: TextStyle(
+          color: selected ? rigColor : color,
+          fontSize: size * 0.9,
+          fontWeight: FontWeight.w600,
+          backgroundColor: const Color(0xCC0C0C0F),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, c + Offset(-tp.width / 2, size * 1.2));
+  }
+
   static void drawSection(
     Canvas canvas,
     PlanElement el,

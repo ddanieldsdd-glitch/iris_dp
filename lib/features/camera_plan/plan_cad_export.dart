@@ -273,6 +273,9 @@ class PlanCadExport {
             }
           }
           continue;
+        // La receta (AM.8) no es una pieza: lo son las que genera.
+        case RigType.recipe:
+          continue;
         case RigType.section:
           // Sección (AM.6): la línea y, en cada punta, la flecha hacia
           // donde se mira y su letra.

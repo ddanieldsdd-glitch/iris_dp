@@ -9,6 +9,13 @@ extension _EditorGestures on _CameraPlanEditorState {
 
   PlanElement? _elementAt(Offset canvasPos) {
     final slack = 1 / math.min(1.0, _scale);
+    // Un lugar tipo (AM.8), por su rombo: antes que sus piezas.
+    for (final el in _drawnElements.reversed) {
+      if (ArchRecipe.isRecipe(el) &&
+          (el.position - canvasPos).distance < 16 * slack) {
+        return el;
+      }
+    }
     for (final el in _drawnElements.reversed) {
       if (PlanSegment.isSegment(el) || PlanTruss.isTruss(el)) continue;
       if ((el.position - canvasPos).distance < 28 * slack) return el;
@@ -626,8 +633,16 @@ extension _EditorGestures on _CameraPlanEditorState {
       if (group.length == 1 && PlanHall.isHall(dragged)) {
         await _regenerateHall(dragged);
       }
+      // Un lugar tipo (AM.8) también; una pieza suya movida a mano se
+      // queda donde se deja.
+      if (group.length == 1 && ArchRecipe.isRecipe(dragged)) {
+        await _regenerateRecipe(dragged);
+      } else if (group.any(ArchRecipe.markTouched)) {
+        await _persistMany(group);
+      }
     } else {
       final el = _selected!;
+      ArchRecipe.markTouched(el);
       // Lo colgado de un truss estirado lo sigue.
       final hung = _settleRig([el]);
       await _persistElement(el);

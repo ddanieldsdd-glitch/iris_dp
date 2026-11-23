@@ -36,6 +36,10 @@ enum RigType {
 
   /// Terreno por alturas (AM.7, `ArchTerrain`), con su agua.
   terrain,
+
+  /// Receta de lugar (AM.8, `ArchRecipe`): casa, edificio, estación,
+  /// playa… Genera piezas del motor; ella misma no se construye.
+  recipe,
 }
 
 extension RigTypeCodec on RigType {
@@ -54,6 +58,7 @@ extension RigTypeCodec on RigType {
     RigType.section => 'Sección',
     RigType.sweep => 'Barrido',
     RigType.terrain => 'Terreno',
+    RigType.recipe => 'Lugar',
   };
 
   /// El tipo de estructura de un elemento, o `null` si no lo es.

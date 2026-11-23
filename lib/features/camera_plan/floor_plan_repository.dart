@@ -8,6 +8,7 @@ import 'package:flutter/painting.dart' show Offset, Rect;
 import '../../core/database/app_database.dart';
 import '../../core/utils/shot_reference_import.dart';
 import 'camera_plan_constants.dart';
+import 'arch/arch_recipe.dart';
 import 'camera_links.dart';
 import 'camera_plan_element_model.dart';
 import 'floor_plan_json.dart';
@@ -16,6 +17,7 @@ import 'floor_plan_scope.dart';
 import 'light/ambient.dart';
 import 'env_overrides.dart';
 import 'light_overrides.dart';
+import 'plan_segment.dart' show defaultMetersPerUnit;
 import 'set_environment.dart';
 import 'plan_follow.dart';
 import 'plan_images.dart';
@@ -739,12 +741,21 @@ class FloorPlanRepository {
     LocationBasePlan? fromSet,
     bool fromSite = false,
     bool includeLights = false,
+    RecipeKind? recipe,
   }) async {
     final siblings = (await db.getLocationsMapForProject(
       projectId,
     )).values.where((l) => l.siteId == siteId).toList();
     String? planJson;
-    if (fromSet != null) {
+    if (recipe != null) {
+      // Un lugar tipo (AM.8), hecho solo con piezas del motor.
+      planJson = FloorPlanJson.encodeDocument(
+        FloorPlanDocument(
+          elements: ArchRecipe.standalone(recipe),
+          metersPerUnit: defaultMetersPerUnit,
+        ),
+      );
+    } else if (fromSet != null) {
       planJson = renewedPlanJson(fromSet.floorPlanJson);
     } else if (fromSite && siteId != null) {
       final site = await db.getSiteById(siteId);

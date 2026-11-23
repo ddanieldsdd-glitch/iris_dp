@@ -6,6 +6,7 @@ import '../../core/database/app_database.dart';
 import '../../core/sync/plan_library_store.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import 'arch/arch_recipe.dart';
 import 'camera_plan_constants.dart';
 import 'floor_plan_json.dart';
 import 'floor_plan_repository.dart';
@@ -186,8 +187,12 @@ class NewSetRequest {
   /// Set de la biblioteca del que se parte, con su planta y sus luces.
   final PlanLibraryEntry? fromLibrary;
 
+  /// Lugar tipo con el que empieza (AM.8): casa, estación, playa…
+  final RecipeKind? recipe;
+
   const NewSetRequest({
     required this.name,
+    this.recipe,
     this.fromSet,
     this.fromLibrary,
     this.fromSite = false,
@@ -212,7 +217,10 @@ Future<NewSetRequest?> askNewSet(
   var from = -1;
   final savedSets = library.where((e) => e.isSet).toList();
   PlanLibraryEntry? saved(int value) =>
-      value <= -2 ? savedSets[-2 - value] : null;
+      value <= -2 && value > -1000 ? savedSets[-2 - value] : null;
+  // -1000 - i = lugar tipo i (AM.8).
+  RecipeKind? place(int value) =>
+      value <= -1000 ? RecipeKind.values[-1000 - value] : null;
   var includeLights = true;
   return showDialog<NewSetRequest>(
     context: context,
@@ -233,6 +241,7 @@ Future<NewSetRequest?> askNewSet(
                   : null,
               includeLights: lightsAvailable && includeLights,
               fromLibrary: saved(from),
+              recipe: place(from),
             ),
           );
         }
@@ -279,12 +288,21 @@ Future<NewSetRequest?> askNewSet(
                         value: -2 - i,
                         child: Text('Biblioteca · ${savedSets[i].name}'),
                       ),
+                    for (final k in RecipeKind.values)
+                      DropdownMenuItem(
+                        value: -1000 - k.index,
+                        child: Text('Lugar tipo · ${k.label}'),
+                      ),
                   ],
                   onChanged: (v) => refresh(() {
                     from = v ?? -1;
                     final entry = saved(from);
                     if (entry != null && controller.text.trim().isEmpty) {
                       controller.text = entry.name;
+                    }
+                    final k = place(from);
+                    if (k != null && controller.text.trim().isEmpty) {
+                      controller.text = k.label;
                     }
                   }),
                 ),

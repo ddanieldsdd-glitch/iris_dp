@@ -31,6 +31,8 @@ import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
 import 'arch/arch_sweep.dart';
 import 'arch/arch_terrain.dart';
+import 'arch/arch_recipe.dart';
+import 'arch/recipe_controls.dart';
 import 'arch/plan_section.dart';
 import 'arch/plan_levels.dart';
 import 'camera_plan_grouping.dart';
@@ -3976,6 +3978,27 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     if (mounted) _select(added.first);
   }
 
+  /// Un lugar tipo (AM.8) en el centro de la vista, con sus piezas.
+  Future<void> _addPlace() async {
+    final kind = await showRecipePicker(context);
+    if (kind == null || !mounted) return;
+    final recipe = ArchRecipe.create(kind, _snapToGrid(_viewCenter));
+    final layer = await _layerForNew(ElementType.wall);
+    if (!mounted) return;
+    recipe.layer = layer;
+    final next = [..._elements, recipe];
+    ArchRecipe.regenerate(next, recipe, _metersPerUnit);
+    await _replaceElements(next, layer: layer);
+    if (mounted) _select(recipe);
+  }
+
+  /// Rehace lo que genera un lugar tipo tras cambiarlo o moverlo.
+  Future<void> _regenerateRecipe(PlanElement recipe) async {
+    final next = [..._elements];
+    ArchRecipe.regenerate(next, recipe, _metersPerUnit);
+    await _replaceElements(next, layer: recipe.layer);
+  }
+
   /// Rehace lo que genera la nave tras cambiar su receta o moverla.
   Future<void> _regenerateHall(PlanElement hall) async {
     final next = [..._elements];
@@ -5032,6 +5055,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                       catalogLights: _gear.catalogLights,
                       onAddArchitecture: _addArchitecture,
                       onAddHall: _openHallBuilder,
+                      onAddPlace: _addPlace,
                       wallsToEnvironment:
                           _linkedSet != null && _linkedSite != null
                           ? _wallsToEnvironment
@@ -5619,6 +5643,12 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                   onPreview: () => setState(() {}),
                                   onUpdate: () async {
                                     final el = _selected!;
+                                    // Un lugar tipo (AM.8) se rehace.
+                                    if (ArchRecipe.isRecipe(el)) {
+                                      await _regenerateRecipe(el);
+                                      return;
+                                    }
+                                    ArchRecipe.markTouched(el);
                                     await _syncCameraSensor(el);
                                     // Una luz de pared se pega a la pared.
                                     if (LightWallMount.isOn(el)) {

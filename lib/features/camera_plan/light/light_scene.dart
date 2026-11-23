@@ -1308,7 +1308,10 @@ class LightScene {
             continue;
           }
           // Una línea de sección (AM.6) no tapa nada.
-          if (RigTypeCodec.of(el) == RigType.section) continue;
+          if (RigTypeCodec.of(el) == RigType.section ||
+              RigTypeCodec.of(el) == RigType.recipe) {
+            continue;
+          }
           final radius = propSizeM(el) / metersPerUnit;
           final height = propHeightM(el);
           switch (el.propType) {
@@ -1626,6 +1629,10 @@ class LightScene {
         final rel = centre - a;
         final off = (rel.dx * dir.dy - rel.dy * dir.dx).abs();
         if (off > _mountTolerance) continue;
+        // Una pared de otra planta (AM.8) no tiene ese hueco.
+        if ((PlanLevel.of(gap.element) - PlanLevel.of(element)).abs() > 0.05) {
+          continue;
+        }
         double along(Offset p) =>
             (p.dx - a.dx) * dir.dx + (p.dy - a.dy) * dir.dy;
         final la = along(oa);

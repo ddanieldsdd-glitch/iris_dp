@@ -133,6 +133,7 @@ class _PlanGlobalMapState extends ConsumerState<PlanGlobalMap> {
       fromSet: request.fromSet,
       fromSite: request.fromSite,
       includeLights: request.includeLights,
+      recipe: request.recipe,
     );
   }
 

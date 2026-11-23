@@ -767,7 +767,10 @@ class PlanElevation {
             }
           }
           continue;
-        case RigType.hall || RigType.scan || RigType.section:
+        case RigType.hall ||
+            RigType.scan ||
+            RigType.section ||
+            RigType.recipe:
           continue;
         case null:
           break;

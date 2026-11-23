@@ -12,6 +12,8 @@ import 'arch/arch_sweep.dart';
 import 'arch/arch_terrain.dart';
 import 'arch/sweep_controls.dart';
 import 'arch/terrain_controls.dart';
+import 'arch/arch_recipe.dart';
+import 'arch/recipe_controls.dart';
 import 'arch/level_controls.dart';
 import 'arch/plan_section.dart';
 import 'arch/section_controls.dart';
@@ -90,6 +92,7 @@ class PlanPieceControls extends StatelessWidget {
       PlanSection.isSection(el) ||
       ArchSweep.isSweep(el) ||
       ArchTerrain.isTerrain(el) ||
+      ArchRecipe.isRecipe(el) ||
       _isTerrain(el) ||
       _isGrip(el) ||
       el.type == ElementType.actor ||
@@ -552,6 +555,11 @@ class PlanPieceControls extends StatelessWidget {
           onPreview: onPreview,
           onUpdate: onUpdate,
         ),
+      );
+    } else if (ArchRecipe.isRecipe(el)) {
+      // Lugar tipo (AM.8).
+      children.add(
+        RecipeControls(element: el, onPreview: onPreview, onUpdate: onUpdate),
       );
     } else if (ArchTerrain.isTerrain(el)) {
       // Terreno (AM.7).

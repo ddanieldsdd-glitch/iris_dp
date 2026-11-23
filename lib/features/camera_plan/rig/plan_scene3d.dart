@@ -363,7 +363,7 @@ class PlanScene3d {
               ],
             });
           }
-        case RigType.hall || RigType.section || null:
+        case RigType.hall || RigType.section || RigType.recipe || null:
           break;
       }
       switch (el.type) {
@@ -1016,6 +1016,8 @@ class PlanScene3d {
           ];
     final holes = <Map<String, dynamic>>[];
     for (final o in openings) {
+      // Un hueco de otra planta (AM.8) no es de esta pared.
+      if ((PlanLevel.of(o) - level).abs() > 0.05) continue;
       // Dónde cae el centro del hueco sobre la pared.
       var best = double.infinity, along = 0.0;
       for (var k = 1; k < pts.length; k++) {

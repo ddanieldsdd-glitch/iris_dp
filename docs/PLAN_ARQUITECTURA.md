@@ -350,6 +350,31 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
   - playa: terreno, agua, arena y paseo con barandilla.
 - Las recetas aparecen en «Nuevo set» y en la paleta como **recintos tipo**, como ya hacen las plantillas de nave y de calle.
 
+*Hecho en parte (2026-11-23, rama `plan/motor-arquitectonico`, sin publicar). Cómo quedó:*
+- `arch/arch_recipe.dart` (`ArchRecipe`, `RigType.recipe`, «Lugar»): como la nave, un elemento receta guarda el tipo y sus medidas (`recipeKind`, `recipeParams`). Genera piezas normales del motor, cada una con `recipeUid` y un `uid` estable (`<receta>-<marca>`). Todo va en `props`; el esquema sigue en 66.
+- **Ocho lugares en cuatro grupos**, con medidas de la vida real:
+  - **casa** por plantas (fachada, tabiques, puertas de 0,82 × 2,03 m, ventanas, forjados con nombre «Planta N», escalera y tejado a dos o cuatro aguas o plano);
+  - **habitación** (dormitorio, cocina, baño, salón o bar, con sus muebles);
+  - **edificio** con fachada por módulos, balcones con barandilla, bajo comercial con escaparates y cubierta;
+  - **puente** (tablero sobre pilas y río debajo);
+  - **estación** (andén de 0,9 m, vías, catenaria, marquesina sobre pilares y escalera);
+  - **vagón** (casco de 2,9 m, suelo y filas de asientos);
+  - **montaña** (terreno con hierba, tierra y roca por altura);
+  - **playa** (paseo con muro y barandilla, palmeras, arena seca hasta media playa y mar).
+- **Paleta → «Lugar»:** se elige por grupos y se pone en el centro de la vista. El rombo de la receta se elige antes que sus piezas. Moverlo la rehace en su sitio.
+- **Panel:** un mando por medida u opción. Al soltarlo, la receta se rehace. Una pieza movida o cambiada a mano se despega y se respeta.
+- **«Nuevo set»:** «Lugar tipo · …» en «Empezar desde» crea el set con la receta y sus piezas en el entorno.
+- Para que una casa de varias plantas salga bien, el hueco de una planta ya no corta los muros de las otras, ni en la luz ni en el 3D.
+- Pruebas: `test/camera_plan/arch_recipe_test.dart` (20). Sets de ejemplo (casa, edificio, estación con vagón y playa) vistos en la planta y en el 3D.
+- Faltan:
+  - poblar la calle con fachadas de edificio;
+  - puente de arco y paso subterráneo;
+  - ventanas en serie y puertas en el casco del vagón;
+  - repartir el contorno de la casa en habitaciones a medida;
+  - muebles de packs CC0;
+  - vínculos propuestos por receta (AM.U2);
+  - probarlo en el Mac y en Unreal.
+
 ### Unreal, Fab, Megascans y escaneos (pedido de Daniel, 2026-11-22)
 
 Todo lo que se construye con el motor tiene que leerse en Unreal con facilidad. También tiene que poder **sustituirse por meshes reales** y **nacer de un escaneo** del móvil (LiDAR o cámara). Esto no es una fase aparte: está en el contrato de cada pieza (principio 2) y en estos pasos.
@@ -378,7 +403,7 @@ Todo lo que se construye con el motor tiene que leerse en Unreal con facilidad. 
 - Sin duplicados: lo que hace un asset lleva `linked` en la escena y no va en el GLB de estructura (de una puerta o ventana, el marco y las hojas; el hueco se queda en la pared). En IRIS se sigue viendo la pieza paramétrica.
 - **Por material:** debajo de cada material elegido, «En Unreal: …». Se busca en el proyecto de Unreal (`FindMaterials`: materiales e instancias de Fab, Megascans o propios), empezando por su familia en inglés (brick, wood…). El vínculo vale para todas las plantas y viaja con la biblioteca de Unreal (gana el último elegido; quitarlo también viaja). La escena lo lleva en `materials[id].unreal` y Unreal lo pone en las ranuras `IRIS_<id>` de la estructura; si se quita, vuelve el del GLB. En IRIS se sigue viendo la textura CC0.
 - **Para las piezas iguales:** «Ponerlo también a las N iguales» pone el mismo asset (y su ajuste) a las piezas con la misma clase y medidas; en una nave, solo a las suyas. La búsqueda de assets empieza por lo que es la pieza (door, window, column, street lamp…).
-- Falta: miniatura y color medio del material de Unreal en IRIS (F6.23.4); propuestas propias de cada receta (vagón → asiento de tren) cuando existan esas recetas (AM.8); instancias (AM.U1).
+- Falta: miniatura y color medio del material de Unreal en IRIS (F6.23.4); propuestas propias de cada receta (vagón → asiento de tren), ahora que existen las recetas de AM.8; instancias (AM.U1).
 
 **AM.U3 · Del escaneo al motor** (une ES y F6.20 con AM)
 - Hoy el escaneo da muros, huecos, objetos y la altura de techo (`scan_structure.dart` → `scan_review.dart`). Con el motor dará piezas completas:
