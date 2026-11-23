@@ -29,6 +29,7 @@ import '../../shared/annotations/annotation_document.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
+import 'arch/arch_sweep.dart';
 import 'arch/plan_section.dart';
 import 'arch/plan_levels.dart';
 import 'camera_plan_grouping.dart';
@@ -2964,6 +2965,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     PlanTool.slab => 'arch-slab',
     PlanTool.volume => 'arch-volume',
     PlanTool.stair => 'arch-stair',
+    PlanTool.sweep => 'arch-sweep',
     PlanTool.section => 'arch-section',
     _ => PlanSegment.kindWall,
   };
@@ -2987,6 +2989,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
           _metersPerUnit,
         ),
         PlanTool.stair => ArchStair.create(from, to, _metersPerUnit),
+        PlanTool.sweep => ArchSweep.create(from, to),
         PlanTool.section => PlanSection.create(
           from,
           to,

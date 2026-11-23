@@ -31,6 +31,10 @@ enum PlanTool {
   /// Escalera (AM.6): del arranque hacia donde sube.
   stair,
 
+  /// Barrido (AM.5): un perfil a lo largo de una línea (barandilla,
+  /// bordillo, vía, tablero, casco de vagón…).
+  sweep,
+
   /// Línea de sección (AM.6): por dónde cortar para verla de lado.
   section,
   measure,
@@ -47,6 +51,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.slab => 'Forjado',
     PlanTool.volume => 'Volumen',
     PlanTool.stair => 'Escalera',
+    PlanTool.sweep => 'Barrido',
     PlanTool.section => 'Sección',
     PlanTool.measure => 'Medir',
   };
@@ -61,6 +66,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.slab => Icons.layers_outlined,
     PlanTool.volume => Icons.view_in_ar_outlined,
     PlanTool.stair => Icons.stairs_outlined,
+    PlanTool.sweep => Icons.fence,
     PlanTool.section => Icons.content_cut,
     PlanTool.measure => Icons.straighten,
   };
@@ -75,6 +81,7 @@ extension PlanToolInfo on PlanTool {
       this == PlanTool.slab ||
       this == PlanTool.volume ||
       this == PlanTool.stair ||
+      this == PlanTool.sweep ||
       this == PlanTool.section;
 }
 

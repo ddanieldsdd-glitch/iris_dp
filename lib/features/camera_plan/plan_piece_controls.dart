@@ -8,6 +8,8 @@ import 'arch/arch_material_picker.dart';
 import 'arch/arch_roof_controls.dart';
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
+import 'arch/arch_sweep.dart';
+import 'arch/sweep_controls.dart';
 import 'arch/level_controls.dart';
 import 'arch/plan_section.dart';
 import 'arch/section_controls.dart';
@@ -83,6 +85,7 @@ class PlanPieceControls extends StatelessWidget {
       ArchSolid.isSolid(el) ||
       ArchStair.isStair(el) ||
       PlanSection.isSection(el) ||
+      ArchSweep.isSweep(el) ||
       _isTerrain(el) ||
       _isGrip(el) ||
       el.type == ElementType.actor ||
@@ -536,6 +539,16 @@ class PlanPieceControls extends StatelessWidget {
           ).copyWith(color: palette.textTertiary),
         ),
       ]);
+    } else if (ArchSweep.isSweep(el)) {
+      // Barrido (AM.5).
+      children.add(
+        SweepControls(
+          element: el,
+          metersPerUnit: metersPerUnit,
+          onPreview: onPreview,
+          onUpdate: onUpdate,
+        ),
+      );
     } else if (PlanSection.isSection(el)) {
       // Línea de sección (AM.6).
       children.add(

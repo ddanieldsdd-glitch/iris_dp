@@ -1543,6 +1543,7 @@
     (sc.surfaces || []).forEach((s) => s.outline.forEach((p) => grow(p[0], p[1], 0)));
     (sc.solids || []).forEach((s) => s.outline.forEach((p) => grow(p[0], p[1], s.z1 || 0)));
     (sc.stairs || []).forEach((s) => { for (let i = 0; i + 2 < s.tris.length; i += 9) grow(s.tris[i], s.tris[i + 1], s.tris[i + 2]); });
+    (sc.sweeps || []).forEach((s) => { for (let i = 0; i + 2 < s.tris.length; i += 9) grow(s.tris[i], s.tris[i + 1], s.tris[i + 2]); });
     (sc.walls || []).forEach((w) => w.points.forEach((p, i) => grow(p[0], p[1], (w.z0 || 0) + w.tops[i])));
     (sc.trusses || []).forEach((t) => { grow(t.from[0], t.from[1], t.z); grow(t.to[0], t.to[1], t.z); });
     (sc.fixtures || []).forEach((f) => grow(f.pos[0], f.pos[1], f.pos[2]));
@@ -1580,6 +1581,8 @@
     (sc.surfaces || []).forEach(addSurface);
     (sc.solids || []).forEach(addSolid);
     (sc.stairs || []).forEach(addStair);
+    // Barridos (AM.5): como la escalera, triángulos ya hechos por IRIS.
+    (sc.sweeps || []).forEach(addStair);
     (sc.drapes || []).forEach(addDrape);
 
     for (const p of sc.pillars || []) {

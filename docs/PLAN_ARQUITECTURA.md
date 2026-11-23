@@ -283,6 +283,13 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
   - el casco de un vagón.
 - Repetición a lo largo del camino para farolas, traviesas, columnas y asientos: el patrón que ya usa `lampEveryM`.
 
+*Hecho en parte (2026-11-23, rama `plan/motor-arquitectonico`, sin publicar). Cómo quedó:*
+- `arch/arch_sweep.dart` (`RigType.sweep`): herramienta «Barrido» en la paleta; se dibuja la línea y en el panel se elige el perfil: barandilla, bordillo, zócalo, cornisa, vía de tren (ancho internacional, balasto, carriles y traviesas), catenaria (hilos, postes y brazos), tablero de puente (con pretiles y pilas), casco de vagón (piso, costados y techo en arco), columnas en fila, asientos en fila y perfil propio.
+- Cada tipo con sus medidas reales y lo que tiene sentido tocar (alto, ancho, desde qué altura, cada cuánto se repite), la curva y el material de lo principal. Al cambiar de tipo vuelve a sus medidas.
+- Lo que se repite va de punta a punta sin pasar de la distancia elegida (postes) o repartido por dentro (traviesas, pilas, columnas, asientos). En las esquinas, inglete.
+- Contrato completo: planta (huella de cada perfil y repetición con el color de su material; lo que empieza por encima de 2 m, a trazos), luz (la barandilla deja pasar el 75 %, los costados del vagón y los pretiles tapan, las pilas y las columnas tapan), 3D y GLB de Unreal (una malla por material: `IRIS_architecture_<uid>_<material>`, cerrada y con las caras hacia fuera), DXF (huellas), alzado y sección (la silueta de cada perfil —el vagón de través enseña su techo en arco— y cada repetición como una caja), clase Arquitectura.
+- Falta: caminos de más de dos puntos desde el editor (el modelo ya los admite) y mover sus puntas; arcos de puente; perfil dibujado a mano; ventanas en serie en el casco (con la receta de vagón de AM.8); vincular un tramo a un asset de Unreal (AM.U2).
+
 **AM.6 · Escaleras, rampas y niveles** (absorbe AR.3 y AR.6)
 - Escalera paramétrica (recta, en L, en U, de caracol), con huella, contrahuella, barandilla y material. Rampa.
 - Niveles de una localización: planta baja, entreplanta, planta 1… Cada uno con su altura y un forjado. La planta enseña un nivel y los demás atenuados.

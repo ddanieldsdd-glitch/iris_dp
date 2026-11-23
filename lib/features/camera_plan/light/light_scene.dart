@@ -5,6 +5,7 @@ import 'dart:ui';
 import '../arch/arch_material.dart';
 import '../arch/arch_solid.dart';
 import '../arch/arch_stair.dart';
+import '../arch/arch_sweep.dart';
 import '../arch/wall_faces.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
@@ -921,6 +922,53 @@ class LightScene {
     }
   }
 
+  /// Un barrido (AM.5): sus pantallas a lo largo del camino (una
+  /// barandilla deja pasar casi toda la luz; el casco de un vagón, nada) y
+  /// las piezas que se repiten y tapan (pilas, columnas, postes).
+  static void _addSweep(
+    List<LightBlocker> blockers,
+    PlanElement el,
+    double metersPerUnit,
+  ) {
+    // Como el resto, desde su suelo: la planta de un nivel ve lo suyo.
+    const level = 0.0;
+    final f = ArchSweep.frames(el, metersPerUnit);
+    for (final sc in ArchSweep.screens(el)) {
+      for (var i = 0; i + 1 < f.length; i++) {
+        blockers.add(
+          LightBlocker(
+            ArchSweep.place(f[i], sc.acrossM, metersPerUnit),
+            ArchSweep.place(f[i + 1], sc.acrossM, metersPerUnit),
+            heightM: level + sc.topM,
+            baseM: level + sc.baseM,
+            transmission: sc.transmission,
+            element: el,
+          ),
+        );
+      }
+    }
+    for (final (r, g) in ArchSweep.instances(el, metersPerUnit)) {
+      if (!r.blocks) continue;
+      final poly = ArchSweep.band(
+        g,
+        r.offsetM - r.acrossM / 2,
+        r.offsetM + r.acrossM / 2,
+        metersPerUnit,
+      );
+      for (var i = 0; i < poly.length; i++) {
+        blockers.add(
+          LightBlocker(
+            poly[i],
+            poly[(i + 1) % poly.length],
+            heightM: level + r.topM,
+            baseM: level + r.baseM,
+            element: el,
+          ),
+        );
+      }
+    }
+  }
+
   /// Una tela: tapa de su bajo a su borde de arriba, que sigue la
   /// catenaria, y deja pasar lo que deja su tejido.
   static void _addDrape(
@@ -1202,6 +1250,10 @@ class LightScene {
           }
           if (ArchStair.isStair(el)) {
             _addStair(blockers, el, metersPerUnit);
+            continue;
+          }
+          if (ArchSweep.isSweep(el)) {
+            _addSweep(blockers, el, metersPerUnit);
             continue;
           }
           // Una línea de sección (AM.6) no tapa nada.

@@ -9,6 +9,7 @@ import 'package:xml/xml.dart';
 
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
+import 'arch/arch_sweep.dart';
 import 'arch/plan_section.dart';
 import 'arch/wall_joints.dart';
 import 'camera_plan_constants.dart';
@@ -228,6 +229,12 @@ class PlanCadExport {
             for (final p in ArchStair.walkLine(el))
               m(ArchStair.toCanvas(el, p, metersPerUnit)),
           ]);
+          continue;
+        case RigType.sweep:
+          // Barrido (AM.5): la huella de cada perfil y de cada repetición.
+          for (final poly in ArchSweep.footprints(el, metersPerUnit)) {
+            dxf.polyline(layerSolids, [for (final p in poly) m(p)], closed: true);
+          }
           continue;
         case RigType.section:
           // Sección (AM.6): la línea y, en cada punta, la flecha hacia

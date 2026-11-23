@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../arch/arch_roof.dart';
 import '../arch/arch_solid.dart';
+import '../arch/arch_material.dart';
+import '../arch/arch_sweep.dart';
 import '../arch/arch_stair.dart';
 import '../arch/plan_section.dart';
 import '../camera_plan_element_model.dart';
@@ -65,6 +67,8 @@ class RigPainter {
         drawStair(canvas, el, metersPerUnit, selected: selected, ink: color);
       case RigType.section:
         drawSection(canvas, el, metersPerUnit, selected: selected);
+      case RigType.sweep:
+        drawSweep(canvas, el, metersPerUnit, selected: selected, ink: color);
       case null:
         return false;
     }
@@ -462,6 +466,99 @@ class RigPainter {
   /// Una escalera o una rampa (AM.6), como en los planos: cada peldaño,
   /// la línea por la que se sube con un círculo en el arranque y la flecha
   /// en la llegada, y cuántos peldaños y de cuánto.
+  /// Un barrido (AM.5): la huella de cada perfil y de cada pieza que se
+  /// repite, con el color de su material; lo que va por encima de la
+  /// cabeza (cornisa, catenaria, tablero alto), solo a trazos.
+  static void drawSweep(
+    Canvas canvas,
+    PlanElement el,
+    double mpu, {
+    bool selected = false,
+    Color ink = RigPainter.ink,
+  }) {
+    int srgb(int v) {
+      final x = v / 255;
+      final s = x <= 0.0031308 ? x * 12.92 : 1.055 * math.pow(x, 1 / 2.4) - 0.055;
+      return (s.clamp(0.0, 1.0) * 255).round();
+    }
+
+    Paint fillOf(String mat) {
+      final rgb = (ArchMaterials.byId(mat) ?? ArchMaterials.byId('concrete-smooth')!)
+          .albedoRgb;
+      return Paint()
+        ..color = Color.fromARGB(
+          150,
+          srgb(rgb >> 16 & 255),
+          srgb(rgb >> 8 & 255),
+          srgb(rgb & 255),
+        );
+    }
+
+    final stroke = Paint()
+      ..color = selected ? rigColor : ink.withValues(alpha: 0.85)
+      ..strokeWidth = selected ? 2 : 0.9
+      ..style = PaintingStyle.stroke;
+    final f = ArchSweep.frames(el, mpu);
+    // Lo que empieza por encima de la cabeza (techo del vagón, tablero,
+    // cornisa, hilos), a trazos: deja ver lo de debajo.
+    void draw(List<Offset> poly, String mat, double bottom) {
+      final path = Path()..addPolygon(poly, true);
+      if (bottom >= 2.0) {
+        _dashedPoly(canvas, poly, stroke);
+      } else {
+        canvas
+          ..drawPath(path, fillOf(mat))
+          ..drawPath(path, stroke);
+      }
+    }
+
+    // Lo de abajo primero: el balasto antes que los carriles.
+    final parts = ArchSweep.parts(el).toList()
+      ..sort((a, b) => a.top.compareTo(b.top));
+    final reps = ArchSweep.instances(el, mpu);
+    for (final p in parts.where((p) => p.top <= 0.3)) {
+      draw(ArchSweep.band(f, p.minAcross, p.maxAcross, mpu), p.mat, p.bottom);
+    }
+    for (final (r, g) in reps) {
+      draw(
+        ArchSweep.band(
+          g,
+          r.offsetM - r.acrossM / 2,
+          r.offsetM + r.acrossM / 2,
+          mpu,
+        ),
+        r.mat,
+        r.baseM,
+      );
+    }
+    for (final p in parts.where((p) => p.top > 0.3)) {
+      draw(ArchSweep.band(f, p.minAcross, p.maxAcross, mpu), p.mat, p.bottom);
+    }
+    if (selected || parts.isEmpty) {
+      // El camino, fino, para saber por dónde va.
+      final path = Path()..addPolygon([for (final x in f) x.at], false);
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = (selected ? rigColor : ink).withValues(alpha: 0.6)
+          ..strokeWidth = 0.8
+          ..style = PaintingStyle.stroke,
+      );
+    }
+  }
+
+  static void _dashedPoly(Canvas canvas, List<Offset> poly, Paint paint) {
+    for (var i = 0; i < poly.length; i++) {
+      final a = poly[i], b = poly[(i + 1) % poly.length];
+      final len = (b - a).distance;
+      if (len < 1e-6) continue;
+      final u = (b - a) / len;
+      for (var s = 0.0; s < len; s += 10) {
+        canvas.drawLine(a + u * s, a + u * math.min(len, s + 6), paint);
+      }
+    }
+  }
+
   /// Una línea de sección (AM.6): trazo y punto, y en cada punta una
   /// flecha hacia donde se mira con su letra, como en un plano.
   static void drawSection(

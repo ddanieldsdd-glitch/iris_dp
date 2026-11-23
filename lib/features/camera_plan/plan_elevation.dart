@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
+import 'arch/arch_sweep.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/light_scene.dart';
@@ -531,6 +532,107 @@ class PlanElevation {
               cut: stairCut,
             ),
           );
+          continue;
+        case RigType.sweep:
+          // Barrido (AM.5): la silueta de cada perfil a lo largo de su
+          // camino y cada pieza que se repite, como una caja.
+          final level = PlanLevel.of(el);
+          final f = ArchSweep.frames(el, mpu);
+          final len = f.last.s;
+          final n = math.min(400, math.max(2, (len / 0.25).ceil()));
+          final dense = [for (var k = 0; k <= n; k++) ArchSweep.frameAt(f, len * k / n)];
+          for (final part in ArchSweep.parts(el)) {
+            final pts = <(double, double, double)>[];
+            var hidden = false;
+            for (final fr in dense) {
+              final prof = part.profile;
+              for (var j = 0; j < prof.length; j++) {
+                final a = prof[j], b = prof[(j + 1) % prof.length];
+                for (var t = 0.0; t < 1; t += 0.25) {
+                  final q = Offset.lerp(a, b, t)!;
+                  final c = ArchSweep.place(fr, q.dx, mpu);
+                  if (!behind(c)) {
+                    hidden = true;
+                    continue;
+                  }
+                  final pr = at(c);
+                  pts.add((pr.across, level + q.dy, pr.depth));
+                }
+              }
+            }
+            if (pts.isEmpty) continue;
+            final from = pts.map((p) => p.$1).reduce(math.min);
+            final to = math.max(
+              from + 0.02,
+              pts.map((p) => p.$1).reduce(math.max),
+            );
+            const bins = 48;
+            final tops = List<double?>.filled(bins + 1, null);
+            final bottoms = List<double?>.filled(bins + 1, null);
+            for (final (x, z, _) in pts) {
+              final k = ((x - from) / (to - from) * bins).round().clamp(0, bins);
+              tops[k] = math.max(tops[k] ?? z, z);
+              bottoms[k] = math.min(bottoms[k] ?? z, z);
+            }
+            for (final list in [tops, bottoms]) {
+              for (var k = 0; k <= bins; k++) {
+                if (list[k] != null) continue;
+                var a = k - 1, b = k + 1;
+                while (a >= 0 && list[a] == null) {
+                  a--;
+                }
+                while (b <= bins && list[b] == null) {
+                  b++;
+                }
+                final ya = a >= 0 ? list[a] : null;
+                final yb = b <= bins ? list[b] : null;
+                list[k] = ya != null && yb != null
+                    ? ya + (yb - ya) * (k - a) / (b - a)
+                    : ya ?? yb;
+              }
+            }
+            items.add(
+              ElevationItem(
+                kind: ElevationKind.prop,
+                element: el,
+                from: from,
+                to: to,
+                bottom: level + part.bottom,
+                top: level + part.top,
+                depth: pts.map((p) => p.$3).reduce(math.min),
+                profile: [
+                  for (var k = 0; k <= bins; k++)
+                    (from + (to - from) * k / bins, tops[k]!, bottoms[k]!),
+                ],
+                cut: hidden,
+              ),
+            );
+          }
+          for (final (r, g) in ArchSweep.instances(el, mpu)) {
+            final corners = ArchSweep.band(
+              g,
+              r.offsetM - r.acrossM / 2,
+              r.offsetM + r.acrossM / 2,
+              mpu,
+            );
+            if (!corners.any(behind)) continue;
+            final pr = [for (final c in corners.where(behind)) at(c)];
+            items.add(
+              ElevationItem(
+                kind: ElevationKind.prop,
+                element: el,
+                from: pr.map((p) => p.across).reduce(math.min),
+                to: math.max(
+                  pr.map((p) => p.across).reduce(math.min) + 0.02,
+                  pr.map((p) => p.across).reduce(math.max),
+                ),
+                bottom: level + r.baseM,
+                top: level + r.topM,
+                depth: pr.map((p) => p.depth).reduce(math.min),
+                cut: crosses(corners),
+              ),
+            );
+          }
           continue;
         case RigType.hall || RigType.scan || RigType.section:
           continue;

@@ -30,6 +30,9 @@ enum RigType {
   /// Línea de sección (AM.6, `PlanSection`): no se construye, solo dice
   /// por dónde cortar.
   section,
+
+  /// Barrido (AM.5, `ArchSweep`): un perfil a lo largo de un camino.
+  sweep,
 }
 
 extension RigTypeCodec on RigType {
@@ -46,6 +49,7 @@ extension RigTypeCodec on RigType {
     RigType.volume => 'Volumen',
     RigType.stair => 'Escalera',
     RigType.section => 'Sección',
+    RigType.sweep => 'Barrido',
   };
 
   /// El tipo de estructura de un elemento, o `null` si no lo es.

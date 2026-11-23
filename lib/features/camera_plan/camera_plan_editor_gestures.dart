@@ -40,6 +40,11 @@ extension _EditorGestures on _CameraPlanEditorState {
           ArchSolid.contains(el, canvasPos, _metersPerUnit)) {
         return el;
       }
+      // Un barrido (AM.5), tocando su huella o su camino.
+      if (ArchSweep.isSweep(el) &&
+          ArchSweep.contains(el, canvasPos, _metersPerUnit)) {
+        return el;
+      }
       // Una escalera (AM.6), tocando un peldaño.
       if (ArchStair.isStair(el) &&
           ArchStair.contains(el, canvasPos, _metersPerUnit)) {
