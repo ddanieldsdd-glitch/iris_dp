@@ -33,6 +33,9 @@ enum RigType {
 
   /// Barrido (AM.5, `ArchSweep`): un perfil a lo largo de un camino.
   sweep,
+
+  /// Terreno por alturas (AM.7, `ArchTerrain`), con su agua.
+  terrain,
 }
 
 extension RigTypeCodec on RigType {
@@ -50,6 +53,7 @@ extension RigTypeCodec on RigType {
     RigType.stair => 'Escalera',
     RigType.section => 'Sección',
     RigType.sweep => 'Barrido',
+    RigType.terrain => 'Terreno',
   };
 
   /// El tipo de estructura de un elemento, o `null` si no lo es.

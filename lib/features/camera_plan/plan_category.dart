@@ -36,7 +36,8 @@ enum PlanCategory {
           RigType.volume ||
           RigType.stair ||
           RigType.section ||
-          RigType.sweep:
+          RigType.sweep ||
+          RigType.terrain:
         return PlanCategory.architecture;
       case RigType.hall ||
           RigType.truss ||

@@ -9,6 +9,7 @@ import '../../core/theme/app_colors.dart';
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
 import 'arch/arch_sweep.dart';
+import 'arch/arch_terrain.dart';
 import 'arch/plan_levels.dart';
 import 'arch/wall_faces.dart';
 import 'arch/wall_joints.dart';
@@ -1102,12 +1103,15 @@ class CameraPlanPainter extends CustomPainter {
     // Forjados y volúmenes (AM.2), debajo de todo: son el suelo de lo
     // demás. Una entreplanta, a trazos, va con la estructura.
     bool isGround(PlanElement e) =>
+        ArchTerrain.isTerrain(e) ||
         (ArchSolid.isSolid(e) && !ArchSolid.isOverhead(e)) ||
         (ArchSweep.isSweep(e) && !ArchSweep.isOverhead(e)) ||
         ArchStair.isStair(e);
     bool isRig(PlanElement e) => RigTypeCodec.of(e) != null && !isGround(e);
     return [
-      ...elements.where(isGround),
+      // El terreno (AM.7), lo primero: todo lo demás está encima.
+      ...elements.where(ArchTerrain.isTerrain),
+      ...elements.where((e) => isGround(e) && !ArchTerrain.isTerrain(e)),
       ...elements.where((e) => PlanSegment.isSegment(e) && !isWall(e)),
       ...elements.where(isWall),
       // Truss, pilares y motores, debajo de las luces que cuelgan de ellos.
@@ -1898,6 +1902,7 @@ class CameraPlanPainter extends CustomPainter {
     if (ArchSolid.isSolid(el) ||
         ArchStair.isStair(el) ||
         ArchSweep.isSweep(el) ||
+        ArchTerrain.isTerrain(el) ||
         RigTypeCodec.of(el) == RigType.section) {
       return;
     }

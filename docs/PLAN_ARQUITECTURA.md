@@ -316,6 +316,24 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - **Luz:** `groundAt` y los bloqueos salen del terreno.
 - **Unreal:** se exporta como malla.
 
+*Hecho en parte (2026-11-23, rama `plan/motor-arquitectonico`, sin publicar). Cómo quedó:*
+- `arch/arch_terrain.dart` (`ArchTerrain`, `RigType.terrain`): una rejilla de cotas en los vértices, con casillas de 0,5 m o más (no más de 80 por lado). Lleva un material por casilla y una cota de agua opcional. Todo va en `props`; el esquema sigue en 66.
+- **Herramienta «Terreno»:** se dibuja un rectángulo de esquina a esquina. Las colinas y los taludes que caen dentro pasan a sus cotas y se quitan de la planta, con un aviso. La colina pasa como campana y el talud con su lado alto y su caída.
+- **Pinceles** (panel del terreno): subir, bajar, alisar, aplanar (a la cota donde empieza la pasada) y pintar (hierba, arena, tierra, roca, adoquín, asfalto, hormigón), con radio y fuerza. Con el pincel puesto, arrastrar sobre el terreno lo trabaja; al cerrar el panel se quita.
+- El panel también tiene el material de fondo, el agua con su cota y «Dejarlo llano».
+- **2D:** como un plano topográfico: casillas del color de su material, sombreadas con sol del noroeste, y curvas de nivel claras (más gruesa cada cinco, unas doce en todo el desnivel). Encima, el agua y su orilla.
+- **Luz:** el terreno es una «loma» que lo abarca entero y cuya cota sale de la rejilla (`LightBlocker.field`). Da `groundAt` (también por debajo de cero, en un foso o una playa) y tapa por sus laderas, igual que las colinas.
+- **3D:** lista `terrains`, una malla lisa por material con sus normales y el agua como plano. En el GLB va una pieza por material (`IRIS_architecture_<uid>_<material>`). El suelo gris baja bajo lo más hondo.
+- **DXF:** capas TERRENO (borde, curvas y la cota de cada metro entero) y AGUA (la orilla).
+- **Alzado y sección:** en alzado, la silueta del terreno (lo más alto a cada lado) y el agua; en una sección, además, el perfil justo en el corte, relleno.
+- Pruebas: `test/camera_plan/arch_terrain_test.dart` (10).
+- Faltan:
+  - pincel en el 3D (`plan_3d_edit.dart`);
+  - mezcla suave entre materiales;
+  - que muebles, personas y luces se apoyen en el terreno en el 3D;
+  - terreno girado;
+  - probarlo en el Mac y en Unreal.
+
 **AM.8 · Recetas por lugar** (generalizan `HallRecipe`; cada una construye con AM.1–AM.7)
 - **Casa e interiores:**
   - casa por plantas, que reparte el contorno en habitaciones, con tabiques, puertas, forjados, tejado y escalera;

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
 import 'arch/arch_sweep.dart';
+import 'arch/arch_terrain.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/light_scene.dart';
@@ -632,6 +633,138 @@ class PlanElevation {
                 cut: crosses(corners),
               ),
             );
+          }
+          continue;
+        case RigType.terrain:
+          // Terreno (AM.7): la silueta de lo que se ve detrás (lo más alto
+          // a cada lado) y, en una sección, el perfil justo en el corte,
+          // relleno. El agua, una banda hasta su cota.
+          final level = PlanLevel.of(el);
+          final (lo, hi) = ArchTerrain.range(el);
+          final base = level + math.min(0.0, lo);
+          final hs = ArchTerrain.heights(el);
+          final tc = ArchTerrain.cols(el), tr = ArchTerrain.rows(el);
+          final stride = math.max(1, ((tc + 1) * (tr + 1) / 6000).ceil());
+          final pts = <(double, double, double)>[];
+          for (var k = 0; k < hs.length; k += stride) {
+            final p = ArchTerrain.vertex(el, k % (tc + 1), k ~/ (tc + 1), mpu);
+            if (!behind(p)) continue;
+            final pr = at(p);
+            pts.add((pr.across, level + hs[k], pr.depth));
+          }
+          List<(double, double, double)> binned(
+            List<(double, double)> xs,
+            double from,
+            double to,
+          ) {
+            const bins = 64;
+            final tops = List<double?>.filled(bins + 1, null);
+            for (final (x, z) in xs) {
+              final k = ((x - from) / (to - from) * bins).round().clamp(
+                0,
+                bins,
+              );
+              tops[k] = math.max(tops[k] ?? z, z);
+            }
+            for (var k = 0; k <= bins; k++) {
+              if (tops[k] != null) continue;
+              var a = k - 1, b = k + 1;
+              while (a >= 0 && tops[a] == null) {
+                a--;
+              }
+              while (b <= bins && tops[b] == null) {
+                b++;
+              }
+              final ya = a >= 0 ? tops[a] : null;
+              final yb = b <= bins ? tops[b] : null;
+              tops[k] = ya != null && yb != null
+                  ? ya + (yb - ya) * (k - a) / (b - a)
+                  : ya ?? yb ?? base;
+            }
+            return [
+              for (var k = 0; k <= bins; k++)
+                (from + (to - from) * k / bins, tops[k]!, base),
+            ];
+          }
+
+          if (pts.length >= 2) {
+            final from = pts.map((p) => p.$1).reduce(math.min);
+            final to = math.max(
+              from + 0.02,
+              pts.map((p) => p.$1).reduce(math.max),
+            );
+            items.add(
+              ElevationItem(
+                kind: ElevationKind.prop,
+                element: el,
+                from: from,
+                to: to,
+                bottom: base,
+                top: level + hi,
+                depth: pts.map((p) => p.$3).reduce(math.max),
+                label: 'Terreno',
+                profile: binned([for (final p in pts) (p.$1, p.$2)], from, to),
+              ),
+            );
+          }
+          final water = ArchTerrain.water(el);
+          if (water != null && lo < water && pts.length >= 2) {
+            final wet = ArchTerrain.flooded(el, mpu)
+                .map((r) => r.center)
+                .where(behind)
+                .map((c) => at(c).across)
+                .toList();
+            if (wet.isNotEmpty) {
+              items.add(
+                ElevationItem(
+                  kind: ElevationKind.prop,
+                  element: el,
+                  from: wet.reduce(math.min),
+                  to: math.max(
+                    wet.reduce(math.min) + 0.02,
+                    wet.reduce(math.max),
+                  ),
+                  bottom: base,
+                  top: level + water,
+                  depth: 0,
+                  label: 'Agua',
+                ),
+              );
+            }
+          }
+          final c = cut;
+          if (c != null) {
+            final rect = ArchTerrain.rect(el, mpu);
+            final reach =
+                rect.size.longestSide + (c.from - rect.center).distance;
+            final step = ArchTerrain.cellM(el) / mpu / 2;
+            final prof = <(double, double)>[];
+            for (var t = -reach; t <= reach; t += step) {
+              final p = c.from + c.along * t;
+              final z = ArchTerrain.heightAt(el, p, mpu, hs);
+              if (z != null) prof.add((at(p).across, level + z));
+            }
+            if (prof.length >= 2) {
+              final from = prof.map((p) => p.$1).reduce(math.min);
+              final to = math.max(
+                from + 0.02,
+                prof.map((p) => p.$1).reduce(math.max),
+              );
+              items.add(
+                ElevationItem(
+                  kind: ElevationKind.prop,
+                  element: el,
+                  from: from,
+                  to: to,
+                  bottom: base,
+                  top: prof.map((p) => p.$2).reduce(math.max),
+                  depth: 0,
+                  label: 'Terreno',
+                  profile: binned(prof, from, to),
+                  cut: true,
+                ),
+              );
+            }
           }
           continue;
         case RigType.hall || RigType.scan || RigType.section:

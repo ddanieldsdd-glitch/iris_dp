@@ -51,6 +51,13 @@ extension _EditorGestures on _CameraPlanEditorState {
         return el;
       }
     }
+    // El terreno (AM.7), debajo de todo: lo último.
+    for (final el in _drawnElements.reversed) {
+      if (ArchTerrain.isTerrain(el) &&
+          ArchTerrain.contains(el, canvasPos, _metersPerUnit)) {
+        return el;
+      }
+    }
     return null;
   }
 
@@ -235,6 +242,38 @@ extension _EditorGestures on _CameraPlanEditorState {
         return;
       }
     }
+    // Con el pincel del terreno (AM.7), arrastrar sobre él lo trabaja.
+    final terrain = _selected;
+    final brush = ArchTerrain.brush.value;
+    if (_tool == PlanTool.select &&
+        brush != null &&
+        terrain != null &&
+        ArchTerrain.isTerrain(terrain) &&
+        ArchTerrain.contains(terrain, canvasPos, _metersPerUnit)) {
+      if (brush.mode == TerrainBrushMode.flatten) {
+        ArchTerrain.brush.value = brush.copyWith(
+          flattenTo: ArchTerrain.heightAt(terrain, canvasPos, _metersPerUnit),
+        );
+      }
+      _brushing = true;
+      _brushLast = canvasPos;
+      _dragging = null;
+      _segmentHandle = null;
+      _isRotating = false;
+      _isDraggingPathPoint = false;
+      _marqueeStart = null;
+      _dragDirty = true;
+      _updateDrag(
+        () => ArchTerrain.stroke(
+          terrain,
+          canvasPos,
+          ArchTerrain.brush.value!,
+          _metersPerUnit,
+          amount: 0.25,
+        ),
+      );
+      return;
+    }
     if (_tool.drawsSegment) {
       _update(() {
         _segmentStart ??= _snapSegmentPoint(canvasPos);
@@ -305,6 +344,25 @@ extension _EditorGestures on _CameraPlanEditorState {
 
   void _onPanUpdate(DragUpdateDetails d) {
     final canvasPos = _toCanvasCoords(d.localPosition);
+    final brush = ArchTerrain.brush.value;
+    final terrain = _selected;
+    if (_brushing && brush != null && terrain != null) {
+      // Cuanto más se mueve el dedo, más trabaja: una pasada de un radio
+      // aplica la fuerza entera.
+      final moved = (canvasPos - (_brushLast ?? canvasPos)).distance *
+          _metersPerUnit;
+      _brushLast = canvasPos;
+      _updateDrag(
+        () => ArchTerrain.stroke(
+          terrain,
+          canvasPos,
+          brush,
+          _metersPerUnit,
+          amount: (moved / math.max(0.1, brush.radiusM)).clamp(0.02, 1.0),
+        ),
+      );
+      return;
+    }
     if (_imageGrip != null) {
       _update(() => _imageDraft = _imageDragRect(canvasPos));
       return;
@@ -522,6 +580,8 @@ extension _EditorGestures on _CameraPlanEditorState {
       return;
     }
 
+    _brushing = false;
+    _brushLast = null;
     // Se guarda siempre que algo se haya movido, se suelte como se suelte.
     final moved = _dragDirty;
     final dragged = _dragging;

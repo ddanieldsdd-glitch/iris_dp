@@ -37,6 +37,10 @@ enum PlanTool {
 
   /// Línea de sección (AM.6): por dónde cortar para verla de lado.
   section,
+
+  /// Terreno (AM.7): un rectángulo de esquina a esquina que luego se
+  /// trabaja con pinceles.
+  terrain,
   measure,
 }
 
@@ -53,6 +57,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.stair => 'Escalera',
     PlanTool.sweep => 'Barrido',
     PlanTool.section => 'Sección',
+    PlanTool.terrain => 'Terreno',
     PlanTool.measure => 'Medir',
   };
 
@@ -68,6 +73,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.stair => Icons.stairs_outlined,
     PlanTool.sweep => Icons.fence,
     PlanTool.section => Icons.content_cut,
+    PlanTool.terrain => Icons.landscape_outlined,
     PlanTool.measure => Icons.straighten,
   };
 
@@ -82,7 +88,8 @@ extension PlanToolInfo on PlanTool {
       this == PlanTool.volume ||
       this == PlanTool.stair ||
       this == PlanTool.sweep ||
-      this == PlanTool.section;
+      this == PlanTool.section ||
+      this == PlanTool.terrain;
 }
 
 /// Paleta fija de la planta: lo que se puede añadir, siempre a la vista.

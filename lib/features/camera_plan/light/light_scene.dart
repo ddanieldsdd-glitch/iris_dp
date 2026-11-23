@@ -6,6 +6,7 @@ import '../arch/arch_material.dart';
 import '../arch/arch_solid.dart';
 import '../arch/arch_stair.dart';
 import '../arch/arch_sweep.dart';
+import '../arch/arch_terrain.dart';
 import '../arch/wall_faces.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
@@ -152,6 +153,11 @@ class LightBlocker {
   /// Elemento de la planta del que sale, si lo hay.
   final PlanElement? element;
 
+  /// Un terreno (AM.7): la cota en cada punto del lienzo, o `null` fuera
+  /// de él. Va como una loma ([domeRadius] lo abarca entero) cuya altura
+  /// no sale de la distancia al centro, sino de aquí.
+  final double? Function(Offset)? field;
+
   const LightBlocker(
     this.a,
     this.b, {
@@ -169,7 +175,8 @@ class LightBlocker {
   }) : radius = 0,
        domeRadius = null,
        stretch = 1,
-       turn = 0;
+       turn = 0,
+       field = null;
 
   const LightBlocker.circle(
     Offset centre,
@@ -181,6 +188,7 @@ class LightBlocker {
     this.stretch = 1,
     this.turn = 0,
     this.groundM = 0,
+    this.field,
   }) : a = centre,
        b = centre,
        miredShift = 0,
@@ -203,6 +211,7 @@ class LightBlocker {
           stretch: stretch,
           turn: turn,
           groundM: groundM ?? this.groundM,
+          field: field,
         )
       : LightBlocker(
           a,
@@ -238,6 +247,15 @@ class LightBlocker {
 
   /// Distancia de un punto al centro, en ese mismo espacio.
   double localDistance(Offset point) => localVector(point - a).distance;
+
+  /// Cota de una loma o de un terreno en [p] (lienzo); `null` si el
+  /// terreno no llega ahí.
+  double? groundAt(Offset p) {
+    final f = field;
+    if (f != null) return f(p);
+    final d = localDistance(p);
+    return d < (domeRadius ?? 0) ? domeHeightAt(d) : null;
+  }
 
   /// Altura de una loma a [distance] de su centro.
   double domeHeightAt(double distance) {
@@ -489,6 +507,14 @@ class LightScene {
           b.domeRadius,
           b.stretch,
           b.turn,
+          // Un terreno cambia con sus cotas, no con su caja.
+          b.field != null && b.element != null
+              ? Object.hashAll(
+                  ArchTerrain.heights(
+                    b.element!,
+                  ).map((h) => (h * 100).round()),
+                )
+              : 0,
         ),
     ]),
     Object.hashAll([
@@ -502,14 +528,21 @@ class LightScene {
   double groundAt(Offset point) => _groundOf(hills, point);
 
   static double _groundOf(List<LightBlocker> hills, Offset point) {
+    // Un terreno manda en su cota, aunque baje de cero (una playa, un
+    // foso); las lomas, por encima.
+    double? terrain;
     var ground = 0.0;
     for (final hill in hills) {
-      final distance = hill.localDistance(point);
-      if (distance < hill.domeRadius!) {
-        ground = math.max(ground, hill.domeHeightAt(distance));
+      final z = hill.groundAt(point);
+      if (z == null) continue;
+      if (hill.field != null) {
+        terrain = math.max(terrain ?? z, z);
+      } else {
+        ground = math.max(ground, z);
       }
     }
-    return ground;
+    if (terrain == null) return ground;
+    return ground > 0 ? math.max(terrain, ground) : terrain;
   }
 
   /// Altura de la cara de alguien de pie en un punto.
@@ -1254,6 +1287,24 @@ class LightScene {
           }
           if (ArchSweep.isSweep(el)) {
             _addSweep(blockers, el, metersPerUnit);
+            continue;
+          }
+          if (ArchTerrain.isTerrain(el)) {
+            // Terreno (AM.7): da cota al suelo y tapa por sus laderas,
+            // como una loma que lo abarca entero.
+            final rect = ArchTerrain.rect(el, metersPerUnit);
+            final hs = ArchTerrain.heights(el);
+            blockers.add(
+              LightBlocker.circle(
+                rect.center,
+                1e-3,
+                element: el,
+                heightM: math.max(0.01, hs.reduce(math.max)),
+                domeRadius: rect.size.longestSide * 0.75,
+                field: (p) =>
+                    ArchTerrain.heightAt(el, p, metersPerUnit, hs),
+              ),
+            );
             continue;
           }
           // Una línea de sección (AM.6) no tapa nada.
@@ -2336,7 +2387,7 @@ class LightScene {
     const steps = 32;
     for (var i = 0; i <= steps; i++) {
       final t = enter + (exit - enter) * i / steps;
-      final ground = hill.domeHeightAt(hill.localDistance(origin + dir * t));
+      final ground = hill.groundAt(origin + dir * t) ?? 0;
       final toFace = (ground + PlanLight.subjectHeightM - z) / t;
       if (toFace < horizon - 1e-6) return t;
       horizon = math.max(horizon, (ground - z) / t);
@@ -2955,8 +3006,8 @@ class LightScene {
     // apoyados en la ladera.
     for (var i = 1; i < steps; i++) {
       final t = enter + (exit - enter) * i / steps;
-      final distance = hill.localDistance(origin + dir * t);
-      if (heightAt(t) < hill.domeHeightAt(distance) - 0.02) return true;
+      final ground = hill.groundAt(origin + dir * t);
+      if (ground != null && heightAt(t) < ground - 0.02) return true;
     }
     return false;
   }

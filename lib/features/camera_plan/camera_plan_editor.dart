@@ -30,6 +30,7 @@ import '../../shared/shot_images/shot_image_menu.dart';
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
 import 'arch/arch_sweep.dart';
+import 'arch/arch_terrain.dart';
 import 'arch/plan_section.dart';
 import 'arch/plan_levels.dart';
 import 'camera_plan_grouping.dart';
@@ -713,6 +714,10 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   static const double _maxScale = 6;
   bool _loading = true;
   bool _isRotating = false;
+
+  /// Se está pasando el pincel por un terreno (AM.7).
+  bool _brushing = false;
+  Offset? _brushLast;
 
   /// Punto tocado dentro de un recinto: abre sus propiedades.
   Offset? _selectedRoom;
@@ -2967,11 +2972,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     PlanTool.stair => 'arch-stair',
     PlanTool.sweep => 'arch-sweep',
     PlanTool.section => 'arch-section',
+    PlanTool.terrain => 'arch-terrain',
     _ => PlanSegment.kindWall,
   };
 
   Future<void> _addSegment(Offset from, Offset to) async {
     if ((to - from).distance < 8) return;
+    if (_tool == PlanTool.terrain) {
+      await _addTerrain(from, to);
+      return;
+    }
     await _addElement(
       switch (_tool) {
         PlanTool.drape => PlanDrape.create(from, to),
@@ -3000,6 +3010,39 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       keepPosition: true,
       select: false,
     );
+  }
+
+  /// Un terreno (AM.7) en el rectángulo: las colinas y los taludes que
+  /// caen dentro pasan a sus cotas y se quitan de la planta.
+  Future<void> _addTerrain(Offset from, Offset to) async {
+    final terrain = ArchTerrain.create(from, to, _metersPerUnit);
+    final taken = ArchTerrain.absorb(
+      terrain,
+      _visibleElements,
+      _metersPerUnit,
+    );
+    await _addElement(terrain, keepPosition: true, select: false);
+    if (!mounted || taken.isEmpty) return;
+    setState(() {
+      _selected = null;
+      _multi
+        ..clear()
+        ..addAll(taken);
+    });
+    await _deleteSelected();
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            taken.length == 1
+                ? 'La colina o el talud que había ya es parte del terreno.'
+                : 'Las ${taken.length} colinas y taludes que había ya son '
+                      'parte del terreno.',
+          ),
+        ),
+      );
   }
 
   // ── Ajuste de la zona del set ─────────────────────────────────────────────

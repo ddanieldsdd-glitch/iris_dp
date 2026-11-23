@@ -9,7 +9,9 @@ import 'arch/arch_roof_controls.dart';
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
 import 'arch/arch_sweep.dart';
+import 'arch/arch_terrain.dart';
 import 'arch/sweep_controls.dart';
+import 'arch/terrain_controls.dart';
 import 'arch/level_controls.dart';
 import 'arch/plan_section.dart';
 import 'arch/section_controls.dart';
@@ -23,6 +25,7 @@ import 'light/modifiers.dart';
 import 'camera_aim.dart';
 import 'light/plan_light.dart';
 import 'light/surfaces.dart';
+import 'light_overrides.dart';
 import 'plan_marks.dart';
 import 'plan_opening.dart';
 import 'plan_segment.dart';
@@ -86,6 +89,7 @@ class PlanPieceControls extends StatelessWidget {
       ArchStair.isStair(el) ||
       PlanSection.isSection(el) ||
       ArchSweep.isSweep(el) ||
+      ArchTerrain.isTerrain(el) ||
       _isTerrain(el) ||
       _isGrip(el) ||
       el.type == ElementType.actor ||
@@ -543,6 +547,17 @@ class PlanPieceControls extends StatelessWidget {
       // Barrido (AM.5).
       children.add(
         SweepControls(
+          element: el,
+          metersPerUnit: metersPerUnit,
+          onPreview: onPreview,
+          onUpdate: onUpdate,
+        ),
+      );
+    } else if (ArchTerrain.isTerrain(el)) {
+      // Terreno (AM.7).
+      children.add(
+        TerrainControls(
+          key: ValueKey('terrain-${LightOverrides.uidOf(el) ?? el.id}'),
           element: el,
           metersPerUnit: metersPerUnit,
           onPreview: onPreview,

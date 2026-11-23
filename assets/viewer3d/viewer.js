@@ -1027,6 +1027,39 @@
     }
   }
 
+  // Terreno (AM.7): triángulos y normales ya hechos por IRIS, lisos; el
+  // agua, un plano que no echa sombra.
+  function addTerrain(t) {
+    if (!t.tris || t.tris.length < 9) return;
+    const pos = [], nor = [];
+    for (let i = 0; i + 2 < t.tris.length; i += 3) {
+      const v = V(t.tris[i], t.tris[i + 1], t.tris[i + 2]);
+      pos.push(v.x, v.y, v.z);
+      const n = t.norms && t.norms.length > i + 2 ? V(t.norms[i], t.norms[i + 1], t.norms[i + 2]) : new THREE.Vector3(0, 1, 0);
+      nor.push(n.x, n.y, n.z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    const mat = (t.mat && archMaterial(t.mat, false)) || solidFallback;
+    if (mat.map) {
+      // Vista desde arriba: la textura a su tamaño real.
+      const d = matDefs[t.mat] || {};
+      const tw = (d.tex && d.tex.w) || 1, th = (d.tex && d.tex.h) || 1;
+      const uv = new Float32Array(pos.length / 3 * 2);
+      for (let k = 0; k < pos.length / 3; k++) { uv[k * 2] = pos[k * 3] / tw; uv[k * 2 + 1] = pos[k * 3 + 2] / th; }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    }
+    const m = new THREE.Mesh(g, mat);
+    m.name = t.id;
+    m.userData.id = t.id;
+    picks.push(m);
+    m.castShadow = !t.water;
+    m.receiveShadow = true;
+    tagPiece(m, t);
+    L.walls.add(m);
+  }
+
   function addLeaves(o, z0, top) {
     if (!o.span) return;
     const a = [o.span[0], o.span[1]], b = [o.span[2], o.span[3]];
@@ -1544,6 +1577,9 @@
     (sc.solids || []).forEach((s) => s.outline.forEach((p) => grow(p[0], p[1], s.z1 || 0)));
     (sc.stairs || []).forEach((s) => { for (let i = 0; i + 2 < s.tris.length; i += 9) grow(s.tris[i], s.tris[i + 1], s.tris[i + 2]); });
     (sc.sweeps || []).forEach((s) => { for (let i = 0; i + 2 < s.tris.length; i += 9) grow(s.tris[i], s.tris[i + 1], s.tris[i + 2]); });
+    // Del terreno basta lo más bajo y lo más alto de cada esquina.
+    let groundLow = 0;
+    (sc.terrains || []).forEach((t) => { for (let i = 0; i + 2 < t.tris.length; i += 3) { if (i % 90 === 0) grow(t.tris[i], t.tris[i + 1], t.tris[i + 2]); groundLow = Math.min(groundLow, t.tris[i + 2]); } });
     (sc.walls || []).forEach((w) => w.points.forEach((p, i) => grow(p[0], p[1], (w.z0 || 0) + w.tops[i])));
     (sc.trusses || []).forEach((t) => { grow(t.from[0], t.from[1], t.z); grow(t.to[0], t.to[1], t.z); });
     (sc.fixtures || []).forEach((f) => grow(f.pos[0], f.pos[1], f.pos[2]));
@@ -1568,7 +1604,8 @@
     const floorSpan = env === 'exterior' ? span + 400 : span + 30;
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(floorSpan, floorSpan), new THREE.MeshStandardMaterial({ color: floorColor, roughness: 0.95 }));
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(c.x, -0.01, c.z);
+    // Bajo el terreno más hondo (el fondo del mar), para no taparlo.
+    floor.position.set(c.x, Math.min(-0.01, groundLow - 0.05), c.z);
     root.add(floor);
     const grid = new THREE.GridHelper(Math.ceil(span + 30), Math.ceil(span + 30), 0x6d7378, 0x7f858a);
     grid.position.set(c.x, 0, c.z);
@@ -1583,6 +1620,7 @@
     (sc.stairs || []).forEach(addStair);
     // Barridos (AM.5): como la escalera, triángulos ya hechos por IRIS.
     (sc.sweeps || []).forEach(addStair);
+    (sc.terrains || []).forEach(addTerrain);
     (sc.drapes || []).forEach(addDrape);
 
     for (const p of sc.pillars || []) {

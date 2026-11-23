@@ -6,6 +6,7 @@ import '../arch/arch_roof.dart';
 import '../arch/arch_solid.dart';
 import '../arch/arch_material.dart';
 import '../arch/arch_sweep.dart';
+import '../arch/arch_terrain.dart';
 import '../arch/arch_stair.dart';
 import '../arch/plan_section.dart';
 import '../camera_plan_element_model.dart';
@@ -69,6 +70,8 @@ class RigPainter {
         drawSection(canvas, el, metersPerUnit, selected: selected);
       case RigType.sweep:
         drawSweep(canvas, el, metersPerUnit, selected: selected, ink: color);
+      case RigType.terrain:
+        drawTerrain(canvas, el, metersPerUnit, selected: selected, ink: color);
       case null:
         return false;
     }
@@ -466,6 +469,102 @@ class RigPainter {
   /// Una escalera o una rampa (AM.6), como en los planos: cada peldaño,
   /// la línea por la que se sube con un círculo en el arranque y la flecha
   /// en la llegada, y cuántos peldaños y de cuánto.
+  /// Un terreno (AM.7) como un plano topográfico: cada casilla con el
+  /// color de su material, sombreada como si le diera el sol del noroeste;
+  /// encima, las curvas de nivel (más gruesa cada cinco), el agua y el
+  /// borde.
+  static void drawTerrain(
+    Canvas canvas,
+    PlanElement el,
+    double mpu, {
+    bool selected = false,
+    Color ink = RigPainter.ink,
+  }) {
+    final c = ArchTerrain.cols(el), r = ArchTerrain.rows(el);
+    final cellM = ArchTerrain.cellM(el);
+    final h = ArchTerrain.heights(el);
+    final mats = ArchTerrain.materials(el);
+    final paint = ArchTerrain.paint(el);
+    final o = ArchTerrain.origin(el, mpu);
+    final size = cellM / mpu;
+    int srgb(int v) {
+      final x = v / 255;
+      final s = x <= 0.0031308
+          ? x * 12.92
+          : 1.055 * math.pow(x, 1 / 2.4) - 0.055;
+      return (s.clamp(0.0, 1.0) * 255).round();
+    }
+
+    // Las casillas, juntas por material y tono: pocas pinturas.
+    const shades = 9;
+    final paths = <(int, int), Path>{};
+    double at(int i, int j) => h[j * (c + 1) + i];
+    for (var j = 0; j < r; j++) {
+      for (var i = 0; i < c; i++) {
+        final gx = (at(i + 1, j) + at(i + 1, j + 1) - at(i, j) - at(i, j + 1)) /
+            (2 * cellM);
+        final gy = (at(i, j + 1) + at(i + 1, j + 1) - at(i, j) - at(i + 1, j)) /
+            (2 * cellM);
+        // Sol del noroeste (arriba a la izquierda), a 45°.
+        final n = math.sqrt(gx * gx + gy * gy + 1);
+        final lit = ((-gx * -0.5 + -gy * -0.5 + 0.707) / n).clamp(0.0, 1.0);
+        final k = (lit * (shades - 1)).round();
+        paths
+            .putIfAbsent((paint[j * c + i], k), Path.new)
+            .addRect(
+              Rect.fromLTWH(o.dx + i * size, o.dy + j * size, size, size),
+            );
+      }
+    }
+    for (final MapEntry(key: (m, k), value: path) in paths.entries) {
+      final rgb = (ArchMaterials.byId(mats[m]) ?? ArchMaterials.byId('grass')!)
+          .albedoRgb;
+      final f = 0.55 + 0.75 * k / (shades - 1);
+      int ch(int v) => (srgb(v) * f).round().clamp(0, 255);
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = Color.fromARGB(
+            170,
+            ch(rgb >> 16 & 255),
+            ch(rgb >> 8 & 255),
+            ch(rgb & 255),
+          ),
+      );
+    }
+    final step = ArchTerrain.contourStep(el);
+    // Claras, como en un plano topográfico sobre fondo oscuro.
+    final line = Paint()
+      ..color = const Color(0xFFF1E3C4).withValues(alpha: 0.45)
+      ..strokeWidth = 0.7;
+    final index = Paint()
+      ..color = const Color(0xFFF1E3C4).withValues(alpha: 0.85)
+      ..strokeWidth = 1.3;
+    for (final (a, b, z) in ArchTerrain.contours(el, mpu, stepM: step)) {
+      final major = ((z / step).round() % 5) == 0;
+      canvas.drawLine(a, b, major ? index : line);
+    }
+    if (ArchTerrain.water(el) case final w?) {
+      final water = Paint()..color = const Color(0x993A7CA5);
+      for (final rect in ArchTerrain.flooded(el, mpu)) {
+        canvas.drawRect(rect.inflate(0.3), water);
+      }
+      final shore = Paint()
+        ..color = const Color(0xFF2B6A90)
+        ..strokeWidth = 1.6;
+      for (final (a, b) in ArchTerrain.isoline(el, w, mpu)) {
+        canvas.drawLine(a, b, shore);
+      }
+    }
+    canvas.drawRect(
+      ArchTerrain.rect(el, mpu),
+      Paint()
+        ..color = selected ? rigColor : ink.withValues(alpha: 0.5)
+        ..strokeWidth = selected ? 2 : 0.8
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
   /// Un barrido (AM.5): la huella de cada perfil y de cada pieza que se
   /// repite, con el color de su material; lo que va por encima de la
   /// cabeza (cornisa, catenaria, tablero alto), solo a trazos.

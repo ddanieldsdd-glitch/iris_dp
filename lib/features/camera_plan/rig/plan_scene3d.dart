@@ -24,6 +24,7 @@ import '../arch/arch_material.dart';
 import '../arch/arch_solid.dart';
 import '../arch/arch_stair.dart';
 import '../arch/arch_sweep.dart';
+import '../arch/arch_terrain.dart';
 import '../arch/wall_faces.dart';
 import '../arch/wall_joints.dart';
 import '../plan_classes.dart';
@@ -132,6 +133,7 @@ class PlanScene3d {
     final solids = <Map<String, dynamic>>[];
     final stairs = <Map<String, dynamic>>[];
     final sweeps = <Map<String, dynamic>>[];
+    final terrains = <Map<String, dynamic>>[];
 
     // Techos de los recintos, solo si alguna luz cuelga sin altura propia.
     List<SceneRoom>? rooms;
@@ -331,6 +333,36 @@ class PlanScene3d {
               'tris': tris,
             });
           }
+        case RigType.terrain:
+          // Terreno (AM.7): una malla lisa por material y el agua, cada
+          // una con su nombre de pieza para Unreal (`uid:material`).
+          for (final MapEntry(key: mat, value: m)
+              in ArchTerrain.mesh(el, mpu).entries) {
+            final tris = <double>[];
+            for (var k = 0; k + 2 < m.tris.length; k += 3) {
+              tris
+                ..addAll(xy(Offset(m.tris[k], m.tris[k + 1])))
+                ..add(_r(level + m.tris[k + 2]));
+            }
+            terrains.add({
+              'id': uid,
+              'uid': '$uid:$mat',
+              'name': el.displayLabel,
+              'cat': PlanCategory.of(el).name,
+              'cls': PlanClass.of(el).name,
+              'mat': mat,
+              'water': mat == ArchTerrain.waterMat,
+              'tris': tris,
+              // Como las posiciones: la y de la planta, hacia el norte.
+              'norms': [
+                for (var k = 0; k + 2 < m.normals.length; k += 3) ...[
+                  _r(m.normals[k]),
+                  _r(-m.normals[k + 1]),
+                  _r(m.normals[k + 2]),
+                ],
+              ],
+            });
+          }
         case RigType.hall || RigType.section || null:
           break;
       }
@@ -431,6 +463,7 @@ class PlanScene3d {
       ..['solids'] = solids
       ..['stairs'] = stairs
       ..['sweeps'] = sweeps
+      ..['terrains'] = terrains
       ..['drapes'] = drapes
       ..['pillars'] = pillars
       ..['trusses'] = trusses
@@ -499,6 +532,7 @@ class PlanScene3d {
       'solids',
       'stairs',
       'sweeps',
+      'terrains',
     ]) {
       for (final item in (scene[k] as List?) ?? const []) {
         if (item is! Map) continue;
@@ -809,6 +843,7 @@ class PlanScene3d {
       'solids',
       'stairs',
       'sweeps',
+      'terrains',
     ];
     final parts = {
       for (final k in kinds)

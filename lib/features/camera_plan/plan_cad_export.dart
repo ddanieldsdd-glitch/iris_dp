@@ -10,6 +10,7 @@ import 'package:xml/xml.dart';
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
 import 'arch/arch_sweep.dart';
+import 'arch/arch_terrain.dart';
 import 'arch/plan_section.dart';
 import 'arch/wall_joints.dart';
 import 'camera_plan_constants.dart';
@@ -141,6 +142,12 @@ class PlanCadExport {
   /// En una sección, lo que cruza la línea de corte.
   static const layerCut = 'CORTE';
 
+  /// Terreno (AM.7): su borde y sus curvas de nivel, con la cota.
+  static const layerTerrain = 'TERRENO';
+
+  /// La orilla del agua del terreno.
+  static const layerWater = 'AGUA';
+
   /// La planta en DXF, en metros, con el norte hacia arriba.
   static String planDxf(List<PlanElement> elements, double metersPerUnit) {
     final dxf = _Dxf({
@@ -157,6 +164,8 @@ class PlanCadExport {
       layerDrapes,
       layerSolids,
       layerSections,
+      layerTerrain,
+      layerWater,
     });
     // El lienzo crece hacia abajo; el CAD, hacia arriba.
     Offset m(Offset p) => Offset(p.dx * metersPerUnit, -p.dy * metersPerUnit);
@@ -234,6 +243,34 @@ class PlanCadExport {
           // Barrido (AM.5): la huella de cada perfil y de cada repetición.
           for (final poly in ArchSweep.footprints(el, metersPerUnit)) {
             dxf.polyline(layerSolids, [for (final p in poly) m(p)], closed: true);
+          }
+          continue;
+        case RigType.terrain:
+          // Terreno (AM.7): el borde, las curvas de nivel (las de cada
+          // metro entero, con su cota) y la orilla del agua.
+          final r = ArchTerrain.rect(el, metersPerUnit);
+          dxf.polyline(layerTerrain, [
+            m(r.topLeft),
+            m(r.topRight),
+            m(r.bottomRight),
+            m(r.bottomLeft),
+          ], closed: true);
+          final labelled = <double>{};
+          for (final (a, b, z) in ArchTerrain.contours(el, metersPerUnit)) {
+            dxf.line(layerTerrain, m(a), m(b));
+            if (z == z.roundToDouble() && labelled.add(z)) {
+              dxf.text(
+                layerTerrain,
+                m((a + b) / 2),
+                '${z.toStringAsFixed(0)} m',
+                height: 0.25,
+              );
+            }
+          }
+          if (ArchTerrain.water(el) case final w?) {
+            for (final (a, b) in ArchTerrain.isoline(el, w, metersPerUnit)) {
+              dxf.line(layerWater, m(a), m(b));
+            }
           }
           continue;
         case RigType.section:
