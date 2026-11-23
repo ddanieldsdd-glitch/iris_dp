@@ -37,6 +37,32 @@ extension ElevationSideLabel on ElevationSide {
   };
 }
 
+/// Una sección (AM.6): la planta cortada por una línea y vista hacia un
+/// lado. Lo que queda delante de la línea no se ve y lo que la cruza sale
+/// cortado, relleno. Se mira desde [from] hacia [to] a la derecha: lo que
+/// se ve está a la izquierda de la línea, en el lienzo.
+class ElevationCut {
+  /// Extremos de la línea en el lienzo.
+  final Offset from;
+  final Offset to;
+
+  /// La letra de la sección: «A» da «Sección A-A».
+  final String name;
+
+  const ElevationCut(this.from, this.to, {this.name = 'A'});
+
+  /// A lo largo de la línea, de [from] a [to], de largo 1.
+  Offset get along {
+    final d = to - from;
+    return d.distance < 1e-9 ? const Offset(1, 0) : d / d.distance;
+  }
+
+  /// Hacia donde se mira, de largo 1.
+  Offset get look => Offset(along.dy, -along.dx);
+
+  String get label => 'Sección $name-$name';
+}
+
 enum ElevationKind {
   wall,
   opening,
@@ -89,6 +115,9 @@ class ElevationItem {
   /// (`across`, `top`, `bottom`).
   final List<(double, double, double)> profile;
 
+  /// En una sección, la pieza cruza la línea de corte: se rellena.
+  final bool cut;
+
   const ElevationItem({
     required this.kind,
     required this.element,
@@ -104,6 +133,7 @@ class ElevationItem {
     this.cct = 5600,
     this.rgb,
     this.profile = const [],
+    this.cut = false,
   });
 
   double get centre => (from + to) / 2;
@@ -115,7 +145,24 @@ class PlanElevation {
   final ElevationSide side;
   final List<ElevationItem> items;
 
-  const PlanElevation(this.side, this.items);
+  /// Si es una sección, por dónde corta. `null` en un alzado.
+  final ElevationCut? cut;
+
+  const PlanElevation(this.side, this.items, [this.cut]);
+
+  /// «Alzado», «Perfil» o «Sección A-A».
+  String get title => cut?.label ?? side.label;
+
+  /// Desde dónde se mira, en palabras.
+  String get hint => cut == null ? side.hint : 'lo que hay detrás del corte';
+
+  /// Cuánto va a lo ancho de esta vista una dirección del lienzo.
+  double acrossOfDir(Offset dir) => acrossOf(dir, side, cut);
+
+  /// Cuánto se aleja del que mira una dirección del lienzo.
+  double depthOfDir(Offset dir) => cut == null
+      ? project(dir, 1, side).depth
+      : dir.dx * cut!.look.dx + dir.dy * cut!.look.dy;
 
   /// Altura de una persona de pie y del objetivo de una cámara en mano o en
   /// trípode, en metros.
@@ -139,8 +186,18 @@ class PlanElevation {
   static ({double across, double depth}) project(
     Offset p,
     double metersPerUnit,
-    ElevationSide side,
-  ) => switch (side) {
+    ElevationSide side, [
+    ElevationCut? cut,
+  ]) => cut != null
+      ? (
+          across: ((p - cut.from).dx * cut.along.dx +
+                  (p - cut.from).dy * cut.along.dy) *
+              metersPerUnit,
+          depth: ((p - cut.from).dx * cut.look.dx +
+                  (p - cut.from).dy * cut.look.dy) *
+              metersPerUnit,
+        )
+      : switch (side) {
     ElevationSide.front => (
       across: p.dx * metersPerUnit,
       depth: -p.dy * metersPerUnit,
@@ -152,10 +209,33 @@ class PlanElevation {
   };
 
   /// Una dirección de la planta en la vista: cuánto va a lo ancho.
-  static double acrossOf(Offset dir, ElevationSide side) => switch (side) {
-    ElevationSide.front => dir.dx,
-    ElevationSide.side => -dir.dy,
-  };
+  static double acrossOf(
+    Offset dir,
+    ElevationSide side, [
+    ElevationCut? cut,
+  ]) => cut != null
+      ? dir.dx * cut.along.dx + dir.dy * cut.along.dy
+      : switch (side) {
+          ElevationSide.front => dir.dx,
+          ElevationSide.side => -dir.dy,
+        };
+
+  /// Lo que queda detrás de la línea de corte de un contorno cerrado, en
+  /// el lienzo: el corte de Sutherland–Hodgman por un semiplano.
+  static List<Offset> clipBehind(List<Offset> poly, ElevationCut cut) {
+    double d(Offset p) =>
+        (p - cut.from).dx * cut.look.dx + (p - cut.from).dy * cut.look.dy;
+    final out = <Offset>[];
+    for (var i = 0; i < poly.length; i++) {
+      final a = poly[i], b = poly[(i + 1) % poly.length];
+      final da = d(a), db = d(b);
+      if (da >= 0) out.add(a);
+      if ((da >= 0) != (db >= 0)) {
+        out.add(Offset.lerp(a, b, da / (da - db))!);
+      }
+    }
+    return out;
+  }
 
   /// Lo más alto de un volumen con cubierta a lo ancho de la vista: la
   /// malla de su cubierta proyectada y, en cada franja, lo más alto.
@@ -166,8 +246,9 @@ class PlanElevation {
     double from,
     double to,
     double level,
-    double bottom,
-  ) {
+    double bottom, {
+    ElevationCut? cut,
+  }) {
     final roof = ArchSolid.roof(el);
     if (roof == null || to - from < 0.01) return const [];
     const bins = 32;
@@ -178,6 +259,7 @@ class PlanElevation {
       final p = at(
         ArchSolid.toCanvas(el, Offset(mesh[i], mesh[i + 1]), mpu),
       );
+      if (cut != null && p.depth < 0) continue;
       final k = ((p.across - from) / (to - from) * bins).round().clamp(0, bins);
       top[k] = math.max(top[k] ?? eave, eave + mesh[i + 2]);
     }
@@ -210,11 +292,30 @@ class PlanElevation {
     /// La planta vista por la luz, si ya está hecha. Si no, se hace sin
     /// rebotes: aquí solo hacen falta los recintos y sus techos.
     LightScene? scene,
+
+    /// Si se da, es una sección por esa línea (AM.6) y no un alzado.
+    ElevationCut? cut,
   }) {
     final mpu = metersPerUnit;
     scene ??= LightScene.from(elements, metersPerUnit: mpu, wallBounce: false);
     final items = <ElevationItem>[];
-    ({double across, double depth}) at(Offset p) => project(p, mpu, side);
+    ({double across, double depth}) at(Offset p) =>
+        project(p, mpu, side, cut);
+
+    // En una sección: lo de delante de la línea no se ve.
+    bool behind(Offset p) => cut == null || at(p).depth >= 0;
+    bool crosses(Iterable<Offset> pts) =>
+        cut != null && pts.any(behind) && !pts.every(behind);
+
+    /// Un tramo recortado a lo que queda detrás de la línea, o `null`.
+    (Offset, Offset)? clipSpan(Offset a, Offset b) {
+      if (cut == null) return (a, b);
+      final da = at(a).depth, db = at(b).depth;
+      if (da < 0 && db < 0) return null;
+      if (da >= 0 && db >= 0) return (a, b);
+      final x = Offset.lerp(a, b, da / (da - db))!;
+      return da >= 0 ? (a, x) : (x, b);
+    }
 
     final trusses = {
       for (final t in elements.where(PlanTruss.isTruss))
@@ -225,12 +326,14 @@ class PlanElevation {
         final c = PlanDrape.catenary(el, mpu);
         final profile = [
           for (var k = 0; k <= 24; k++)
+            if (behind(PlanSegment.pointAt(el, k / 24)))
             (
               at(PlanSegment.pointAt(el, k / 24)).across,
               PlanDrape.topAt(el, k / 24, c),
               PlanDrape.bottomAt(el, k / 24, c),
             ),
         ];
+        if (profile.length < 2) continue;
         final mid = at(PlanSegment.pointAt(el, 0.5));
         items.add(
           ElevationItem(
@@ -243,13 +346,19 @@ class PlanElevation {
             depth: mid.depth,
             label: 'libre ${PlanDrape.clearanceM(el, c).toStringAsFixed(2)} m',
             profile: profile,
+            cut: crosses([
+              PlanSegment.pointAt(el, 0),
+              PlanSegment.pointAt(el, 1),
+            ]),
           ),
         );
         continue;
       }
       switch (RigTypeCodec.of(el)) {
         case RigType.truss:
-          final a = at(PlanTruss.start(el)), b = at(PlanTruss.end(el));
+          final span = clipSpan(PlanTruss.start(el), PlanTruss.end(el));
+          if (span == null) continue;
+          final a = at(span.$1), b = at(span.$2);
           final half = PlanTruss.outerM(PlanTruss.sizeCm(el)) / 2;
           final low = PlanLevel.of(el) + PlanTruss.lowM(el);
           items.add(
@@ -261,10 +370,12 @@ class PlanElevation {
               bottom: low,
               top: low + PlanTruss.depthM(el),
               depth: (a.depth + b.depth) / 2,
+              cut: crosses([PlanTruss.start(el), PlanTruss.end(el)]),
             ),
           );
           continue;
         case RigType.motor || RigType.groundSupport:
+          if (!behind(el.position)) continue;
           final truss = trusses[el.props[PlanRigPoint.trussKey]];
           final top = truss == null
               ? 3.0
@@ -286,6 +397,7 @@ class PlanElevation {
           );
           continue;
         case RigType.pillar:
+          if (!behind(el.position)) continue;
           final p = at(el.position);
           final half = PlanPillar.sizeM(el) / 2;
           items.add(
@@ -303,8 +415,12 @@ class PlanElevation {
         case RigType.slab || RigType.volume:
           // Forjado o volumen (AM.2): de su cota de abajo a la de arriba,
           // a lo ancho de su contorno visto desde este lado.
+          final outline = ArchSolid.outline(el, mpu);
           final pts = [
-            for (final p in ArchSolid.outline(el, mpu)) at(p),
+            for (final p in cut == null
+                ? outline
+                : PlanElevation.clipBehind(outline, cut))
+              at(p),
           ];
           if (pts.isEmpty) continue;
           final level = PlanLevel.of(el);
@@ -321,7 +437,17 @@ class PlanElevation {
               top: level + ArchSolid.topM(el),
               depth: pts.map((p) => p.depth).reduce(math.min),
               // Con cubierta (AM.3), su silueta vista desde este lado.
-              profile: _roofSilhouette(el, mpu, at, from, to, level, bottom),
+              profile: _roofSilhouette(
+                el,
+                mpu,
+                at,
+                from,
+                to,
+                level,
+                bottom,
+                cut: cut,
+              ),
+              cut: crosses(outline),
             ),
           );
           continue;
@@ -330,7 +456,16 @@ class PlanElevation {
           // este lado.
           final level = PlanLevel.of(el);
           final spans = <(double, double, double Function(double), double)>[];
+          var stairCut = false;
           for (final step in ArchStair.steps(el)) {
+            final corners = [
+              for (final p in step.poly) ArchStair.toCanvas(el, p, mpu),
+            ];
+            if (!corners.any(behind)) {
+              stairCut = true;
+              continue;
+            }
+            if (crosses(corners)) stairCut = true;
             final pts = [
               for (final p in step.poly)
                 at(ArchStair.toCanvas(el, p, mpu)),
@@ -393,10 +528,11 @@ class PlanElevation {
               top: level + profile.map((p) => p.$2 - level).reduce(math.max),
               depth: spans.isEmpty ? 0 : at(el.position).depth,
               profile: profile,
+              cut: stairCut,
             ),
           );
           continue;
-        case RigType.hall || RigType.scan:
+        case RigType.hall || RigType.scan || RigType.section:
           continue;
         case null:
           break;
@@ -404,6 +540,13 @@ class PlanElevation {
       if (PlanSegment.isSegment(el)) {
         if (PlanSegment.kind(el) != PlanSegment.kindWall) continue;
         final a = at(el.position), b = at(PlanSegment.end(el));
+        // En una sección: lo que queda detrás y, si la cruza, su corte.
+        const samples = 32;
+        final seen = [
+          for (var k = 0; k <= samples; k++)
+            if (behind(PlanSegment.pointAt(el, k / samples))) k / samples,
+        ];
+        if (seen.isEmpty) continue;
         final top =
             (el.props[LightScene.heightKey] as num?)?.toDouble() ??
             (el.props[PlanPillar.heightKey] as num?)?.toDouble() ??
@@ -417,6 +560,7 @@ class PlanElevation {
                   for (var k = 0; k <= 16; k++) k / 16,
                   ...PlanSegment.profileTs(el),
                 }.toList()..sort())
+                  if (behind(PlanSegment.pointAt(el, t)))
                   (
                     at(PlanSegment.pointAt(el, t)).across,
                     PlanSegment.topAtM(el, t)!,
@@ -424,28 +568,55 @@ class PlanElevation {
                   ),
               ]
             : const <(double, double, double)>[];
-        items.add(
-          ElevationItem(
-            kind: ElevationKind.wall,
-            element: el,
-            from: math.min(a.across, b.across),
-            to: math.max(a.across, b.across) + 0.02,
-            bottom: 0,
-            top: profile.isEmpty
-                ? top
-                : profile.map((p) => p.$2).reduce(math.max),
-            depth: (a.depth + b.depth) / 2,
-            label: el.label ?? '',
-            profile: profile,
-          ),
-        );
+        final xs = cut == null
+            ? [a.across, b.across]
+            : [for (final t in seen) at(PlanSegment.pointAt(el, t)).across];
+        final from = xs.reduce(math.min), to = xs.reduce(math.max) + 0.02;
+        if (to - from > 0.03 || seen.length == samples + 1) {
+          items.add(
+            ElevationItem(
+              kind: ElevationKind.wall,
+              element: el,
+              from: from,
+              to: to,
+              bottom: 0,
+              top: profile.isEmpty
+                  ? top
+                  : profile.map((p) => p.$2).reduce(math.max),
+              depth: (a.depth + b.depth) / 2,
+              label: el.label ?? '',
+              profile: profile,
+            ),
+          );
+        }
+        if (seen.length <= samples) {
+          // Por donde la cruza la línea: su grosor, relleno.
+          final t = _crossing(el, (q) => at(q).depth);
+          final c = at(PlanSegment.pointAt(el, t)).across;
+          final half = math.max(0.05, PlanSegment.thicknessM(el) / 2);
+          items.add(
+            ElevationItem(
+              kind: ElevationKind.wall,
+              element: el,
+              from: c - half,
+              to: c + half,
+              bottom: 0,
+              top: PlanSegment.topAtM(el, t) ?? top,
+              depth: 0,
+              cut: true,
+            ),
+          );
+        }
         continue;
       }
       // Una pared suelta de las de antes (AM.4).
       if (el.type == ElementType.wall &&
           !PlanOpening.isOpening(el) &&
           el.architectureType == ArchitectureType.wall) {
-        final (s, e) = LightScene.legacyWallSpan(el);
+        final (s0, e0) = LightScene.legacyWallSpan(el);
+        final span = clipSpan(s0, e0);
+        if (span == null) continue;
+        final (s, e) = span;
         final a = at(s), b = at(e);
         items.add(
           ElevationItem(
@@ -459,12 +630,14 @@ class PlanElevation {
                 scene.wallTopAt(el.position),
             depth: (a.depth + b.depth) / 2,
             label: el.label ?? '',
+            cut: crosses([s0, e0]),
           ),
         );
         continue;
       }
       if (PlanOpening.isOpening(el)) {
         final (s, e) = PlanOpening.span(el);
+        if (!behind(Offset.lerp(s, e, 0.5)!)) continue;
         final a = at(s), b = at(e);
         items.add(
           ElevationItem(
@@ -490,6 +663,7 @@ class PlanElevation {
         );
         continue;
       }
+      if (!behind(el.position)) continue;
       final p = at(el.position);
       switch (el.type) {
         case ElementType.light:
@@ -501,7 +675,7 @@ class PlanElevation {
               ? PlanLight.heightOf(el)
               : (el.props[PlanLight.heightKey] as num?)?.toDouble() ?? standM;
           final dir = LightScene.aimOf(el);
-          final across = acrossOf(dir, side);
+          final across = acrossOf(dir, side, cut);
           double? aim;
           // Con su inclinación (F6.21.5): hacia el lado al que apunta en
           // planta, subiendo o bajando lo que diga el tilt.
@@ -544,7 +718,7 @@ class PlanElevation {
         case ElementType.camera:
           final z =
               (el.props[PlanLight.heightKey] as num?)?.toDouble() ?? lensM;
-          final across = acrossOf(LightScene.aimOf(el), side);
+          final across = acrossOf(LightScene.aimOf(el), side, cut);
           items.add(
             ElevationItem(
               kind: ElevationKind.camera,
@@ -582,7 +756,26 @@ class PlanElevation {
     }
     // Lo lejano primero: lo cercano se pinta encima.
     items.sort((a, b) => b.depth.compareTo(a.depth));
-    return PlanElevation(side, items);
+    return PlanElevation(side, items, cut);
+  }
+
+  /// Dónde cruza un tramo la línea de corte (profundidad 0), de 0 a 1.
+  static double _crossing(
+    PlanElement el,
+    double Function(Offset) depthAt,
+  ) {
+    var lo = 0.0, hi = 1.0;
+    final front = depthAt(PlanSegment.pointAt(el, 0)) < 0;
+    for (var i = 0; i < 30; i++) {
+      final mid = (lo + hi) / 2;
+      final behind = depthAt(PlanSegment.pointAt(el, mid)) >= 0;
+      if (behind == front) {
+        hi = mid;
+      } else {
+        lo = mid;
+      }
+    }
+    return (lo + hi) / 2;
   }
 }
 
@@ -666,7 +859,9 @@ class PlanElevationPainter extends CustomPainter {
               outline,
               Paint()
                 ..color = wall
-                    ? faint.withValues(alpha: 0.18 * alpha)
+                    ? (item.cut
+                          ? ink.withValues(alpha: 0.85)
+                          : faint.withValues(alpha: 0.18 * alpha))
                     : background,
             )
             ..drawPath(
@@ -679,7 +874,10 @@ class PlanElevationPainter extends CustomPainter {
         case ElevationKind.wall:
           canvas.drawRect(
             rect,
-            Paint()..color = faint.withValues(alpha: 0.18 * alpha),
+            Paint()
+              ..color = item.cut
+                  ? ink.withValues(alpha: 0.85)
+                  : faint.withValues(alpha: 0.18 * alpha),
           );
           canvas.drawRect(
             rect,
@@ -810,14 +1008,21 @@ class PlanElevationPainter extends CustomPainter {
             final p = to(x, bottom);
             body.lineTo(p.dx, p.dy);
           }
+          body.close();
+          if (item.cut) {
+            canvas.drawPath(body, Paint()..color = ink.withValues(alpha: 0.5));
+          }
           canvas.drawPath(
-            body..close(),
+            body,
             Paint()
               ..color = color
               ..style = PaintingStyle.stroke
               ..strokeWidth = 0.8,
           );
         case ElevationKind.prop:
+          if (item.cut) {
+            canvas.drawRect(rect, Paint()..color = ink.withValues(alpha: 0.5));
+          }
           canvas.drawRect(
             rect,
             Paint()
@@ -890,7 +1095,7 @@ class PlanElevationPainter extends CustomPainter {
     }
     _text(
       canvas,
-      '${e.side.label} · ${e.side.hint}',
+      '${e.title} · ${e.hint}',
       Offset(margin.left, size.height - 22),
       faint,
       11,

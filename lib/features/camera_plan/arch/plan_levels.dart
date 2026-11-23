@@ -83,6 +83,8 @@ abstract final class PlanLevels {
     double elevationM,
     List<PlanStorey> storeys,
   ) {
+    // Una línea de sección corta todos los niveles.
+    if (RigTypeCodec.of(el) == RigType.section) return true;
     if ((storeyOf(el, storeys).elevationM - elevationM).abs() <= tolerance) {
       return true;
     }

@@ -26,6 +26,10 @@ enum RigType {
 
   /// Escalera o rampa (AM.6, `ArchStair`).
   stair,
+
+  /// Línea de sección (AM.6, `PlanSection`): no se construye, solo dice
+  /// por dónde cortar.
+  section,
 }
 
 extension RigTypeCodec on RigType {
@@ -41,6 +45,7 @@ extension RigTypeCodec on RigType {
     RigType.slab => 'Forjado',
     RigType.volume => 'Volumen',
     RigType.stair => 'Escalera',
+    RigType.section => 'Sección',
   };
 
   /// El tipo de estructura de un elemento, o `null` si no lo es.

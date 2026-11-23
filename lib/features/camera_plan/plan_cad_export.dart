@@ -9,6 +9,7 @@ import 'package:xml/xml.dart';
 
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
+import 'arch/plan_section.dart';
 import 'arch/wall_joints.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
@@ -133,6 +134,12 @@ class PlanCadExport {
   /// Forjados y volúmenes (AM.2): su contorno.
   static const layerSolids = 'VOLUMENES';
 
+  /// Líneas de sección (AM.6): el corte, sus flechas y su letra.
+  static const layerSections = 'SECCIONES';
+
+  /// En una sección, lo que cruza la línea de corte.
+  static const layerCut = 'CORTE';
+
   /// La planta en DXF, en metros, con el norte hacia arriba.
   static String planDxf(List<PlanElement> elements, double metersPerUnit) {
     final dxf = _Dxf({
@@ -148,6 +155,7 @@ class PlanCadExport {
       layerRigging,
       layerDrapes,
       layerSolids,
+      layerSections,
     });
     // El lienzo crece hacia abajo; el CAD, hacia arriba.
     Offset m(Offset p) => Offset(p.dx * metersPerUnit, -p.dy * metersPerUnit);
@@ -220,6 +228,29 @@ class PlanCadExport {
             for (final p in ArchStair.walkLine(el))
               m(ArchStair.toCanvas(el, p, metersPerUnit)),
           ]);
+          continue;
+        case RigType.section:
+          // Sección (AM.6): la línea y, en cada punta, la flecha hacia
+          // donde se mira y su letra.
+          final a = PlanSection.start(el), b = PlanSection.end(el);
+          dxf.line(layerSections, m(a), m(b));
+          final look = PlanSection.look(el) * (0.6 / metersPerUnit);
+          final along = (b - a).distance == 0
+              ? Offset.zero
+              : (b - a) / (b - a).distance * (0.15 / metersPerUnit);
+          for (final p in [a, b]) {
+            final tip = p + look;
+            dxf
+              ..line(layerSections, m(p), m(tip))
+              ..line(layerSections, m(tip), m(tip - look * 0.35 + along))
+              ..line(layerSections, m(tip), m(tip - look * 0.35 - along))
+              ..text(
+                layerSections,
+                m(tip + look * 0.4),
+                PlanSection.name(el),
+                height: 0.3,
+              );
+          }
           continue;
         case RigType.hall || RigType.scan:
           continue;
@@ -343,6 +374,8 @@ class PlanCadExport {
       layerRigging,
       layerDrapes,
       layerSolids,
+      layerSections,
+      layerCut,
     });
     dxf.line(
       layerWalls,
@@ -361,7 +394,9 @@ class PlanCadExport {
         case ElevationKind.wall || ElevationKind.opening
             when item.profile.isNotEmpty:
           dxf.polyline(
-            item.kind == ElevationKind.wall ? layerWalls : layerOpenings,
+            item.kind == ElevationKind.wall
+                ? (item.cut ? layerCut : layerWalls)
+                : layerOpenings,
             [
               for (final (x, top, _) in item.profile) Offset(x, top),
               for (final (x, _, bottom) in item.profile.reversed)
@@ -370,7 +405,7 @@ class PlanCadExport {
             closed: true,
           );
         case ElevationKind.wall:
-          dxf.polyline(layerWalls, box(), closed: true);
+          dxf.polyline(item.cut ? layerCut : layerWalls, box(), closed: true);
         case ElevationKind.opening:
           dxf.polyline(layerOpenings, box(), closed: true);
         case ElevationKind.light:
@@ -421,13 +456,13 @@ class PlanCadExport {
           );
           dxf.text(layerText, Offset(item.to + 0.1, item.top), item.label);
         case ElevationKind.prop when item.profile.isNotEmpty:
-          dxf.polyline(layerSolids, [
+          dxf.polyline(item.cut ? layerCut : layerSolids, [
             for (final (x, top, _) in item.profile) Offset(x, top),
             for (final (x, _, bottom) in item.profile.reversed)
               Offset(x, bottom),
           ], closed: true);
         case ElevationKind.prop:
-          dxf.polyline(layerProps, box(), closed: true);
+          dxf.polyline(item.cut ? layerCut : layerProps, box(), closed: true);
         case ElevationKind.truss:
           dxf.polyline(layerTruss, box(), closed: true);
         case ElevationKind.rigPoint:

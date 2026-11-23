@@ -32,7 +32,10 @@ enum PlanCategory {
     switch (RigTypeCodec.of(el)) {
       case RigType.scan:
         return PlanCategory.scan;
-      case RigType.slab || RigType.volume || RigType.stair:
+      case RigType.slab ||
+          RigType.volume ||
+          RigType.stair ||
+          RigType.section:
         return PlanCategory.architecture;
       case RigType.hall ||
           RigType.truss ||

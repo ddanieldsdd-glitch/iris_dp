@@ -9,6 +9,8 @@ import 'arch/arch_roof_controls.dart';
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
 import 'arch/level_controls.dart';
+import 'arch/plan_section.dart';
+import 'arch/section_controls.dart';
 import 'arch/stair_controls.dart';
 import 'arch/wall_controls.dart';
 import 'camera_plan_constants.dart';
@@ -80,6 +82,7 @@ class PlanPieceControls extends StatelessWidget {
       PlanHall.isHall(el) ||
       ArchSolid.isSolid(el) ||
       ArchStair.isStair(el) ||
+      PlanSection.isSection(el) ||
       _isTerrain(el) ||
       _isGrip(el) ||
       el.type == ElementType.actor ||
@@ -533,6 +536,15 @@ class PlanPieceControls extends StatelessWidget {
           ).copyWith(color: palette.textTertiary),
         ),
       ]);
+    } else if (PlanSection.isSection(el)) {
+      // Línea de sección (AM.6).
+      children.add(
+        SectionControls(
+          element: el,
+          metersPerUnit: metersPerUnit,
+          onUpdate: onUpdate,
+        ),
+      );
     } else if (ArchStair.isStair(el)) {
       // Escalera o rampa (AM.6).
       children.add(

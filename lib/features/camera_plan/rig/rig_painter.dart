@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../arch/arch_roof.dart';
 import '../arch/arch_solid.dart';
 import '../arch/arch_stair.dart';
+import '../arch/plan_section.dart';
 import '../camera_plan_element_model.dart';
 import '../plan_segment.dart';
 import 'plan_drape.dart';
@@ -62,6 +63,8 @@ class RigPainter {
         );
       case RigType.stair:
         drawStair(canvas, el, metersPerUnit, selected: selected, ink: color);
+      case RigType.section:
+        drawSection(canvas, el, metersPerUnit, selected: selected);
       case null:
         return false;
     }
@@ -459,6 +462,72 @@ class RigPainter {
   /// Una escalera o una rampa (AM.6), como en los planos: cada peldaño,
   /// la línea por la que se sube con un círculo en el arranque y la flecha
   /// en la llegada, y cuántos peldaños y de cuánto.
+  /// Una línea de sección (AM.6): trazo y punto, y en cada punta una
+  /// flecha hacia donde se mira con su letra, como en un plano.
+  static void drawSection(
+    Canvas canvas,
+    PlanElement el,
+    double mpu, {
+    bool selected = false,
+  }) {
+    const color = Color(0xFFC8102E);
+    final a = PlanSection.start(el), b = PlanSection.end(el);
+    final len = (b - a).distance;
+    if (len < 1) return;
+    final u = (b - a) / len;
+    final look = PlanSection.look(el);
+    // Del tamaño de un rótulo, sea cual sea la escala.
+    final size = math.max(10.0, 0.45 / mpu);
+    final line = Paint()
+      ..color = color
+      ..strokeWidth = selected ? 2.2 : 1.4
+      ..style = PaintingStyle.stroke;
+    // Trazo y punto.
+    final dash = size * 0.9, gap = size * 0.3, dot = size * 0.1;
+    var s = 0.0;
+    while (s < len) {
+      final e = math.min(len, s + dash);
+      canvas.drawLine(a + u * s, a + u * e, line);
+      s = e + gap;
+      if (s < len) {
+        canvas.drawLine(a + u * s, a + u * math.min(len, s + dot), line);
+      }
+      s += dot + gap;
+    }
+    final fill = Paint()..color = color;
+    for (final p in [a, b]) {
+      canvas.drawLine(p, p + look * size, line..strokeWidth = 2);
+      final tip = p + look * size * 1.3;
+      canvas.drawPath(
+        Path()
+          ..moveTo(tip.dx, tip.dy)
+          ..lineTo(
+            (p + look * size * 0.8 + u * size * 0.3).dx,
+            (p + look * size * 0.8 + u * size * 0.3).dy,
+          )
+          ..lineTo(
+            (p + look * size * 0.8 - u * size * 0.3).dx,
+            (p + look * size * 0.8 - u * size * 0.3).dy,
+          )
+          ..close(),
+        fill,
+      );
+      final tp = TextPainter(
+        text: TextSpan(
+          text: PlanSection.name(el),
+          style: TextStyle(
+            color: color,
+            fontSize: size * 0.9,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final at = p - u * size * 0.9;
+      tp.paint(canvas, at - Offset(tp.width / 2, tp.height / 2));
+    }
+  }
+
   static void drawStair(
     Canvas canvas,
     PlanElement el,

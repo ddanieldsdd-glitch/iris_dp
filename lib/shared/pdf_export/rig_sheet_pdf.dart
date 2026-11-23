@@ -1,10 +1,12 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/painting.dart' show Offset;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../core/utils/pdf_export_fonts.dart';
+import '../../features/camera_plan/arch/plan_section.dart';
 import '../../features/camera_plan/camera_plan_constants.dart';
 import '../../features/camera_plan/camera_plan_element_model.dart';
 import '../../features/camera_plan/light/modifiers.dart';
@@ -299,9 +301,14 @@ const _beamLine = PdfColor.fromInt(0xFFE59AAF);
 /// Cotas y rótulos de estructura.
 const _dim = PdfColor.fromInt(0xFFC8102E);
 
+/// Lo que corta una sección (AM.6): las paredes en negro y lo demás en
+/// gris, como en un plano de arquitectura.
+const _cut = PdfColor.fromInt(0xFF3A3F45);
+const _cutSoft = PdfColor.fromInt(0xFFB9C0C7);
+
 typedef _Box = ({double x, double y, double w, double h});
 
-enum _Kind { compact, plan, elevations, legend, schedule }
+enum _Kind { compact, plan, elevations, sections, legend, schedule }
 
 /// Lo que comparten todas las hojas.
 class _Data {
@@ -328,6 +335,18 @@ class _Data {
     metersPerUnit: mpu,
     side: ElevationSide.side,
   );
+
+  /// Las líneas de sección de la planta (AM.6), por su letra.
+  late final List<PlanElement> sectionLines = PlanSection.of(elements);
+
+  /// Cada sección vista, en el orden de [sectionLines].
+  late final List<PlanElevation> sections = [
+    for (final s in sectionLines)
+      PlanSection.elevationOf(s, elements, metersPerUnit: mpu),
+  ];
+
+  /// Cuántas secciones caben en una hoja.
+  static const sectionsPerPage = 2;
 
   /// El color de cada modelo, en el orden de la leyenda.
   late final Map<String, (PdfColor, PdfColor)> modelColors = {
@@ -365,6 +384,8 @@ class _Data {
       (_Kind.plan, 0),
       (_Kind.elevations, 0),
     ],
+    for (var i = 0; i < sections.length; i += sectionsPerPage)
+      (_Kind.sections, i),
     if (legendOverflows) (_Kind.legend, 0),
     if (options.schedule)
       for (var from = 0; from < units.length; from += scheduleRows)
@@ -455,7 +476,7 @@ class _Data {
   /// Hacia dónde apunta un foco en un alzado (radianes desde la horizontal
   /// hacia la derecha, positivo hacia arriba), con la misma dirección que
   /// la planta y el 3D. `null` si mira hacia el que mira o al contrario.
-  double? aimIn(ElevationItem item, ElevationSide side) {
+  double? aimIn(ElevationItem item, PlanElevation e) {
     final f = fixtureOf[item.element];
     if (f == null) return item.aim;
     final pos = (f['pos'] as List).cast<num>();
@@ -463,8 +484,9 @@ class _Data {
     final dx = (aim[0] - pos[0]).toDouble();
     final dy = (aim[1] - pos[1]).toDouble();
     final dz = (aim[2] - pos[2]).toDouble();
-    final across = side == ElevationSide.front ? dx : dy;
-    final depth = side == ElevationSide.front ? dy : dx;
+    // Del mundo (y hacia el norte) al lienzo (y hacia abajo).
+    final across = e.acrossOfDir(Offset(dx, -dy));
+    final depth = e.depthOfDir(Offset(dx, -dy));
     final inView = math.sqrt(across * across + dz * dz);
     if (inView < 0.3 * math.sqrt(inView * inView + depth * depth)) {
       return null;
@@ -509,10 +531,22 @@ class _Page {
       case _Kind.elevations:
         frontBox = (x: 12.0, y: 24.0, w: _drawW, h: 118.0);
         sideBox = (x: 12.0, y: 168.0, w: _drawW, h: 110.0);
+      case _Kind.sections:
+        frontBox = (x: 12.0, y: 24.0, w: _drawW, h: 118.0);
+        if (from + 1 < d.sections.length) {
+          sideBox = (x: 12.0, y: 168.0, w: _drawW, h: 110.0);
+        }
       case _Kind.legend || _Kind.schedule:
         break;
     }
   }
+
+  /// Lo que va arriba y abajo: el alzado y el perfil o, en una hoja de
+  /// secciones, dos secciones.
+  PlanElevation get topView =>
+      kind == _Kind.sections ? d.sections[from] : d.front;
+  PlanElevation get bottomView =>
+      kind == _Kind.sections ? d.sections[from + 1] : d.profile;
 
   /// En una hoja de la lista de focos, el primero que lleva.
   final int from;
@@ -550,10 +584,10 @@ class _Page {
             _frame(g);
             if (planBox != null) _plan(g);
             if (frontBox case final box?) {
-              _elevation(g, d.front, box, frontScale);
+              _elevation(g, topView, box, frontScale);
             }
             if (sideBox case final box?) {
-              _elevation(g, d.profile, box, sideScale);
+              _elevation(g, bottomView, box, sideScale);
             }
             for (final (x, y, el) in _legendIcons) {
               _drawIcons(g, x, y, el);
@@ -783,9 +817,9 @@ class _Page {
         line(g, _split, 10, _split, 287);
         line(g, 10, 180, _split, 180);
         line(g, 186, 180, 186, 287);
-      case _Kind.elevations:
+      case _Kind.elevations || _Kind.sections:
         line(g, _split, 10, _split, 287);
-        line(g, 10, 150, _split, 150);
+        if (sideBox != null) line(g, 10, 150, _split, 150);
       case _Kind.plan || _Kind.schedule:
         line(g, _split, 10, _split, 287);
       case _Kind.legend:
@@ -1036,6 +1070,7 @@ class _Page {
     _planStreetLamps(g, s);
     _planFixtures(g, s);
     _planDimensions(g);
+    _planSections(g);
     // Norte y barra de escala.
     final box = planBox!;
     final nx = box.x + box.w - 8, ny = box.y - 4;
@@ -1279,6 +1314,73 @@ class _Page {
     return (math.min(a.$1, out.$1) - 4, math.max(a.$2, out.$2) + 4);
   }
 
+  /// Una línea de sección (AM.6) en mm de la hoja: sus extremos y hacia
+  /// dónde se mira, de largo 1.
+  ((double, double), (double, double), (double, double)) _sectionMm(
+    PlanElement el,
+  ) {
+    (double, double) mm(Offset p) => pm([p.dx * d.mpu, -p.dy * d.mpu]);
+    final a = mm(PlanSection.start(el)), b = mm(PlanSection.end(el));
+    // El lienzo y la hoja tienen la y hacia abajo: la dirección vale igual.
+    final look = PlanSection.look(el);
+    return (a, b, (look.dx, look.dy));
+  }
+
+  /// Las líneas de sección: trazo y punto en rojo y, en cada punta, la
+  /// flecha hacia donde se mira.
+  void _planSections(PdfGraphics g) {
+    for (final el in d.sectionLines) {
+      final (a, b, look) = _sectionMm(el);
+      line(g, a.$1, a.$2, b.$1, b.$2, color: _dim, width: 0.3, dash: [3, 1, 0.6, 1]);
+      final len = math.sqrt(
+        math.pow(b.$1 - a.$1, 2) + math.pow(b.$2 - a.$2, 2),
+      );
+      if (len < 0.1) continue;
+      final u = ((b.$1 - a.$1) / len, (b.$2 - a.$2) / len);
+      for (final p in [a, b]) {
+        final tip = (p.$1 + look.$1 * 5, p.$2 + look.$2 * 5);
+        line(g, p.$1, p.$2, tip.$1, tip.$2, color: _dim, width: 0.4);
+        poly(
+          g,
+          [
+            (tip.$1 + look.$1 * 1.6, tip.$2 + look.$2 * 1.6),
+            (tip.$1 + u.$1 * 1.1, tip.$2 + u.$2 * 1.1),
+            (tip.$1 - u.$1 * 1.1, tip.$2 - u.$2 * 1.1),
+          ],
+          stroke: null,
+          fill: _dim,
+          closed: true,
+        );
+      }
+    }
+  }
+
+  /// La letra de cada sección, junto a sus dos puntas.
+  void _planSectionLabels() {
+    for (final el in d.sectionLines) {
+      final (a, b, _) = _sectionMm(el);
+      final len = math.sqrt(
+        math.pow(b.$1 - a.$1, 2) + math.pow(b.$2 - a.$2, 2),
+      );
+      if (len < 0.1) continue;
+      final u = ((b.$1 - a.$1) / len, (b.$2 - a.$2) / len);
+      for (final (p, sign) in [(a, -1.0), (b, 1.0)]) {
+        labels.add(
+          _Label(
+            p.$1 + u.$1 * 3.2 * sign + 3,
+            p.$2 + u.$2 * 3.2 * sign + 1.4,
+            PlanSection.name(el),
+            size: 8,
+            bold: true,
+            color: _dim,
+            width: 6,
+            align: pw.TextAlign.center,
+          ),
+        );
+      }
+    }
+  }
+
   void _planDimensionLabels() {
     final m = _measured;
     if (m.maxX - m.minX < 0.5 || m.maxY - m.minY < 0.5) return;
@@ -1381,6 +1483,7 @@ class _Page {
       );
     }
     _planDimensionLabels();
+    _planSectionLabels();
     final nx = box.x + box.w - 8, ny = box.y - 4;
     labels.add(
       _Label(
@@ -1437,7 +1540,7 @@ class _Page {
             ],
             stroke: _struct,
             fill: item.kind == ElevationKind.wall
-                ? const PdfColor.fromInt(0xFFF1F3F5)
+                ? (item.cut ? _cut : const PdfColor.fromInt(0xFFF1F3F5))
                 : PdfColors.white,
             width: item.kind == ElevationKind.wall ? 0.2 : 0.15,
             closed: true,
@@ -1450,7 +1553,7 @@ class _Page {
             w,
             h,
             stroke: _struct,
-            fill: const PdfColor.fromInt(0xFFF1F3F5),
+            fill: item.cut ? _cut : const PdfColor.fromInt(0xFFF1F3F5),
             width: 0.2,
           );
         case ElevationKind.opening:
@@ -1516,13 +1619,22 @@ class _Page {
               for (final (across, _, bottom) in item.profile.reversed)
                 at(across, bottom),
             ],
-            stroke: _decorLine,
-            fill: _decor,
-            width: 0.12,
+            stroke: item.cut ? _struct : _decorLine,
+            fill: item.cut ? _cutSoft : _decor,
+            width: item.cut ? 0.2 : 0.12,
             closed: true,
           );
         case ElevationKind.prop:
-          rect(g, x, y, w, h, stroke: _decorLine, fill: _decor, width: 0.12);
+          rect(
+            g,
+            x,
+            y,
+            w,
+            h,
+            stroke: item.cut ? _struct : _decorLine,
+            fill: item.cut ? _cutSoft : _decor,
+            width: item.cut ? 0.2 : 0.12,
+          );
       }
     }
     // Los haces, sobre paredes y telas (son claros) y bajo los aparatos.
@@ -1530,7 +1642,7 @@ class _Page {
       if (!d.options.beams) break;
       if (item.kind != ElevationKind.light) continue;
       if (PlanGrip.isGrip(item.element)) continue;
-      final aim = d.aimIn(item, e.side);
+      final aim = d.aimIn(item, e);
       if (aim == null || item.beamDeg >= 179) continue;
       final z = d.heightOf(item);
       final c = at(item.centre, z);
@@ -1555,7 +1667,7 @@ class _Page {
     // Los aparatos, por encima de telas y paredes para que se vean.
     for (final item in e.items) {
       if (item.kind == ElevationKind.light) {
-        _elevationLight(g, item, at, s, e.side);
+        _elevationLight(g, item, at, s, e);
       }
     }
     // Cotas de altura en rojo, a la derecha.
@@ -1572,7 +1684,7 @@ class _Page {
     ElevationItem item,
     (double, double) Function(double, double) at,
     double s,
-    ElevationSide side,
+    PlanElevation e,
   ) {
     final el = item.element;
     if (PlanGrip.isGrip(el)) {
@@ -1585,7 +1697,7 @@ class _Page {
     final z = d.heightOf(item);
     final c = at(item.centre, z);
     if (StreetLamp.isOn(el)) {
-      _elevationStreetLamp(g, item, at, s, side, z);
+      _elevationStreetLamp(g, item, at, s, e, z);
       return;
     }
     // En pie: el mástil y las patas hasta el suelo.
@@ -1600,7 +1712,7 @@ class _Page {
       line(g, knee.$1, knee.$2, foot.$1, foot.$2, color: _muted, width: 0.2);
     }
     final (family, size) = d.shapeOf(el, fixture: d.fixtureOf[el]);
-    final aim = d.aimIn(item, side);
+    final aim = d.aimIn(item, e);
     final extent = symbol(
       g,
       c.$1,
@@ -1628,14 +1740,14 @@ class _Page {
     ElevationItem item,
     (double, double) Function(double, double) at,
     double s,
-    ElevationSide side,
+    PlanElevation e,
     double z,
   ) {
     final el = item.element;
     final color = d.colorOf(el);
     final r = el.rotation * math.pi / 180;
     // Hacia fuera de la fachada, en lo que se ve de este lado.
-    final out = side == ElevationSide.front ? math.sin(r) : math.cos(r);
+    final out = e.acrossOfDir(Offset(math.sin(r), -math.cos(r)));
     const armM = 0.8;
     final head = at(item.centre, z);
     final elbow = at(item.centre - out * armM, z + 0.25);
@@ -1797,11 +1909,13 @@ class _Page {
       title(box.x, 16, 'PLANTA DE LUZ Y RIGGING', planScale);
       _planLabels();
     }
-    for (final (box, e, name, isFront) in [
-      (frontBox, d.front, 'ALZADO FRONTAL', true),
-      (sideBox, d.profile, 'PERFIL LATERAL', false),
+    for (final (box, title0, isFront) in [
+      (frontBox, 'ALZADO FRONTAL', true),
+      (sideBox, 'PERFIL LATERAL', false),
     ]) {
       if (box == null) continue;
+      final e = isFront ? topView : bottomView;
+      final name = e.cut == null ? title0 : e.title.toUpperCase();
       final scale = RigSheetPdf.scaleFor(
         e.right - e.left + 1,
         e.height,
@@ -1818,7 +1932,7 @@ class _Page {
     }
 
     final y = _legend(16);
-    if (kind != _Kind.elevations) _structure(y);
+    if (kind != _Kind.elevations && kind != _Kind.sections) _structure(y);
     _titleBlock();
   }
 
@@ -2182,8 +2296,10 @@ class _Page {
     final info = d.info;
     final scales = <String>[
       if (planBox != null) 'P ${scaleLabel(planScale)}',
-      if (frontBox != null) 'A ${scaleLabel(frontScale)}',
-      if (sideBox != null) 'L ${scaleLabel(sideScale)}',
+      if (frontBox != null)
+        '${kind == _Kind.sections ? 'S' : 'A'} ${scaleLabel(frontScale)}',
+      if (sideBox != null)
+        '${kind == _Kind.sections ? 'S' : 'L'} ${scaleLabel(sideScale)}',
     ].join(' · ');
     cell(_titleX, top + 3, 'PROYECTO', info.project, big: true);
     cell(

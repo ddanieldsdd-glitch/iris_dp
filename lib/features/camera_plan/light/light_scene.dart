@@ -1204,6 +1204,8 @@ class LightScene {
             _addStair(blockers, el, metersPerUnit);
             continue;
           }
+          // Una línea de sección (AM.6) no tapa nada.
+          if (RigTypeCodec.of(el) == RigType.section) continue;
           final radius = propSizeM(el) / metersPerUnit;
           final height = propHeightM(el);
           switch (el.propType) {

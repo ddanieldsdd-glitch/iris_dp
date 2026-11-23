@@ -307,7 +307,7 @@ class PlanScene3d {
             'tris': tris,
             ...?_linked(el),
           });
-        case RigType.hall || null:
+        case RigType.hall || RigType.section || null:
           break;
       }
       switch (el.type) {

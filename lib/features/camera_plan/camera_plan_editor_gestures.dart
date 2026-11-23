@@ -20,6 +20,13 @@ extension _EditorGestures on _CameraPlanEditorState {
         return el;
       }
     }
+    // Una línea de sección (AM.6), por cualquier punto.
+    for (final el in _drawnElements.reversed) {
+      if (PlanSection.isSection(el) &&
+          PlanSection.contains(el, canvasPos, slop: 10 * slack)) {
+        return el;
+      }
+    }
     // Los tramos, después: lo que está encima de una pared se coge antes.
     for (final el in _drawnElements.reversed) {
       if (!PlanSegment.isSegment(el)) continue;

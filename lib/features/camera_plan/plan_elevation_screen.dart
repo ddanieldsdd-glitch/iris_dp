@@ -11,6 +11,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/export_file_saver.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../shared/pdf_export/rig_sheet_pdf.dart';
+import 'arch/plan_section.dart';
 import 'camera_plan_element_model.dart';
 import 'light/light_scene.dart';
 import 'light_sheet_export.dart';
@@ -70,8 +71,14 @@ class PlanElevationScreen extends StatefulWidget {
 }
 
 class _PlanElevationScreenState extends State<PlanElevationScreen> {
-  /// Qué hoja se mira: la planta (1) o el alzado y el perfil (2).
+  /// Qué hoja se mira: la planta (1) o el alzado y el perfil (2); con
+  /// secciones, la primera de ellas (3). En una sola hoja, la hoja (1) o
+  /// las secciones (2).
   var _page = 2;
+  var _compactPage = 1;
+
+  /// Las líneas de sección de la planta (AM.6).
+  late final List<PlanElement> _sections = PlanSection.of(widget.elements);
 
   RigSheetOptions _o = const RigSheetOptions();
   var _gaffer = '';
@@ -214,6 +221,20 @@ class _PlanElevationScreenState extends State<PlanElevationScreen> {
     if (mounted) unawaited(_restore());
   }
 
+  void _saveSection(PlanElement section) {
+    final e = PlanSection.elevationOf(
+      section,
+      widget.elements,
+      metersPerUnit: widget.metersPerUnit,
+    );
+    _save(
+      utf8.encode(PlanCadExport.elevationDxf(e)),
+      'seccion ${PlanSection.name(section)}',
+      'dxf',
+      'DXF de la ${e.title.toLowerCase()}',
+    );
+  }
+
   void _saveSide(ElevationSide side) => _save(
     utf8.encode(PlanCadExport.elevationDxf(_elevation(side))),
     side.label.toLowerCase(),
@@ -245,6 +266,9 @@ class _PlanElevationScreenState extends State<PlanElevationScreen> {
               ),
               'dxf-front' => _saveSide(ElevationSide.front),
               'dxf-side' => _saveSide(ElevationSide.side),
+              final String c when c.startsWith('dxf-sec-') => _saveSection(
+                _sections[int.parse(c.substring(8))],
+              ),
               _ => _save(
                 PlanCadExport.planMvr(
                   widget.elements,
@@ -282,6 +306,18 @@ class _PlanElevationScreenState extends State<PlanElevationScreen> {
                     dense: true,
                     title: Text('${side.label} en DXF'),
                     subtitle: Text('Visto ${side.hint}, en metros'),
+                  ),
+                ),
+              for (final (i, s) in _sections.indexed)
+                PopupMenuItem(
+                  value: 'dxf-sec-$i',
+                  child: ListTile(
+                    dense: true,
+                    title: Text('Sección ${PlanSection.name(s)}-'
+                        '${PlanSection.name(s)} en DXF'),
+                    subtitle: const Text(
+                      'Lo que hay detrás del corte, en metros',
+                    ),
                   ),
                 ),
               const PopupMenuItem(
@@ -332,13 +368,29 @@ class _PlanElevationScreenState extends State<PlanElevationScreen> {
                 ),
                 if (split)
                   SegmentedButton<int>(
-                    segments: const [
-                      ButtonSegment(value: 1, label: Text('Planta')),
-                      ButtonSegment(value: 2, label: Text('Alzado y perfil')),
+                    segments: [
+                      const ButtonSegment(value: 1, label: Text('Planta')),
+                      const ButtonSegment(
+                        value: 2,
+                        label: Text('Alzado y perfil'),
+                      ),
+                      if (_sections.isNotEmpty)
+                        ButtonSegment(value: 3, label: Text(_sectionsLabel)),
                     ],
                     selected: {_page},
                     showSelectedIcon: false,
                     onSelectionChanged: (s) => setState(() => _page = s.first),
+                  )
+                else if (_sections.isNotEmpty)
+                  SegmentedButton<int>(
+                    segments: [
+                      const ButtonSegment(value: 1, label: Text('Hoja')),
+                      ButtonSegment(value: 2, label: Text(_sectionsLabel)),
+                    ],
+                    selected: {_compactPage},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (s) =>
+                        setState(() => _compactPage = s.first),
                   ),
                 FilterChip(
                   label: const Text('Conos de luz'),
@@ -373,6 +425,10 @@ class _PlanElevationScreenState extends State<PlanElevationScreen> {
     );
   }
 
+  String get _sectionsLabel => _sections.length == 1
+      ? 'Sección ${PlanSection.name(_sections.single)}'
+      : 'Secciones';
+
   Widget _sheet(AppPalette palette, bool split) {
     if (widget.elements.isEmpty) {
       return Center(
@@ -393,7 +449,9 @@ class _PlanElevationScreenState extends State<PlanElevationScreen> {
             : const CircularProgressIndicator(),
       );
     }
-    final page = split ? _page : 1;
+    final page = split
+        ? (_page == 3 && _sections.isEmpty ? 2 : _page)
+        : (_sections.isEmpty ? 1 : _compactPage);
     return Stack(
       children: [
         Positioned.fill(

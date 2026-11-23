@@ -30,6 +30,9 @@ enum PlanTool {
 
   /// Escalera (AM.6): del arranque hacia donde sube.
   stair,
+
+  /// Línea de sección (AM.6): por dónde cortar para verla de lado.
+  section,
   measure,
 }
 
@@ -44,6 +47,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.slab => 'Forjado',
     PlanTool.volume => 'Volumen',
     PlanTool.stair => 'Escalera',
+    PlanTool.section => 'Sección',
     PlanTool.measure => 'Medir',
   };
 
@@ -57,6 +61,7 @@ extension PlanToolInfo on PlanTool {
     PlanTool.slab => Icons.layers_outlined,
     PlanTool.volume => Icons.view_in_ar_outlined,
     PlanTool.stair => Icons.stairs_outlined,
+    PlanTool.section => Icons.content_cut,
     PlanTool.measure => Icons.straighten,
   };
 
@@ -69,7 +74,8 @@ extension PlanToolInfo on PlanTool {
       this == PlanTool.truss ||
       this == PlanTool.slab ||
       this == PlanTool.volume ||
-      this == PlanTool.stair;
+      this == PlanTool.stair ||
+      this == PlanTool.section;
 }
 
 /// Paleta fija de la planta: lo que se puede añadir, siempre a la vista.

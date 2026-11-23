@@ -297,7 +297,10 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - En el menú «Vista» de la planta, «Niveles»: «Todos los niveles», cada nivel con su cota («Planta 1 · +3,00») y «Añadir un nivel encima» (un forjado de 25 cm a 3 m del último, que cubre las paredes y volúmenes que haya). Viendo un nivel: lo de los demás sale atenuado y no se puede coger, la luz solo cuenta lo de ese nivel, su forjado se ve como suelo y lo nuevo nace en él.
 - En el panel de un forjado, «Es el suelo de un nivel» y su nombre (entreplanta, sótano…).
 - Una escalera nueva sale con la altura justa hasta el nivel de arriba, y se ve en los dos niveles que une.
-- Falta: barandilla (con los barridos de AM.5); la vista de sección; que el 3D enseñe solo un nivel (o lo corte); la luz que baja por el hueco de una escalera de un nivel a otro.
+- **Sección** (`arch/plan_section.dart`, `RigType.section`): herramienta «Sección» en la paleta; se dibuja la línea de corte y se mira a su izquierda (o al otro lado, desde su panel, donde también se cambia la letra). En la planta, trazo y punto rojo con flecha y letra en cada punta; corta todos los niveles, no tapa la luz y no sale en el 3D.
+- La vista (`PlanElevation.of(..., cut:)`) quita lo que queda delante de la línea y rellena lo que la cruza: las paredes, con su grosor en negro; volúmenes, forjados y escaleras, recortados y en gris. Las luces y las cámaras apuntan según la línea.
+- En «Alzado y perfil», una pestaña «Sección A» o «Secciones»; en la hoja de luz, una hoja con dos secciones («SECCIÓN A-A») y las líneas dibujadas en la planta; en DXF, la capa SECCIONES en la planta y la capa CORTE en cada sección.
+- Falta: barandilla (con los barridos de AM.5); que el 3D enseñe solo un nivel (o lo corte); la luz que baja por el hueco de una escalera de un nivel a otro; mover las puntas de una sección por separado (hoy se redibuja).
 
 **AM.7 · Terreno y agua en 3D**
 - Terreno por alturas: una rejilla como la de `roofGrid`, con pinceles para subir, bajar, alisar y aplanar, y capas de material pintadas (arena, hierba, roca, tierra).
