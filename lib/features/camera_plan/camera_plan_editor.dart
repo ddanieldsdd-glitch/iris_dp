@@ -29,6 +29,7 @@ import '../../shared/annotations/annotation_document.dart';
 import '../../shared/shot_images/shot_image_menu.dart';
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
+import 'arch/plan_levels.dart';
 import 'camera_plan_grouping.dart';
 import '../equipment/widgets/light_quick_add_sheet.dart';
 import 'camera_links.dart';
@@ -474,9 +475,56 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
   }
 
-  /// Lo que se ve en la planta y se puede coger con el dedo.
-  List<PlanElement> get _drawnElements =>
-      PlanClass.shown(_visibleElements, _hiddenClasses);
+  /// El nivel que se está viendo (AM.6), por la cota de su suelo; `null`:
+  /// todos. Lo nuevo nace en él y solo se coge lo suyo.
+  double? _activeLevelM;
+
+  List<PlanStorey> get _storeys => PlanLevels.of(_visibleElements);
+
+  PlanStorey? get _activeStorey {
+    final level = _activeLevelM;
+    if (level == null) return null;
+    for (final st in _storeys) {
+      if ((st.elevationM - level).abs() <= PlanLevels.tolerance) return st;
+    }
+    return null;
+  }
+
+  void _showLevel(double? elevationM) => setState(() {
+    _activeLevelM = elevationM;
+    final picked = _selected;
+    if (picked != null &&
+        elevationM != null &&
+        !PlanLevels.isOn(picked, elevationM, _storeys)) {
+      _selected = null;
+    }
+  });
+
+  /// Un nivel nuevo encima del último, y se pasa a verlo.
+  Future<void> _addStorey() async {
+    final slab = PlanLevels.newStorey(
+      _visibleElements,
+      _metersPerUnit,
+      around: _viewCenter,
+    );
+    final floor = PlanLevels.slabFloorM(slab);
+    _activeLevelM = null;
+    await _addElement(slab, keepPosition: true, select: false);
+    if (mounted) _showLevel(floor);
+  }
+
+  /// Lo que se ve en la planta y se puede coger con el dedo: viendo un
+  /// nivel, solo lo suyo.
+  List<PlanElement> get _drawnElements {
+    final shown = PlanClass.shown(_visibleElements, _hiddenClasses);
+    final level = _activeLevelM;
+    if (level == null) return shown;
+    final storeys = _storeys;
+    return [
+      for (final el in shown)
+        if (PlanLevels.isOn(el, level, storeys)) el,
+    ];
+  }
 
   /// En 3D, los aparatos siempre: sin ellos no habría luz.
   List<PlanElement> get _elements3d => PlanClass.shown(
@@ -3002,6 +3050,22 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
       }
       el.props[kLightUnitKey] = nextLightUnit(_elements);
     }
+    // Viendo un nivel (AM.6), lo nuevo nace en él.
+    if (_activeLevelM case final level?
+        when level != 0 &&
+            PlanLevel.of(el) == 0 &&
+            !PlanLevels.isLevelSlab(el)) {
+      PlanLevel.set(el, level);
+    }
+    // Una escalera nace salvando hasta el nivel de arriba.
+    if (ArchStair.isStair(el) &&
+        ArchStair.shape(el) != StairShape.ramp) {
+      final storeys = _storeys;
+      final from = PlanLevels.storeyOf(el, storeys);
+      if (PlanLevels.riseToNext(from, storeys) case final rise?) {
+        el.props[ArchStair.riseKey] = (rise * 1000).round() / 1000;
+      }
+    }
     setState(() => _elements.add(el));
     for (final l in frozen) {
       if (l != layer && l != PlanLayer.shot) await _saveLayer(l);
@@ -4662,8 +4726,14 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                 // Reconocer cada elemento: colores por tipo, nombres y la imagen
                 // de su asset de Unreal (F6.20). Se recuerdan entre sesiones.
                 PopupMenuButton<String>(
-                  tooltip:
-                      'Vista: colores por tipo, nombres, assets y haces de luz',
+                  tooltip: switch (_activeStorey) {
+                    final st? =>
+                      'Vista · ${PlanLevels.label(st)}: colores, nombres, '
+                          'assets, haces y niveles',
+                    null =>
+                      'Vista: colores por tipo, nombres, assets, haces de '
+                          'luz y niveles',
+                  },
                   icon: Icon(
                     Icons.palette_outlined,
                     color:
@@ -4671,7 +4741,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                             _showNames ||
                             _assetView ||
                             !_showBeams ||
-                            _hiddenClasses.isNotEmpty
+                            _hiddenClasses.isNotEmpty ||
+                            _activeLevelM != null
                         ? palette.accent
                         : palette.textSecondary,
                   ),
@@ -4713,8 +4784,43 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                         checked: !_hiddenClasses.contains(c),
                         child: Text(c.label),
                       ),
+                    // Niveles de la localización (AM.6): ver uno, todos o
+                    // añadir uno encima.
+                    const PopupMenuDivider(),
+                    PopupMenuItem(
+                      enabled: false,
+                      height: 32,
+                      child: Text(
+                        'Niveles',
+                        style: AppTypography.caption(palette),
+                      ),
+                    ),
+                    CheckedPopupMenuItem(
+                      value: 'level:all',
+                      checked: _activeLevelM == null,
+                      child: const Text('Todos los niveles'),
+                    ),
+                    for (final st in _storeys.reversed)
+                      CheckedPopupMenuItem(
+                        value: 'level:${st.elevationM}',
+                        checked: _activeStorey?.elevationM == st.elevationM,
+                        child: Text(PlanLevels.label(st)),
+                      ),
+                    const PopupMenuItem(
+                      value: 'level:add',
+                      child: Text('Añadir un nivel encima'),
+                    ),
                   ],
                   onSelected: (v) {
+                    if (v.startsWith('level:')) {
+                      final what = v.substring('level:'.length);
+                      if (what == 'all') return _showLevel(null);
+                      if (what == 'add') {
+                        unawaited(_addStorey());
+                        return;
+                      }
+                      return _showLevel(double.parse(what));
+                    }
                     switch (v) {
                       case 'types':
                         setState(() => _colorByType = !_colorByType);
@@ -5219,6 +5325,8 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                                                     .maxHeight,
                                                               ),
                                                               painter: CameraPlanPainter(
+                                                                activeLevelM:
+                                                                    _activeLevelM,
                                                                 viewPosition:
                                                                     _shownPosition,
                                                                 images:

@@ -8,6 +8,7 @@ import 'arch/arch_material_picker.dart';
 import 'arch/arch_roof_controls.dart';
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
+import 'arch/level_controls.dart';
 import 'arch/stair_controls.dart';
 import 'arch/wall_controls.dart';
 import 'camera_plan_constants.dart';
@@ -501,6 +502,13 @@ class PlanPieceControls extends StatelessWidget {
                 el.props[ArchSolid.thickKey] = (v * 100).round() / 100,
           ),
         ],
+        // Un forjado puede ser el suelo de un nivel (AM.6).
+        if (ArchSolid.isSlab(el))
+          LevelSlabControls(
+            key: ValueKey('level-${identityHashCode(el)}'),
+            element: el,
+            onUpdate: onUpdate,
+          ),
         if (ArchSolid.isVolume(el)) ...[
           ArchRoofControls(
             element: el,

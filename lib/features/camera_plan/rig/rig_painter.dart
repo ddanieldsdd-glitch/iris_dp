@@ -29,6 +29,10 @@ class RigPainter {
     double metersPerUnit, {
     Color color = ink,
     bool selected = false,
+
+    /// Un forjado que es el suelo del nivel que se ve (AM.6): relleno,
+    /// aunque esté por encima de la cabeza del de abajo.
+    bool asFloor = false,
   }) {
     if (PlanDrape.isDrape(el)) {
       drawDrape(canvas, el, metersPerUnit, selected: selected, ink: color);
@@ -48,7 +52,14 @@ class RigPainter {
       case RigType.scan:
         drawScan(canvas, el.position, metersPerUnit, color: color);
       case RigType.slab || RigType.volume:
-        drawSolid(canvas, el, metersPerUnit, selected: selected, ink: color);
+        drawSolid(
+          canvas,
+          el,
+          metersPerUnit,
+          selected: selected,
+          ink: color,
+          asFloor: asFloor,
+        );
       case RigType.stair:
         drawStair(canvas, el, metersPerUnit, selected: selected, ink: color);
       case null:
@@ -364,11 +375,12 @@ class RigPainter {
     double mpu, {
     bool selected = false,
     Color ink = RigPainter.ink,
+    bool asFloor = false,
   }) {
     final pts = ArchSolid.outline(el, mpu);
     if (pts.length < 3) return;
     final path = Path()..addPolygon(pts, true);
-    final overhead = ArchSolid.isOverhead(el);
+    final overhead = ArchSolid.isOverhead(el) && !asFloor;
     final rgb = ArchSolid.material(el).albedoRgb;
     int srgb(int c) {
       final v = c / 255;

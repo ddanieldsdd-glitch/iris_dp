@@ -293,7 +293,11 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - `arch/arch_stair.dart` (`RigType.stair`): herramienta «Escalera» en la paleta; se dibuja del arranque hacia donde sube (de caracol, del centro al borde). Formas: recta, en L, en U (con ojo de 10 cm), de caracol (con núcleo y lo que gira) y rampa. Gira a la izquierda o a la derecha.
 - Los peldaños salen de la altura que salva, a cerca de 17,5 cm cada uno; la huella, del largo del tramo. Avisa si es incómoda (huella de menos de 22 cm, 2C + H de más de 70 cm, contrahuella de más de 18,5 cm) o si una rampa pasa del 12 %. Al pasar a rampa una de un piso, se deja al 8 %.
 - Contrato completo: planta (peldaños, línea de subida con círculo y flecha, «16 × 17,5» o «Rampa 8 %»), luz (cada peldaño tapa por sus lados), 3D y GLB de Unreal (una malla por escalera, con su material y nombre de pieza), DXF (peldaños y línea de subida), alzado (silueta escalonada), clase Arquitectura y panel con material.
-- Falta: barandilla (con los barridos de AM.5); niveles de la localización con su forjado y la planta por niveles; la vista de sección; que la escalera conecte dos niveles por su altura.
+- **Niveles** (`arch/plan_levels.dart`): un nivel es un forjado con nombre («Planta 1»); su cara de arriba es la cota del nivel. Así no hace falta nada aparte en la base: se guarda, se copia y viaja con la planta, y el forjado sale en el 3D y en Unreal. Lo que está en un nivel lleva su cota en `levelM`, como ya hacían truss y naves.
+- En el menú «Vista» de la planta, «Niveles»: «Todos los niveles», cada nivel con su cota («Planta 1 · +3,00») y «Añadir un nivel encima» (un forjado de 25 cm a 3 m del último, que cubre las paredes y volúmenes que haya). Viendo un nivel: lo de los demás sale atenuado y no se puede coger, la luz solo cuenta lo de ese nivel, su forjado se ve como suelo y lo nuevo nace en él.
+- En el panel de un forjado, «Es el suelo de un nivel» y su nombre (entreplanta, sótano…).
+- Una escalera nueva sale con la altura justa hasta el nivel de arriba, y se ve en los dos niveles que une.
+- Falta: barandilla (con los barridos de AM.5); la vista de sección; que el 3D enseñe solo un nivel (o lo corte); la luz que baja por el hueco de una escalera de un nivel a otro.
 
 **AM.7 · Terreno y agua en 3D**
 - Terreno por alturas: una rejilla como la de `roofGrid`, con pinceles para subir, bajar, alisar y aplanar, y capas de material pintadas (arena, hierba, roca, tierra).

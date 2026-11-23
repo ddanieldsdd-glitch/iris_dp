@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'arch/arch_solid.dart';
 import 'arch/arch_stair.dart';
+import 'arch/plan_levels.dart';
 import 'arch/wall_faces.dart';
 import 'arch/wall_joints.dart';
 import 'camera_plan_constants.dart';
@@ -130,6 +131,10 @@ class CameraPlanPainter extends CustomPainter {
   /// La posición del plano que se ve (0 es la primera): la luz se calcula
   /// con los focos, cámaras y actores en esa marca (PL.3).
   final int viewPosition;
+
+  /// El nivel que se está viendo (AM.6), por la cota de su suelo: lo de
+  /// los demás niveles se ve atenuado y no entra en la luz. `null`: todo.
+  final double? activeLevelM;
 
   /// Capas de fondo: se ven atenuadas.
   final List<PlanElement> inheritedElements;
@@ -304,6 +309,7 @@ class CameraPlanPainter extends CustomPainter {
     this.documentDrawing,
     this.documentLightOnly = false,
     this.viewPosition = 0,
+    this.activeLevelM,
   }) : _fixedScale = scale,
        _fixedOffset = offset,
        _contents = PlanLightKey.drawing([
@@ -333,10 +339,25 @@ class CameraPlanPainter extends CustomPainter {
     hiddenClasses,
   );
 
-  /// Lo que entra en el cálculo de la luz: en la posición que se ve.
-  late final List<PlanElement> _litScene = viewPosition == 0
-      ? _lit
-      : [for (final el in _lit) PlanMarks.atPosition(el, viewPosition)];
+  /// Los niveles de la planta (AM.6).
+  late final List<PlanStorey> _storeys = PlanLevels.of(_lit);
+
+  /// Si una pieza es de otro nivel que el que se ve.
+  bool _offLevel(PlanElement el) =>
+      activeLevelM != null && !PlanLevels.isOn(el, activeLevelM!, _storeys);
+
+  /// Lo que entra en el cálculo de la luz: en la posición que se ve y,
+  /// viendo un nivel, solo lo de ese nivel (sin su propio forjado, que es
+  /// su suelo).
+  late final List<PlanElement> _litScene = [
+    for (final el in _lit)
+      if (!_offLevel(el) &&
+          !(activeLevelM != null &&
+              PlanLevels.isLevelSlab(el) &&
+              (PlanLevels.slabFloorM(el) - activeLevelM!).abs() <=
+                  PlanLevels.tolerance))
+        viewPosition == 0 ? el : PlanMarks.atPosition(el, viewPosition),
+  ];
 
   // Un pintor se crea cada vez que cambia algo; mover la vista solo lo vuelve
   // a usar. Lo que no depende de la vista se calcula una vez por pintor.
@@ -1839,6 +1860,11 @@ class CameraPlanPainter extends CustomPainter {
       mpu,
       color: _CanvasColors.ink,
       selected: selected || ringed,
+      asFloor:
+          activeLevelM != null &&
+          PlanLevels.isLevelSlab(el) &&
+          (PlanLevels.slabFloorM(el) - activeLevelM!).abs() <=
+              PlanLevels.tolerance,
     );
     if (!selected && !ringed) return;
     if (PlanDrape.isDrape(el)) {
@@ -3189,11 +3215,17 @@ class CameraPlanPainter extends CustomPainter {
   }) {
     // Un foco del set que este plano no usa: en fantasma, para volver a
     // usarlo con un toque (PL.2).
-    if (!_ghosting && LightOverrides.isUnused(el)) {
+    // De otro nivel (AM.6), o un foco del set que este plano no usa: en
+    // fantasma.
+    final offLevel = _offLevel(el);
+    if (!_ghosting && (offLevel || LightOverrides.isUnused(el))) {
       _ghosting = true;
       canvas.saveLayer(
         null,
-        Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.22),
+        Paint()
+          ..color = const Color(
+            0xFFFFFFFF,
+          ).withValues(alpha: offLevel ? 0.16 : 0.22),
       );
       try {
         _drawElement(canvas, el, selected: selected, ringed: ringed, body: body);
@@ -4675,6 +4707,7 @@ class CameraPlanPainter extends CustomPainter {
       old._contents != _contents ||
       old.elements != elements ||
       old.viewPosition != viewPosition ||
+      old.activeLevelM != activeLevelM ||
       old.images != images ||
       old.inheritedElements != inheritedElements ||
       old.inheritedOpacity != inheritedOpacity ||
