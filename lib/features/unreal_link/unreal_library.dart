@@ -98,6 +98,16 @@ class UnrealLibrary extends ChangeNotifier {
 
   UnrealLibraryEntry? entryOf(String path) => _byPath[path];
 
+  /// El asset de la biblioteca que mejor encaja con un mueble de tipo
+  /// [type] (AM.U3: «sofá» del escaneo → el sofá de Fab ya usado): el
+  /// favorito primero y, si no, el último usado. Nada si no hay ninguno.
+  UnrealAssetRef? suggestFor(PropType type) {
+    for (final e in entries) {
+      if (propTypeFor(e.ref.name) == type) return e.ref;
+    }
+    return null;
+  }
+
   Future<void> load() async {
     if (_loaded) return;
     final prefs = await SharedPreferences.getInstance();

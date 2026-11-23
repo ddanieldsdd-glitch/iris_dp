@@ -1,17 +1,40 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import '../../unreal_link/unreal_asset_ref.dart';
+import '../../unreal_link/unreal_library.dart';
+import '../arch/arch_material.dart';
+import '../arch/arch_solid.dart';
+import '../arch/arch_stair.dart';
+import '../arch/plan_levels.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/light_scene.dart';
 import '../light/plan_light.dart';
 import '../plan_opening.dart';
 import '../plan_segment.dart';
+import 'plan_rig.dart';
 import 'scan_capture.dart';
+import 'scan_engine.dart';
 import 'scan_structure.dart';
 
 /// Qué es cada cosa que se revisa (ES.3).
-enum ReviewKind { wall, door, window, passage, storefront, object, light }
+enum ReviewKind {
+  wall,
+  door,
+  window,
+  passage,
+  storefront,
+  object,
+  light,
+
+  /// Del escaneo al motor (AM.U3): el suelo y el techo del recinto como
+  /// forjados, otro suelo como nivel y una escalera o rampa.
+  floor,
+  ceiling,
+  level,
+  stair,
+}
 
 /// Una propuesta del solucionador en la revisión: se acepta o no, y se le
 /// pueden corregir las medidas.
@@ -34,6 +57,13 @@ class ReviewItem {
   /// [ReviewKind.light].
   String name;
 
+  /// Un mueble sin tipo entra como volumen (AM.U3); con tipo, como pieza
+  /// de atrezzo con su asset de Unreal si la biblioteca tiene uno.
+  bool asVolume;
+
+  /// El material propuesto por el color de la foto (AM.U3), o el elegido.
+  String? materialId;
+
   ReviewItem({
     required this.kind,
     required this.index,
@@ -47,6 +77,8 @@ class ReviewItem {
     this.height = 0,
     this.propType = PropType.rectangle,
     this.name = '',
+    this.asVolume = true,
+    this.materialId,
   });
 
   /// Un hueco en una pared: puerta, ventana, paso o escaparate.
@@ -69,6 +101,10 @@ class ReviewItem {
     ReviewKind.storefront => 'Escaparate',
     ReviewKind.light =>
       name.isEmpty ? 'Luz práctica' : name[0].toUpperCase() + name.substring(1),
+    ReviewKind.floor => 'Suelo',
+    ReviewKind.ceiling => 'Techo',
+    ReviewKind.level => name.isEmpty ? 'Nivel' : name,
+    ReviewKind.stair => name.isEmpty ? 'Escalera' : name,
     ReviewKind.object => switch (propType) {
       PropType.bed => 'Cama',
       PropType.table => 'Mesa',
@@ -122,6 +158,42 @@ List<ReviewItem> reviewItems(ScanStructure s) => [
       height: s.lights[i].y,
       name: s.lights[i].label,
     ),
+  // Del escaneo al motor (AM.U3).
+  if (!s.exterior && ScanEngine.outline(s.walls) != null) ...[
+    ReviewItem(
+      kind: ReviewKind.floor,
+      index: 0,
+      confidence: 0.9,
+      thickness: 0.1,
+    ),
+    ReviewItem(
+      kind: ReviewKind.ceiling,
+      index: 0,
+      confidence: s.heightEstimated ? 0.5 : 0.9,
+      // Un techo que no se vio, mejor no ponerlo sin mirar.
+      accepted: !s.heightEstimated,
+      thickness: 0.2,
+      height: s.heightM,
+    ),
+    for (var i = 0; i < s.floors.length; i++)
+      ReviewItem(
+        kind: ReviewKind.level,
+        index: i,
+        confidence: 0.7,
+        thickness: PlanLevels.defaultSlabThickM,
+        height: s.floors[i],
+        name: 'Planta ${i + 1}',
+      ),
+  ],
+  for (var i = 0; i < s.stairs.length; i++)
+    ReviewItem(
+      kind: ReviewKind.stair,
+      index: i,
+      confidence: s.stairs[i].confidence,
+      width: s.stairs[i].widthM,
+      height: s.stairs[i].riseM,
+      name: s.stairs[i].ramp ? 'Rampa' : 'Escalera',
+    ),
 ];
 
 /// Un primer tipo para el mueble por su tamaño; se cambia en la revisión.
@@ -153,6 +225,29 @@ List<List<double>> reviewPoints(ScanStructure s, ReviewItem item) {
       ];
     case ReviewKind.light:
       return [at(s.lights[item.index].position, item.height)];
+    case ReviewKind.floor || ReviewKind.ceiling || ReviewKind.level:
+      final o = ScanEngine.outline(s.walls) ?? const <Offset>[];
+      if (o.isEmpty) return const [];
+      final h = item.kind == ReviewKind.floor ? 0.0 : item.height;
+      var c = Offset.zero;
+      for (final p in o) {
+        c += p;
+      }
+      c = c / o.length.toDouble();
+      // Un poco hacia dentro: en la foto, sin las paredes.
+      return [at(c, h), for (final p in o) at(Offset.lerp(p, c, 0.2)!, h)];
+    case ReviewKind.stair:
+      final st = s.stairs[item.index];
+      final n = Offset(-(st.to - st.from).dy, (st.to - st.from).dx) /
+          math.max(1e-6, st.runM) *
+          (item.width / 2);
+      return [
+        at((st.from + st.to) / 2, item.height / 2),
+        at(st.from - n, 0),
+        at(st.from + n, 0),
+        at(st.to + n, item.height),
+        at(st.to - n, item.height),
+      ];
     case ReviewKind.door ||
         ReviewKind.window ||
         ReviewKind.passage ||
@@ -247,6 +342,15 @@ const kScanSourceKey = 'source';
 const kScanSourceValue = 'scan';
 const kScanThicknessKey = 'thicknessM';
 
+/// Entre qué materiales se busca el de una cara por el color de su foto
+/// (AM.U3); `null` si esa propuesta no lleva material.
+Set<ArchFamily>? photoMaterialFamilies(ReviewKind kind) => switch (kind) {
+  ReviewKind.wall => ScanEngine.wallFamilies,
+  ReviewKind.floor => ScanEngine.floorFamilies,
+  ReviewKind.ceiling => ScanEngine.ceilingFamilies,
+  _ => null,
+};
+
 /// Los elementos de la planta para lo aceptado de [s], en unidades de la
 /// planta ([mpu] metros por unidad). Las paredes llevan su grosor y lo que
 /// sale del escaneo va marcado con `source: scan`.
@@ -264,8 +368,59 @@ List<PlanElement> reviewElements(
           PlanSegment.create(start: w.start / mpu, end: w.end / mpu)
             ..layer = PlanLayer.environment
             ..props[kScanThicknessKey] = _round(it.thickness)
-            ..props[kScanSourceKey] = kScanSourceValue,
+            ..props[kScanSourceKey] = kScanSourceValue
+            ..props.addAll({
+              if (it.materialId case final m?) ArchMaterials.key: m,
+            }),
         );
+      case ReviewKind.floor || ReviewKind.ceiling || ReviewKind.level:
+        final o = ScanEngine.outline(s.walls);
+        if (o == null) continue;
+        var c = Offset.zero;
+        for (final p in o) {
+          c += p;
+        }
+        c = c / o.length.toDouble();
+        // Con la cara de arriba en su cota: el suelo, a 0 y hacia abajo;
+        // el techo, con la de abajo a la altura del techo.
+        final top = switch (it.kind) {
+          ReviewKind.floor => 0.0,
+          ReviewKind.ceiling => it.height + it.thickness,
+          _ => it.height,
+        };
+        final slab = ArchSolid.create(RigType.slab, c / mpu, [
+          for (final p in o) p - c,
+        ]);
+        slab
+          ..layer = PlanLayer.environment
+          ..props[ArchSolid.topKey] = _round(top)
+          ..props[ArchSolid.thickKey] = _round(it.thickness)
+          ..props[ArchMaterials.key] =
+              it.materialId ??
+              switch (it.kind) {
+                ReviewKind.floor => 'concrete-floor',
+                ReviewKind.ceiling => 'plaster-raw',
+                _ => PlanLevels.defaultSlabMat,
+              }
+          ..props[kScanSourceKey] = kScanSourceValue;
+        if (it.kind == ReviewKind.level) {
+          slab.props[PlanLevels.nameKey] = it.label;
+        }
+        out.add(slab);
+      case ReviewKind.stair:
+        final st = s.stairs[it.index];
+        final el = ArchStair.create(
+          st.from / mpu,
+          st.to / mpu,
+          mpu,
+          shape: st.ramp ? StairShape.ramp : StairShape.straight,
+        );
+        el
+          ..layer = PlanLayer.environment
+          ..props[ArchStair.widthKey] = _round(it.width)
+          ..props[ArchStair.riseKey] = _round(it.height)
+          ..props[kScanSourceKey] = kScanSourceValue;
+        out.add(el);
       case ReviewKind.light:
         // Una luz práctica de la localización: entra como luz en la planta,
         // a su altura y con su nombre.
@@ -316,8 +471,29 @@ List<PlanElement> reviewElements(
             },
           )..layer = PlanLayer.environment,
         );
+      case ReviewKind.object
+          when it.propType == PropType.rectangle && it.asVolume:
+        // Un mueble sin tipo: un volumen con su caja (AM.U3).
+        final o = s.objects[it.index];
+        final hw = it.width / 2, hd = it.depth / 2;
+        final vol = ArchSolid.create(RigType.volume, o.center / mpu, [
+          Offset(-hw, -hd),
+          Offset(hw, -hd),
+          Offset(hw, hd),
+          Offset(-hw, hd),
+        ]);
+        vol
+          ..rotation = o.rotationDeg
+          ..layer = PlanLayer.environment
+          ..props[ArchSolid.heightKey] = _round(it.height)
+          ..props[kScanSourceKey] = kScanSourceValue;
+        if (it.materialId case final m?) vol.props[ArchMaterials.key] = m;
+        out.add(vol);
       case ReviewKind.object:
         final o = s.objects[it.index];
+        final asset = it.propType == PropType.rectangle
+            ? null
+            : UnrealLibrary.instance.suggestFor(it.propType);
         out.add(
           PlanElement(
             id: 0,
@@ -331,7 +507,12 @@ List<PlanElement> reviewElements(
               LightScene.heightKey: _round(it.height),
               kScanSourceKey: kScanSourceValue,
             },
-          )..layer = PlanLayer.environment,
+          )
+            ..layer = PlanLayer.environment
+            // En Unreal, el asset de ese tipo que ya está en la biblioteca.
+            ..props.addAll({
+              if (asset != null) UnrealAssetRef.key: asset.toJson(),
+            }),
         );
     }
   }

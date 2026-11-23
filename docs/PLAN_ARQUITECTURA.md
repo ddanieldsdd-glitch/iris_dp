@@ -374,6 +374,28 @@ Todo lo que se construye con el motor tiene que leerse en Unreal con facilidad. 
   - Más adelante, la textura real proyectada en la pieza (ES.4) viaja como material propio a Unreal.
 - La malla del escaneo sigue siendo solo la piel, a elegir (decisión ES 2026-11-03). La pieza paramétrica es la que manda y la que se edita.
 
+*Hecho en parte (2026-11-23, rama `plan/motor-arquitectonico`, sin publicar). Cómo quedó:*
+- `rig/scan_engine.dart` (`ScanEngine`):
+  - `outline`: el contorno del recinto, con las paredes encadenadas por sus puntas o, si no cierran, su envolvente;
+  - `floors`: otros suelos, los picos de superficie que mira arriba a más de 1,8 m entre sí y bajo el techo;
+  - `stairs`: zonas de la rejilla cenital que suben con un plano seguido. Del 35 al 100 % es escalera, que llega al nivel que tenga a mano; del 2 al 14 % es rampa, que se alarga hasta el suelo. Un mueble o una tarima, que son planos, no salen.
+- `ScanStructure` lleva `floors` y `stairs`, y `movedStructure` los mueve con lo demás.
+- **Revisión:** cuatro propuestas nuevas: suelo, techo, nivel («Planta 1»…) y escalera o rampa.
+  - El techo que no se vio sale sin aceptar.
+  - Suelo, techo y niveles se abren desde el resumen; la escalera, también en el plano.
+  - Al cambiar la altura del techo, su forjado la sigue.
+- **Piezas que salen:**
+  - forjados de AM.2 con el contorno: el suelo a 0, el techo con su cara de abajo a la altura del techo, y los niveles con su nombre;
+  - `ArchStair` recta o rampa, con su ancho y lo que sube;
+  - un mueble sin tipo entra como volumen (se puede elegir que no); con tipo sigue siendo mueble y lleva el asset de Unreal de ese tipo que ya esté en la biblioteca, el favorito o el último usado (`UnrealLibrary.suggestFor`).
+- **Material por el color:** paredes, suelo y techo miden el color medio de su foto (sin los bordes) y proponen el `ArchMaterial` más parecido de su familia, contando más el tinte que el brillo. Se calcula en segundo plano al añadir lo revisado (`materialsFromPhotos`), con la foto escalada a la medida de la captura.
+- Pruebas: `test/camera_plan/scan_engine_test.dart` (15).
+- Faltan:
+  - el exterior (calle, fachadas y bordillos);
+  - el escaneo solo con cámara;
+  - la textura real proyectada (ES.4);
+  - probarlo con un escaneo de verdad en el iPhone y el Mac.
+
 **AM.U4 · Formatos de intercambio**
 - **glTF/GLB con `extras`:** el formato principal, para Unreal, Capture y Blender.
 - **USD/USDZ:** ya se lee para los escaneos (`scan_usdz.dart`). Exportar USD del set queda como opción para Unreal 5 y Omniverse, cuando AM.U1 esté estable.

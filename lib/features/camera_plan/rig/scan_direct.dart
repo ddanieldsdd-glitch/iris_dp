@@ -384,4 +384,6 @@ ScanStructure movedStructure(ScanStructure s, Offset delta) => ScanStructure(
     for (final l in s.lights) ScanLight(l.position + delta, l.y, l.label),
   ],
   exterior: s.exterior,
+  floors: s.floors,
+  stairs: [for (final st in s.stairs) st.moved(delta)],
 );

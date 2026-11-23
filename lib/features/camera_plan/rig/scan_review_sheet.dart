@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../unreal_link/unreal_library.dart';
+import '../arch/arch_material.dart';
 import '../camera_plan_constants.dart';
 import 'scan_review.dart';
 import 'scan_structure.dart';
@@ -237,6 +239,31 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
         line('${count(ReviewKind.object)} muebles'),
         if (count(ReviewKind.light) > 0)
           line('${count(ReviewKind.light)} luces prácticas'),
+        // Del escaneo al motor (AM.U3): forjados, niveles y escaleras, que
+        // en el plano no se tocan; se abren desde aquí.
+        for (final it in _items.where(
+          (it) => switch (it.kind) {
+            ReviewKind.floor ||
+            ReviewKind.ceiling ||
+            ReviewKind.level ||
+            ReviewKind.stair => true,
+            _ => false,
+          },
+        ))
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: ValueKey('review-${it.kind.name}-${it.index}'),
+              onPressed: () => _select(it),
+              child: Text(
+                '${it.label}${switch (it.kind) {
+                  ReviewKind.floor || ReviewKind.ceiling => ' · forjado',
+                  ReviewKind.level => ' · a ${it.height.toStringAsFixed(2)} m',
+                  _ => '',
+                }}${it.accepted ? '' : ' (no va)'}',
+              ),
+            ),
+          ),
         if (widget.lightNote != null) ...[
           const SizedBox(height: AppSpacing.sm),
           Text(widget.lightNote!, style: AppTypography.caption(palette)),
@@ -249,7 +276,13 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
             palette,
             s.heightEstimated ? 'Techo (estimado)' : 'Techo',
             _height,
-            (v) => _height = v,
+            (v) {
+              _height = v;
+              // El forjado del techo va a la altura del techo.
+              for (final it in _items) {
+                if (it.kind == ReviewKind.ceiling) it.height = v;
+              }
+            },
           ),
         if (s.heightEstimated && !s.exterior)
           Text(
@@ -336,6 +369,23 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
       _number(palette, 'Alféizar', it.sill, (v) => it.sill = v),
       _number(palette, 'Dintel', it.head, (v) => it.head = v),
     ],
+    ReviewKind.floor || ReviewKind.ceiling => [
+      _number(palette, 'Grosor', it.thickness, (v) => it.thickness = v),
+      if (it.materialId case final m?)
+        Text(
+          'Material por el color de la foto: '
+          '${ArchMaterials.byId(m)?.name ?? m}',
+          style: AppTypography.caption(palette),
+        ),
+    ],
+    ReviewKind.level => [
+      _number(palette, 'Cota', it.height, (v) => it.height = v),
+      _number(palette, 'Grosor', it.thickness, (v) => it.thickness = v),
+    ],
+    ReviewKind.stair => [
+      _number(palette, 'Ancho', it.width, (v) => it.width = v),
+      _number(palette, 'Sube', it.height, (v) => it.height = v),
+    ],
     ReviewKind.object => [
       DropdownButton<PropType>(
         value: it.propType,
@@ -352,6 +402,23 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
       _number(palette, 'Ancho', it.width, (v) => it.width = v),
       _number(palette, 'Fondo', it.depth, (v) => it.depth = v),
       _number(palette, 'Alto', it.height, (v) => it.height = v),
+      if (it.propType == PropType.rectangle)
+        SwitchListTile(
+          key: const ValueKey('review-as-volume'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('Como volumen'),
+          value: it.asVolume,
+          onChanged: (v) => setState(() => it.asVolume = v),
+        )
+      else
+        Text(
+          switch (UnrealLibrary.instance.suggestFor(it.propType)) {
+            final ref? => 'En Unreal: ${ref.name}',
+            null => 'En Unreal: sin asset de este tipo en la biblioteca',
+          },
+          style: AppTypography.caption(palette),
+        ),
     ],
   };
 
@@ -563,6 +630,7 @@ class _ReviewPainter extends CustomPainter {
         ReviewKind.passage,
         ReviewKind.storefront,
       },
+      {ReviewKind.stair},
       {ReviewKind.object},
       {ReviewKind.wall},
     ]) {
@@ -575,6 +643,9 @@ class _ReviewPainter extends CustomPainter {
           d = toSegment(map(w.start), map(w.end));
         } else if (it.kind == ReviewKind.light) {
           d = (map(s.lights[it.index].position) - at).distance;
+        } else if (it.kind == ReviewKind.stair) {
+          final st = s.stairs[it.index];
+          d = toSegment(map(st.from), map(st.to));
         } else if (it.kind == ReviewKind.object) {
           final pts = _box(it).map(map).toList();
           d = (Path()..addPolygon(pts, true)).contains(at)
@@ -644,10 +715,34 @@ class _ReviewPainter extends CustomPainter {
               ..style = PaintingStyle.stroke
               ..strokeWidth = 2,
           );
+        case ReviewKind.stair:
+          // El tiro, con sus peldaños (o liso, si es rampa).
+          final st = s.stairs[it.index];
+          final a = map(st.from), b = map(st.to);
+          final d = b - a;
+          final len = d.distance;
+          if (len < 1) break;
+          final n = Offset(-d.dy, d.dx) / len * (it.width * k / 2);
+          paint.strokeWidth = chosen ? 3 : 1.5;
+          canvas.drawPath(
+            Path()..addPolygon([a - n, a + n, b + n, b - n], true),
+            paint,
+          );
+          if (!st.ramp) {
+            final steps = math.max(2, (st.runM / 0.28).round());
+            for (var i = 1; i < steps; i++) {
+              final p = a + d * (i / steps);
+              canvas.drawLine(p - n, p + n, paint..strokeWidth = 1);
+            }
+          }
+          canvas.drawLine(a, b, paint..strokeWidth = 1);
         case ReviewKind.door ||
             ReviewKind.window ||
             ReviewKind.passage ||
-            ReviewKind.storefront:
+            ReviewKind.storefront ||
+            ReviewKind.floor ||
+            ReviewKind.ceiling ||
+            ReviewKind.level:
           break;
       }
     }

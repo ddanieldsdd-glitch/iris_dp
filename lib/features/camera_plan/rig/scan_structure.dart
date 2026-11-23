@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'scan_engine.dart';
 import 'scan_walls.dart';
 
 /// De dónde sale un elemento de la estructura.
@@ -275,6 +276,13 @@ class ScanStructure {
   /// Una calle o un patio: sin techo.
   final bool exterior;
 
+  /// Otros suelos sobre el de abajo, en metros (AM.U3): entreplanta,
+  /// planta de arriba.
+  final List<double> floors;
+
+  /// Escaleras y rampas que se ven en el escaneo (AM.U3).
+  final List<ScanStair> stairs;
+
   const ScanStructure({
     required this.floorY,
     required this.heightM,
@@ -285,6 +293,8 @@ class ScanStructure {
     required this.objects,
     this.lights = const [],
     this.exterior = false,
+    this.floors = const [],
+    this.stairs = const [],
   });
 }
 
@@ -439,6 +449,8 @@ ScanStructure solveStructure(
       ? const <ScanObject>[]
       : _objects(p.grid!, walls, floorY, heightM, axis, localGround: exterior);
 
+  // Otros suelos y escaleras (AM.U3): fuera, no hay plantas.
+  final floors = exterior ? const <double>[] : ScanEngine.floors(p, floorY);
   return ScanStructure(
     floorY: floorY,
     heightM: heightM,
@@ -452,6 +464,10 @@ ScanStructure solveStructure(
         ScanLight(l.position, l.y - floorY, l.label),
     ],
     exterior: exterior,
+    floors: floors,
+    stairs: p.grid == null
+        ? const []
+        : ScanEngine.stairs(p.grid!, floorY, levels: floors),
   );
 }
 

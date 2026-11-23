@@ -15,6 +15,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
 import '../../scan_jobs/capture_store.dart';
+import '../arch/arch_material.dart';
 import 'scan_direct.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_layout.dart';
@@ -57,6 +58,7 @@ import 'scan_capture_channel.dart';
 import 'scan_store.dart';
 import 'scan_usdz.dart';
 import 'scan_capture.dart';
+import 'scan_engine.dart';
 import 'scan_review.dart';
 import 'scan_review_sheet.dart';
 import 'scan_structure.dart';
@@ -1129,16 +1131,8 @@ class _Plan3dViewState extends State<Plan3dView> {
 
     if (!mounted) return;
     setState(() => _status = null);
-    final result = await ScanReviewSheet.show(
-      context,
-      structure: structure,
-      lightNote: capture == null ? null : _lightNote(capture),
-      cut: cut,
-      topPng: topOk ? base64Decode(top['png'] as String) : null,
-      topRect: topOk
-          ? Rect.fromLTWH(n(top['x']), n(top['y']), n(top['w']), n(top['h']))
-          : null,
-      findPhoto: capture == null || capture.frames.isEmpty
+    final ReviewPhotoFinder? findPhoto =
+        capture == null || capture.frames.isEmpty
           ? null
           : (item) async {
               final world = await _mapPoints('planToScan', id, [
@@ -1151,10 +1145,20 @@ class _Plan3dViewState extends State<Plan3dView> {
               ]);
               if (view == null) return null;
               return (path: '${capture.dir}/${view.frame.file}', view: view);
-            },
+            };
+    final result = await ScanReviewSheet.show(
+      context,
+      structure: structure,
+      lightNote: capture == null ? null : _lightNote(capture),
+      cut: cut,
+      topPng: topOk ? base64Decode(top['png'] as String) : null,
+      topRect: topOk
+          ? Rect.fromLTWH(n(top['x']), n(top['y']), n(top['w']), n(top['h']))
+          : null,
+      findPhoto: findPhoto,
     );
     if (result == null) return;
-    await _addReviewed(structure, result, add);
+    await _addReviewed(structure, result, add, findPhoto: findPhoto);
   }
 
   /// La planta sin PC (ES.A): de una captura ya hecha, con sus planos y sus
@@ -1213,12 +1217,7 @@ class _Plan3dViewState extends State<Plan3dView> {
       );
       return;
     }
-    final result = await ScanReviewSheet.show(
-      context,
-      structure: plan.structure,
-      cut: plan.cut,
-      lightNote: _lightNote(capture),
-      findPhoto: capture.frames.isEmpty
+    final ReviewPhotoFinder? findPhoto = capture.frames.isEmpty
           ? null
           : (item) async {
               final view = bestPhoto(
@@ -1232,13 +1231,20 @@ class _Plan3dViewState extends State<Plan3dView> {
                 capture.dir,
               );
               return path == null ? null : (path: path, view: view);
-            },
+            };
+    final result = await ScanReviewSheet.show(
+      context,
+      structure: plan.structure,
+      cut: plan.cut,
+      lightNote: _lightNote(capture),
+      findPhoto: findPhoto,
     );
     if (result == null) return;
     await _addReviewed(
       movedStructure(plan.structure, _landingDelta(plan.structure)),
       result,
       add,
+      findPhoto: findPhoto,
     );
   }
 
@@ -1270,9 +1276,11 @@ class _Plan3dViewState extends State<Plan3dView> {
   Future<void> _addReviewed(
     ScanStructure structure,
     ScanReviewResult result,
-    Future<void> Function(PlanElement) add,
-  ) async {
+    Future<void> Function(PlanElement) add, {
+    ReviewPhotoFinder? findPhoto,
+  }) async {
     final mpu = widget.metersPerUnit;
+    if (findPhoto != null) await _materialsByPhoto(result.items, findPhoto);
     final elements = reviewElements(structure, result.items, mpu);
     for (final e in elements) {
       await add(e);
@@ -1297,6 +1305,48 @@ class _Plan3dViewState extends State<Plan3dView> {
             '${elements.length} elementos añadidos a la planta desde el '
             'escaneo, con el techo a ${result.heightM.toStringAsFixed(2)} m.',
       );
+    }
+  }
+
+  /// AM.U3: el material de paredes, suelo y techo por el color medio de su
+  /// foto, el de la biblioteca más parecido. Lo ya elegido no se toca.
+  Future<void> _materialsByPhoto(
+    List<ReviewItem> items,
+    ReviewPhotoFinder findPhoto,
+  ) async {
+    final asked = <ReviewItem>[];
+    final jobs =
+        <
+          ({
+            String path,
+            Size frameSize,
+            List<Offset?> pixels,
+            Set<ArchFamily> families,
+          })
+        >[];
+    for (final it in items) {
+      final families = photoMaterialFamilies(it.kind);
+      if (!it.accepted || it.materialId != null || families == null) continue;
+      final photo = await findPhoto(it);
+      if (photo == null) continue;
+      final f = photo.view.frame;
+      asked.add(it);
+      jobs.add((
+        path: photo.path,
+        frameSize: Size(f.width.toDouble(), f.height.toDouble()),
+        pixels: photo.view.pixels,
+        families: families,
+      ));
+    }
+    if (jobs.isEmpty) return;
+    if (mounted) setState(() => _status = 'Midiendo el color de las fotos…');
+    try {
+      final ids = await ScanEngine.materialsFromPhotos(jobs);
+      for (var i = 0; i < asked.length; i++) {
+        asked[i].materialId = ids[i];
+      }
+    } on Object {
+      // Sin material propuesto: quedan los de siempre.
     }
   }
 

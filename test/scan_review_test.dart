@@ -90,7 +90,8 @@ const backFrame = CaptureFrame(
 void main() {
   test('las propuestas, con lo dudoso marcado y la cama reconocida', () {
     final items = reviewItems(room());
-    expect(items, hasLength(7));
+    // 7 del escaneo, más el suelo y el techo como forjados (AM.U3).
+    expect(items, hasLength(9));
     expect(items.where((it) => it.dubious), hasLength(2));
     final bed = items.firstWhere((it) => it.kind == ReviewKind.object);
     expect(bed.propType, PropType.bed);
