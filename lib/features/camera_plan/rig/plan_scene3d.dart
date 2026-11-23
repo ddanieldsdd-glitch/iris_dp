@@ -13,6 +13,7 @@ import '../set_environment.dart';
 import '../light/light_scene.dart';
 import '../plan_category.dart';
 import '../../unreal_link/unreal_asset_ref.dart';
+import '../../unreal_link/unreal_library.dart';
 import '../light/plan_grip.dart';
 import '../camera_aim.dart';
 import '../light/meter.dart';
@@ -186,9 +187,10 @@ class PlanScene3d {
       }
       if (PlanSegment.isSegment(el)) {
         if (PlanSegment.kind(el) != PlanSegment.kindWall) continue;
-        walls.add(
-          _wall(el, uid, openings, mpu, level, xy, roofAt, joint: joints[el]),
-        );
+        walls.add({
+          ..._wall(el, uid, openings, mpu, level, xy, roofAt, joint: joints[el]),
+          ...?_linked(el),
+        });
         continue;
       }
       // Una pared suelta de las de antes (un sello de tamaño fijo): la luz
@@ -197,9 +199,10 @@ class PlanScene3d {
           !PlanOpening.isOpening(el) &&
           el.architectureType == ArchitectureType.wall) {
         final (a, b) = LightScene.legacyWallSpan(el);
-        walls.add(
-          _wall(el, uid, openings, mpu, level, xy, roofAt, points: [a, b]),
-        );
+        walls.add({
+          ..._wall(el, uid, openings, mpu, level, xy, roofAt, points: [a, b]),
+          ...?_linked(el),
+        });
         continue;
       }
       switch (RigTypeCodec.of(el)) {
@@ -220,6 +223,7 @@ class PlanScene3d {
               roofAt(PlanHall.hallUidOf(el), el.position) ??
                   PlanPillar.heightM(el),
             ),
+            ...?_linked(el),
           });
         case RigType.truss:
           trusses.add({
@@ -275,6 +279,7 @@ class PlanScene3d {
             'z1': _r(level + ArchSolid.topM(el)),
             'mat': ArchSolid.material(el).id,
             ...?_solidRoof(el, mpu, level, xy),
+            ...?_linked(el),
           });
         case RigType.hall || null:
           break;
@@ -442,9 +447,16 @@ class PlanScene3d {
         }
       }
     }
+    final links = UnrealLibrary.instance.materialPaths;
     return {
       for (final id in used.toList()..sort())
-        if (ArchMaterials.byId(id) case final m?) id: m.toScene(),
+        if (ArchMaterials.byId(id) case final m?)
+          id: {
+            ...m.toScene(),
+            // AM.U2: en Unreal lo hace este material de Fab, Megascans o
+            // del proyecto.
+            'unreal': ?links[id],
+          },
     };
   }
 
@@ -547,7 +559,9 @@ class PlanScene3d {
     if (ref == null) return null;
     if (el.type == ElementType.camera ||
         (el.type == ElementType.light && LightBeam.emits(el.lightType)) ||
-        (el.type == ElementType.prop && furniture.contains(el.propType))) {
+        (el.type == ElementType.prop &&
+            furniture.contains(el.propType) &&
+            RigTypeCodec.of(el) == null)) {
       return null;
     }
     var at = el.position;
@@ -559,6 +573,18 @@ class PlanScene3d {
     } else if (PlanTruss.isTruss(el)) {
       from = PlanTruss.start(el);
       to = PlanTruss.end(el);
+    } else if (PlanOpening.isOpening(el)) {
+      // Una puerta o una ventana: a lo largo de su pared.
+      (from, to) = PlanOpening.span(el);
+    } else if (ArchSolid.isSolid(el) && ArchSolid.outlineM(el).isNotEmpty) {
+      // Un volumen: en el centro de su caja, no en su punto de anclaje.
+      final pts = ArchSolid.outlineM(el);
+      final xs = pts.map((p) => p.dx), ys = pts.map((p) => p.dy);
+      final c = Offset(
+        (xs.reduce(math.max) + xs.reduce(math.min)) / 2,
+        (ys.reduce(math.max) + ys.reduce(math.min)) / 2,
+      );
+      at = ArchSolid.toCanvas(el, c, mpu);
     }
     if (from != null && to != null) {
       at = (from + to) / 2;
@@ -567,16 +593,77 @@ class PlanScene3d {
       // con la y al revés que el lienzo.
       yaw = (math.atan2(d.dx, -d.dy) * 180 / math.pi + 360) % 360;
     }
+    final fit = UnrealAssetRef.fits(el) ? fitOf(el, mpu) : null;
     return {
       'id': uid,
       'name': el.displayLabel,
       'cat': PlanCategory.of(el).name,
       'at': [_r(at.dx * mpu), _r(-at.dy * mpu)],
-      'z0': PlanLevel.of(el),
+      'z0': _r(PlanLevel.of(el) + (fit?.zM ?? 0)),
       'yawDeg': _r(yaw),
       if (from != null && to != null) 'lengthM': _r((to - from).distance * mpu),
+      // AM.U2: el asset se ajusta a las medidas de la pieza.
+      if (fit != null) 'fitM': [for (final v in fit.sizeM) _r(v)],
       'asset': ref.toPayload(),
     };
+  }
+
+  /// Una pieza que en Unreal hace un asset (AM.U2): IRIS la sigue
+  /// dibujando, pero no va en la estructura, para que no salga dos veces.
+  static Map<String, dynamic>? _linked(PlanElement el) =>
+      UnrealAssetRef.has(el) ? const {'linked': true} : null;
+
+  /// Las medidas a las que se ajusta en Unreal el asset de una pieza de
+  /// arquitectura (AM.U2), en metros y en los ejes de la pieza: a lo largo
+  /// de hacia donde mira (en un tramo, su largo), de lado y en alto; un 0
+  /// deja ese eje a su tamaño. `zM`: a qué altura sobre su nivel empieza.
+  /// `null` si la pieza no tiene medidas a las que ajustarse.
+  static ({List<double> sizeM, double zM})? fitOf(
+    PlanElement el,
+    double mpu,
+  ) {
+    if (PlanOpening.isOpening(el)) {
+      final sill = PlanOpening.sill(el);
+      return (
+        sizeM: [
+          PlanOpening.width(el) * mpu,
+          0,
+          math.max(0.1, PlanOpening.head(el) - sill),
+        ],
+        zM: sill,
+      );
+    }
+    if (PlanSegment.isSegment(el) &&
+        PlanSegment.kind(el) == PlanSegment.kindWall) {
+      final from = PlanSegment.pointAt(el, 0), to = PlanSegment.pointAt(el, 1);
+      return (
+        sizeM: [
+          (to - from).distance * mpu,
+          PlanSegment.thicknessM(el),
+          PlanSegment.maxTopM(el) ?? PlanSegment.heightM(el) ?? defaultWallM,
+        ],
+        zM: 0,
+      );
+    }
+    if (PlanPillar.isPillar(el)) {
+      final s = PlanPillar.sizeM(el);
+      return (sizeM: [s, s, PlanPillar.heightM(el)], zM: 0);
+    }
+    if (ArchSolid.isSolid(el)) {
+      final s = ArchSolid.sizeM(el);
+      if (s.isEmpty) return null;
+      // Con giro 0 la pieza mira hacia arriba de la planta: su fondo va a
+      // lo largo de hacia donde mira.
+      return (
+        sizeM: [
+          s.height,
+          s.width,
+          ArchSolid.topM(el) - ArchSolid.bottomM(el),
+        ],
+        zM: ArchSolid.bottomM(el),
+      );
+    }
+    return null;
   }
 
   /// El atrezzo que tiene cuerpo (lo demás de [PropType] son colinas,
@@ -860,6 +947,7 @@ class PlanScene3d {
           'arch': arch,
           'rise': _r(PlanOpening.archRiseM(o, mpu)),
         },
+        ...?_linked(o),
         'kind': PlanOpening.isWindow(o)
             ? 'window'
             : PlanOpening.isDoor(o)

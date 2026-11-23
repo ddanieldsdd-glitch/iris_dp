@@ -216,6 +216,9 @@ class UnrealStagePayload {
       'loc': loc([at[0], at[1], a['z0'] ?? 0]),
       'rot': rotToward(math.sin(rad), math.cos(rad), 0),
       'lengthCm': ?(a['lengthM'] == null ? null : _r((a['lengthM'] as num) * 100)),
+      // AM.U2: a lo largo, de lado y en alto; 0 deja ese eje como está.
+      if (a['fitM'] case final List fit)
+        'fitCm': [for (final v in fit) _r((v as num).toDouble() * 100)],
       'asset': a['asset'],
     };
   }
@@ -349,6 +352,15 @@ class UnrealStagePayload {
         (a) => a['id'] == id,
       );
 
+  /// Id de material de IRIS → ruta del material de Unreal que lo hace
+  /// (AM.U2), de los materiales que usa la escena.
+  static Map<String, String> materialLinks(Map<String, dynamic> scene) => {
+    for (final MapEntry(:key, :value)
+        in ((scene['materials'] as Map?) ?? const {}).entries)
+      if (value is Map && value['unreal'] is String)
+        '$key': value['unreal'] as String,
+  };
+
   /// La escena entera para Unreal, en el mundo (nivel) [world].
   static Map<String, dynamic> build(
     Map<String, dynamic> scene, {
@@ -376,6 +388,8 @@ class UnrealStagePayload {
       ],
       if (scanFolders.isNotEmpty) 'scanFolders': scanFolders,
       'structure': ?structure,
+      // AM.U2: los materiales de IRIS que en Unreal hace otro material.
+      'materials': materialLinks(scene),
       'lights': [
         for (final f in (scene['fixtures'] as List? ?? const []).cast<Map>())
           ?light(f),
@@ -450,13 +464,16 @@ class UnrealStagePayload {
         jsonEncode(before['environment']) != jsonEncode(now['environment']);
     final structureChanged =
         jsonEncode(before['structure']) != jsonEncode(now['structure']);
+    final materialsChanged =
+        jsonEncode(before['materials']) != jsonEncode(now['materials']);
     if (kinds.every((k) => (out[k] as List).isEmpty) &&
         remove.isEmpty &&
         !sunChanged &&
         !exposureChanged &&
         !environmentChanged &&
         !fogChanged &&
-        !structureChanged) {
+        !structureChanged &&
+        !materialsChanged) {
       return null;
     }
     return {
@@ -471,6 +488,7 @@ class UnrealStagePayload {
         'sky': now['sky'],
       },
       if (structureChanged) 'structure': now['structure'],
+      if (materialsChanged) 'materials': now['materials'],
     };
   }
 }

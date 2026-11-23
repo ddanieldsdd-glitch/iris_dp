@@ -27,6 +27,7 @@ Funciones:
   Capture(json)      → {"ok": true, "token": …}: foto en alta por una cámara
   CaptureResult(tok) → {"ok": true, "ready": bool, "png": base64}
   FindAssets(texto)  → {"ok": true, "assets": [{path, name, kind, source, sizeCm}]}
+  FindMaterials(texto) → lo mismo, con los materiales del proyecto (AM.U2)
   FindFabAssets(txt) → lo mismo, solo lo bajado de Fab y Megascans (F6.20 D2)
   AssetPreview(ruta) → {"ok": true, "top": png64, "threeQuarter": png64, "topSpanCm"}
 
@@ -225,10 +226,56 @@ def _apply_body(uid, parent, label, asset):
 
 
 def _apply_asset(a):
-    """Otra pieza con asset (pared, actor, grip, rigging)."""
+    """Otra pieza con asset (pared, puerta, ventana, pilar, volumen, actor,
+    grip, rigging)."""
     uid = str(a["id"])
-    _place_asset(uid, "IRIS_%s" % (a.get("name") or uid), a["asset"],
-                 _vec(a["loc"]), _rot(a["rot"]))
+    loc, rot = _vec(a["loc"]), _rot(a["rot"])
+    actor = _place_asset(uid, "IRIS_%s" % (a.get("name") or uid), a["asset"], loc, rot)
+    if actor is not None and a.get("fitCm"):
+        _fit(actor, a["fitCm"], loc, rot)
+
+
+def _fit_plan(size, origin, fit):
+    """Cómo encajar un asset en las medidas de una pieza de IRIS (AM.U2).
+
+    [size] y [origin]: tamaño y centro de su caja, sin girar ni escalar, en
+    sus ejes. [fit]: a lo largo de hacia donde mira la pieza, de lado y en
+    alto (0: ese eje se queda como está). Si el asset está tumbado al revés
+    (lo largo de lado), se gira un cuarto de vuelta en vez de deformarlo.
+    Devuelve (girar 90°, escala en sus ejes, desplazamiento del centro de
+    abajo en los ejes de la pieza)."""
+    fx, fy, fz = [float(v or 0) for v in fit]
+    ax, ay, az = [max(float(v), 0.0) for v in size]
+    turn = (fx > 0 and fy > 0 and ax > 0 and ay > 0
+            and abs(fx - fy) > 1 and abs(ax - ay) > 1
+            and (fx > fy) != (ax > ay))
+    # Lo que tiene que medir en sus propios ejes.
+    tx, ty = (fy, fx) if turn else (fx, fy)
+    sx = tx / ax if tx > 0 and ax > 0 else 1.0
+    sy = ty / ay if ty > 0 and ay > 0 else 1.0
+    sz = fz / az if fz > 0 and az > 0 else 1.0
+    # El centro de abajo de su caja, ya escalado, en sus ejes…
+    cx, cy, cz = origin[0] * sx, origin[1] * sy, (origin[2] - az / 2) * sz
+    # …y en los de la pieza (girar 90° lleva x a y, y a −x).
+    if turn:
+        cx, cy = -cy, cx
+    return turn, (sx, sy, sz), (cx, cy, cz)
+
+
+def _fit(actor, fit, loc, rot):
+    """Ajusta el actor de un asset a las medidas de su pieza: centrado en
+    ella y apoyado en su base."""
+    actor.set_actor_scale3d(unreal.Vector(1, 1, 1))
+    actor.set_actor_location_and_rotation(unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0),
+                                          False, True)
+    origin, extent = actor.get_actor_bounds(False)
+    size = (extent.x * 2, extent.y * 2, extent.z * 2)
+    turn, scale, centre = _fit_plan(size, (origin.x, origin.y, origin.z), fit)
+    final = unreal.Rotator(roll=rot.roll, pitch=rot.pitch, yaw=rot.yaw + (90 if turn else 0))
+    fwd, right, up = rot.get_forward_vector(), rot.get_right_vector(), rot.get_up_vector()
+    offset = fwd * centre[0] + right * centre[1] + up * centre[2]
+    actor.set_actor_scale3d(unreal.Vector(*scale))
+    actor.set_actor_location_and_rotation(loc - offset, final, False, True)
 
 
 def _set(obj, name, value):
@@ -457,12 +504,18 @@ def _source_of(package):
     return "project"
 
 
-def _find_assets(query, limit=40, sources=None):
-    """Mallas, Blueprints y personajes del proyecto que contienen todas las
-    palabras de [query] en su nombre o su carpeta. Con [sources], solo los
-    de esos orígenes («fab», «megascans», «project»)."""
+# Materiales de Unreal que pueden hacer de un material de IRIS (AM.U2).
+MATERIAL_CLASSES = {"Material": "material", "MaterialInstanceConstant": "material"}
+
+
+def _find_assets(query, limit=40, sources=None, classes=None):
+    """Mallas, Blueprints y personajes del proyecto (o, con [classes], lo
+    de esas clases) que contienen todas las palabras de [query] en su
+    nombre o su carpeta. Con [sources], solo los de esos orígenes («fab»,
+    «megascans», «project»)."""
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
-    classes = {"StaticMesh": "mesh", "Blueprint": "blueprint", "SkeletalMesh": "skeletal"}
+    classes = classes or {"StaticMesh": "mesh", "Blueprint": "blueprint",
+                          "SkeletalMesh": "skeletal"}
     flt = unreal.ARFilter(
         class_paths=[unreal.TopLevelAssetPath("/Script/Engine", c) for c in classes],
         package_paths=["/Game"], recursive_paths=True)
@@ -757,6 +810,57 @@ def _apply_structure(s):
                 if unreal.Name(extra) not in tags:
                     tags.append(unreal.Name(extra))
             actor.tags = tags
+        if actor is not None:
+            _link_materials(actor)
+
+
+# Materiales de IRIS que en Unreal hace otro material (AM.U2): id de IRIS →
+# ruta del material de Fab, Megascans o del proyecto. Llegan con la escena.
+_material_links = {}
+
+
+def _norm(text):
+    return re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
+
+
+def _slot_link(slot_name):
+    """La ruta del material de Unreal para una ranura del GLB de IRIS
+    (`IRIS_<id>`, tal vez con lo que le añade el importador), o None."""
+    name = _norm(slot_name)
+    best = None
+    for mid, path in _material_links.items():
+        key = "iris_" + _norm(mid)
+        if (name == key or name.startswith(key + "_")) and (
+                best is None or len(key) > len(best[0])):
+            best = (key, path)
+    return best[1] if best else None
+
+
+def _link_materials(actor):
+    """Pone a cada ranura de una pieza de la estructura su material
+    vinculado, o le devuelve el que trae el GLB si ya no lo tiene."""
+    comp = actor.get_component_by_class(unreal.StaticMeshComponent)
+    mesh = comp.get_editor_property("static_mesh") if comp is not None else None
+    if mesh is None:
+        return
+    for i, slot in enumerate(mesh.get_editor_property("static_materials")):
+        path = _slot_link(slot.get_editor_property("material_slot_name"))
+        wanted = unreal.EditorAssetLibrary.load_asset(path) if path else None
+        if path and wanted is None:
+            unreal.log_warning("[IRIS Stage] No encuentro el material %s." % path)
+        wanted = wanted or slot.get_editor_property("material_interface")
+        if comp.get_material(i) != wanted:
+            comp.set_material(i, wanted)
+
+
+def _apply_material_links(links):
+    """Cambian los vínculos de materiales: se repasan las piezas que ya
+    están en el nivel."""
+    global _material_links
+    _material_links = dict(links or {})
+    for uid, actor in list(_actors.items()):
+        if uid.startswith(STRUCTURE_ID + PART):
+            _link_materials(actor)
 
 
 # Carpetas del outliner por clase de la planta (AR.1).
@@ -996,6 +1100,8 @@ def _apply(data):
         _apply_fog(data["fog"])
     if data.get("exposure"):
         _apply_exposure(data["exposure"])
+    if "materials" in data:
+        _apply_material_links(data["materials"])
     if data.get("structure"):
         _apply_structure(data["structure"])
     return len(lights)
@@ -1094,6 +1200,15 @@ class IrisStageLink(unreal.BlueprintFunctionLibrary):
     def FindAssets(query):
         try:
             return json.dumps({"ok": True, "assets": _find_assets(query)})
+        except Exception as exc:
+            return json.dumps({"ok": False, "error": str(exc)})
+
+    @unreal.ufunction(static=True, params=[str], ret=str,
+                      meta=dict(Category="IRIS Stage"))
+    def FindMaterials(query):
+        try:
+            return json.dumps({"ok": True, "assets": _find_assets(
+                query, classes=MATERIAL_CLASSES)})
         except Exception as exc:
             return json.dumps({"ok": False, "error": str(exc)})
 

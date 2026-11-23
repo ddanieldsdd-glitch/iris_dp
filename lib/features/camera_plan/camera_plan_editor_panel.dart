@@ -75,6 +75,10 @@ class _ElementPanel extends StatefulWidget {
   /// De dónde cuelga un foco o qué posición es un truss (AR.4).
   final String? mountLabel;
 
+  /// Todas las piezas de la planta: para poner un asset de Unreal a las
+  /// iguales (AM.U2).
+  final List<PlanElement> elements;
+
   const _ElementPanel({
     required this.palette,
     required this.element,
@@ -110,6 +114,7 @@ class _ElementPanel extends StatefulWidget {
     this.linkedShots = 0,
     this.followLabels = const {},
     this.mountLabel,
+    this.elements = const [],
   });
 
   @override
@@ -511,6 +516,7 @@ class _ElementPanelState extends State<_ElementPanel> {
                     // Su asset de Unreal (F6.20 B2), para cualquier tipo.
                     UnrealAssetTile(
                       element: element,
+                      elements: widget.elements,
                       link: UnrealLink.instance,
                       projectId: widget.projectId,
                       onChanged: () async => widget.onUpdate(),

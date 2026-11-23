@@ -281,6 +281,18 @@ class UnrealLink extends ChangeNotifier {
     ];
   }
 
+  /// Materiales del proyecto de Unreal (Fab, Megascans o propios) que
+  /// contienen [query] en el nombre o la carpeta (AM.U2).
+  Future<List<UnrealAsset>> findMaterials(String query) async {
+    final r = await call('FindMaterials', {
+      'query': query,
+    }, const Duration(seconds: 60));
+    return [
+      for (final a in (r['assets'] as List? ?? const []).cast<Map>())
+        UnrealAsset.fromJson(a),
+    ];
+  }
+
   /// Lo bajado de Fab y Megascans al proyecto de Unreal (F6.20 D2): todo,
   /// o lo que contenga [query].
   Future<List<UnrealAsset>> findFabAssets([String query = '']) async {

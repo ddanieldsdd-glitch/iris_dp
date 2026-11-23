@@ -334,6 +334,14 @@ Todo lo que se construye con el motor tiene que leerse en Unreal con facilidad. 
 - **Por receta:** una receta puede proponer sus vínculos, por ejemplo vagón → «asiento de tren» de Fab. Se eligen una vez por proyecto, en la biblioteca de Unreal que ya existe (`unreal_library.dart`).
 - **Licencias:** el modelo de Fab o Megascans nunca sale de Unreal (como hoy). IRIS solo guarda la referencia y la miniatura.
 
+*Hecho (2026-11-23, rama `plan/motor-arquitectonico`, sin publicar; falta probarlo en Unreal en el PC de Daniel). Cómo quedó:*
+- **Por pieza:** puertas, ventanas, paredes, pilares y volúmenes con asset llegan a Unreal a lo largo de su pared (o en el centro de su caja) con sus medidas (`fitM`/`fitCm`: largo, fondo y alto; 0 deja ese eje como está). Una ventana empieza en su alféizar. En el panel, «Ajustar a las medidas de la pieza» (`props['unrealFit']`, encendido de serie) o a su tamaño real.
+- `iris_stage_link.py` (`_fit_plan` y `_fit`): escala el asset en sus ejes hasta llenar la pieza, centrado y apoyado en su base. Si el asset está tumbado al revés (lo largo de lado), lo gira un cuarto de vuelta en vez de deformarlo. Comprobado fuera de Unreal en `tests/check_import.py`.
+- Sin duplicados: lo que hace un asset lleva `linked` en la escena y no va en el GLB de estructura (de una puerta o ventana, el marco y las hojas; el hueco se queda en la pared). En IRIS se sigue viendo la pieza paramétrica.
+- **Por material:** debajo de cada material elegido, «En Unreal: …». Se busca en el proyecto de Unreal (`FindMaterials`: materiales e instancias de Fab, Megascans o propios), empezando por su familia en inglés (brick, wood…). El vínculo vale para todas las plantas y viaja con la biblioteca de Unreal (gana el último elegido; quitarlo también viaja). La escena lo lleva en `materials[id].unreal` y Unreal lo pone en las ranuras `IRIS_<id>` de la estructura; si se quita, vuelve el del GLB. En IRIS se sigue viendo la textura CC0.
+- **Para las piezas iguales:** «Ponerlo también a las N iguales» pone el mismo asset (y su ajuste) a las piezas con la misma clase y medidas; en una nave, solo a las suyas. La búsqueda de assets empieza por lo que es la pieza (door, window, column, street lamp…).
+- Falta: miniatura y color medio del material de Unreal en IRIS (F6.23.4); propuestas propias de cada receta (vagón → asiento de tren) cuando existan esas recetas (AM.8); instancias (AM.U1).
+
 **AM.U3 · Del escaneo al motor** (une ES y F6.20 con AM)
 - Hoy el escaneo da muros, huecos, objetos y la altura de techo (`scan_structure.dart` → `scan_review.dart`). Con el motor dará piezas completas:
   - suelo y techo del escaneo → **forjados** de AM.2, con su cota;

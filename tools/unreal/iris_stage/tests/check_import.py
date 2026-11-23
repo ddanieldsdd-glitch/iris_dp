@@ -48,6 +48,24 @@ spec = importlib.util.spec_from_file_location("iris_stage_link", path)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 assert hasattr(module, "IrisStageLink"), "falta la clase IrisStageLink"
+
+# AM.U2: un asset encaja en las medidas de su pieza. Una puerta de 2 × 0,1 ×
+# 2,2 m en un hueco de 0,9 × 2,1 m: se estrecha, no cambia de fondo y queda
+# apoyada en el suelo.
+turn, scale, centre = module._fit_plan((200, 10, 220), (0, 0, 110), (90, 0, 210))
+assert not turn and abs(scale[0] - 0.45) < 1e-9 and scale[1] == 1
+assert abs(scale[2] - 210 / 220) < 1e-9 and abs(centre[2]) < 1e-9
+# Tumbada al revés (lo ancho de lado): se gira en vez de deformarla.
+turn, scale, centre = module._fit_plan((10, 100, 200), (0, 5, 100), (90, 12, 200))
+assert turn and abs(scale[0] - 1.2) < 1e-9 and abs(scale[1] - 0.9) < 1e-9
+assert abs(centre[0] + 4.5) < 1e-9 and abs(centre[1]) < 1e-9
+# Un material vinculado vale para su ranura, aunque el importador le
+# añada algo al nombre; el id más largo gana.
+module._material_links = {"brick": "/Game/A.A", "brick-old": "/Game/B.B"}
+assert module._slot_link("IRIS_brick-old") == "/Game/B.B"
+assert module._slot_link("IRIS_brick_old_1") == "/Game/B.B"
+assert module._slot_link("IRIS_brick") == "/Game/A.A"
+assert module._slot_link("IRIS_plaster") is None
 if len(sys.argv) > 2:
     with tempfile.TemporaryDirectory() as dest:
         data = module.read_package(sys.argv[2], dest)

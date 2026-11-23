@@ -5507,6 +5507,7 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
                                       0,
                                   followLabels: _followLabels,
                                   mountLabel: _mountLabel(_selected!),
+                                  elements: _elements,
                                   reading:
                                       _selected!.type == ElementType.actor ||
                                           _selected!.propType == PropType.meter

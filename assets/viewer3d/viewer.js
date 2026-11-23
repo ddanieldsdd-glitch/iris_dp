@@ -805,6 +805,8 @@
     if (!uid) return;
     mesh.name = 'IRIS_' + (item.cls || 'architecture') + '_' + String(uid).replace(/[^A-Za-z0-9_-]/g, '_');
     mesh.userData.iris = { uid: String(uid), cls: item.cls || 'architecture', mat: item.mat || null, name: item.name || null };
+    // En Unreal la hace un asset (AM.U2): no va en la estructura.
+    if (item.linked) mesh.userData.iris.linked = true;
   }
   const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fc7d6, roughness: 0.1, metalness: 0.1, side: THREE.DoubleSide, transparent: true, opacity: 0.25, depthWrite: false });
 
@@ -997,7 +999,7 @@
       piece.castShadow = piece.receiveShadow = true;
       piece.userData.id = s.id;
       picks.push(piece);
-      tagPiece(piece, { uid: s.id + ':' + tag, cls: s.cls, mat: tag === 'cubierta' ? s.roofMat : s.mat, name: s.name });
+      tagPiece(piece, { uid: s.id + ':' + tag, cls: s.cls, mat: tag === 'cubierta' ? s.roofMat : s.mat, name: s.name, linked: s.linked });
       L.walls.add(piece);
     };
     tris(s.gableTris, mat, 'hastiales');
@@ -1018,7 +1020,12 @@
     ];
     if (o.kind === 'window') parts.push(plank(a, b, lo - 0.04, lo, 0.18, frameMat));
     for (const l of o.leaves || []) parts.push(plank([l[0], l[1]], [l[2], l[3]], lo + 0.01, hi - 0.01, 0.04, leafMat));
-    for (const m of parts) if (m) L.walls.add(m);
+    for (const m of parts) {
+      if (!m) continue;
+      // La puerta o la ventana la hace en Unreal un asset (AM.U2).
+      if (o.linked) m.userData.iris = { linked: true };
+      L.walls.add(m);
+    }
   }
 
   function addWall(w) {
@@ -2256,6 +2263,7 @@
       g.updateWorldMatrix(true, true);
       g.traverse((o) => {
         if (!o.isMesh || !o.geometry) return;
+        if (o.userData.iris && o.userData.iris.linked) return;
         const solid = (x) => solidOf.get(x) || x;
         const mat = Array.isArray(o.material) ? o.material.map(solid) : solid(o.material);
         if (!Array.isArray(mat) && mat && mat.blending === THREE.AdditiveBlending) return;

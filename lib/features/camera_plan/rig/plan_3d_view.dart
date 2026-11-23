@@ -2032,6 +2032,7 @@ class _Plan3dViewState extends State<Plan3dView> {
             ),
           UnrealAssetTile(
             element: _selected!,
+            elements: widget.elements,
             link: UnrealLink.instance,
             projectId: widget.projectId,
             onChanged: _update,

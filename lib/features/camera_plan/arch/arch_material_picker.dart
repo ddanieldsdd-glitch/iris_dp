@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../unreal_link/unreal_material_link.dart';
 import 'arch_material.dart';
 
 /// Muestra de un material: su textura CC0 o, si no tiene, su color.
@@ -127,6 +128,12 @@ class ArchMaterialField extends StatelessWidget {
               ),
             ),
           ),
+          // Con qué material de Unreal se hace (AM.U2).
+          if (current != null)
+            UnrealMaterialLinkRow(
+              material: current,
+              onChanged: () => onChanged(current),
+            ),
         ],
       ),
     );

@@ -26,13 +26,14 @@ enum UnrealAssetSource {
   );
 }
 
-/// Qué clase de asset: una malla, un Blueprint o un personaje (malla con
-/// esqueleto o MetaHuman).
+/// Qué clase de asset: una malla, un Blueprint, un personaje (malla con
+/// esqueleto o MetaHuman) o un material (AM.U2).
 enum UnrealAssetKind {
   mesh,
   blueprint,
   skeletal,
-  metahuman;
+  metahuman,
+  material;
 
   static UnrealAssetKind byName(String? name) => values.firstWhere(
     (k) => k.name == name,
@@ -150,6 +151,21 @@ class UnrealAssetRef {
   }
 
   static bool has(PlanElement el) => of(el) != null;
+
+  /// Si el asset de una pieza de arquitectura (puerta, ventana, pared,
+  /// pilar, volumen) se ajusta a sus medidas en Unreal (AM.U2), que es lo
+  /// normal, o va a su tamaño real.
+  static const fitKey = 'unrealFit';
+
+  static bool fits(PlanElement el) => el.props[fitKey] != false;
+
+  static void setFits(PlanElement el, bool fits) {
+    if (fits) {
+      el.props.remove(fitKey);
+    } else {
+      el.props[fitKey] = false;
+    }
+  }
 
   /// Pone (o quita, con `null`) el asset del elemento.
   static void set(PlanElement el, UnrealAssetRef? ref) {

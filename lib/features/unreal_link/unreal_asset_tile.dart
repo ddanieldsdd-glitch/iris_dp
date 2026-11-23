@@ -13,6 +13,7 @@ import '../camera_plan/light/light_scene.dart';
 import '../camera_plan/rig/plan_scene3d.dart';
 import 'unreal_library.dart';
 import 'unreal_link.dart';
+import 'unreal_link_hints.dart';
 import 'unreal_thumbs.dart';
 
 /// Qué asset de Unreal (Fab, Megascans o propio) hace de este elemento en
@@ -28,12 +29,17 @@ class UnrealAssetTile extends StatefulWidget {
   /// Proyecto donde se guardan las miniaturas; sin él, no se renderizan.
   final int? projectId;
 
+  /// Todas las piezas de la planta: para poner el mismo asset a las
+  /// iguales (AM.U2).
+  final Iterable<PlanElement> elements;
+
   const UnrealAssetTile({
     super.key,
     required this.element,
     required this.link,
     required this.onChanged,
     this.projectId,
+    this.elements = const [],
   });
 
   static UnrealAssetRef? assetOf(PlanElement el) => UnrealAssetRef.of(el);
@@ -114,6 +120,7 @@ class _UnrealAssetTileState extends State<UnrealAssetTile> {
       builder: (_) => _AssetDialog(
         link: widget.link,
         kinds: UnrealAssetTile.kindsFor(widget.element),
+        initialQuery: UnrealLinkHints.queryFor(widget.element),
       ),
     );
     if (picked == null) return;
@@ -156,6 +163,20 @@ class _UnrealAssetTileState extends State<UnrealAssetTile> {
         final file = projectId == null
             ? null
             : thumbs.file(projectId, asset?.thumb34);
+        final siblings = UnrealLinkHints.siblingsOf(
+          widget.element,
+          widget.elements,
+        );
+        final pending = asset == null
+            ? 0
+            : siblings
+                  .where(
+                    (o) =>
+                        UnrealAssetRef.of(o)?.path != asset.path ||
+                        UnrealAssetRef.fits(o) !=
+                            UnrealAssetRef.fits(widget.element),
+                  )
+                  .length;
         return Padding(
           padding: const EdgeInsets.only(top: AppSpacing.sm),
           child: Column(
@@ -197,6 +218,29 @@ class _UnrealAssetTileState extends State<UnrealAssetTile> {
                     palette,
                   ).copyWith(color: palette.textTertiary),
                 ),
+              // AM.U2: la puerta, la ventana o el pilar de Unreal, a las
+              // medidas de la pieza de IRIS.
+              if (asset != null && UnrealLinkHints.canFit(widget.element))
+                SwitchListTile(
+                  key: const ValueKey('unreal-asset-fit'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Ajustar a las medidas de la pieza',
+                    style: AppTypography.bodyMedium(palette),
+                  ),
+                  subtitle: Text(
+                    UnrealAssetRef.fits(widget.element)
+                        ? 'En Unreal se estira hasta llenar el hueco.'
+                        : 'En Unreal va a su tamaño real.',
+                    style: AppTypography.caption(palette),
+                  ),
+                  value: UnrealAssetRef.fits(widget.element),
+                  onChanged: (v) async {
+                    UnrealAssetRef.setFits(widget.element, v);
+                    await widget.onChanged();
+                  },
+                ),
               const SizedBox(height: AppSpacing.xs),
               OutlinedButton.icon(
                 icon: const Icon(Icons.chair_outlined, size: 16),
@@ -205,6 +249,20 @@ class _UnrealAssetTileState extends State<UnrealAssetTile> {
                 ),
                 onPressed: link.isOn && !_rendering ? _pick : null,
               ),
+              if (pending > 0)
+                TextButton.icon(
+                  key: const ValueKey('unreal-asset-siblings'),
+                  icon: const Icon(Icons.copy_all_outlined, size: 16),
+                  label: Text(
+                    pending == 1
+                        ? 'Ponerlo también a la otra igual'
+                        : 'Ponerlo también a las $pending iguales',
+                  ),
+                  onPressed: () async {
+                    UnrealLinkHints.copyTo(widget.element, siblings);
+                    await widget.onChanged();
+                  },
+                ),
               if (asset != null && projectId != null && link.isOn)
                 TextButton.icon(
                   icon: _rendering
@@ -253,14 +311,19 @@ class _Pick {
 class _AssetDialog extends StatefulWidget {
   final UnrealLink link;
   final Set<UnrealAssetKind> kinds;
-  const _AssetDialog({required this.link, required this.kinds});
+  final String initialQuery;
+  const _AssetDialog({
+    required this.link,
+    required this.kinds,
+    this.initialQuery = '',
+  });
 
   @override
   State<_AssetDialog> createState() => _AssetDialogState();
 }
 
 class _AssetDialogState extends State<_AssetDialog> {
-  final _query = TextEditingController();
+  late final _query = TextEditingController(text: widget.initialQuery);
   List<UnrealAsset> _found = const [];
   bool _busy = false;
   String? _error;

@@ -78,6 +78,12 @@ class UnrealLibrary extends ChangeNotifier {
   /// Lo quitado, con la fecha: viaja con la biblioteca para que otro equipo
   /// no lo vuelva a traer (salvo que alguien lo use después).
   final _removed = <String, DateTime>{};
+
+  /// Materiales de IRIS que en Unreal hace otro material (AM.U2): id del
+  /// material de IRIS → el de Fab, Megascans o del proyecto, con cuándo se
+  /// eligió. Un vínculo quitado se queda sin `ref`, con su fecha, para que
+  /// otro equipo no lo vuelva a traer.
+  final _materials = <String, ({UnrealAssetRef? ref, DateTime at})>{};
   bool _loaded = false;
 
   /// Favoritos primero; luego lo último usado.
@@ -112,7 +118,32 @@ class UnrealLibrary extends ChangeNotifier {
       for (final MapEntry(:key, :value) in _removed.entries)
         key: value.toUtc().toIso8601String(),
     },
+    if (_materials.isNotEmpty)
+      'materials': {
+        for (final MapEntry(:key, :value) in _materials.entries)
+          key: {
+            'ref': ?value.ref?.toJson(),
+            'at': value.at.toUtc().toIso8601String(),
+          },
+      },
   });
+
+  /// El material de Unreal que hace del material de IRIS [id], si lo hay.
+  UnrealAssetRef? materialLinkOf(String id) => _materials[id]?.ref;
+
+  /// Los vínculos de materiales: id de IRIS → ruta del de Unreal.
+  Map<String, String> get materialPaths => {
+    for (final MapEntry(:key, :value) in _materials.entries)
+      if (value.ref case final ref?) key: ref.path,
+  };
+
+  /// Vincula (o desvincula, con `null`) el material de IRIS [id] con un
+  /// material de Unreal. Vale para todas las plantas.
+  Future<void> linkMaterial(String id, UnrealAssetRef? ref) async {
+    await load();
+    _materials[id] = (ref: ref, at: DateTime.now().toUtc());
+    await _save();
+  }
 
   /// Junta lo que llega (de otro equipo) con lo de aquí: por ruta, se queda
   /// lo último usado, favorito si lo es en alguno, y las miniaturas que
@@ -142,6 +173,20 @@ class UnrealLibrary extends ChangeNotifier {
     for (final item in items) {
       final e = UnrealLibraryEntry.fromJson(item);
       if (e != null) _merge(e);
+    }
+    // Vínculos de materiales: por material, gana el último elegido.
+    if (raw is Map && raw['materials'] is Map) {
+      for (final MapEntry(:key, :value) in (raw['materials'] as Map).entries) {
+        if (value is! Map) continue;
+        final at = DateTime.tryParse('${value['at']}');
+        if (at == null) continue;
+        final mine = _materials['$key'];
+        if (mine != null && !at.isAfter(mine.at)) continue;
+        _materials['$key'] = (
+          ref: UnrealAssetRef.fromJson(value['ref']),
+          at: at,
+        );
+      }
     }
     // Lo quitado no vuelve, salvo que se haya usado después de quitarlo.
     _byPath.removeWhere((path, e) {
@@ -251,6 +296,7 @@ class UnrealLibrary extends ChangeNotifier {
   void clearForTest() {
     _byPath.clear();
     _removed.clear();
+    _materials.clear();
     _loaded = true;
   }
 
