@@ -21,6 +21,8 @@ import '../light/surfaces.dart';
 import '../light/wall_mount.dart';
 import '../arch/arch_material.dart';
 import '../arch/arch_solid.dart';
+import '../arch/wall_faces.dart';
+import '../arch/wall_joints.dart';
 import '../plan_classes.dart';
 import '../light_beam.dart';
 import '../light_overrides.dart';
@@ -78,6 +80,8 @@ class PlanScene3d {
       final uid = LightOverrides.uidOf(el);
       if (recipe != null && uid != null) halls[uid] = (el, recipe);
     }
+    // Las esquinas de las paredes, unidas (AM.4).
+    final joints = WallJoints.of(elements, mpu);
     // Altura de la cubierta de una nave en un punto del lienzo.
     double? roofAt(String? hallUid, Offset canvas) {
       final h = halls[hallUid];
@@ -182,7 +186,20 @@ class PlanScene3d {
       }
       if (PlanSegment.isSegment(el)) {
         if (PlanSegment.kind(el) != PlanSegment.kindWall) continue;
-        walls.add(_wall(el, uid, openings, mpu, level, xy, roofAt));
+        walls.add(
+          _wall(el, uid, openings, mpu, level, xy, roofAt, joint: joints[el]),
+        );
+        continue;
+      }
+      // Una pared suelta de las de antes (un sello de tamaño fijo): la luz
+      // ya la tenía en cuenta; ahora también el 3D y Unreal (AM.4).
+      if (el.type == ElementType.wall &&
+          !PlanOpening.isOpening(el) &&
+          el.architectureType == ArchitectureType.wall) {
+        final (a, b) = LightScene.legacyWallSpan(el);
+        walls.add(
+          _wall(el, uid, openings, mpu, level, xy, roofAt, points: [a, b]),
+        );
         continue;
       }
       switch (RigTypeCodec.of(el)) {
@@ -194,6 +211,10 @@ class PlanScene3d {
             'at': xy(el.position),
             'z0': level,
             'shape': PlanPillar.isRound(el) ? 'round' : 'square',
+            // Un pilar cuadrado gira con el elemento (AM.4).
+            if (!PlanPillar.isRound(el) && el.rotation != 0)
+              'rotDeg': _r(el.rotation),
+            'cls': PlanClass.of(el).name,
             'sizeM': PlanPillar.sizeM(el),
             'heightM': _r(
               roofAt(PlanHall.hallUidOf(el), el.position) ??
@@ -416,7 +437,7 @@ class PlanScene3d {
     for (final k in const ['walls', 'surfaces', 'drapes', 'halls', 'solids']) {
       for (final item in (scene[k] as List?) ?? const []) {
         if (item is! Map) continue;
-        for (final key in const ['mat', 'floorMat', 'roofMat']) {
+        for (final key in const ['mat', 'matB', 'floorMat', 'roofMat']) {
           if (item[key] case final String id) used.add(id);
         }
       }
@@ -785,11 +806,17 @@ class PlanScene3d {
     double? heightM,
     double? thickM,
     String? name,
+    WallOutline? joint,
   }) {
     final steps = PlanSegment.curve(el) == 0 ? 1 : 16;
+    // Perfil propio (AM.4): un punto más en el pico del hastial.
+    final profiled = points == null && PlanSegment.hasProfile(el);
+    final ts = <double>{
+      for (var k = 0; k <= steps; k++) k / steps,
+      if (profiled) ...PlanSegment.profileTs(el),
+    }.toList()..sort();
     final pts =
-        points ??
-        [for (var k = 0; k <= steps; k++) PlanSegment.pointAt(el, k / steps)];
+        points ?? [for (final t in ts) PlanSegment.pointAt(el, t)];
     final cum = <double>[0];
     for (var k = 1; k < pts.length; k++) {
       cum.add(cum.last + (pts[k] - pts[k - 1]).distance);
@@ -797,9 +824,12 @@ class PlanScene3d {
     final hallUid = PlanHall.hallUidOf(el);
     final fixed =
         heightM ?? (el.props[PlanPillar.heightKey] as num?)?.toDouble();
-    final tops = [
-      for (final p in pts) _r(roofAt(hallUid, p) ?? fixed ?? defaultWallM),
-    ];
+    final tops = profiled
+        ? [for (final t in ts) _r(PlanSegment.topAtM(el, t)!)]
+        : [
+            for (final p in pts)
+              _r(roofAt(hallUid, p) ?? fixed ?? defaultWallM),
+          ];
     final holes = <Map<String, dynamic>>[];
     for (final o in openings) {
       // Dónde cae el centro del hueco sobre la pared.
@@ -825,6 +855,11 @@ class PlanScene3d {
         'to': _r(math.min(cum.last, along + half) * mpu),
         'sill': PlanOpening.sill(o),
         'head': PlanOpening.head(o),
+        // Arco (AM.4): la clave es `head`; arranca `rise` más abajo.
+        if (PlanOpening.arch(o) case final arch?) ...{
+          'arch': arch,
+          'rise': _r(PlanOpening.archRiseM(o, mpu)),
+        },
         'kind': PlanOpening.isWindow(o)
             ? 'window'
             : PlanOpening.isDoor(o)
@@ -855,6 +890,10 @@ class PlanScene3d {
       'z0': level,
       'tops': tops,
       'thick': _r(thickM ?? PlanSegment.thicknessM(el)),
+      // Lo que se alarga cada cara en sus extremos para unirse a la pared
+      // vecina: [inicio izq., inicio der., final izq., final der.].
+      if (joint != null && joint.extendM.any((v) => v.abs() > 1e-4))
+        'ext': [for (final v in joint.extendM) _r(v)],
       'openings': holes,
       // Solo si se le ha elegido material: sin él, el color neutro de siempre.
       if (el.props[LightScene.materialKey] case final String material)
@@ -864,6 +903,8 @@ class PlanScene3d {
         'mat': m.id,
         'rgb': m.albedoRgb,
       },
+      // La otra cara, de otro material (AM.4).
+      if (WallFaces.isTwoSided(el)) 'matB': WallFaces.back(el)!.id,
       // Para Unreal (AM.U1): cada pieza, un actor con su clase y su `id`.
       'cls': PlanClass.of(el).name,
     };

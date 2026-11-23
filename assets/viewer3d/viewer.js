@@ -810,13 +810,18 @@
 
   // Un tramo de pared con grosor (CA.1): las dos caras, el canto de arriba,
   // el de abajo y los dos de los lados.
-  function slab(out, a, b, z0, zLoA, zLoB, zHiA, zHiB, t) {
+  // `ea` y `eb` (AM.4): lo que se alarga cada cara [+, −] en el extremo a
+  // y en el b para unirse a la pared vecina. `outB`: la cara + (la B de la
+  // planta) va aparte si es de otro material.
+  function slab(out, a, b, z0, zLoA, zLoB, zHiA, zHiB, t, ea, eb, outB) {
     const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
     const nx = -dy / len * t / 2, ny = dx / len * t / 2;
-    const P = (p, s, z) => V(p[0] + nx * s, p[1] + ny * s, z0 + z);
-    const a0 = P(a, 1, zLoA), b0 = P(b, 1, zLoB), b1 = P(b, 1, zHiB), a1 = P(a, 1, zHiA);
-    const c0 = P(a, -1, zLoA), d0 = P(b, -1, zLoB), d1 = P(b, -1, zHiB), c1 = P(a, -1, zHiA);
-    quad(out, a0, b0, b1, a1);
+    const P = (p, s, z, e) => V(p[0] + nx * s + ux * e, p[1] + ny * s + uy * e, z0 + z);
+    const eap = ea ? -ea[0] : 0, eam = ea ? -ea[1] : 0, ebp = eb ? eb[0] : 0, ebm = eb ? eb[1] : 0;
+    const a0 = P(a, 1, zLoA, eap), b0 = P(b, 1, zLoB, ebp), b1 = P(b, 1, zHiB, ebp), a1 = P(a, 1, zHiA, eap);
+    const c0 = P(a, -1, zLoA, eam), d0 = P(b, -1, zLoB, ebm), d1 = P(b, -1, zHiB, ebm), c1 = P(a, -1, zHiA, eam);
+    quad(outB || out, a0, b0, b1, a1);
     quad(out, d0, c0, c1, d1);
     quad(out, a1, b1, d1, c1);
     quad(out, c0, d0, b0, a0);
@@ -1002,7 +1007,8 @@
   function addLeaves(o, z0, top) {
     if (!o.span) return;
     const a = [o.span[0], o.span[1]], b = [o.span[2], o.span[3]];
-    const lo = z0 + (o.sill || 0), hi = z0 + Math.min(o.head || 2.1, top || 99);
+    // En un arco, el marco y las hojas llegan a los arranques (AM.4).
+    const lo = z0 + (o.sill || 0), hi = z0 + Math.min((o.head || 2.1) - (o.rise || 0), top || 99);
     const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
     const ux = dx / len * 0.03, uy = dy / len * 0.03;
     const parts = [
@@ -1017,16 +1023,35 @@
 
   function addWall(w) {
     const pts = w.points, z0 = w.z0 || 0, holes = w.openings || [];
-    // En «Maqueta» las paredes van macizas y con su grosor.
-    const thick = clearView ? (w.thick || 0) : 0;
+    // Con su grosor (AM.4: también fuera de «Maqueta», así llega a Unreal).
+    const thick = w.thick || 0;
     const cum = [0];
     for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
     const pos = [], glass = [];
+    // La cara B de otro material (AM.4) va en su propio grupo.
+    const posB = w.matB && matDefs[w.matB] ? [] : null;
+    // Esquinas unidas (AM.4): [inicio izq., inicio der., final izq., final
+    // der.] de la planta; la cara + de aquí es la derecha de la planta.
+    const ext = w.ext || null;
+    const total = cum[cum.length - 1];
+    // Arco (AM.4): el alto de la parte de arriba del hueco en s.
+    const headAt = (o, s) => {
+      if (!o.arch || !(o.rise > 0)) return o.head;
+      const half = (o.to - o.from) / 2, x = s - (o.from + half), spring = o.head - o.rise;
+      if (half <= 0) return o.head;
+      if (o.arch === 'round') return spring + o.rise * Math.sqrt(Math.max(0, 1 - (x / half) * (x / half)));
+      const r = (half * half + o.rise * o.rise) / (2 * o.rise);
+      return spring + o.rise - (r - Math.sqrt(Math.max(0, r * r - x * x)));
+    };
     for (let k = 1; k < pts.length; k++) {
       const s0 = cum[k - 1], s1 = cum[k];
       if (s1 - s0 < 1e-6) continue;
       const cuts = [s0, s1];
-      for (const o of holes) for (const s of [o.from, o.to]) if (s > s0 && s < s1) cuts.push(s);
+      for (const o of holes) {
+        for (const s of [o.from, o.to]) if (s > s0 && s < s1) cuts.push(s);
+        // El arco, en tramos cortos.
+        if (o.arch && o.rise > 0) for (let i = 1; i < 16; i++) { const s = o.from + (o.to - o.from) * i / 16; if (s > s0 && s < s1) cuts.push(s); }
+      }
       cuts.sort((a, b) => a - b);
       const at = (s) => { const t = (s - s0) / (s1 - s0); return [lerp(pts[k - 1][0], pts[k][0], t), lerp(pts[k - 1][1], pts[k][1], t), lerp(w.tops[k - 1], w.tops[k], t)]; };
       for (let c = 1; c < cuts.length; c++) {
@@ -1034,22 +1059,35 @@
         if (cuts[c] - cuts[c - 1] < 1e-6) continue;
         const mid = (cuts[c - 1] + cuts[c]) / 2;
         const hole = holes.find((o) => mid > o.from && mid < o.to);
+        const ea = ext && cuts[c - 1] < 1e-6 ? [ext[1], ext[0]] : null;
+        const eb = ext && cuts[c] > total - 1e-6 ? [ext[3], ext[2]] : null;
         const face = (zLoA, zLoB, zHiA, zHiB, out) => {
           if (zHiA - zLoA < 1e-3 && zHiB - zLoB < 1e-3) return;
-          if (thick > 0 && out === pos) return slab(out, a, b, z0, zLoA, zLoB, zHiA, zHiB, thick);
+          if (thick > 0 && out === pos) return slab(out, a, b, z0, zLoA, zLoB, zHiA, zHiB, thick, ea, eb, posB);
           quad(out, V(a[0], a[1], z0 + zLoA), V(b[0], b[1], z0 + zLoB), V(b[0], b[1], z0 + zHiB), V(a[0], a[1], z0 + zHiA));
         };
         if (!hole) {
           face(0, 0, a[2], b[2], pos);
         } else {
+          const ha = headAt(hole, cuts[c - 1]), hb = headAt(hole, cuts[c]);
           face(0, 0, hole.sill, hole.sill, pos);
-          face(Math.min(hole.head, a[2]), Math.min(hole.head, b[2]), a[2], b[2], pos);
-          if (hole.glass) face(hole.sill, hole.sill, Math.min(hole.head, a[2]), Math.min(hole.head, b[2]), glass);
+          face(Math.min(ha, a[2]), Math.min(hb, b[2]), a[2], b[2], pos);
+          if (hole.glass) face(hole.sill, hole.sill, Math.min(ha, a[2]), Math.min(hb, b[2]), glass);
         }
       }
     }
-    const wall = meshFrom(pos, wallMaterial(w), w.id);
-    if (wall.material && wall.material.map) boxUV(wall.geometry, wall.material);
+    let wall;
+    if (posB && posB.length) {
+      // Dos materiales en una sola pieza: un grupo por cara.
+      wall = meshFrom(pos.concat(posB), [wallMaterial(w), archMaterial(w.matB, !clearView)], w.id);
+      wall.geometry.addGroup(0, pos.length / 3, 0);
+      wall.geometry.addGroup(pos.length / 3, posB.length / 3, 1);
+      const tex = wall.material.find((m) => m && m.map);
+      if (tex) boxUV(wall.geometry, tex);
+    } else {
+      wall = meshFrom(pos, wallMaterial(w), w.id);
+      if (wall.material && wall.material.map) boxUV(wall.geometry, wall.material);
+    }
     tagPiece(wall, w);
     L.walls.add(wall);
     // En «Maqueta», las aristas marcadas: esquinas y huecos se leen aunque
@@ -1519,7 +1557,10 @@
       const geo = p.shape === 'round' ? new THREE.CylinderGeometry(p.sizeM / 2, p.sizeM / 2, h, 16) : new THREE.BoxGeometry(p.sizeM, h, p.sizeM);
       const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xa9b0b6, metalness: 0.3, roughness: 0.6 }));
       m.position.copy(V(p.at[0], p.at[1], z0 + h / 2));
+      // Un pilar cuadrado, girado como en la planta (AM.4).
+      if (p.rotDeg) m.rotation.y = -p.rotDeg * Math.PI / 180;
       m.userData.id = p.id; m.userData.movable = true; m.userData.dragY = z0; m.userData.liftable = true; picks.push(m);
+      tagPiece(m, p);
       L.pillars.add(m);
     }
 
@@ -2215,11 +2256,12 @@
       g.updateWorldMatrix(true, true);
       g.traverse((o) => {
         if (!o.isMesh || !o.geometry) return;
-        const mat = solidOf.get(o.material) || o.material;
-        if (mat && mat.blending === THREE.AdditiveBlending) return;
+        const solid = (x) => solidOf.get(x) || x;
+        const mat = Array.isArray(o.material) ? o.material.map(solid) : solid(o.material);
+        if (!Array.isArray(mat) && mat && mat.blending === THREE.AdditiveBlending) return;
         const geo = o.geometry.clone();
         geo.applyMatrix4(o.matrixWorld);
-        const m = new THREE.Mesh(geo, forExport(mat, textures));
+        const m = new THREE.Mesh(geo, Array.isArray(mat) ? mat.map((x) => forExport(x, textures)) : forExport(mat, textures));
         m.name = o.name || 'IRIS';
         // Uid, clase y material de la pieza: van a los `extras` del glTF.
         if (o.userData.iris) m.userData = { iris: o.userData.iris };

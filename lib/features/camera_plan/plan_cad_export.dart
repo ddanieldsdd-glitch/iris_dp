@@ -8,6 +8,7 @@ import 'package:flutter/painting.dart';
 import 'package:xml/xml.dart';
 
 import 'arch/arch_solid.dart';
+import 'arch/wall_joints.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/light_scene.dart';
@@ -151,6 +152,7 @@ class PlanCadExport {
     Offset m(Offset p) => Offset(p.dx * metersPerUnit, -p.dy * metersPerUnit);
     Offset dir(Offset d) => Offset(d.dx, -d.dy);
     final units = lightUnitNumbers(elements);
+    final outlines = WallJoints.of(elements, metersPerUnit);
 
     for (final el in elements) {
       if (PlanDrape.isDrape(el)) {
@@ -190,11 +192,13 @@ class PlanCadExport {
           if (PlanPillar.isRound(el)) {
             dxf.circle(layerWalls, c, r);
           } else {
+            // Girado con el elemento (AM.4).
+            final rad = el.rotation * math.pi / 180;
+            final u = Offset(math.cos(rad), math.sin(rad)) * (r / metersPerUnit);
+            final v = Offset(-math.sin(rad), math.cos(rad)) * (r / metersPerUnit);
             dxf.polyline(layerWalls, [
-              c + Offset(-r, -r),
-              c + Offset(r, -r),
-              c + Offset(r, r),
-              c + Offset(-r, r),
+              for (final k in [-u - v, u - v, u + v, -u + v])
+                m(el.position + k),
             ], closed: true);
           }
           continue;
@@ -209,10 +213,30 @@ class PlanCadExport {
           break;
       }
       if (PlanSegment.isSegment(el)) {
-        final layer = PlanSegment.kind(el) == PlanSegment.kindWall
-            ? layerWalls
-            : layerProps;
-        dxf.line(layer, m(el.position), m(PlanSegment.end(el)));
+        // Una pared, con su grosor y las esquinas unidas (AM.4).
+        if (outlines[el] case final o?) {
+          dxf.polyline(layerWalls, [for (final p in o.polygon) m(p)],
+              closed: true);
+          continue;
+        }
+        final steps = PlanSegment.curve(el) == 0 ? 1 : 12;
+        dxf.polyline(
+          PlanSegment.kind(el) == PlanSegment.kindWall
+              ? layerWalls
+              : layerProps,
+          [
+            for (var k = 0; k <= steps; k++)
+              m(PlanSegment.pointAt(el, k / steps)),
+          ],
+        );
+        continue;
+      }
+      // Una pared suelta de las de antes.
+      if (el.type == ElementType.wall &&
+          el.architectureType == ArchitectureType.wall &&
+          !PlanOpening.isOpening(el)) {
+        final (a, b) = LightScene.legacyWallSpan(el);
+        dxf.line(layerWalls, m(a), m(b));
         continue;
       }
       if (PlanOpening.isOpening(el)) {
@@ -320,6 +344,17 @@ class PlanCadExport {
       ];
       final centre = Offset(item.centre, (item.bottom + item.top) / 2);
       switch (item.kind) {
+        case ElevationKind.wall || ElevationKind.opening
+            when item.profile.isNotEmpty:
+          dxf.polyline(
+            item.kind == ElevationKind.wall ? layerWalls : layerOpenings,
+            [
+              for (final (x, top, _) in item.profile) Offset(x, top),
+              for (final (x, _, bottom) in item.profile.reversed)
+                Offset(x, bottom),
+            ],
+            closed: true,
+          );
         case ElevationKind.wall:
           dxf.polyline(layerWalls, box(), closed: true);
         case ElevationKind.opening:

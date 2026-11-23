@@ -221,10 +221,16 @@ class RigPainter {
     if (PlanPillar.isRound(el)) {
       canvas.drawCircle(el.position, size / 2, fill);
     } else {
-      canvas.drawRect(
-        Rect.fromCenter(center: el.position, width: size, height: size),
-        fill,
-      );
+      // Girado como el elemento, igual que lo ven la luz y el 3D (AM.4).
+      canvas
+        ..save()
+        ..translate(el.position.dx, el.position.dy)
+        ..rotate(el.rotation * math.pi / 180)
+        ..drawRect(
+          Rect.fromCenter(center: Offset.zero, width: size, height: size),
+          fill,
+        )
+        ..restore();
     }
   }
 

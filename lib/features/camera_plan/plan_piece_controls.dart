@@ -7,6 +7,7 @@ import 'arch/arch_material.dart';
 import 'arch/arch_material_picker.dart';
 import 'arch/arch_roof_controls.dart';
 import 'arch/arch_solid.dart';
+import 'arch/wall_controls.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/plan_grip.dart';
@@ -427,7 +428,9 @@ class PlanPieceControls extends StatelessWidget {
                 el.props[PlanOpening.sillKey] = (v * 20).round() / 20,
           ),
         slider(
-          'Dintel (altura a la que acaba)',
+          PlanOpening.arch(el) == null
+              ? 'Dintel (altura a la que acaba)'
+              : 'Clave del arco (lo más alto)',
           '${head.toStringAsFixed(2)} m',
           current: head,
           min: 1,
@@ -435,6 +438,8 @@ class PlanPieceControls extends StatelessWidget {
           onChanged: (v) =>
               el.props[PlanOpening.headKey] = (v * 20).round() / 20,
         ),
+        // Recto o en arco (AM.4).
+        OpeningArchChips(element: el, onUpdate: onUpdate),
       ]);
     } else if (ArchSolid.isSolid(el)) {
       // Forjado o volumen (AM.2): medidas, altura y material.
@@ -582,7 +587,7 @@ class PlanPieceControls extends StatelessWidget {
         // Alto y grueso de la pared (CA.4): el 3D, el motor de luz y
         // Unreal la levantan así.
         slider(
-          'Altura de la pared',
+          PlanSegment.hasProfile(el) ? 'Alto al inicio' : 'Altura de la pared',
           '${wallH.toStringAsFixed(1)} m',
           current: wallH,
           min: 0.5,
@@ -625,6 +630,13 @@ class PlanPieceControls extends StatelessWidget {
           style: AppTypography.caption(
             palette,
           ).copyWith(color: palette.textTertiary),
+        ),
+             const SizedBox(height: AppSpacing.sm),
+        // Hastial o pared inclinada, y la otra cara (AM.4).
+        WallProfileControls(
+          element: el,
+          onPreview: onPreview,
+          onUpdate: onUpdate,
         ),
       ]);
     } else if (PlanSegment.isSegment(el) &&

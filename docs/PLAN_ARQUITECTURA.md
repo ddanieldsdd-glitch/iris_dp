@@ -264,6 +264,17 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - Muros compuestos de varias capas (enlucido + ladrillo), con un material en cada cara.
 - Se corrige el giro de los pilares cuadrados y se exportan a 3D las piezas de muro antiguas.
 
+*Hecho en parte (2026-11-23, rama `plan/motor-arquitectonico`, sin publicar). Cómo quedó:*
+- `arch/wall_joints.dart`: el contorno de cada pared a su grosor. Dos paredes que se tocan por un extremo se cortan a inglete; tres o más en un punto se alargan hasta taparse; en T, la que llega se mete en la otra.
+- Planta: la pared a su grosor real, rellena, con las esquinas unidas (si se ve muy fina, una raya). Los huecos borran la pared a todo su grosor. DXF de planta: el contorno de cada pared, no su eje; las curvas, con su curva.
+- Perfil: «Recta», «Inclinada» (alto al final) o «Hastial» (alto del pico y dónde está). Lo entienden la luz (la pared tapa en trozos de medio metro, cada uno a su alto), el alzado, el DXF y la hoja (la silueta) y el 3D.
+- Huecos en arco: «Recto», «Medio punto» o «Rebajado». El dintel pasa a ser la clave del arco. En 3D el arco se recorta en la pared; el marco y las hojas llegan a los arranques. La luz usa un dintel equivalente con la misma superficie. En el alzado se ve el arco.
+- Dos caras: «Material del otro lado» (`matB`). La cara A es la de la izquierda del sentido en que se dibujó. En la planta, una raya de cada color por dentro de la pared. Rebote: cada cara con su material, según el lado de la luz. En 3D y en Unreal es una sola pieza con dos materiales.
+- 3D: las paredes tienen grosor siempre, no solo en «Maqueta» (así llegan a Unreal), con las esquinas unidas.
+- Pilares cuadrados: giran con el elemento en la planta, en el 3D (con su nombre de pieza) y en el DXF.
+- Las paredes sueltas de antes (sellos de tamaño fijo) salen en el 3D, en el alzado y en el DXF.
+- Falta: muros de varias capas con su grosor (enlucido + ladrillo + cámara); arcos en la planta; uniones de paredes curvas.
+
 **AM.5 · Barridos: un perfil a lo largo de un camino**
 - Un perfil 2D (biblioteca o dibujado) recorre una línea, recta o curva. Con esto salen:
   - barandillas, bordillos, cornisas, molduras y zócalos;

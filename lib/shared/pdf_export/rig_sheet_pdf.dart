@@ -1425,6 +1425,23 @@ class _Page {
       final a = at(item.from, item.bottom), b = at(item.to, item.top);
       final x = a.$1, y = b.$2, w = b.$1 - a.$1, h = a.$2 - b.$2;
       switch (item.kind) {
+        case ElevationKind.wall || ElevationKind.opening
+            when item.profile.isNotEmpty:
+          // Una pared con hastial o un hueco en arco (AM.4).
+          poly(
+            g,
+            [
+              for (final (across, top, _) in item.profile) at(across, top),
+              for (final (across, _, bottom) in item.profile.reversed)
+                at(across, bottom),
+            ],
+            stroke: _struct,
+            fill: item.kind == ElevationKind.wall
+                ? const PdfColor.fromInt(0xFFF1F3F5)
+                : PdfColors.white,
+            width: item.kind == ElevationKind.wall ? 0.2 : 0.15,
+            closed: true,
+          );
         case ElevationKind.wall:
           rect(
             g,

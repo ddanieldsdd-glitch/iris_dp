@@ -144,6 +144,62 @@ class PlanOpening {
   static double head(PlanElement el) =>
       math.max(sill(el) + 0.1, (el.props[headKey] as num?)?.toDouble() ?? 2.1);
 
+  /// Remate del hueco (AM.4): recto (sin clave), en arco de medio punto o
+  /// rebajado. El dintel ([head]) es la clave del arco, lo más alto.
+  static const archKey = 'arch';
+  static const archRound = 'round';
+  static const archSegmental = 'segmental';
+
+  static String? arch(PlanElement el) => switch (el.props[archKey]) {
+    archRound => archRound,
+    archSegmental => archSegmental,
+    _ => null,
+  };
+
+  static String archLabel(String? arch) => switch (arch) {
+    archRound => 'Medio punto',
+    archSegmental => 'Rebajado',
+    _ => 'Recto',
+  };
+
+  /// Lo que sube el arco desde sus arranques hasta la clave, en metros.
+  static double archRiseM(PlanElement el, double metersPerUnit) {
+    final a = arch(el);
+    if (a == null) return 0;
+    final w = width(el) * metersPerUnit;
+    final room = head(el) - sill(el) - 0.05;
+    return math.max(0, math.min(a == archRound ? w / 2 : w / 5, room));
+  }
+
+  /// Altura de la parte alta del hueco a [u] de su centro (−1 a 1, de
+  /// jamba a jamba), en metros.
+  static double headAtM(PlanElement el, double u, double metersPerUnit) {
+    final rise = archRiseM(el, metersPerUnit);
+    if (rise <= 0) return head(el);
+    final spring = head(el) - rise;
+    final half = width(el) * metersPerUnit / 2;
+    final x = u.clamp(-1.0, 1.0) * half;
+    if (arch(el) == archRound) {
+      // Medio punto: un semicírculo (aplastado si no cabe).
+      return spring + rise * math.sqrt(math.max(0, 1 - (x / half) * (x / half)));
+    }
+    // Rebajado: un arco de círculo que pasa por los arranques y la clave.
+    final r = (half * half + rise * rise) / (2 * rise);
+    return spring + rise - (r - math.sqrt(math.max(0, r * r - x * x)));
+  }
+
+  /// El dintel de un hueco recto que deja pasar la misma luz que el arco.
+  static double effectiveHeadM(PlanElement el, double metersPerUnit) {
+    final rise = archRiseM(el, metersPerUnit);
+    if (rise <= 0) return head(el);
+    var area = 0.0;
+    const n = 16;
+    for (var i = 0; i < n; i++) {
+      area += headAtM(el, -1 + (2 * i + 1) / n, metersPerUnit);
+    }
+    return area / n;
+  }
+
   /// Grados que está abierta una puerta o una ventana. 0 = cerrada.
   static double openDeg(PlanElement el) {
     final stored = (el.props[openKey] as num?)?.toDouble();

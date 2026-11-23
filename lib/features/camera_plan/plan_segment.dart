@@ -55,6 +55,75 @@ class PlanSegment {
   static double thicknessM(PlanElement el) =>
       (el.props[thicknessKey] as num?)?.toDouble() ?? defaultThicknessM;
 
+  /// Perfil de la pared (AM.4): alto al final, distinto del de inicio
+  /// ([heightKey]), y un pico (hastial) en un punto del tramo.
+  static const heightEndKey = 'heightEndM';
+  static const peakKey = 'peakM';
+  static const peakAtKey = 'peakAt';
+  static const double defaultProfileM = 2.5;
+
+  /// La pared no tiene el mismo alto en toda su longitud.
+  static bool hasProfile(PlanElement el) =>
+      el.props[heightEndKey] is num || el.props[peakKey] is num;
+
+  static double? heightEndM(PlanElement el) =>
+      (el.props[heightEndKey] as num?)?.toDouble();
+  static double? peakM(PlanElement el) =>
+      (el.props[peakKey] as num?)?.toDouble();
+  static double peakAt(PlanElement el) =>
+      ((el.props[peakAtKey] as num?)?.toDouble() ?? 0.5).clamp(0.05, 0.95);
+
+  /// Alto de la pared en [t] (0 = inicio, 1 = final), en metros. Null si
+  /// no tiene alto propio: entonces manda la nave o el recinto.
+  static double? topAtM(PlanElement el, double t) {
+    final h0 = heightM(el);
+    if (!hasProfile(el)) return h0;
+    final a = h0 ?? defaultProfileM;
+    final b = heightEndM(el) ?? a;
+    final peak = peakM(el);
+    if (peak == null) return a + (b - a) * t;
+    final k = peakAt(el);
+    return t <= k
+        ? a + (peak - a) * (t / k)
+        : peak + (b - peak) * ((t - k) / (1 - k));
+  }
+
+  /// Lo más alto de la pared, en metros.
+  static double? maxTopM(PlanElement el) {
+    if (!hasProfile(el)) return heightM(el);
+    return [
+      for (final t in profileTs(el)) topAtM(el, t)!,
+    ].reduce(math.max);
+  }
+
+  /// Los puntos (en `t`) donde cambia la pendiente del perfil.
+  static List<double> profileTs(PlanElement el) => [
+    0,
+    if (peakM(el) != null) peakAt(el),
+    1,
+  ];
+
+  /// El `t` del punto del tramo más cercano a [p].
+  static double tOf(PlanElement el, Offset p) {
+    if (curve(el) == 0) {
+      final d = delta(el);
+      final len2 = d.dx * d.dx + d.dy * d.dy;
+      if (len2 == 0) return 0;
+      final v = p - start(el);
+      return ((v.dx * d.dx + v.dy * d.dy) / len2).clamp(0.0, 1.0);
+    }
+    var best = 0.0, bestD = double.infinity;
+    for (var i = 0; i <= _samples * 2; i++) {
+      final t = i / (_samples * 2);
+      final d = (pointAt(el, t) - p).distance;
+      if (d < bestD) {
+        bestD = d;
+        best = t;
+      }
+    }
+    return best;
+  }
+
   static String kindLabel(String kind) => switch (kind) {
     kindStreet => 'Calle',
     kindRelief => 'Relieve',

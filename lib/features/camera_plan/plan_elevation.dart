@@ -338,6 +338,20 @@ class PlanElevation {
             scene.wallTopAt(
               Offset.lerp(el.position, PlanSegment.end(el), 0.5)!,
             );
+        // Con perfil (AM.4): alto distinto en cada punta o hastial.
+        final profile = PlanSegment.hasProfile(el)
+            ? [
+                for (final t in <double>{
+                  for (var k = 0; k <= 16; k++) k / 16,
+                  ...PlanSegment.profileTs(el),
+                }.toList()..sort())
+                  (
+                    at(PlanSegment.pointAt(el, t)).across,
+                    PlanSegment.topAtM(el, t)!,
+                    0.0,
+                  ),
+              ]
+            : const <(double, double, double)>[];
         items.add(
           ElevationItem(
             kind: ElevationKind.wall,
@@ -345,7 +359,32 @@ class PlanElevation {
             from: math.min(a.across, b.across),
             to: math.max(a.across, b.across) + 0.02,
             bottom: 0,
-            top: top,
+            top: profile.isEmpty
+                ? top
+                : profile.map((p) => p.$2).reduce(math.max),
+            depth: (a.depth + b.depth) / 2,
+            label: el.label ?? '',
+            profile: profile,
+          ),
+        );
+        continue;
+      }
+      // Una pared suelta de las de antes (AM.4).
+      if (el.type == ElementType.wall &&
+          !PlanOpening.isOpening(el) &&
+          el.architectureType == ArchitectureType.wall) {
+        final (s, e) = LightScene.legacyWallSpan(el);
+        final a = at(s), b = at(e);
+        items.add(
+          ElevationItem(
+            kind: ElevationKind.wall,
+            element: el,
+            from: math.min(a.across, b.across),
+            to: math.max(a.across, b.across) + 0.02,
+            bottom: 0,
+            top:
+                (el.props[LightScene.heightKey] as num?)?.toDouble() ??
+                scene.wallTopAt(el.position),
             depth: (a.depth + b.depth) / 2,
             label: el.label ?? '',
           ),
@@ -364,6 +403,17 @@ class PlanElevation {
             bottom: PlanOpening.sill(el),
             top: PlanOpening.head(el),
             depth: (a.depth + b.depth) / 2,
+            // En arco (AM.4): su contorno.
+            profile: PlanOpening.arch(el) == null
+                ? const []
+                : [
+                    for (var k = 0; k <= 16; k++)
+                      (
+                        a.across + (b.across - a.across) * k / 16,
+                        PlanOpening.headAtM(el, -1 + k / 8, mpu),
+                        PlanOpening.sill(el),
+                      ),
+                  ],
           ),
         );
         continue;
@@ -526,6 +576,34 @@ class PlanElevationPainter extends CustomPainter {
         to(item.to, item.top),
       );
       switch (item.kind) {
+        case ElevationKind.wall || ElevationKind.opening
+            when item.profile.isNotEmpty:
+          final outline = Path();
+          for (final (i, (x, top, _)) in item.profile.indexed) {
+            final p = to(x, top);
+            i == 0 ? outline.moveTo(p.dx, p.dy) : outline.lineTo(p.dx, p.dy);
+          }
+          for (final (x, _, bottom) in item.profile.reversed) {
+            final p = to(x, bottom);
+            outline.lineTo(p.dx, p.dy);
+          }
+          outline.close();
+          final wall = item.kind == ElevationKind.wall;
+          canvas
+            ..drawPath(
+              outline,
+              Paint()
+                ..color = wall
+                    ? faint.withValues(alpha: 0.18 * alpha)
+                    : background,
+            )
+            ..drawPath(
+              outline,
+              Paint()
+                ..color = color
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = wall ? 1 : 0.8,
+            );
         case ElevationKind.wall:
           canvas.drawRect(
             rect,

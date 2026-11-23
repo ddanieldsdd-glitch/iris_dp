@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import 'arch/arch_solid.dart';
+import 'arch/wall_faces.dart';
+import 'arch/wall_joints.dart';
 import 'camera_plan_constants.dart';
 import 'camera_plan_element_model.dart';
 import 'light/ambient.dart';
@@ -516,6 +518,7 @@ class CameraPlanPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     _sheet = size;
+    _wallOutlines = null;
     _drawCanvasBackground(canvas, size);
 
     canvas.save();
@@ -1709,6 +1712,67 @@ class CameraPlanPainter extends CustomPainter {
     }
   }
 
+  /// Contornos de las paredes con sus esquinas unidas (AM.4). Se hacen una
+  /// vez por repintado.
+  Map<PlanElement, WallOutline>? _wallOutlines;
+
+  Map<PlanElement, WallOutline> get wallOutlines => _wallOutlines ??=
+      WallJoints.of(elements, metersPerUnit ?? defaultMetersPerUnit);
+
+  /// La pared a su grosor real, con las esquinas a inglete; si es muy fina
+  /// para verse, una raya.
+  void _drawWallBody(Canvas canvas, PlanElement el, Path axis) {
+    final outline = wallOutlines[el];
+    final mpu = metersPerUnit ?? defaultMetersPerUnit;
+    final thick = PlanSegment.thicknessM(el) / mpu;
+    if (outline == null || thick * scale < 2.5) {
+      canvas.drawPath(
+        axis,
+        Paint()
+          ..color = _CanvasColors.ink
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(thick, 2.5 / scale)
+          ..strokeCap = StrokeCap.round,
+      );
+      return;
+    }
+    final body = outline.path;
+    canvas
+      ..drawPath(body, Paint()..color = _CanvasColors.ink)
+      // Un filo del mismo color tapa la costura del inglete.
+      ..drawPath(
+        body,
+        Paint()
+          ..color = _CanvasColors.ink
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.8 / scale,
+      );
+    // Cada cara con su material, si tiene uno distinto en cada lado.
+    final faces = WallFaces.colors(el);
+    if (faces == null) return;
+    final w = math.max(1.2 / scale, thick * 0.18);
+    for (final (line, other, color) in [
+      (outline.left, outline.right, faces.$1),
+      (outline.right, outline.left, faces.$2),
+    ]) {
+      // La raya va por dentro de la pared, pegada a su cara.
+      final inset = [
+        for (var k = 0; k < line.length; k++)
+          line[k] +
+              (other[k] - line[k]) /
+                  math.max((other[k] - line[k]).distance, 1e-6) *
+                  (w / 2),
+      ];
+      canvas.drawPath(
+        Path()..addPolygon(inset, false),
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = w,
+      );
+    }
+  }
+
   void _drawSegment(
     Canvas canvas,
     PlanElement el, {
@@ -1723,14 +1787,7 @@ class CameraPlanPainter extends CustomPainter {
         case PlanSegment.kindRelief:
           PlanTerrainPainter.slope(canvas, el, scale: scale);
         default:
-          canvas.drawPath(
-            path,
-            Paint()
-              ..color = _CanvasColors.ink
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 6
-              ..strokeCap = StrokeCap.round,
-          );
+          _drawWallBody(canvas, el, path);
       }
     }
 
@@ -3967,22 +4024,37 @@ class CameraPlanPainter extends CustomPainter {
     }
   }
 
+  /// Medio grosor, en el lienzo, de la pared en la que está el hueco.
+  double _hostHalfThickness(PlanElement opening) {
+    final mpu = metersPerUnit ?? defaultMetersPerUnit;
+    var best = 0.0, bestD = 14.0;
+    for (final w in wallOutlines.keys) {
+      final d = PlanSegment.distanceTo(w, opening.position);
+      if (d < bestD) {
+        bestD = d;
+        best = PlanSegment.thicknessM(w) / 2 / mpu;
+      }
+    }
+    return best;
+  }
+
   /// Puerta, ventana o abertura: abre su hueco en la pared y dibuja lo que
   /// hay en él. Se pinta en coordenadas del elemento (ya trasladado y
   /// girado): la pared va a lo largo del eje x.
   void _drawOpening(Canvas canvas, PlanElement el) {
     final half = PlanOpening.width(el) / 2;
-    // El hueco: se borra la pared que haya debajo.
+    // El hueco: se borra la pared que haya debajo, a todo su grosor.
+    final depth = math.max(5.0, _hostHalfThickness(el) + 1);
     canvas.drawRect(
-      Rect.fromLTRB(-half, -5, half, 5),
+      Rect.fromLTRB(-half, -depth, half, depth),
       Paint()..color = _CanvasColors.background,
     );
     final jamb = Paint()
       ..color = _CanvasColors.ink
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
-    canvas.drawLine(Offset(-half, -5), Offset(-half, 5), jamb);
-    canvas.drawLine(Offset(half, -5), Offset(half, 5), jamb);
+    canvas.drawLine(Offset(-half, -depth), Offset(-half, depth), jamb);
+    canvas.drawLine(Offset(half, -depth), Offset(half, depth), jamb);
 
     if (PlanOpening.isWindow(el)) {
       // Cerrada, el cristal; abierta, el hueco limpio y sus hojas.

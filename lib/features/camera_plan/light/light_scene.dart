@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import '../arch/arch_material.dart';
 import '../arch/arch_solid.dart';
+import '../arch/wall_faces.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../plan_marks.dart';
@@ -942,6 +943,11 @@ class LightScene {
 
   // ── Qué tapa la luz ───────────────────────────────────────────────────────
 
+  /// Los dos extremos de una pared suelta de las de antes (un sello de
+  /// tamaño fijo).
+  static (Offset, Offset) legacyWallSpan(PlanElement el) =>
+      _span(el, pieceWidth);
+
   static (Offset, Offset) _span(PlanElement el, double width) {
     final rad = el.rotation * math.pi / 180;
     final half = Offset(math.cos(rad), math.sin(rad)) * (width / 2);
@@ -1447,6 +1453,28 @@ class LightScene {
       // El alto que se le haya puesto a la pared (CA.4); si no, el de
       // siempre, que luego sube hasta el techo del recinto.
       final ownHeight = PlanSegment.heightM(element);
+      // Un tramo macizo de la pared. Si su alto cambia a lo largo (AM.4),
+      // en trozos de medio metro, cada uno a su alto.
+      void wallRun(double from, double to) {
+        final profiled =
+            PlanSegment.isSegment(element) && PlanSegment.hasProfile(element);
+        final n = profiled
+            ? math.max(1, ((to - from) * metersPerUnit / 0.5).ceil())
+            : 1;
+        for (var k = 0; k < n; k++) {
+          final p = a + dir * (from + (to - from) * k / n);
+          final q = a + dir * (from + (to - from) * (k + 1) / n);
+          final h = profiled
+              ? PlanSegment.topAtM(
+                  element,
+                  PlanSegment.tOf(element, (p + q) / 2),
+                )!
+              : ownHeight ?? 2.5;
+          blockers.add(
+            LightBlocker(p, q, isWall: true, heightM: h, element: element),
+          );
+        }
+      }
 
       // Tramos de esta pared ocupados por huecos, en distancia desde `a`.
       final cuts = <(double, double, _Gap)>[];
@@ -1472,17 +1500,7 @@ class LightScene {
 
       var cursor = 0.0;
       for (final (from, to, gap) in cuts) {
-        if (from > cursor + 0.5) {
-          blockers.add(
-            LightBlocker(
-              a + dir * cursor,
-              a + dir * from,
-              isWall: true,
-              heightM: ownHeight ?? 2.5,
-              element: element,
-            ),
-          );
-        }
+        if (from > cursor + 0.5) wallRun(cursor, from);
         final start = a + dir * math.max(from, cursor);
         final end = a + dir * to;
         if ((end - start).distance > 1) {
@@ -1491,24 +1509,14 @@ class LightScene {
               start,
               end,
               sillM: PlanOpening.sill(gap.element),
-              headM: PlanOpening.head(gap.element),
+              headM: PlanOpening.effectiveHeadM(gap.element, metersPerUnit),
               element: gap.element,
             ),
           );
         }
         cursor = math.max(cursor, to);
       }
-      if (length > cursor + 0.5) {
-        blockers.add(
-          LightBlocker(
-            a + dir * cursor,
-            b,
-            isWall: true,
-            heightM: ownHeight ?? 2.5,
-            element: element,
-          ),
-        );
-      }
+      if (length > cursor + 0.5) wallRun(cursor, length);
     }
     return (
       blockers: blockers,
@@ -1595,6 +1603,11 @@ class LightScene {
       required bool through,
       required LightBlocker? own,
       required String label,
+      // La otra cara, si es de otro material (AM.4): la contraria a la
+      // normal `(−tangente.dy, tangente.dx)`.
+      double? keepB,
+      double? miredB,
+      String? labelB,
     }) {
       final areaM2 = lengthUnits * metersPerUnit * heightM;
       final normalA = Offset(-tangent.dy, tangent.dx);
@@ -1640,6 +1653,10 @@ class LightScene {
             : normalA * -1;
         final incident = _incident(light, centre, facing, own, z: z);
         if (incident == null) continue;
+        final faceA = facing == normalA;
+        final fKeep = faceA ? keep : (keepB ?? keep);
+        final fMired = faceA ? mired : (miredB ?? mired);
+        final fLabel = faceA ? label : (labelB ?? label);
         // Lo que recoge de un aparato es la media sobre toda la tela, no lo
         // del centro multiplicado por su superficie (F6.22.3): los bordes
         // están más lejos, de lado y fuera del centro del haz.
@@ -1664,7 +1681,7 @@ class LightScene {
               beamDeg,
               math.sqrt(flat * flat + rise * rise),
             ) *
-            keep;
+            fKeep;
         final candela = flux / spread;
         if (candela < 1) continue;
         final incoming = toLight.distance < 1e-6
@@ -1676,7 +1693,7 @@ class LightScene {
               candela: candela,
               beamDeg: beamDeg,
               sizeM: lengthUnits * metersPerUnit,
-              cct: _shift(incident.cct, mired),
+              cct: _shift(incident.cct, fMired),
               rgb: incident.rgb,
               status: light.source.status,
               lambertian: matte,
@@ -1692,7 +1709,7 @@ class LightScene {
             frontOnly: true,
             z: z,
             surface: own,
-            label: '$label ← ${light.label}',
+            label: '$fLabel ← ${light.label}',
           ),
           facing,
         );
@@ -1705,6 +1722,10 @@ class LightScene {
       final dot = toward.dx * normalA.dx + toward.dy * normalA.dy;
       if (dot.abs() < 0.05) return flush();
       final facing = dot >= 0 ? normalA : normalA * -1;
+      final faceA = facing == normalA;
+      final sKeep = faceA ? keep : (keepB ?? keep);
+      final sMired = faceA ? mired : (miredB ?? mired);
+      final sLabel = faceA ? label : (labelB ?? label);
       // El sol puede darle solo en parte (la mancha de una ventana cae
       // baja): se mira a varias alturas y a lo largo de la superficie.
       var lit = 0.0;
@@ -1729,7 +1750,7 @@ class LightScene {
       final cosElevation = 1 / math.sqrt(1 + _sunTan * _sunTan);
       final lux =
           env.condition.sunLux * sun.transmission * cosElevation * dot.abs();
-      final candela = lux * areaM2 * keep / spread;
+      final candela = lux * areaM2 * sKeep / spread;
       if (candela < 1) return flush();
       add(
         SceneLight(
@@ -1737,7 +1758,7 @@ class LightScene {
             candela: candela,
             beamDeg: beamDeg,
             sizeM: lengthUnits * metersPerUnit,
-            cct: _shift(env.condition.sunCct, sun.miredShift + mired),
+            cct: _shift(env.condition.sunCct, sun.miredShift + sMired),
             status: PhotometryStatus.estimated,
             lambertian: matte,
           ),
@@ -1750,7 +1771,7 @@ class LightScene {
           frontOnly: true,
           z: z,
           surface: own,
-          label: '$label ← Sol',
+          label: '$sLabel ← Sol',
         ),
         facing,
       );
@@ -2007,10 +2028,10 @@ class LightScene {
         final span = blocker.b - blocker.a;
         final length = span.distance;
         if (length < 20) continue;
-        final material = ArchMaterials.wallSurface(
-          wall,
-          wall.props[materialKey] as String?,
-        );
+        final material = WallFaces.surface(wall, 1);
+        final back = WallFaces.isTwoSided(wall)
+            ? WallFaces.surface(wall, -1)
+            : null;
         // La pared se reparte en paños de alrededor de dos metros (hasta
         // tres); cada uno devuelve lo suyo. Un tramo corto, como los de una
         // pared curva, es un solo paño.
@@ -2020,15 +2041,21 @@ class LightScene {
             centre: blocker.a + span * t,
             tangent: span / length,
             lengthUnits: length / panes,
-            heightM:
-                PlanSegment.heightM(wall) ??
-                (StreetProfile.isStreet(wall) ? blocker.heightM : wallHeightM),
+            heightM: PlanSegment.hasProfile(wall)
+                ? blocker.heightM
+                : PlanSegment.heightM(wall) ??
+                      (StreetProfile.isStreet(wall)
+                          ? blocker.heightM
+                          : wallHeightM),
             keep: material.reflectance,
             mired: material.miredShift,
             beamDeg: material.beamDeg,
             through: false,
             own: blocker,
             label: 'Pared ${material.name.toLowerCase()}',
+            keepB: back?.reflectance,
+            miredB: back?.miredShift,
+            labelB: back == null ? null : 'Pared ${back.name.toLowerCase()}',
           );
         }
       }

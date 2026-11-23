@@ -117,14 +117,19 @@ void main() {
       for (final layer in ['MUROS', 'HUECOS', 'LUCES', 'HACES', 'CAMARAS']) {
         expect(dxf, contains('2\n$layer\n'));
       }
-      // La pared: de (0, 0) a (8, 0) en la capa MUROS.
-      expect(
-        dxf,
-        contains(
-          'LINE\n8\nMUROS\n10\n0.0000\n20\n0.0000\n30\n0.0000\n'
-          '11\n8.0000\n21\n0.0000',
-        ),
-      );
+      // La pared, de (0, 0) a (8, 0) en la capa MUROS, con su grosor
+      // (AM.4): sus dos caras a 6 cm del eje.
+      for (final (x0, x1, y) in [
+        ('0.0000', '8.0000', '-0.0600'),
+        ('8.0000', '0.0000', '0.0600'),
+      ]) {
+        expect(
+          dxf,
+          contains(
+            '8\nMUROS\n10\n$x0\n20\n$y\n30\n0.0000\n11\n$x1\n21\n$y',
+          ),
+        );
+      }
       // La M18, 4 m al sur de la pared: y = -4.
       expect(dxf, contains('CIRCLE\n8\nLUCES\n10\n6.0000\n20\n-4.0000'));
       // Rótulo con su unidad y sin acentos.
