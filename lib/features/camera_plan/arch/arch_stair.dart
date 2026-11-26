@@ -392,7 +392,7 @@ abstract final class ArchStair {
 
     void post(Offset p, double z0, double h) {
       const t = 0.035;
-      for (final (a, b) in [
+      for (final (a, b) in const [
         (Offset(-t, -t), Offset(t, -t)),
         (Offset(t, -t), Offset(t, t)),
         (Offset(t, t), Offset(-t, t)),

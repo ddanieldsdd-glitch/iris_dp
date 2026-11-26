@@ -3021,6 +3021,35 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
     );
   }
 
+  /// Un forjado o un volumen con la forma del recinto cerrado en que cae
+  /// [p] (dos toques en el mismo sitio con la herramienta).
+  Future<void> _fillRoom(Offset p) async {
+    final kind = _tool == PlanTool.volume ? RigType.volume : RigType.slab;
+    final el = ArchSolid.fromRoom(
+      kind,
+      [
+        for (final r in LightScene.from(
+          _visibleElements,
+          metersPerUnit: _metersPerUnit,
+        ).rooms)
+          r.room,
+      ],
+      p,
+      _metersPerUnit,
+    );
+    if (el == null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Aquí no hay un recinto cerrado: arrastra de esquina a esquina.',
+          ),
+        ),
+      );
+      return;
+    }
+    await _addElement(el, keepPosition: true, select: true);
+  }
+
   /// Un terreno (AM.7) en el rectángulo: las colinas y los taludes que
   /// caen dentro pasan a sus cotas y se quitan de la planta.
   Future<void> _addTerrain(Offset from, Offset to) async {

@@ -392,7 +392,13 @@ class RigPainter {
   }) {
     final pts = ArchSolid.outline(el, mpu);
     if (pts.length < 3) return;
-    final path = Path()..addPolygon(pts, true);
+    // Con sus huecos (el de la escalera) sin rellenar.
+    final path = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addPolygon(pts, true);
+    for (final h in ArchSolid.holes(el, mpu)) {
+      path.addPolygon(h, true);
+    }
     final overhead = ArchSolid.isOverhead(el) && !asFloor;
     final rgb = ArchSolid.material(el).albedoRgb;
     int srgb(int c) {

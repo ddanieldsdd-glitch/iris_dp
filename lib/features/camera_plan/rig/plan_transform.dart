@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../arch/arch_solid.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/plan_light.dart';
@@ -65,6 +66,19 @@ class PlanTransform {
   /// Lo que manda la flecha vertical del visor: sube el foco o la cámara;
   /// lo demás sube con su suelo.
   static void liftBy(PlanElement el, double dz) {
+    // Empujar y tirar (AM.2): un volumen crece o mengua; un forjado sube
+    // o baja su cara de arriba.
+    if (ArchSolid.isVolume(el)) {
+      el.props[ArchSolid.heightKey] = _round(
+        math.max(0.05, ArchSolid.heightM(el) + dz),
+        100,
+      );
+      return;
+    }
+    if (ArchSolid.isSlab(el)) {
+      el.props[ArchSolid.topKey] = _round(ArchSolid.slabTopM(el) + dz, 100);
+      return;
+    }
     if (hasHeight(el)) {
       setHeight(el, heightM(el) + dz);
     } else {

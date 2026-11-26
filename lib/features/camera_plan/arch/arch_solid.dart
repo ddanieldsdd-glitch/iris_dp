@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import '../camera_plan_element_model.dart';
+import '../light/rooms.dart';
 import '../light_overrides.dart';
 import '../rig/plan_rig.dart';
 import 'arch_material.dart';
@@ -90,6 +91,66 @@ abstract final class ArchSolid {
     return el;
   }
 
+  /// Con la forma del recinto cerrado de paredes en que cae [p], o
+  /// `null` si no cae en ninguno.
+  static PlanElement? fromRoom(
+    RigType kind,
+    List<PlanRoom> rooms,
+    Offset p,
+    double metersPerUnit,
+  ) {
+    PlanRoom? best;
+    for (final r in rooms) {
+      if (!r.contains(p)) continue;
+      // El más pequeño que lo contiene (una habitación dentro de la casa).
+      if (best == null || r.area.abs() < best.area.abs()) best = r;
+    }
+    if (best == null || best.polygon.length < 3) return null;
+    final poly = best.polygon;
+    final centre =
+        poly.reduce((a, b) => a + b) / poly.length.toDouble();
+    return create(kind, centre, [
+      for (final q in poly) (q - centre) * metersPerUnit,
+    ]);
+  }
+
+  /// Huecos (el de una escalera, un patio): contornos en metros respecto
+  /// al centro, como el contorno.
+  static const holesKey = 'holes';
+
+  static List<List<Offset>> holesM(PlanElement el) {
+    final raw = el.props[holesKey];
+    if (raw is! List) return const [];
+    return [
+      for (final h in raw)
+        if (h is List)
+          [
+            for (final p in h)
+              if (p is List && p.length >= 2)
+                Offset((p[0] as num).toDouble(), (p[1] as num).toDouble()),
+          ],
+    ].where((h) => h.length >= 3).toList();
+  }
+
+  static void setHoles(PlanElement el, List<List<Offset>> holes) {
+    if (holes.isEmpty) {
+      el.props.remove(holesKey);
+      return;
+    }
+    el.props[holesKey] = [
+      for (final h in holes)
+        [
+          for (final p in h) [_r(p.dx), _r(p.dy)],
+        ],
+    ];
+  }
+
+  /// Los huecos en el lienzo, girados con el elemento.
+  static List<List<Offset>> holes(PlanElement el, double metersPerUnit) => [
+    for (final h in holesM(el))
+      [for (final p in h) toCanvas(el, p, metersPerUnit)],
+  ];
+
   /// Contorno en metros, sin girar.
   static List<Offset> outlineM(PlanElement el) {
     final raw = el.props[outlineKey];
@@ -135,15 +196,21 @@ abstract final class ArchSolid {
     ];
   }
 
-  /// Área en planta, m².
+  /// Área en planta, m² (sin sus huecos).
   static double areaM2(PlanElement el) {
-    final p = outlineM(el);
-    var a = 0.0;
-    for (var i = 0; i < p.length; i++) {
-      final q = p[(i + 1) % p.length];
-      a += p[i].dx * q.dy - q.dx * p[i].dy;
+    double of(List<Offset> p) {
+      var a = 0.0;
+      for (var i = 0; i < p.length; i++) {
+        final q = p[(i + 1) % p.length];
+        a += p[i].dx * q.dy - q.dx * p[i].dy;
+      }
+      return a.abs() / 2;
     }
-    return a.abs() / 2;
+
+    return math.max(
+      0.0,
+      of(outlineM(el)) - holesM(el).fold(0.0, (s, h) => s + of(h)),
+    );
   }
 
   static double heightM(PlanElement el) =>
@@ -216,18 +283,22 @@ abstract final class ArchSolid {
       ArchMaterials.byId(el.props[ArchMaterials.key] as String?) ??
       ArchMaterials.byId(isSlab(el) ? defaultSlabMat : defaultVolumeMat)!;
 
-  /// El punto del lienzo cae dentro del contorno.
+  /// El punto del lienzo cae dentro del contorno (y no en un hueco).
   static bool contains(PlanElement el, Offset p, double metersPerUnit) {
-    final poly = outline(el, metersPerUnit);
-    var inside = false;
-    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      final a = poly[i], b = poly[j];
-      if ((a.dy > p.dy) != (b.dy > p.dy) &&
-          p.dx < (b.dx - a.dx) * (p.dy - a.dy) / (b.dy - a.dy) + a.dx) {
-        inside = !inside;
+    bool inPoly(List<Offset> poly) {
+      var inside = false;
+      for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        final a = poly[i], b = poly[j];
+        if ((a.dy > p.dy) != (b.dy > p.dy) &&
+            p.dx < (b.dx - a.dx) * (p.dy - a.dy) / (b.dy - a.dy) + a.dx) {
+          inside = !inside;
+        }
       }
+      return inside;
     }
-    return inside;
+
+    return inPoly(outline(el, metersPerUnit)) &&
+        !holes(el, metersPerUnit).any(inPoly);
   }
 
   static double _r(double v) => (v * 1000).round() / 1000;

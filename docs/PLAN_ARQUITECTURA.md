@@ -241,7 +241,8 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - 3D y Unreal: lista `solids` (contorno, `z0`, `z1`, material) extruida con textura a escala; va al GLB como pieza propia.
 - Corregido de paso: los truss, motores, pilares y naves salían además como cajas «Rectángulo» en el 3D.
 - Los materiales de siempre ya no pierden el color de su textura: el tinte solo ajusta el brillo.
-- Falta: polígonos de más de cuatro lados y huecos (dibujar punto a punto), y crear un forjado desde paredes que cierran.
+- *Hecho (2026-11-26):* dos toques en el mismo sitio con «Forjado» o «Volumen» dentro de un recinto cerrado de paredes crean la pieza con su forma (cualquier número de lados). Los forjados admiten huecos (`props['holes']`), que se ven en la planta y en el 3D y no cuentan como suelo ni como techo. Empujar y tirar en el 3D: el asa de altura hace crecer un volumen o sube la cara de arriba de un forjado. Un forjado encima de una habitación le da su techo en la luz, y uno a ras de suelo, su suelo.
+- Falta: dibujar un polígono punto a punto sin paredes; dibujar huecos a mano (hoy los ponen las recetas); el asa de empujar en la planta; que el volumen rebote.
 
 **AM.3 · Cubiertas para cualquier contorno**
 - Se sacan `HallRoof` y `roofGrid` de la nave a un `ArchRoof` común: plana, a un agua, a dos aguas, a cuatro aguas, en bóveda y de lona. Con alero, pendiente o altura de cumbrera, y material.
@@ -307,7 +308,8 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - **Sección** (`arch/plan_section.dart`, `RigType.section`): herramienta «Sección» en la paleta; se dibuja la línea de corte y se mira a su izquierda (o al otro lado, desde su panel, donde también se cambia la letra). En la planta, trazo y punto rojo con flecha y letra en cada punta; corta todos los niveles, no tapa la luz y no sale en el 3D.
 - La vista (`PlanElevation.of(..., cut:)`) quita lo que queda delante de la línea y rellena lo que la cruza: las paredes, con su grosor en negro; volúmenes, forjados y escaleras, recortados y en gris. Las luces y las cámaras apuntan según la línea.
 - En «Alzado y perfil», una pestaña «Sección A» o «Secciones»; en la hoja de luz, una hoja con dos secciones («SECCIÓN A-A») y las líneas dibujadas en la planta; en DXF, la capa SECCIONES en la planta y la capa CORTE en cada sección.
-- Falta: barandilla (con los barridos de AM.5); que el 3D enseñe solo un nivel (o lo corte); la luz que baja por el hueco de una escalera de un nivel a otro; mover las puntas de una sección por separado (hoy se redibuja).
+- *Hecho (2026-11-26):* barandilla en las escaleras (a los dos lados, a uno o sin), pasamanos a 0,9 m y balaustres, como pieza de metal aparte para Unreal; viendo un nivel, el 3D lo enseña con los de abajo y sin los de encima.
+- Falta: la luz que baja por el hueco de una escalera de un nivel a otro; mover las puntas de una sección por separado (hoy se redibuja).
 
 **AM.7 · Terreno y agua en 3D**
 - Terreno por alturas: una rejilla como la de `roofGrid`, con pinceles para subir, bajar, alisar y aplanar, y capas de material pintadas (arena, hierba, roca, tierra).
@@ -328,9 +330,8 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - **Alzado y sección:** en alzado, la silueta del terreno (lo más alto a cada lado) y el agua; en una sección, además, el perfil justo en el corte, relleno.
 - Pruebas: `test/camera_plan/arch_terrain_test.dart` (10).
 - Faltan:
-  - pincel en el 3D (`plan_3d_edit.dart`);
+  - ~~pincel en el 3D~~ y ~~muebles, personas, cámaras y focos apoyados en el terreno en el 3D~~ (hechos el 2026-11-26);
   - mezcla suave entre materiales;
-  - que muebles, personas y luces se apoyen en el terreno en el 3D;
   - terreno girado;
   - probarlo en el Mac y en Unreal.
 
@@ -366,11 +367,19 @@ Todo en tela, madera, hormigón, vidrio y demás. Debe valer para la planta 2D e
 - **«Nuevo set»:** «Lugar tipo · …» en «Empezar desde» crea el set con la receta y sus piezas en el entorno.
 - Para que una casa de varias plantas salga bien, el hueco de una planta ya no corta los muros de las otras, ni en la luz ni en el 3D.
 - Pruebas: `test/camera_plan/arch_recipe_test.dart` (20). Sets de ejemplo (casa, edificio, estación con vagón y playa) vistos en la planta y en el 3D.
+- **Segunda tanda (2026-11-26, pedida por Daniel: «terminar de perfilar lo que falta de IRIS 3D»; Unreal se prueba en su PC):**
+  - **Vagón por dentro:** bastidor, suelo a la altura del piso, paredes con ventanas en serie, puertas dobles a los lados, paso entre vagones, techo en bóveda. Asientos y mesas como muebles sueltos, en tres disposiciones: enfrentados con mesa, en filas o bancos a los lados (metro).
+  - **Sentarse (F6.1.9b, `plan_seats.dart`):**
+    - un actor soltado sobre una silla, un banco, un sofá o una cama se sienta (o se tumba), mira hacia donde mira el mueble y queda a su nivel (`props['seat']`);
+    - sigue al asiento si se mueve o si la receta se rehace;
+    - se levanta si se le aparta o se le pone «De pie».
+  - **Suelos que se pisan (`PlanFloors`):** un actor o una cámara soltados sobre un forjado o una tarima (volumen de hasta 1,3 m sin cubierta) suben a su cota, y al salir vuelven a la calle.
+  - **3D:** maniquí con postura (de pie, sentado a la altura de su asiento, tumbado), mirando hacia donde mira.
+  - **Calle con edificios:** calle con perfil (calzada, aceras, farolas de báculo) y una fila de edificios a cada lado, de cara a la calle, con alturas y fachadas que varían.
+  - **Puente de arco:** dovelas de piedra en parábola, montantes, estribos y tablero con barandillas.
+  - **Estación:** paso subterráneo con escalera desde el andén, túnel bajo las vías con suelo, techo y paredes. Un forjado bajo tierra baja con su grosor.
+  - **Casa:** de 1 a 4 habitaciones al fondo, cada una con su puerta; el forjado de arriba lleva el hueco de la escalera.
 - Faltan:
-  - poblar la calle con fachadas de edificio;
-  - puente de arco y paso subterráneo;
-  - ventanas en serie y puertas en el casco del vagón;
-  - repartir el contorno de la casa en habitaciones a medida;
   - muebles de packs CC0;
   - vínculos propuestos por receta (AM.U2);
   - probarlo en el Mac y en Unreal.

@@ -556,6 +556,15 @@ abstract final class ArchRecipe {
           thick: PlanLevels.defaultSlabThickM,
           mat: 'wood-floor-oak',
           name: 'Planta $f',
+          // El hueco por donde sube la escalera de la planta de abajo.
+          holes: [
+            Rect.fromLTRB(
+              stairX - stairW / 2 - 0.05,
+              hd - 0.4 - run - 0.05,
+              stairX + stairW / 2 + 0.05,
+              hd - 0.35,
+            ),
+          ],
         );
       }
       if (f + 1 < floors) {
@@ -1273,7 +1282,7 @@ abstract final class ArchRecipe {
       mat: 'metal-brushed',
       level: floor + inner,
     );
-    roof.props[ArchSolid.roofKey] = ArchRoof(
+    roof.props[ArchSolid.roofKey] = const ArchRoof(
       kind: ArchRoofKind.vault,
       riseM: 0.35,
       ridgeDeg: 0,
@@ -1578,8 +1587,26 @@ class _Builder {
     required double thick,
     required String mat,
     String? name,
+    List<Rect> holes = const [],
   }) {
     final el = ArchSolid.create(RigType.slab, at(r.center), _outline(r));
+    if (holes.isNotEmpty) {
+      ArchSolid.setHoles(el, [
+        for (final h in holes)
+          [
+            for (final p in [
+              h.topLeft,
+              h.topRight,
+              h.bottomRight,
+              h.bottomLeft,
+            ])
+              Offset(
+                p.dx - r.center.dx,
+                (p.dy - r.center.dy) * (flip ? -1 : 1),
+              ),
+          ],
+      ]);
+    }
     el.props
       ..[ArchSolid.topKey] = (top * 1000).round() / 1000
       ..[ArchSolid.thickKey] = thick

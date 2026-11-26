@@ -6,6 +6,7 @@ import 'package:iris_dp/core/theme/app_theme.dart';
 import 'package:iris_dp/features/camera_plan/arch/arch_recipe.dart';
 import 'package:iris_dp/features/camera_plan/arch/arch_material.dart';
 import 'package:iris_dp/features/camera_plan/arch/arch_solid.dart';
+import 'package:iris_dp/features/camera_plan/arch/arch_stair.dart';
 import 'package:iris_dp/features/camera_plan/arch/arch_terrain.dart';
 import 'package:iris_dp/features/camera_plan/arch/plan_levels.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
@@ -24,6 +25,7 @@ import 'package:iris_dp/features/camera_plan/plan_segment.dart';
 import 'package:iris_dp/features/camera_plan/plan_street.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_rig.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
+import 'package:iris_dp/features/camera_plan/rig/plan_transform.dart';
 
 import '../support/snapshot.dart';
 
@@ -297,6 +299,70 @@ void main() {
     ], metersPerUnit: mpu).rooms.single;
     expect(r.ceilingM, closeTo(2.8, 1e-6));
     expect(r.floor.id, ArchMaterials.floorSurface('wood-floor-dark').id);
+  });
+
+  test('el forjado de arriba lleva el hueco de la escalera', () {
+    final all = place(RecipeKind.house, params: {'floors': 2.0});
+    final slab = all.firstWhere(
+      (e) => e.props[PlanLevels.nameKey] == 'Planta 1',
+    );
+    expect(ArchSolid.holesM(slab), hasLength(1));
+    final stair = all.firstWhere(ArchStair.isStair);
+    final mid = ArchStair.toCanvas(
+      stair,
+      Offset(ArchStair.runM(stair) / 2, 0),
+      mpu,
+    );
+    expect(ArchSolid.contains(slab, mid, mpu), isFalse);
+    expect(ArchSolid.contains(slab, all.first.position, mpu), isTrue);
+    final sc = PlanScene3d.build(all, metersPerUnit: mpu);
+    final solid = (sc['solids'] as List).cast<Map>().firstWhere(
+      (s) => s['holes'] != null,
+    );
+    expect(solid['holes'], hasLength(1));
+  });
+
+  test('dos toques dentro de un recinto: un forjado con su forma', () {
+    final room = place(RecipeKind.room, at: const Offset(100, 100));
+    final rooms = [
+      for (final r in LightScene.from(room, metersPerUnit: mpu).rooms) r.room,
+    ];
+    final slab = ArchSolid.fromRoom(
+      RigType.slab,
+      rooms,
+      const Offset(100, 100),
+      mpu,
+    );
+    expect(slab, isNotNull);
+    expect(ArchSolid.areaM2(slab!), closeTo(4.5 * 4, 0.8));
+    expect(
+      ArchSolid.fromRoom(RigType.slab, rooms, const Offset(900, 900), mpu),
+      isNull,
+    );
+  });
+
+  test('empujar y tirar: un volumen crece, un forjado sube', () {
+    final v = ArchSolid.rectangle(
+      RigType.volume,
+      Offset.zero,
+      const Offset(40, 40),
+      mpu,
+    );
+    final h = ArchSolid.heightM(v);
+    PlanTransform.liftBy(v, 0.5);
+    expect(ArchSolid.heightM(v), closeTo(h + 0.5, 1e-9));
+    expect(PlanLevel.of(v), 0);
+    PlanTransform.liftBy(v, -50);
+    expect(ArchSolid.heightM(v), 0.05);
+    final s = ArchSolid.rectangle(
+      RigType.slab,
+      Offset.zero,
+      const Offset(40, 40),
+      mpu,
+    );
+    final top = ArchSolid.slabTopM(s);
+    PlanTransform.liftBy(s, 0.3);
+    expect(ArchSolid.slabTopM(s), closeTo(top + 0.3, 1e-9));
   });
 
   test('«Nuevo set» desde un lugar tipo', () {

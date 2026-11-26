@@ -294,6 +294,10 @@ class PlanScene3d {
             'cls': PlanClass.of(el).name,
             'kind': RigTypeCodec.of(el)!.name,
             'outline': [for (final p in ArchSolid.outline(el, mpu)) xy(p)],
+            if (ArchSolid.holes(el, mpu) case final hs when hs.isNotEmpty)
+              'holes': [
+                for (final h in hs) [for (final p in h) xy(p)],
+              ],
             'z0': _r(level + ArchSolid.bottomM(el)),
             'z1': _r(level + ArchSolid.topM(el)),
             'mat': ArchSolid.material(el).id,

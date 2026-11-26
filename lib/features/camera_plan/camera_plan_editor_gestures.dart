@@ -685,6 +685,15 @@ extension _EditorGestures on _CameraPlanEditorState {
           _segmentStart = point;
           _segmentHover = point;
         });
+      } else if ((_tool == PlanTool.slab || _tool == PlanTool.volume) &&
+          (point - from).distance < 8) {
+        // Dos toques en el mismo sitio, dentro de un recinto cerrado: el
+        // forjado o el volumen toma su forma (AM.2).
+        _update(() {
+          _segmentStart = null;
+          _segmentHover = null;
+        });
+        _fillRoom(point);
       } else {
         // Encadena: el final de este tramo es el inicio del siguiente.
         _update(() {

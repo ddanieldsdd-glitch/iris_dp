@@ -1001,6 +1001,10 @@
     const h = (s.eave != null ? s.eave : (s.z1 || 0)) - (s.z0 || 0);
     if (h < 0.005) return;
     const shape = new THREE.Shape(s.outline.map((p) => new THREE.Vector2(p[0], p[1])));
+    // Sus huecos (AM.2): el de una escalera, un patio.
+    for (const hole of s.holes || []) {
+      if (hole.length >= 3) shape.holes.push(new THREE.Path(hole.map((p) => new THREE.Vector2(p[0], p[1]))));
+    }
     let geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false });
     const mat = (s.mat && archMaterial(s.mat, false)) || solidFallback;
     if (mat.map) geo = boxUV(geo, mat) || geo;
@@ -1009,6 +1013,8 @@
     m.position.y = s.z0 || 0;
     m.castShadow = m.receiveShadow = true;
     m.userData.id = s.id;
+    // Se mueve en planta y se empuja o se tira de su altura (AM.2).
+    m.userData.movable = true; m.userData.dragY = s.z0 || 0; m.userData.liftable = true;
     picks.push(m);
     tagPiece(m, s);
     L.walls.add(m);
