@@ -201,9 +201,12 @@ abstract final class ArchSolid {
 
   /// Cota de abajo: un volumen arranca del suelo; un forjado, de su
   /// cara de arriba menos su grosor (nunca por debajo del suelo).
-  static double bottomM(PlanElement el) => isSlab(el)
-      ? math.max(0.0, slabTopM(el) - slabThickM(el))
-      : 0;
+  static double bottomM(PlanElement el) => !isSlab(el)
+      ? 0
+      // Bajo tierra (un túnel, un sótano), su grosor entero hacia abajo.
+      : slabTopM(el) <= 0
+      ? slabTopM(el) - slabThickM(el)
+      : math.max(0.0, slabTopM(el) - slabThickM(el));
 
   /// Un forjado por encima de la cabeza (entreplanta, techo): en la
   /// planta va a trazos, como lo que está por encima del corte.

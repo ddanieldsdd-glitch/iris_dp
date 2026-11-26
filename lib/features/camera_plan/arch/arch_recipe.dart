@@ -7,7 +7,9 @@ import '../light/light_scene.dart';
 import '../light_overrides.dart';
 import '../plan_opening.dart';
 import '../plan_seats.dart';
+import '../light/street_lamp.dart';
 import '../plan_segment.dart';
+import '../plan_street.dart';
 import '../rig/plan_hall.dart';
 import '../rig/plan_rig.dart';
 import 'arch_material.dart';
@@ -47,7 +49,16 @@ enum RecipeKind {
     RecipeGroup.city,
     'Plantas con fachada por módulos, balcones y bajo comercial',
   ),
-  bridge('Puente', RecipeGroup.city, 'Tablero sobre pilas y el río debajo'),
+  street(
+    'Calle con edificios',
+    RecipeGroup.city,
+    'Calzada, aceras y farolas, con edificios a uno o a los dos lados',
+  ),
+  bridge(
+    'Puente',
+    RecipeGroup.city,
+    'Tablero sobre pilas o arco de piedra, y el río debajo',
+  ),
   station(
     'Estación',
     RecipeGroup.rail,
@@ -138,6 +149,14 @@ abstract final class ArchRecipe {
       RecipeKnob.number('depthM', 'Fondo', 8, min: 6, max: 20, step: 0.5),
       RecipeKnob.number('floors', 'Plantas', 2, min: 1, max: 3, step: 1),
       RecipeKnob.number(
+        'rooms',
+        'Habitaciones al fondo',
+        2,
+        min: 1,
+        max: 4,
+        step: 1,
+      ),
+      RecipeKnob.number(
         'storeyM',
         'Altura de planta',
         2.8,
@@ -198,6 +217,21 @@ abstract final class ArchRecipe {
         ('concrete-smooth', 'Hormigón'),
       ]),
     ],
+    RecipeKind.street => const [
+      RecipeKnob.number('lengthM', 'Largo', 60, min: 20, max: 200, step: 1),
+      RecipeKnob.number('roadM', 'Calzada', 7, min: 3, max: 20, step: 0.5),
+      RecipeKnob.number('walkM', 'Aceras', 3, min: 1, max: 8, step: 0.5),
+      RecipeKnob.number(
+        'frontM',
+        'Frente de cada edificio',
+        16,
+        min: 8,
+        max: 40,
+        step: 1,
+      ),
+      RecipeKnob.number('floors', 'Plantas', 4, min: 1, max: 12, step: 1),
+      RecipeKnob.toggle('both', 'Edificios a los dos lados', true),
+    ],
     RecipeKind.bridge => const [
       RecipeKnob.number('lengthM', 'Largo', 40, min: 10, max: 200, step: 1),
       RecipeKnob.number('widthM', 'Ancho', 8, min: 3, max: 30, step: 0.5),
@@ -209,6 +243,10 @@ abstract final class ArchRecipe {
         max: 40,
         step: 0.5,
       ),
+      RecipeKnob.choice('type', 'Estructura', 'piers', [
+        ('piers', 'Tablero sobre pilas'),
+        ('arch', 'Arco'),
+      ]),
       RecipeKnob.number('spanM', 'Entre pilas', 20, min: 6, max: 60, step: 1),
       RecipeKnob.toggle('river', 'Río debajo', true),
     ],
@@ -233,6 +271,7 @@ abstract final class ArchRecipe {
       RecipeKnob.number('tracks', 'Vías', 2, min: 1, max: 2, step: 1),
       RecipeKnob.toggle('canopy', 'Marquesina', true),
       RecipeKnob.toggle('catenary', 'Catenaria', true),
+      RecipeKnob.toggle('underpass', 'Paso subterráneo', true),
     ],
     RecipeKind.carriage => const [
       RecipeKnob.choice('layout', 'Asientos', 'tables', [
@@ -381,6 +420,8 @@ abstract final class ArchRecipe {
         _room(b);
       case RecipeKind.building:
         _building(b);
+      case RecipeKind.street:
+        _street(b);
       case RecipeKind.bridge:
         _bridge(b);
       case RecipeKind.station:
@@ -423,7 +464,6 @@ abstract final class ArchRecipe {
     final run = math.min(d - 1.2, (risers - 1) * 0.28);
     const stairW = 1.0;
     final stairX = hw - 0.15 - stairW / 2;
-    final split = math.min(0.0, hw - 0.15 - stairW - 0.1);
     for (var f = 0; f < floors; f++) {
       final z = f * storey;
       final t = 'p$f';
@@ -436,46 +476,45 @@ abstract final class ArchRecipe {
       ].indexed) {
         b.wall('$t-w$i', a, c, level: z, height: storey, thick: 0.25, mat: mat);
       }
-      // Tabiques: uno de lado a lado (sin cortar la escalera) y otro que
-      // parte el fondo en dos habitaciones.
+      // Tabiques: uno de lado a lado (sin cortar la escalera) y otros que
+      // parten el fondo en las habitaciones que se pidan, cada una con su
+      // puerta.
+      final edge = hw - 0.15 - stairW - 0.1;
       b.wall(
         '$t-t0',
         Offset(-hw, 0),
-        Offset(hw - 0.15 - stairW - 0.1, 0),
+        Offset(edge, 0),
         level: z,
         height: storey,
         thick: 0.1,
         mat: 'paint-white',
       );
-      b.wall(
-        '$t-t1',
-        Offset(split, -hd),
-        Offset(split, 0),
-        level: z,
-        height: storey,
-        thick: 0.1,
-        mat: 'paint-white',
-      );
-      // Puertas de las habitaciones del fondo.
-      b.opening(
-        '$t-d0',
-        ArchitectureType.doorClosed,
-        Offset((-hw + split) / 2, 0),
-        0,
-        _door.w,
-        head: _door.h,
-        level: z,
-      );
-      if (split - 0.5 > 0.5 || hw - 1.4 > split + 0.6) {
-        b.opening(
-          '$t-d1',
-          ArchitectureType.doorClosed,
-          Offset(math.min(split + 0.8, hw - 1.8), 0),
-          0,
-          _door.w,
-          head: _door.h,
-          level: z,
-        );
+      final rooms = b.n('rooms').round();
+      final roomW = (edge + hw) / rooms;
+      for (var k = 0; k < rooms; k++) {
+        final x0 = -hw + k * roomW;
+        if (k > 0) {
+          b.wall(
+            '$t-t$k',
+            Offset(x0, -hd),
+            Offset(x0, 0),
+            level: z,
+            height: storey,
+            thick: 0.1,
+            mat: 'paint-white',
+          );
+        }
+        if (roomW >= _door.w + 0.3) {
+          b.opening(
+            '$t-d$k',
+            ArchitectureType.doorClosed,
+            Offset(x0 + roomW / 2, 0),
+            0,
+            _door.w,
+            head: _door.h,
+            level: z,
+          );
+        }
       }
       // Ventanas: dos al fondo, una por lado y, delante, una arriba y
       // dos abajo con la puerta.
@@ -854,18 +893,97 @@ abstract final class ArchRecipe {
     );
   }
 
+  /// Una calle con perfil (calzada, aceras y farolas) y una fila de
+  /// edificios a cada lado, de fachada hacia la calle. Cada edificio
+  /// cambia un poco de altura y de fachada para que no salgan todos
+  /// iguales.
+  static void _street(_Builder b) {
+    final len = b.n('lengthM'), road = b.n('roadM'), walk = b.n('walkM');
+    final front = b.n('frontM'), floors = b.n('floors').round();
+    final street = b.add(
+      PlanSegment.create(
+        start: b.at(Offset(-len / 2, 0)),
+        end: b.at(Offset(len / 2, 0)),
+      ),
+      'street',
+    );
+    street.props['kind'] = PlanSegment.kindStreet;
+    StreetProfile(
+      roadM: road,
+      walkLeftM: walk,
+      walkRightM: walk,
+      lampStyle: StreetLamp.stylePole,
+    ).writeTo(street);
+    const mats = ['brick-tan', 'paint-cream', 'brick-old', 'concrete-smooth'];
+    final n = math.max(1, (len / front).floor());
+    final w = len / n;
+    const depth = 12.0;
+    final line = road / 2 + walk;
+    for (final (side, flip) in [
+      ('n', false),
+      if (b.flag('both')) ('s', true),
+    ]) {
+      for (var k = 0; k < n; k++) {
+        final i = k + (flip ? 1 : 0);
+        final sub = b.child(
+          '$side$k-',
+          Offset(
+            -len / 2 + (k + 0.5) * w,
+            flip ? line + depth / 2 : -line - depth / 2,
+          ),
+          flip: flip,
+          params: {
+            'widthM': w - 0.2,
+            'depthM': depth,
+            'floors': math
+                .max(1, floors + (i % 3 == 1 ? 1 : (i % 3 == 2 ? -1 : 0)))
+                .toDouble(),
+            'storeyM': 3.0,
+            'moduleM': 3.0,
+            'shop': true,
+            'balconies': i.isEven,
+            'wallMat': mats[i % mats.length],
+          },
+        );
+        _building(sub);
+      }
+    }
+  }
+
   static void _bridge(_Builder b) {
     final len = b.n('lengthM'), w = b.n('widthM'), h = b.n('heightM');
-    final deck = b.sweep(
-      'deck',
-      Offset(-len / 2, 0),
-      Offset(len / 2, 0),
-      SweepKind.deck,
-    );
-    deck.props
-      ..[ArchSweep.widthKey] = w
-      ..[ArchSweep.baseKey] = h
-      ..[ArchSweep.everyKey] = b.n('spanM');
+    if (b.s('type') == 'arch') {
+      // Sobre el arco, un tablero sin pilas y sus barandillas.
+      b.slab(
+        'deck',
+        Rect.fromLTRB(-len / 2, -w / 2, len / 2, w / 2),
+        top: h,
+        thick: 0.6,
+        mat: 'stone-paving',
+      );
+      for (final (j, y) in [-w / 2 + 0.15, w / 2 - 0.15].indexed) {
+        final rail = b.sweep(
+          'rail$j',
+          Offset(-len / 2, y),
+          Offset(len / 2, y),
+          SweepKind.railing,
+          level: h,
+        );
+        rail.props[ArchSweep.heightKey] = 1.0;
+      }
+      _arch(b, len, w, h);
+    } else {
+      final deck = b.sweep(
+        'deck',
+        Offset(-len / 2, 0),
+        Offset(len / 2, 0),
+        SweepKind.deck,
+      );
+      deck.props
+        ..[ArchSweep.widthKey] = w
+        ..[ArchSweep.baseKey] = h
+        ..[ArchSweep.everyKey] = b.n('spanM');
+    }
     if (!b.flag('river')) return;
     // El río: un cauce que baja en el medio, con agua.
     final across = math.max(30.0, w * 4);
@@ -881,17 +999,140 @@ abstract final class ArchRecipe {
     );
   }
 
+  /// Un arco de piedra bajo el tablero: dovelas que siguen una parábola
+  /// de estribo a estribo y montantes que llevan el tablero.
+  static void _arch(_Builder b, double len, double w, double h) {
+    final span = len * 0.8, rise = math.max(0.5, h - 0.9);
+    double zAt(double x) => rise * (1 - math.pow(2 * x / span, 2).toDouble());
+    const n = 24;
+    final ds = span / n;
+    for (var k = 0; k < n; k++) {
+      final x = -span / 2 + (k + 0.5) * ds;
+      final z = zAt(x);
+      b.volume(
+        'arch$k',
+        Rect.fromCenter(
+          center: Offset(x, 0),
+          width: ds + 0.08,
+          height: w * 0.7,
+        ),
+        height: 0.6,
+        mat: 'stone-rock',
+        level: math.max(0.0, z - 0.3),
+      );
+    }
+    // Montantes cada 4 m entre el arco y el tablero.
+    final posts = math.max(2, (span / 4).floor());
+    for (var k = 1; k < posts; k++) {
+      final x = -span / 2 + k * span / posts;
+      final z = zAt(x) + 0.3;
+      if (h - 0.6 - z < 0.3) continue;
+      for (final (j, y) in [-w * 0.25, w * 0.25].indexed) {
+        b.pillar(
+          'post$k-$j',
+          Offset(x, y),
+          size: 0.4,
+          height: h - 0.6 - z,
+          level: z,
+        );
+      }
+    }
+    // Estribos en las dos puntas.
+    for (final (j, x) in [-span / 2 - 1, span / 2 + 1].indexed) {
+      b.volume(
+        'abut$j',
+        Rect.fromCenter(center: Offset(x, 0), width: 2, height: w * 0.8),
+        height: math.max(0.5, h - 0.6),
+        mat: 'stone-rock',
+      );
+    }
+  }
+
   // ── Estación y vagón ─────────────────────────────────────────────────
 
   static void _station(_Builder b) {
     final len = b.n('lengthM'), hp = b.n('platformM'), wp = b.n('widthM');
     final tracks = b.n('tracks').round();
-    b.volume(
-      'platform',
-      Rect.fromLTRB(-len / 2, -wp / 2, len / 2, wp / 2),
-      height: hp,
-      mat: 'stone-paving',
-    );
+    final under = b.flag('underpass');
+    // El paso subterráneo: una escalera que baja del andén a un túnel
+    // que cruza bajo las vías.
+    const depth = 3.2, stairW = 2.0;
+    final rise = depth + hp;
+    final run = ((rise / 0.17).ceil() - 1) * 0.29;
+    final xs = len * 0.2 - run / 2, xe = xs + run;
+    if (under && run < len * 0.6 && wp >= stairW + 1) {
+      for (final (tag, r) in [
+        ('platform', Rect.fromLTRB(-len / 2, -wp / 2, xs, wp / 2)),
+        ('platform-b', Rect.fromLTRB(xe, -wp / 2, len / 2, wp / 2)),
+        ('platform-c', Rect.fromLTRB(xs, -wp / 2, xe, -stairW / 2 - 0.1)),
+        ('platform-d', Rect.fromLTRB(xs, stairW / 2 + 0.1, xe, wp / 2)),
+      ]) {
+        b.volume(tag, r, height: hp, mat: 'stone-paving');
+      }
+      b.stair(
+        'down',
+        Offset(xs, 0),
+        Offset(xe, 0),
+        rise: rise,
+        width: stairW,
+        level: -depth,
+      );
+      // El túnel, a lo ancho de las vías.
+      final reach = wp / 2 + (tracks > 1 ? 5.0 : 2.5);
+      final y0 = tracks > 1 ? -reach : -wp / 2, y1 = reach;
+      b.slab(
+        'tunnel-floor',
+        Rect.fromLTRB(xs - 3, y0, xs, y1),
+        top: -depth,
+        thick: 0.3,
+        mat: 'tile-light',
+      );
+      b.slab(
+        'tunnel-roof',
+        Rect.fromLTRB(xs - 3.2, y0, xs + 0.2, y1),
+        top: 0,
+        thick: 0.4,
+        mat: 'concrete-smooth',
+      );
+      for (final (j, y) in [y0, y1].indexed) {
+        b.wall(
+          'tunnel-e$j',
+          Offset(xs - 3, y),
+          Offset(xs, y),
+          level: -depth,
+          height: depth - 0.4,
+          thick: 0.25,
+          mat: 'tile-light',
+        );
+      }
+      for (final (j, x) in [xs - 3, xs].indexed) {
+        b.wall(
+          'tunnel-w$j',
+          Offset(x, y0),
+          Offset(x, y1),
+          level: -depth,
+          height: depth - 0.4,
+          thick: 0.25,
+          mat: 'tile-light',
+        );
+      }
+      b.opening(
+        'tunnel-door',
+        ArchitectureType.opening,
+        Offset(xs, 0),
+        90,
+        stairW,
+        head: depth - 0.45,
+        level: -depth,
+      );
+    } else {
+      b.volume(
+        'platform',
+        Rect.fromLTRB(-len / 2, -wp / 2, len / 2, wp / 2),
+        height: hp,
+        mat: 'stone-paving',
+      );
+    }
     // Del borde del andén al eje de la vía, 1,65 m.
     final ys = [wp / 2 + 1.65, if (tracks > 1) -wp / 2 - 1.65];
     for (final (i, y) in ys.indexed) {
@@ -926,10 +1167,10 @@ abstract final class ArchRecipe {
       );
     }
     // Escalera de subida al andén por una punta.
-    final run = math.max(1.0, ((hp / 0.16).ceil() - 1) * 0.3);
+    final up = math.max(1.0, ((hp / 0.16).ceil() - 1) * 0.3);
     b.stair(
       'access',
-      Offset(-len / 2 - run, 0),
+      Offset(-len / 2 - up, 0),
       Offset(-len / 2, 0),
       rise: hp,
       width: math.min(2.4, wp - 0.6),
@@ -1205,18 +1446,55 @@ class _Builder {
   final PlanElement recipe;
   final String uid;
   final double mpu;
-  final out = <PlanElement>[];
+  final List<PlanElement> out;
 
-  _Builder(this.recipe, this.uid, this.mpu);
+  /// Para una receta dentro de otra (los edificios de una calle): dónde
+  /// está su centro, si va del revés (de cara al otro lado), sus medidas
+  /// y la marca que antecede a las de sus piezas.
+  final Offset origin;
+  final bool flip;
+  final Map<String, Object> params;
+  final String prefix;
 
-  double n(String k) => ArchRecipe.number(recipe, k);
-  String s(String k) => ArchRecipe.value(recipe, k) as String;
-  bool flag(String k) => ArchRecipe.value(recipe, k) as bool;
+  _Builder(
+    this.recipe,
+    this.uid,
+    this.mpu, {
+    List<PlanElement>? out,
+    this.origin = Offset.zero,
+    this.flip = false,
+    this.params = const {},
+    this.prefix = '',
+  }) : out = out ?? <PlanElement>[];
 
-  Offset at(Offset m) => recipe.position + m / mpu;
+  _Builder child(
+    String prefix,
+    Offset origin, {
+    bool flip = false,
+    Map<String, Object> params = const {},
+  }) => _Builder(
+    recipe,
+    uid,
+    mpu,
+    out: out,
+    origin: this.origin + origin,
+    flip: flip,
+    params: params,
+    prefix: this.prefix + prefix,
+  );
+
+  double n(String k) =>
+      (params[k] as num?)?.toDouble() ?? ArchRecipe.number(recipe, k);
+  String s(String k) =>
+      params[k] as String? ?? ArchRecipe.value(recipe, k) as String;
+  bool flag(String k) =>
+      params[k] as bool? ?? ArchRecipe.value(recipe, k) as bool;
+
+  Offset at(Offset m) =>
+      recipe.position + (origin + (flip ? Offset(m.dx, -m.dy) : m)) / mpu;
 
   PlanElement add(PlanElement el, String tag, {double level = 0}) {
-    el.props[LightOverrides.uidKey] = '$uid-$tag';
+    el.props[LightOverrides.uidKey] = '$uid-$prefix$tag';
     el.props[ArchRecipe.ownerKey] = uid;
     PlanLevel.set(el, (level * 1000).round() / 1000);
     out.add(el);

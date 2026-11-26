@@ -19,6 +19,7 @@ import 'package:iris_dp/features/camera_plan/plan_elevation.dart';
 import 'package:iris_dp/features/camera_plan/plan_opening.dart';
 import 'package:iris_dp/features/camera_plan/plan_piece_controls.dart';
 import 'package:iris_dp/features/camera_plan/plan_segment.dart';
+import 'package:iris_dp/features/camera_plan/plan_street.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_rig.dart';
 import 'package:iris_dp/features/camera_plan/rig/plan_scene3d.dart';
 
@@ -195,6 +196,56 @@ void main() {
     expect(ArchTerrain.water(sand), 0);
     final scene = LightScene.from(beach, metersPerUnit: 0.2);
     expect(scene, isNotNull);
+  });
+
+  test('Calle: edificios a los dos lados, de cara a la calle', () {
+    final all = place(RecipeKind.street, metersPerUnit: 0.2);
+    expect(all.where(StreetProfile.isStreet), hasLength(1));
+    final doors = all.where(
+      (p) => PlanOpening.isDoor(p) && PlanLevel.of(p) == 0,
+    );
+    // Una puerta por edificio, en la fachada de la calle (a 3 + 3,5 m).
+    expect(doors.any((d) => d.position.dy < 0), isTrue);
+    expect(doors.any((d) => d.position.dy > 0), isTrue);
+    for (final d in doors) {
+      expect((d.position.dy * 0.2).abs(), closeTo(6.5, 0.01));
+    }
+    final one = place(
+      RecipeKind.street,
+      params: {'both': false},
+      metersPerUnit: 0.2,
+    );
+    expect(one.length, lessThan(all.length));
+  });
+
+  test('Puente de arco y paso subterráneo', () {
+    final arch = place(RecipeKind.bridge, params: {'type': 'arch'});
+    final stones = arch.where(
+      (p) => LightOverrides.uidOf(p)!.contains('-arch'),
+    );
+    expect(stones, hasLength(24));
+    final top = stones.map(PlanLevel.of).reduce((a, b) => a > b ? a : b);
+    expect(top, greaterThan(3));
+
+    final station = place(RecipeKind.station);
+    final down = station.where(
+      (p) => LightOverrides.uidOf(p)!.endsWith('-down'),
+    );
+    expect(down, hasLength(1));
+    expect(PlanLevel.of(down.single), -3.2);
+    final none = place(RecipeKind.station, params: {'underpass': false});
+    expect(
+      none.where((p) => LightOverrides.uidOf(p)!.contains('tunnel')),
+      isEmpty,
+    );
+  });
+
+  test('Casa: tantas habitaciones al fondo como se pidan', () {
+    int doors(double rooms) => place(
+      RecipeKind.house,
+      params: {'floors': 1.0, 'rooms': rooms, 'widthM': 14.0},
+    ).where((p) => PlanOpening.isDoor(p)).length;
+    expect(doors(3), doors(1) + 2);
   });
 
   test('«Nuevo set» desde un lugar tipo', () {
