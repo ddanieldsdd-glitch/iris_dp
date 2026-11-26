@@ -603,7 +603,12 @@ class LightScene {
         _build(all, metersPerUnit: metersPerUnit).walls,
         minArea: 1 / (metersPerUnit * metersPerUnit),
       ))
-        _roomWith(room, ambient?.rooms ?? const []),
+        _roomWith(
+          room,
+          ambient?.rooms ?? const [],
+          all.where(ArchSolid.isSlab).toList(),
+          metersPerUnit,
+        ),
     ];
     // Con los recintos ya se sabe qué lado de cada hueco es el de dentro.
     final built = _build(
@@ -849,16 +854,37 @@ class LightScene {
     return null;
   }
 
-  static SceneRoom _roomWith(PlanRoom room, List<RoomSetting> settings) {
+  static SceneRoom _roomWith(
+    PlanRoom room,
+    List<RoomSetting> settings, [
+    List<PlanElement> slabs = const [],
+    double metersPerUnit = 1,
+  ]) {
     RoomSetting? own;
     for (final s in settings) {
       if (room.contains(s.point)) own = s;
     }
+    // Un forjado encima le da su techo y uno a ras de suelo, su suelo
+    // (AM.2), salvo que el recinto diga otra cosa.
+    double? slabCeiling;
+    String? slabFloor;
+    final inside = room.interiorPoint;
+    for (final slab in slabs) {
+      if (!ArchSolid.contains(slab, inside, metersPerUnit)) continue;
+      final level = PlanLevel.of(slab);
+      final bottom = level + ArchSolid.bottomM(slab);
+      final top = level + ArchSolid.slabTopM(slab);
+      if (bottom > 1.8) {
+        if (slabCeiling == null || bottom < slabCeiling) slabCeiling = bottom;
+      } else if (top.abs() < 0.3) {
+        slabFloor = slab.props[ArchMaterials.key] as String?;
+      }
+    }
     return SceneRoom(
       room,
       roofed: !(own?.openSky ?? false),
-      ceilingM: own?.ceilingM ?? wallHeightM,
-      floor: ArchMaterials.floorSurface(own?.floor),
+      ceilingM: own?.ceilingM ?? slabCeiling ?? wallHeightM,
+      floor: ArchMaterials.floorSurface(own?.floor ?? slabFloor),
     );
   }
 

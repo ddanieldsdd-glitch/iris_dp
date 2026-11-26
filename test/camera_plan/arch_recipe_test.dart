@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iris_dp/core/theme/app_colors.dart';
 import 'package:iris_dp/core/theme/app_theme.dart';
 import 'package:iris_dp/features/camera_plan/arch/arch_recipe.dart';
+import 'package:iris_dp/features/camera_plan/arch/arch_material.dart';
+import 'package:iris_dp/features/camera_plan/arch/arch_solid.dart';
 import 'package:iris_dp/features/camera_plan/arch/arch_terrain.dart';
 import 'package:iris_dp/features/camera_plan/arch/plan_levels.dart';
 import 'package:iris_dp/features/camera_plan/camera_plan_constants.dart';
@@ -130,8 +132,10 @@ void main() {
       // La puerta de la calle sustituye a una ventana: mismos huecos.
       expect(byZ[0.0], byZ[3.0]);
       expect(byZ[3.0], byZ[6.0]);
-      // Escalera y tejado.
-      expect((sc['stairs'] as List).length, 2);
+      // Dos escaleras, cada una con su barandilla, y el tejado.
+      final stairs = (sc['stairs'] as List).cast<Map>();
+      expect(stairs.where((s) => s['shape'] != 'rail'), hasLength(2));
+      expect(stairs.where((s) => s['shape'] == 'rail'), hasLength(2));
       expect((sc['solids'] as List), isNotEmpty);
     });
 
@@ -246,6 +250,53 @@ void main() {
       params: {'floors': 1.0, 'rooms': rooms, 'widthM': 14.0},
     ).where((p) => PlanOpening.isDoor(p)).length;
     expect(doors(3), doors(1) + 2);
+  });
+
+  test('Escalera con barandilla, y el 3D por niveles', () {
+    final all = place(RecipeKind.house, params: {'floors': 2.0});
+    final sc = PlanScene3d.build(all, metersPerUnit: mpu);
+    final rails = (sc['stairs'] as List).cast<Map>().where(
+      (s) => s['shape'] == 'rail',
+    );
+    expect(rails, hasLength(1));
+    final zs = [
+      for (final (k, v) in (rails.single['tris'] as List).indexed)
+        if (k % 3 == 2) (v as num).toDouble(),
+    ];
+    // El pasamanos llega a 0,9 m por encima de la planta de arriba.
+    expect(zs.reduce((a, b) => a > b ? a : b), closeTo(2.8 + 0.9, 0.1));
+    // Viendo la planta baja, sin la de arriba ni el tejado.
+    final low = PlanLevels.upTo(all, 0);
+    expect(low.length, lessThan(all.length));
+    expect(low.any((e) => PlanLevel.of(e) >= 2.8), isFalse);
+    expect(PlanLevels.upTo(all, 2.8).length, all.length);
+  });
+
+  test('un forjado encima da techo a la habitación; uno a ras, suelo', () {
+    final room = place(RecipeKind.room, at: const Offset(100, 100));
+    final rooms0 = LightScene.from(room, metersPerUnit: mpu).rooms;
+    expect(rooms0, isNotEmpty);
+    final above = ArchSolid.rectangle(
+      RigType.slab,
+      const Offset(40, 40),
+      const Offset(160, 160),
+      mpu,
+    )..props[ArchSolid.topKey] = 3.0;
+    above.props[ArchSolid.thickKey] = 0.2;
+    final floor = ArchSolid.rectangle(
+      RigType.slab,
+      const Offset(40, 40),
+      const Offset(160, 160),
+      mpu,
+    )..props[ArchSolid.topKey] = 0.0;
+    floor.props[ArchMaterials.key] = 'wood-floor-dark';
+    final r = LightScene.from([
+      ...room,
+      above,
+      floor,
+    ], metersPerUnit: mpu).rooms.single;
+    expect(r.ceilingM, closeTo(2.8, 1e-6));
+    expect(r.floor.id, ArchMaterials.floorSurface('wood-floor-dark').id);
   });
 
   test('«Nuevo set» desde un lugar tipo', () {

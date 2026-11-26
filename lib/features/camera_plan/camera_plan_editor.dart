@@ -533,10 +533,16 @@ class _CameraPlanEditorState extends ConsumerState<CameraPlanEditor> {
   }
 
   /// En 3D, los aparatos siempre: sin ellos no habría luz.
-  List<PlanElement> get _elements3d => PlanClass.shown(
-    _visibleElements,
-    _hiddenClasses.difference({PlanClass.fixtures}),
-  );
+  List<PlanElement> get _elements3d {
+    final shown = PlanClass.shown(
+      _visibleElements,
+      _hiddenClasses.difference({PlanClass.fixtures}),
+    );
+    // Viendo un nivel, el 3D lo enseña con los de abajo y sin los de
+    // encima (AM.6).
+    final level = _activeLevelM;
+    return level == null ? shown : PlanLevels.upTo(shown, level);
+  }
   late bool _colorByType = AppPrefs.instance.get(_colorByTypeKey);
   late bool _showNames = AppPrefs.instance.get(_namesKey);
 

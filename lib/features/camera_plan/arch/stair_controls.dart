@@ -118,6 +118,30 @@ class StairControls extends StatelessWidget {
           ),
         ],
         const SizedBox(height: AppSpacing.xs),
+        // La barandilla (AM.6), a los lados que la lleven.
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final (value, label) in const [
+              ('both', 'Barandilla a los dos lados'),
+              ('left', 'A la izquierda'),
+              ('right', 'A la derecha'),
+              ('none', 'Sin barandilla'),
+            ])
+              ChoiceChip(
+                key: ValueKey('stair-rail-$value'),
+                label: Text(label),
+                selected: ArchStair.rail(el) == value,
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) {
+                  el.props[ArchStair.railKey] = value;
+                  onUpdate();
+                },
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
         slider(
           'Ancho de paso',
           m(ArchStair.widthM(el)),

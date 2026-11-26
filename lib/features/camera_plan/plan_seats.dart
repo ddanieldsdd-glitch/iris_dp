@@ -140,7 +140,11 @@ abstract final class PlanSeats {
 
   /// Al soltar a [actor] en [p]: se sienta si cae sobre una plaza libre;
   /// si estaba sentado y se le aparta, se levanta. Dice si ha cambiado.
-  static bool settle(List<PlanElement> elements, PlanElement actor, double mpu) {
+  static bool settle(
+    List<PlanElement> elements,
+    PlanElement actor,
+    double mpu,
+  ) {
     if (actor.type != ElementType.actor) return false;
     final hit = nearest(elements, actor.position, mpu, actor: actor);
     if (hit != null) {
@@ -217,11 +221,7 @@ abstract final class PlanFloors {
 
   /// Al soltar a un actor o una cámara: sube o baja al suelo que pisa.
   /// Dice si ha cambiado.
-  static bool settle(
-    List<PlanElement> elements,
-    PlanElement el,
-    double mpu,
-  ) {
+  static bool settle(List<PlanElement> elements, PlanElement el, double mpu) {
     if (el.type != ElementType.actor && el.type != ElementType.camera) {
       return false;
     }

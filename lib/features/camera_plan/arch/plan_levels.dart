@@ -76,6 +76,18 @@ abstract final class PlanLevels {
     return found;
   }
 
+  /// Lo que se ve en el 3D viendo el nivel que está a [elevationM]: ese
+  /// nivel y los de abajo, sin los de encima (como quitar el tejado y
+  /// las plantas de arriba en un programa de arquitectura).
+  static List<PlanElement> upTo(List<PlanElement> elements, double elevationM) {
+    final storeys = of(elements);
+    if (storeys.isEmpty) return elements;
+    return [
+      for (final el in elements)
+        if (storeyOf(el, storeys).elevationM <= elevationM + tolerance) el,
+    ];
+  }
+
   /// Si una pieza se ve en el nivel que está a [elevationM]: la suya y,
   /// una escalera, también el nivel al que llega.
   static bool isOn(

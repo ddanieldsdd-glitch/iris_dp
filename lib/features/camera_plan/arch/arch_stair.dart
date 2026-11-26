@@ -60,6 +60,11 @@ abstract final class ArchStair {
   /// Lo que gira una de caracol, en grados.
   static const sweepKey = 'sweepDeg';
 
+  /// Barandilla: `both` (de serie), `left`, `right` o `none`.
+  static const railKey = 'rail';
+  static const railHeightM = 0.9;
+  static const railMat = 'metal-brushed';
+
   static const double defaultWidthM = 1.0;
   static const double defaultRiseM = 2.8;
   static const double defaultRampRiseM = 0.3;
@@ -332,6 +337,101 @@ abstract final class ArchStair {
 
   /// La malla en metros del elemento (x, y como sus metros; z hacia
   /// arriba), en triángulos: cada peldaño como un prisma.
+  static String rail(PlanElement el) => switch (el.props[railKey]) {
+    'left' => 'left',
+    'right' => 'right',
+    'none' => 'none',
+    _ => 'both',
+  };
+
+  /// La barandilla (AM.6), en sus metros: pasamanos a 0,9 m sobre la
+  /// línea de huella, a cada lado que la lleve, y balaustres cada dos
+  /// peldaños. Triángulos como [mesh].
+  static List<double> railMesh(PlanElement el) {
+    final side = rail(el);
+    if (side == 'none') return const [];
+    final line = walkLine(el);
+    if (line.length < 2) return const [];
+    final list = steps(el);
+    final rise = riseM(el);
+    final n = line.length;
+    double topAt(int k) {
+      if (shape(el) == StairShape.ramp) return rise * k / (n - 1);
+      if (shape(el) == StairShape.spiral) return rise * k / (n - 1);
+      return k < list.length ? list[k].top : rise;
+    }
+
+    final out = <double>[];
+    void quad(Offset a, double za, Offset b, double zb, Offset c, double zc,
+        Offset d, double zd) {
+      out
+        ..addAll([a.dx, a.dy, za, b.dx, b.dy, zb, c.dx, c.dy, zc])
+        ..addAll([a.dx, a.dy, za, c.dx, c.dy, zc, d.dx, d.dy, zd]);
+    }
+
+    // Una barra de sección cuadrada [t] de p (a z0) a q (a z1).
+    void bar(Offset p, double z0, Offset q, double z1, double t) {
+      final d = q - p;
+      final len = d.distance;
+      final nrm = len < 1e-6
+          ? Offset(t / 2, 0)
+          : Offset(-d.dy / len, d.dx / len) * (t / 2);
+      final h = t / 2;
+      final corners = [
+        (p - nrm, q - nrm, -h),
+        (p + nrm, q + nrm, -h),
+        (p + nrm, q + nrm, h),
+        (p - nrm, q - nrm, h),
+      ];
+      for (var i = 0; i < 4; i++) {
+        final (a0, a1, ha) = corners[i];
+        final (b0, b1, hb) = corners[(i + 1) % 4];
+        quad(a0, z0 + ha, a1, z1 + ha, b1, z1 + hb, b0, z0 + hb);
+      }
+    }
+
+    void post(Offset p, double z0, double h) {
+      const t = 0.035;
+      for (final (a, b) in [
+        (Offset(-t, -t), Offset(t, -t)),
+        (Offset(t, -t), Offset(t, t)),
+        (Offset(t, t), Offset(-t, t)),
+        (Offset(-t, t), Offset(-t, -t)),
+      ]) {
+        quad(p + a, z0, p + b, z0, p + b, z0 + h, p + a, z0 + h);
+      }
+    }
+
+    final half = widthM(el) / 2 - 0.05;
+    for (final s in [
+      if (side != 'left') 1.0,
+      if (side != 'right') -1.0,
+    ]) {
+      final pts = <Offset>[];
+      for (var k = 0; k < n; k++) {
+        final a = line[math.max(0, k - 1)], b = line[math.min(n - 1, k + 1)];
+        final d = b - a;
+        final len = d.distance;
+        final right = len < 1e-9 ? Offset.zero : Offset(-d.dy, d.dx) / len;
+        pts.add(line[k] + right * half * s);
+      }
+      for (var k = 0; k + 1 < n; k++) {
+        bar(
+          pts[k],
+          topAt(k) + railHeightM,
+          pts[k + 1],
+          topAt(k + 1) + railHeightM,
+          0.05,
+        );
+      }
+      for (var k = 0; k < n; k += 2) {
+        post(pts[k], topAt(k), railHeightM);
+      }
+      if ((n - 1).isOdd) post(pts[n - 1], topAt(n - 1), railHeightM);
+    }
+    return out;
+  }
+
   static List<double> mesh(PlanElement el) {
     final out = <double>[];
     void tri(Offset a, double za, Offset b, double zb, Offset c, double zc) {

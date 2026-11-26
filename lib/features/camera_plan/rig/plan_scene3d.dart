@@ -324,6 +324,27 @@ class PlanScene3d {
             'tris': tris,
             ...?_linked(el),
           });
+          // Su barandilla, de metal: otra pieza para Unreal.
+          final rail = ArchStair.railMesh(el);
+          if (rail.isNotEmpty) {
+            stairs.add({
+              'id': uid,
+              'uid': '$uid:rail',
+              'name': '${el.displayLabel} · barandilla',
+              'cat': PlanCategory.of(el).name,
+              'cls': PlanClass.of(el).name,
+              'shape': 'rail',
+              'mat': ArchStair.railMat,
+              'tris': [
+                for (var k = 0; k + 2 < rail.length; k += 3) ...[
+                  ...xy(
+                    ArchStair.toCanvas(el, Offset(rail[k], rail[k + 1]), mpu),
+                  ),
+                  _r(level + rail[k + 2]),
+                ],
+              ],
+            });
+          }
         case RigType.sweep:
           // Barrido (AM.5): una malla por material, cada una con su
           // nombre de pieza para Unreal (`uid:material`).

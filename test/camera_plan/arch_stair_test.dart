@@ -166,7 +166,12 @@ void main() {
       );
 
       final sc = PlanScene3d.build([el], metersPerUnit: mpu);
-      final stair = (sc['stairs'] as List).single as Map;
+      final pieces = (sc['stairs'] as List).cast<Map>();
+      final stair = pieces.singleWhere((s) => s['shape'] != 'rail');
+      // Y su barandilla, de metal, como pieza aparte.
+      final rail = pieces.singleWhere((s) => s['shape'] == 'rail');
+      expect(rail['mat'], ArchStair.railMat);
+      expect(rail['uid'], '${stair['id']}:rail');
       expect(stair['mat'], ArchStair.defaultMat);
       expect(stair['cls'], 'architecture');
       expect((stair['tris'] as List).length, 16 * 12 * 9);
