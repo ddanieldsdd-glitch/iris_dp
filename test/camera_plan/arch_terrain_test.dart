@@ -269,6 +269,35 @@ void main() {
       expect(PlanTool.terrain.drawsSegment, isTrue);
     });
 
+    test('en el 3D, muebles, personas, cámaras y focos se apoyan en él', () {
+      final t = ridge();
+      final actor = PlanElement(
+        id: 2,
+        type: ElementType.actor,
+        position: const Offset(200, 150),
+      );
+      final chair = PlanElement(
+        id: 3,
+        type: ElementType.prop,
+        position: const Offset(200, 150),
+        label: PropType.chair.dbValue,
+      );
+      final cam = PlanElement(
+        id: 4,
+        type: ElementType.camera,
+        position: const Offset(20, 20),
+      );
+      final sc = PlanScene3d.build([
+        t,
+        actor,
+        chair,
+        cam,
+      ], metersPerUnit: mpu);
+      expect((sc['people'] as List).single['z0'], closeTo(6, 0.05));
+      expect((sc['props'] as List).single['z0'], closeTo(6, 0.05));
+      expect((sc['cameras'] as List).single['z0'], closeTo(0, 0.05));
+    });
+
     test('alzado y sección: la loma de lado y cortada', () {
       final t = ridge();
       final side = PlanElevation.of(

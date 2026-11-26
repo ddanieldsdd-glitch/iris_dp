@@ -318,6 +318,39 @@
     }
   }, true);
 
+  // El pincel del terreno (AM.7) en el 3D: arrastrar sobre el terreno lo
+  // trabaja; cada tramo de pasada va a la app en metros de la planta.
+  let brushing = false, brushDrag = null;
+  const terrainMeshes = [];
+  function terrainAt(e) {
+    const hit = rayAt(e).intersectObjects(terrainMeshes, false)[0];
+    return hit ? hit.point : null;
+  }
+  renderer.domElement.addEventListener('pointerdown', (e) => {
+    if (!brushing || e.button !== 0) return;
+    const p = terrainAt(e);
+    if (!p) return;
+    e.stopImmediatePropagation();
+    controls.enabled = false;
+    brushDrag = { last: p };
+    post({ type: 'brush', x: p.x, y: -p.z, start: true });
+  }, true);
+  renderer.domElement.addEventListener('pointermove', (e) => {
+    if (!brushDrag) return;
+    e.stopImmediatePropagation();
+    const p = terrainAt(e);
+    if (!p || p.distanceTo(brushDrag.last) < 0.4) return;
+    brushDrag.last = p;
+    post({ type: 'brush', x: p.x, y: -p.z });
+  }, true);
+  renderer.domElement.addEventListener('pointerup', (e) => {
+    if (!brushDrag) return;
+    e.stopImmediatePropagation();
+    brushDrag = null;
+    controls.enabled = true;
+    post({ type: 'brushEnd' });
+  }, true);
+
   renderer.domElement.addEventListener('pointerdown', (e) => {
     const { w } = size();
     const x = e.clientX, y = e.clientY;
@@ -1056,6 +1089,7 @@
     picks.push(m);
     m.castShadow = !t.water;
     m.receiveShadow = true;
+    if (!t.water) { m.userData.terrain = true; terrainMeshes.push(m); }
     tagPiece(m, t);
     L.walls.add(m);
   }
@@ -1499,7 +1533,7 @@
     root = new THREE.Group();
     scene.add(root);
     const keep = selectedId;
-    cones = []; roofs = []; picks = [];
+    cones = []; roofs = []; picks = []; terrainMeshes.length = 0;
     highlight(null);
     selectedId = keep;
     L = {};
@@ -2718,6 +2752,7 @@
       }
       if ('names' in o) { showNames = !!o.names; updateLabels(); }
       if ('place' in o) setPlacing(!!o.place);
+      if ('brush' in o) brushing = !!o.brush;
       if ('measure' in o) {
         measuring = !!o.measure;
         if (!measuring) clearMeasure();

@@ -22,6 +22,7 @@ import '../../../core/theme/app_layout.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/export_file_saver.dart';
+import '../arch/arch_terrain.dart';
 import '../camera_plan_constants.dart';
 import '../camera_plan_element_model.dart';
 import '../light/ambient.dart';
@@ -326,6 +327,7 @@ class _Plan3dViewState extends State<Plan3dView> {
       (file) => _call('iris.rescan(${jsonEncode(file)});'),
     );
     UnrealThumbs.instance.addListener(_onThumbs);
+    ArchTerrain.brush.addListener(_onBrush);
     unawaited(_shareScanFolders());
     unawaited(
       ScanCaptureChannel.isSupported().then((ok) {
@@ -406,6 +408,7 @@ class _Plan3dViewState extends State<Plan3dView> {
     _scanArrivals?.cancel();
     _structureTimer?.cancel();
     UnrealThumbs.instance.removeListener(_onThumbs);
+    ArchTerrain.brush.removeListener(_onBrush);
     _debounce?.cancel();
     _realLength.dispose();
     super.dispose();
@@ -544,6 +547,7 @@ class _Plan3dViewState extends State<Plan3dView> {
           'ortho': _ortho,
           'names': _names,
           'show': _show,
+          'brush': ArchTerrain.brush.value != null,
           'nav':
               AppPrefs.instance.get(
                 PlanPrefs.unrealNav,
@@ -597,6 +601,10 @@ class _Plan3dViewState extends State<Plan3dView> {
         }
       case 'move' || 'aim' || 'rotate' || 'lift':
         _applyFrom3d(message);
+      case 'brush':
+        _brushAt(message);
+      case 'brushEnd':
+        _brushEnd();
       case 'view':
         if (mounted) setState(() => _view = message['view'] as String);
       case 'loaded':
@@ -646,6 +654,59 @@ class _Plan3dViewState extends State<Plan3dView> {
     if (!mounted) return;
     setState(() => _selected = el);
     _schedule();
+  }
+
+  /// El pincel del terreno puesto en su panel: en el 3D, arrastrar sobre
+  /// el terreno lo trabaja (AM.7).
+  void _onBrush() {
+    if (_ready) _set({'brush': ArchTerrain.brush.value != null});
+  }
+
+  PlanElement? _brushed;
+  Offset? _brushLast;
+
+  void _brushAt(Map message) {
+    final brush = ArchTerrain.brush.value;
+    if (brush == null) return;
+    final mpu = widget.metersPerUnit;
+    final p = Plan3dEditing.canvasAt(
+      (message['x'] as num?)?.toDouble() ?? 0,
+      (message['y'] as num?)?.toDouble() ?? 0,
+      mpu,
+    );
+    if (message['start'] == true) {
+      _brushLast = null;
+      final sel = _selected;
+      _brushed = sel != null && ArchTerrain.isTerrain(sel)
+          ? sel
+          : widget.elements
+                .where((e) => ArchTerrain.isTerrain(e))
+                .where((e) => ArchTerrain.contains(e, p, mpu))
+                .firstOrNull;
+    }
+    final t = _brushed;
+    if (t == null) return;
+    final first = _brushLast == null;
+    final moved = (p - (_brushLast ?? p)).distance * mpu;
+    _brushLast = p;
+    ArchTerrain.stroke(
+      t,
+      p,
+      brush,
+      mpu,
+      amount: first
+          ? 0.25
+          : (moved / math.max(0.1, brush.radiusM)).clamp(0.02, 1.0),
+    );
+    _schedule();
+  }
+
+  Future<void> _brushEnd() async {
+    final t = _brushed, save = widget.onChanged;
+    _brushed = null;
+    _brushLast = null;
+    if (t != null && save != null) await save(t);
+    if (mounted) _schedule();
   }
 
   /// Lo que se ha movido, regulado o recoloreado en Unreal vuelve a la

@@ -137,15 +137,19 @@ class PlanScene3d {
     final terrains = <Map<String, dynamic>>[];
 
     // Techos de los recintos, solo si alguna luz cuelga sin altura propia.
-    List<SceneRoom>? rooms;
-    double? ceilingAt(Offset p) {
-      rooms ??= LightScene.from(
-        elements,
-        metersPerUnit: mpu,
-        ambient: ambient,
-      ).rooms;
-      return LightScene.ceilingAt(rooms!, p);
-    }
+    LightScene? lit;
+    LightScene litScene() => lit ??= LightScene.from(
+      elements,
+      metersPerUnit: mpu,
+      ambient: ambient,
+    );
+    double? ceilingAt(Offset p) => LightScene.ceilingAt(litScene().rooms, p);
+    // La cota del terreno (AM.7) o de una colina: muebles, personas y
+    // cámaras se apoyan en ella, como en la luz.
+    final hilly = elements.any(
+      (e) => ArchTerrain.isTerrain(e) || e.propType == PropType.hill,
+    );
+    double groundAt(Offset p) => hilly ? litScene().groundAt(p) : 0;
 
     // El alto de cada asiento, para sentar a quien está en él (F6.1.9b).
     final seatH = <String, double>{
@@ -377,7 +381,14 @@ class PlanScene3d {
       }
       switch (el.type) {
         case ElementType.light:
-          final f = _fixture(el, uid, mpu, level, xy, ceilingAt);
+          final f = _fixture(
+            el,
+            uid,
+            mpu,
+            level + groundAt(el.position),
+            xy,
+            ceilingAt,
+          );
           if (f != null) fixtures.add(f);
         // Una pieza de rigging o de arquitectura (truss, nave, volumen…) no
         // es atrezzo, aunque su etiqueta se lea como «rectángulo».
@@ -390,7 +401,7 @@ class PlanScene3d {
             'cat': PlanCategory.of(el).name,
             'type': el.propType!.name,
             'at': xy(el.position),
-            'z0': level,
+            'z0': _r(level + groundAt(el.position)),
             'yawDeg': el.rotation,
             'sizeM': _r(LightScene.propSizeM(el)),
             'widthM': _r(LightScene.furnitureSizeM(el).width),
@@ -422,7 +433,7 @@ class PlanScene3d {
             'name': el.label ?? 'Actor',
             'cat': PlanCategory.of(el).name,
             'at': xy(el.position),
-            'z0': level,
+            'z0': _r(level + groundAt(el.position)),
             'yawDeg': _r(el.rotation),
             'pose': PlanMarks.pose(el),
             'heightM': _r(PlanMarks.heightM(el)),
@@ -444,7 +455,7 @@ class PlanScene3d {
             'cat': PlanCategory.of(el).name,
             'lens': ?el.lens,
             'at': xy(el.position),
-            'z0': level,
+            'z0': _r(level + groundAt(el.position)),
             // Altura del objetivo: la guardada o la de cámara en mano.
             'z': _r(CameraAim.heightM(el)),
             'dir': [_r(math.sin(rad)), _r(math.cos(rad))],
